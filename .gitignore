@@ -1,0 +1,8 @@
+node_modules
+dist
+coverage
+.env
+.postgres-test/
+.postgres-test.log
+storage/
+src/generated/prisma/

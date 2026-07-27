@@ -1,0 +1,362 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TaskType {
+  DOT_XUAT
+  DINH_KY
+}
+
+enum TaskDeadlineStatus {
+  DANG_THUC_HIEN
+  SAP_DEN_HAN
+  HOAN_THANH_DUNG_HAN
+  HOAN_THANH_QUA_HAN
+  QUA_HAN
+}
+
+enum Frequency {
+  MONTHLY
+  QUARTERLY
+  SEMI_ANNUAL
+  ANNUAL
+}
+
+enum ReportKind {
+  PROGRESS
+  CONSOLIDATED
+}
+
+enum ReportStatus {
+  DRAFT
+  SUBMITTED
+  REJECTED
+  APPROVED
+}
+
+enum UserStatus {
+  ACTIVE
+  LOCKED
+}
+
+enum PeriodStatus {
+  OPEN
+  COMPLETED
+  CANCELED
+}
+
+model Organization {
+  id                   Int                @id @default(autoincrement())
+  code                 String             @unique @db.VarChar(50)
+  name                 String             @db.VarChar(255)
+  isAssigningAuthority Boolean            @default(false)
+  isExecutingUnit      Boolean            @default(true)
+  status               String             @default("ACTIVE") @db.VarChar(20)
+  createdAt            DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime           @updatedAt @db.Timestamptz(3)
+  users                User[]
+  assignedTasks        Task[]             @relation("AssigningOrganization")
+  leadTasks            Task[]             @relation("LeadOrganization")
+  collaboratorTasks    TaskCollaborator[]
+  reportWorkspaces     ReportWorkspace[]
+  auditLogs            AuditLog[]
+
+  @@map("organizations")
+}
+
+model User {
+  id                         Int                   @id @default(autoincrement())
+  username                   String                @unique @db.VarChar(100)
+  fullName                   String                @db.VarChar(255)
+  position                   String?               @db.VarChar(255)
+  rank                       String?               @db.VarChar(255)
+  phone                      String?               @db.VarChar(30)
+  passwordHash               String                @db.VarChar(255)
+  organizationId             Int
+  status                     UserStatus            @default(ACTIVE)
+  lockedAt                   DateTime?             @db.Timestamptz(3)
+  lockedUntil                DateTime?             @db.Timestamptz(3)
+  lockReason                 String?               @db.VarChar(500)
+  failedLoginCount           Int                   @default(0)
+  failedLoginWindowStartedAt DateTime?             @db.Timestamptz(3)
+  deletedAt                  DateTime?             @db.Timestamptz(3)
+  createdAt                  DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime              @updatedAt @db.Timestamptz(3)
+  organization               Organization          @relation(fields: [organizationId], references: [id])
+  permissionGroups           UserPermissionGroup[]
+  createdTasks               Task[]                @relation("TaskCreatedBy")
+  updatedTasks               Task[]                @relation("TaskUpdatedBy")
+  closedTasks                Task[]                @relation("TaskClosedBy")
+  completedTasks             Task[]                @relation("TaskCompletedBy")
+  submittedVersions          ReportVersion[]       @relation("ReportVersionSubmittedBy")
+  reviewedVersions           ReportVersion[]       @relation("ReportVersionReviewedBy")
+  uploadedFiles              StoredFile[]
+  notifications              Notification[]
+  auditLogs                  AuditLog[]
+  refreshSessions            RefreshSession[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@map("users")
+}
+
+model PermissionGroup {
+  id          Int                         @id @default(autoincrement())
+  code        String                      @unique @db.VarChar(100)
+  name        String                      @db.VarChar(255)
+  description String?
+  createdAt   DateTime                    @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime                    @updatedAt @db.Timestamptz(3)
+  permissions PermissionGroupPermission[]
+  users       UserPermissionGroup[]
+
+  @@map("permission_groups")
+}
+
+model Permission {
+  id          Int                         @id @default(autoincrement())
+  code        String                      @unique @db.VarChar(100)
+  name        String                      @db.VarChar(255)
+  description String?
+  groups      PermissionGroupPermission[]
+
+  @@map("permissions")
+}
+
+model PermissionGroupPermission {
+  permissionGroupId Int
+  permissionId      Int
+  permissionGroup   PermissionGroup @relation(fields: [permissionGroupId], references: [id], onDelete: Cascade)
+  permission        Permission      @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([permissionGroupId, permissionId])
+  @@map("permission_group_permissions")
+}
+
+model UserPermissionGroup {
+  userId            Int
+  permissionGroupId Int
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permissionGroup   PermissionGroup @relation(fields: [permissionGroupId], references: [id], onDelete: Cascade)
+
+  @@id([userId, permissionGroupId])
+  @@map("user_permission_groups")
+}
+
+model Program {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique @db.VarChar(50)
+  name        String   @db.VarChar(255)
+  description String?
+  status      String   @default("ACTIVE") @db.VarChar(20)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+  tasks       Task[]
+
+  @@map("programs")
+}
+
+model Task {
+  id                      Int                 @id @default(autoincrement())
+  code                    String              @unique @db.VarChar(100)
+  name                    String              @db.VarChar(500)
+  description             String?
+  expectedOutput          String?
+  type                    TaskType
+  programId               Int
+  assigningOrganizationId Int
+  leadOrganizationId      Int
+  dueAt                   DateTime?           @db.Timestamptz(3)
+  deadlineStatus          TaskDeadlineStatus?
+  frequency               Frequency?
+  periodicStartAt         DateTime?           @db.Timestamptz(3)
+  closedAt                DateTime?           @db.Timestamptz(3)
+  closedById              Int?
+  closeReason             String?
+  completedAt             DateTime?           @db.Timestamptz(3)
+  completedById           Int?
+  deletedAt               DateTime?           @db.Timestamptz(3)
+  createdById             Int
+  updatedById             Int
+  createdAt               DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime            @updatedAt @db.Timestamptz(3)
+  program                 Program             @relation(fields: [programId], references: [id])
+  assigningOrganization   Organization        @relation("AssigningOrganization", fields: [assigningOrganizationId], references: [id])
+  leadOrganization        Organization        @relation("LeadOrganization", fields: [leadOrganizationId], references: [id])
+  createdBy               User                @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  updatedBy               User                @relation("TaskUpdatedBy", fields: [updatedById], references: [id])
+  closedBy                User?               @relation("TaskClosedBy", fields: [closedById], references: [id])
+  completedBy             User?               @relation("TaskCompletedBy", fields: [completedById], references: [id])
+  collaborators           TaskCollaborator[]
+  reportingPeriods        ReportingPeriod[]
+
+  @@index([programId])
+  @@index([leadOrganizationId])
+  @@index([type, deadlineStatus])
+  @@index([deletedAt])
+  @@map("tasks")
+}
+
+model TaskCollaborator {
+  id             Int          @id @default(autoincrement())
+  taskId         Int
+  organizationId Int
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  task           Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([taskId, organizationId])
+  @@map("task_collaborators")
+}
+
+model ReportingPeriod {
+  id            Int               @id @default(autoincrement())
+  taskId        Int
+  frequency     Frequency?
+  year          Int
+  sequence      Int
+  periodStartAt DateTime          @db.Timestamptz(3)
+  dueAt         DateTime          @db.Timestamptz(3)
+  status        PeriodStatus      @default(OPEN)
+  completedAt   DateTime?         @db.Timestamptz(3)
+  canceledAt    DateTime?         @db.Timestamptz(3)
+  cancelReason  String?
+  createdAt     DateTime          @default(now()) @db.Timestamptz(3)
+  task          Task              @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  workspaces    ReportWorkspace[]
+
+  @@unique([taskId, periodStartAt, dueAt])
+  @@index([taskId, status])
+  @@map("reporting_periods")
+}
+
+model ReportWorkspace {
+  id                  Int               @id @default(autoincrement())
+  kind                ReportKind
+  reportingPeriodId   Int
+  ownerOrganizationId Int
+  status              ReportStatus      @default(DRAFT)
+  content             String?
+  createdAt           DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime          @updatedAt @db.Timestamptz(3)
+  reportingPeriod     ReportingPeriod   @relation(fields: [reportingPeriodId], references: [id], onDelete: Cascade)
+  ownerOrganization   Organization      @relation(fields: [ownerOrganizationId], references: [id])
+  versions            ReportVersion[]
+  draftAttachments    DraftAttachment[]
+
+  @@unique([reportingPeriodId, kind, ownerOrganizationId])
+  @@map("report_workspaces")
+}
+
+model ReportVersion {
+  id              Int                 @id @default(autoincrement())
+  workspaceId     Int
+  versionNumber   Int
+  content         String?
+  submittedById   Int
+  submittedAt     DateTime            @default(now()) @db.Timestamptz(3)
+  status          ReportStatus        @default(SUBMITTED)
+  reviewedById    Int?
+  reviewedAt      DateTime?           @db.Timestamptz(3)
+  rejectionReason String?
+  workspace       ReportWorkspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  submittedBy     User                @relation("ReportVersionSubmittedBy", fields: [submittedById], references: [id])
+  reviewedBy      User?               @relation("ReportVersionReviewedBy", fields: [reviewedById], references: [id])
+  attachments     VersionAttachment[]
+
+  @@unique([workspaceId, versionNumber])
+  @@map("report_versions")
+}
+
+model StoredFile {
+  id           Int                 @id @default(autoincrement())
+  originalName String              @db.VarChar(500)
+  storageKey   String              @unique @db.VarChar(500)
+  mimeType     String              @db.VarChar(255)
+  sizeBytes    Int
+  checksum     String              @db.VarChar(128)
+  uploadedById Int
+  createdAt    DateTime            @default(now()) @db.Timestamptz(3)
+  uploadedBy   User                @relation(fields: [uploadedById], references: [id])
+  drafts       DraftAttachment[]
+  versions     VersionAttachment[]
+
+  @@map("stored_files")
+}
+
+model DraftAttachment {
+  workspaceId  Int
+  storedFileId Int
+  workspace    ReportWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  storedFile   StoredFile      @relation(fields: [storedFileId], references: [id], onDelete: Restrict)
+
+  @@id([workspaceId, storedFileId])
+  @@map("draft_attachments")
+}
+
+model VersionAttachment {
+  reportVersionId Int
+  storedFileId    Int
+  reportVersion   ReportVersion @relation(fields: [reportVersionId], references: [id], onDelete: Cascade)
+  storedFile      StoredFile    @relation(fields: [storedFileId], references: [id], onDelete: Restrict)
+
+  @@id([reportVersionId, storedFileId])
+  @@map("version_attachments")
+}
+
+model Notification {
+  id          Int       @id @default(autoincrement())
+  recipientId Int
+  eventKey    String    @db.VarChar(255)
+  type        String    @db.VarChar(100)
+  title       String    @db.VarChar(255)
+  body        String?
+  entityType  String?   @db.VarChar(100)
+  entityId    Int?
+  readAt      DateTime? @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  recipient   User      @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@unique([recipientId, eventKey])
+  @@index([recipientId, readAt])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id             Int           @id @default(autoincrement())
+  actorId        Int?
+  organizationId Int?
+  action         String        @db.VarChar(100)
+  entityType     String        @db.VarChar(100)
+  entityId       Int?
+  beforeData     Json?
+  afterData      Json?
+  reason         String?
+  ipAddress      String?       @db.VarChar(64)
+  userAgent      String?
+  requestId      String?       @db.VarChar(100)
+  createdAt      DateTime      @default(now()) @db.Timestamptz(3)
+  actor          User?         @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model RefreshSession {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  tokenHash String    @unique @db.VarChar(255)
+  expiresAt DateTime  @db.Timestamptz(3)
+  revokedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("refresh_sessions")
+}
