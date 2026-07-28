@@ -4,7 +4,7 @@ import {
   Prisma,
   ReportKind,
   ReportStatus,
-} from '../prisma/client';
+} from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RequestMeta } from '../types/auth';
@@ -58,7 +58,7 @@ export interface DownloadRecord {
 
 @Injectable()
 export class FilesRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async findDraftContext(
     workspaceId: number,

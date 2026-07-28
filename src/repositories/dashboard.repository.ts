@@ -5,7 +5,7 @@ import {
   Prisma,
   ReportStatus,
   TaskType,
-} from '../prisma/client';
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface DashboardFilters {
@@ -35,7 +35,7 @@ export interface DashboardTaskRow {
 
 @Injectable()
 export class DashboardRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async loadSummaryRows(input: {
     filters: DashboardFilters;
@@ -55,19 +55,19 @@ export class DashboardRepository {
         deletedAt: null,
         ...(input.filters.taskCode
           ? {
-              code: {
-                contains: input.filters.taskCode,
-                mode: Prisma.QueryMode.insensitive,
-              },
-            }
+            code: {
+              contains: input.filters.taskCode,
+              mode: Prisma.QueryMode.insensitive,
+            },
+          }
           : {}),
         ...(input.filters.taskName
           ? {
-              name: {
-                contains: input.filters.taskName,
-                mode: Prisma.QueryMode.insensitive,
-              },
-            }
+            name: {
+              contains: input.filters.taskName,
+              mode: Prisma.QueryMode.insensitive,
+            },
+          }
           : {}),
         ...(input.filters.programId
           ? { programId: input.filters.programId }
@@ -75,15 +75,15 @@ export class DashboardRepository {
         ...(input.globalScope
           ? {}
           : {
-              OR: [
-                { leadOrganizationId: input.organizationId },
-                {
-                  collaborators: {
-                    some: { organizationId: input.organizationId },
-                  },
+            OR: [
+              { leadOrganizationId: input.organizationId },
+              {
+                collaborators: {
+                  some: { organizationId: input.organizationId },
                 },
-              ],
-            }),
+              },
+            ],
+          }),
         ...(hasPeriodFilter ? { reportingPeriods: { some: periodWhere } } : {}),
       },
       select: {
@@ -134,11 +134,11 @@ export class DashboardRepository {
       ...(filters.sequence ? { sequence: filters.sequence } : {}),
       ...(filters.dueFrom || filters.dueTo
         ? {
-            dueAt: {
-              ...(filters.dueFrom ? { gte: new Date(filters.dueFrom) } : {}),
-              ...(filters.dueTo ? { lte: new Date(filters.dueTo) } : {}),
-            },
-          }
+          dueAt: {
+            ...(filters.dueFrom ? { gte: new Date(filters.dueFrom) } : {}),
+            ...(filters.dueTo ? { lte: new Date(filters.dueTo) } : {}),
+          },
+        }
         : {}),
     };
   }

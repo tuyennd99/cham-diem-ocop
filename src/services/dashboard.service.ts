@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
-import { PeriodStatus, ReportStatus } from '../prisma/client';
+import { PeriodStatus, ReportStatus } from '@prisma/client';
 import {
   DashboardFilters,
   DashboardRepository,
@@ -13,7 +13,7 @@ import type {
 
 @Injectable()
 export class DashboardService {
-  constructor(private readonly repository: DashboardRepository) {}
+  constructor(private readonly repository: DashboardRepository) { }
 
   async summary(
     filters: DashboardFilters,

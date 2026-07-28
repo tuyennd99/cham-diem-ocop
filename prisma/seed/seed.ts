@@ -1,4 +1,5 @@
-import { createPrismaAdapter, PrismaClient } from '../../src/prisma/client';
+import { PrismaClient } from '@prisma/client';
+import { createPrismaAdapter, } from '../../src/prisma/client';
 import { DEFAULT_SEED_PASSWORD, hashSeedPassword } from './password';
 
 const prisma = new PrismaClient({ adapter: createPrismaAdapter() });

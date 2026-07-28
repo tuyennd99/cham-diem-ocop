@@ -1,6 +1,6 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { uniq } from 'lodash';
-import { Prisma, UserStatus } from '../prisma/client';
+import { Prisma, UserStatus } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RequestMeta } from '../types/auth';
@@ -91,7 +91,7 @@ interface PermissionGroupData {
 
 @Injectable()
 export class SystemRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async listEffectivePermissions(
     userId: number,
@@ -213,13 +213,13 @@ export class SystemRepository {
           ...(permissionGroupIds === undefined
             ? {}
             : {
-                permissionGroups: {
-                  deleteMany: {},
-                  create: permissionGroupIds.map((permissionGroupId) => ({
-                    permissionGroupId,
-                  })),
-                },
-              }),
+              permissionGroups: {
+                deleteMany: {},
+                create: permissionGroupIds.map((permissionGroupId) => ({
+                  permissionGroupId,
+                })),
+              },
+            }),
         },
         select: userPublicSelect,
       });
@@ -537,13 +537,13 @@ export class SystemRepository {
           ...(permissionIds === undefined
             ? {}
             : {
-                permissions: {
-                  deleteMany: {},
-                  create: permissionIds.map((permissionId) => ({
-                    permissionId,
-                  })),
-                },
-              }),
+              permissions: {
+                deleteMany: {},
+                create: permissionIds.map((permissionId) => ({
+                  permissionId,
+                })),
+              },
+            }),
         },
         include: permissionGroupInclude,
       });

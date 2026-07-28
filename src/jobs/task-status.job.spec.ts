@@ -1,5 +1,5 @@
 import { SCHEDULE_CRON_OPTIONS } from '@nestjs/schedule/dist/schedule.constants';
-import { TaskDeadlineStatus, TaskType } from '../prisma/client';
+import { TaskDeadlineStatus, TaskType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { calculateTaskDeadlineStatus, TaskStatusJob } from './task-status.job';
 
@@ -14,42 +14,42 @@ describe('calculateTaskDeadlineStatus', () => {
     now: Date;
     expected: TaskDeadlineStatus;
   }[] = [
-    {
-      name: 'completed on time',
-      completedAt: new Date('2026-07-28T00:00:00.000Z'),
-      dueAt,
-      now,
-      expected: TaskDeadlineStatus.HOAN_THANH_DUNG_HAN,
-    },
-    {
-      name: 'completed late',
-      completedAt: new Date('2026-07-28T00:00:00.001Z'),
-      dueAt,
-      now,
-      expected: TaskDeadlineStatus.HOAN_THANH_QUA_HAN,
-    },
-    {
-      name: 'overdue',
-      completedAt: null,
-      dueAt: new Date('2026-07-25T23:59:59.999Z'),
-      now,
-      expected: TaskDeadlineStatus.QUA_HAN,
-    },
-    {
-      name: 'due in exactly five days',
-      completedAt: null,
-      dueAt: new Date('2026-07-31T00:00:00.000Z'),
-      now,
-      expected: TaskDeadlineStatus.SAP_DEN_HAN,
-    },
-    {
-      name: 'in progress outside the five-day window',
-      completedAt: null,
-      dueAt: new Date('2026-07-31T00:00:00.001Z'),
-      now,
-      expected: TaskDeadlineStatus.DANG_THUC_HIEN,
-    },
-  ];
+      {
+        name: 'completed on time',
+        completedAt: new Date('2026-07-28T00:00:00.000Z'),
+        dueAt,
+        now,
+        expected: TaskDeadlineStatus.HOAN_THANH_DUNG_HAN,
+      },
+      {
+        name: 'completed late',
+        completedAt: new Date('2026-07-28T00:00:00.001Z'),
+        dueAt,
+        now,
+        expected: TaskDeadlineStatus.HOAN_THANH_QUA_HAN,
+      },
+      {
+        name: 'overdue',
+        completedAt: null,
+        dueAt: new Date('2026-07-25T23:59:59.999Z'),
+        now,
+        expected: TaskDeadlineStatus.QUA_HAN,
+      },
+      {
+        name: 'due in exactly five days',
+        completedAt: null,
+        dueAt: new Date('2026-07-31T00:00:00.000Z'),
+        now,
+        expected: TaskDeadlineStatus.SAP_DEN_HAN,
+      },
+      {
+        name: 'in progress outside the five-day window',
+        completedAt: null,
+        dueAt: new Date('2026-07-31T00:00:00.001Z'),
+        now,
+        expected: TaskDeadlineStatus.DANG_THUC_HIEN,
+      },
+    ];
 
   it.each(cases)(
     '$name',

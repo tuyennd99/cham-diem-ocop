@@ -6,7 +6,7 @@ import {
   ReportStatus,
   TaskDeadlineStatus,
   TaskType,
-} from '../prisma/client';
+} from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RequestMeta } from '../types/auth';
@@ -103,7 +103,7 @@ export interface PeriodDraft {
 
 @Injectable()
 export class TasksRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async list(input: {
     page: number;
@@ -221,9 +221,9 @@ export class TasksRepository {
           deadlineStatus:
             input.type === TaskType.DOT_XUAT
               ? calculateTaskDeadlineStatus(
-                  { dueAt: input.dueAt, completedAt: null },
-                  now,
-                )
+                { dueAt: input.dueAt, completedAt: null },
+                now,
+              )
               : null,
           frequency: input.frequency,
           periodicStartAt: input.periodicStartAt,
@@ -236,16 +236,16 @@ export class TasksRepository {
           },
           ...(input.type === TaskType.DOT_XUAT
             ? {
-                reportingPeriods: {
-                  create: {
-                    frequency: null,
-                    year: input.dueAt.getFullYear(),
-                    sequence: 1,
-                    periodStartAt: now,
-                    dueAt: input.dueAt,
-                  },
+              reportingPeriods: {
+                create: {
+                  frequency: null,
+                  year: input.dueAt.getFullYear(),
+                  sequence: 1,
+                  periodStartAt: now,
+                  dueAt: input.dueAt,
                 },
-              }
+              },
+            }
             : {}),
         },
         include: taskInclude,
@@ -607,11 +607,11 @@ export class TasksRepository {
       ...(globalScope
         ? {}
         : {
-            OR: [
-              { leadOrganizationId: organizationId },
-              { collaborators: { some: { organizationId } } },
-            ],
-          }),
+          OR: [
+            { leadOrganizationId: organizationId },
+            { collaborators: { some: { organizationId } } },
+          ],
+        }),
     };
   }
 

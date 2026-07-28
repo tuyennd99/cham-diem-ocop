@@ -33,6 +33,7 @@ export function configureApp(app: INestApplication) {
       'Accept',
       'Origin',
       'X-Requested-With',
+      'X-CSRF-Token',
     ],
   });
 

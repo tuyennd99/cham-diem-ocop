@@ -6,7 +6,7 @@ import {
   ReportKind,
   ReportStatus,
   TaskType,
-} from '../prisma/client';
+} from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RequestMeta } from '../types/auth';
@@ -192,7 +192,7 @@ type VersionHistoryPayload = Prisma.ReportVersionGetPayload<{
 
 @Injectable()
 export class ReportsRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async findWorkspace(id: number): Promise<ReportWorkspaceView | null> {
     const row = await this.prisma.reportWorkspace.findUnique({
@@ -506,18 +506,18 @@ export class ReportsRepository {
     const workspace: Prisma.ReportWorkspaceWhereInput = filters.globalScope
       ? {}
       : {
-          OR: [
-            {
-              reportingPeriod: {
-                task: { leadOrganizationId: filters.organizationId },
-              },
+        OR: [
+          {
+            reportingPeriod: {
+              task: { leadOrganizationId: filters.organizationId },
             },
-            {
-              kind: ReportKind.PROGRESS,
-              ownerOrganizationId: filters.organizationId,
-            },
-          ],
-        };
+          },
+          {
+            kind: ReportKind.PROGRESS,
+            ownerOrganizationId: filters.organizationId,
+          },
+        ],
+      };
     const where: Prisma.ReportVersionWhereInput = {
       submittedAt: {
         ...(filters.submittedFrom
@@ -535,19 +535,19 @@ export class ReportsRepository {
           task: {
             ...(filters.taskCode
               ? {
-                  code: {
-                    contains: filters.taskCode,
-                    mode: Prisma.QueryMode.insensitive,
-                  },
-                }
+                code: {
+                  contains: filters.taskCode,
+                  mode: Prisma.QueryMode.insensitive,
+                },
+              }
               : {}),
             ...(filters.taskName
               ? {
-                  name: {
-                    contains: filters.taskName,
-                    mode: Prisma.QueryMode.insensitive,
-                  },
-                }
+                name: {
+                  contains: filters.taskName,
+                  mode: Prisma.QueryMode.insensitive,
+                },
+              }
               : {}),
             ...(filters.programId ? { programId: filters.programId } : {}),
           },
@@ -783,19 +783,19 @@ export class ReportsRepository {
       ),
       latestVersion: row.versions[0]
         ? {
-            id: row.versions[0].id,
-            versionNumber: row.versions[0].versionNumber,
-            content: row.versions[0].content,
-            status: row.versions[0].status,
-            submittedBy: row.versions[0].submittedBy,
-            submittedAt: row.versions[0].submittedAt,
-            reviewedBy: row.versions[0].reviewedBy,
-            reviewedAt: row.versions[0].reviewedAt,
-            rejectionReason: row.versions[0].rejectionReason,
-            files: row.versions[0].attachments.map(
-              ({ storedFile }) => storedFile,
-            ),
-          }
+          id: row.versions[0].id,
+          versionNumber: row.versions[0].versionNumber,
+          content: row.versions[0].content,
+          status: row.versions[0].status,
+          submittedBy: row.versions[0].submittedBy,
+          submittedAt: row.versions[0].submittedAt,
+          reviewedBy: row.versions[0].reviewedBy,
+          reviewedAt: row.versions[0].reviewedAt,
+          rejectionReason: row.versions[0].rejectionReason,
+          files: row.versions[0].attachments.map(
+            ({ storedFile }) => storedFile,
+          ),
+        }
         : null,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,

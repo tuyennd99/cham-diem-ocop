@@ -3,7 +3,7 @@ import {
   PeriodStatus,
   ReportStatus,
   TaskType,
-} from '../prisma/client';
+} from '@prisma/client';
 import type {
   DashboardRepository,
   DashboardTaskRow,

@@ -119,6 +119,16 @@ describe('Auth endpoints', () => {
       });
   });
 
+  it('allows the CSRF header in CORS preflight', async () => {
+    await request(server)
+      .options('/api/v1/auth/refresh')
+      .set('Origin', 'http://localhost:5173')
+      .set('Access-Control-Request-Method', 'POST')
+      .set('Access-Control-Request-Headers', 'x-csrf-token')
+      .expect(204)
+      .expect('Access-Control-Allow-Headers', /(?:^|,\s*)x-csrf-token(?:,|$)/i);
+  });
+
   it('rejects refresh without an exact allowlisted Origin', async () => {
     await request(server)
       .post('/api/v1/auth/refresh')

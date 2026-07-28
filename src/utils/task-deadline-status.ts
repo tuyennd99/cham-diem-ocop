@@ -1,4 +1,4 @@
-import { TaskDeadlineStatus } from '../prisma/client';
+import { TaskDeadlineStatus } from '@prisma/client';
 
 const FIVE_DAYS_MS = 5 * 24 * 60 * 60 * 1000;
 

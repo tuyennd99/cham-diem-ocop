@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { uniq } from 'lodash';
-import { TaskType } from '../prisma/client';
+import { TaskType } from '@prisma/client';
 import { CreateTaskDto, TaskQueryDto, UpdateTaskDto } from '../dtos/tasks.dto';
 import {
   TasksRepository,
@@ -26,7 +26,7 @@ export class TasksService {
   constructor(
     private readonly repository: TasksRepository,
     private readonly notificationsService?: NotificationsService,
-  ) {}
+  ) { }
 
   async list(query: TaskQueryDto, principal: AccessTokenPayload) {
     this.assertPermission(principal, 'tasks.read');

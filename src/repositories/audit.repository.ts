@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '../prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface AuditAppendInput {
@@ -52,7 +52,7 @@ export type AuditListRow = Prisma.AuditLogGetPayload<{
 
 @Injectable()
 export class AuditRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   append(input: AuditAppendInput) {
     return this.prisma.auditLog.create({
@@ -65,15 +65,15 @@ export class AuditRepository {
         ...(input.beforeData === undefined
           ? {}
           : {
-              beforeData:
-                input.beforeData === null ? Prisma.DbNull : input.beforeData,
-            }),
+            beforeData:
+              input.beforeData === null ? Prisma.DbNull : input.beforeData,
+          }),
         ...(input.afterData === undefined
           ? {}
           : {
-              afterData:
-                input.afterData === null ? Prisma.DbNull : input.afterData,
-            }),
+            afterData:
+              input.afterData === null ? Prisma.DbNull : input.afterData,
+          }),
         reason: input.reason,
         ipAddress: input.ipAddress,
         userAgent: input.userAgent,
@@ -94,15 +94,15 @@ export class AuditRepository {
         : {}),
       ...(filters.createdFrom || filters.createdTo
         ? {
-            createdAt: {
-              ...(filters.createdFrom
-                ? { gte: new Date(filters.createdFrom) }
-                : {}),
-              ...(filters.createdTo
-                ? { lte: new Date(filters.createdTo) }
-                : {}),
-            },
-          }
+          createdAt: {
+            ...(filters.createdFrom
+              ? { gte: new Date(filters.createdFrom) }
+              : {}),
+            ...(filters.createdTo
+              ? { lte: new Date(filters.createdTo) }
+              : {}),
+          },
+        }
         : {}),
     };
     const [data, total] = await this.prisma.$transaction([

@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { isObjectLike } from 'lodash';
-import { Prisma } from '../prisma/client';
+import { Prisma } from '@prisma/client';
 import {
   AuditAppendInput,
   AuditListFilters,
@@ -13,7 +13,7 @@ const SECRET_FIELD =
 
 @Injectable()
 export class AuditService {
-  constructor(private readonly repository: AuditRepository) {}
+  constructor(private readonly repository: AuditRepository) { }
 
   append(
     input: Omit<AuditAppendInput, 'beforeData' | 'afterData'> & {

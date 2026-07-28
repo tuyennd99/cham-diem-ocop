@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { uniq } from 'lodash';
-import { PeriodStatus, UserStatus } from '../prisma/client';
+import { PeriodStatus, UserStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type {
   DeadlineNotificationTarget,
@@ -9,7 +9,7 @@ import type {
 
 @Injectable()
 export class NotificationsRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async list(input: {
     recipientId: number;

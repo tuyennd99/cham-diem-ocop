@@ -12,7 +12,7 @@ import {
   ReportKind,
   ReportStatus,
   TaskType,
-} from '../prisma/client';
+} from '@prisma/client';
 import { ReportHistoryQueryDto } from '../dtos/reports.dto';
 import {
   ReportWorkspaceView,
@@ -28,7 +28,7 @@ export class ReportsService {
   constructor(
     private readonly repository: ReportsRepository,
     private readonly notificationsService?: NotificationsService,
-  ) {}
+  ) { }
 
   async openProgress(reportingPeriodId: number, principal: AccessTokenPayload) {
     this.assertPermission(principal, 'progress.edit');
@@ -330,7 +330,7 @@ export class ReportsService {
       principal.isAdmin ||
       principal.isStaff ||
       workspace.reportingPeriod.task.leadOrganizationId ===
-        principal.organizationId ||
+      principal.organizationId ||
       (workspace.kind === ReportKind.PROGRESS &&
         workspace.ownerOrganizationId === principal.organizationId)
     ) {
@@ -361,7 +361,7 @@ export class ReportsService {
       workspace.kind === ReportKind.PROGRESS &&
       !principal.isAdmin &&
       workspace.reportingPeriod.task.leadOrganizationId !==
-        principal.organizationId
+      principal.organizationId
     ) {
       throw new ForbiddenException(
         'Only the lead organization may review progress',

@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ReportKind } from '../prisma/client';
+import { ReportKind } from '@prisma/client';
 import type { Request } from 'express';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { Permissions } from '../decorators/permissions.decorator';
@@ -32,7 +32,7 @@ export class ProgressReportsController {
   constructor(
     private readonly reports: ReportsService,
     private readonly files: FilesService,
-  ) {}
+  ) { }
 
   @Get('periods/:periodId')
   @Permissions('progress.edit')

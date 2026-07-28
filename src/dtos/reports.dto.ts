@@ -11,7 +11,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Frequency } from '../prisma/client';
+import { Frequency } from '@prisma/client';
 
 export class SaveReportDraftDto {
   @ApiProperty()

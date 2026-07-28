@@ -13,7 +13,7 @@ import {
   DUMMY_PASSWORD_HASH,
 } from '../constants/auth';
 import { env } from '../config/env';
-import { UserStatus } from '../prisma/client';
+import { UserStatus } from '@prisma/client';
 import { AuthRepository } from '../repositories/auth.repository';
 import {
   AccessTokenPayload,
@@ -27,7 +27,7 @@ export class AuthService {
   constructor(
     private readonly repository: AuthRepository,
     private readonly jwtService: JwtService,
-  ) {}
+  ) { }
 
   async login(
     username: string,

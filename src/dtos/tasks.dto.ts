@@ -14,7 +14,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
-import { Frequency, TaskType } from '../prisma/client';
+import { Frequency, TaskType } from '@prisma/client';
 
 export class CreateTaskDto {
   @ApiProperty({ maxLength: 100 })
@@ -85,7 +85,7 @@ export class CreateTaskDto {
   periodicStartAt?: string;
 }
 
-export class UpdateTaskDto extends PartialType(CreateTaskDto) {}
+export class UpdateTaskDto extends PartialType(CreateTaskDto) { }
 
 export class TaskQueryDto {
   @ApiPropertyOptional({ default: 1, minimum: 1 })

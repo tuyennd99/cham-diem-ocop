@@ -1,5 +1,5 @@
 import dayjs from 'dayjs';
-import { Frequency } from '../prisma/client';
+import { Frequency } from '@prisma/client';
 
 export function buildPeriod(frequency: Frequency, anchor: Date) {
   const date = dayjs(anchor);

@@ -11,7 +11,7 @@ import {
 import { createReadStream } from 'node:fs';
 import { unlink } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
-import { PeriodStatus, ReportKind, ReportStatus } from '../prisma/client';
+import { PeriodStatus, ReportKind, ReportStatus } from '@prisma/client';
 import {
   DownloadRecord,
   DraftFileContext,
@@ -167,10 +167,10 @@ export class FilesService {
       (context.ownerOrganizationId !== principal.organizationId ||
         (context.kind === ReportKind.PROGRESS
           ? !context.reportingPeriod.task.collaboratorOrganizationIds.includes(
-              principal.organizationId,
-            )
+            principal.organizationId,
+          )
           : context.reportingPeriod.task.leadOrganizationId !==
-            principal.organizationId))
+          principal.organizationId))
     ) {
       throw new ForbiddenException('Report belongs to another organization');
     }
@@ -201,7 +201,7 @@ export class FilesService {
       principal.isAdmin ||
       principal.isStaff ||
       context.reportingPeriod.task.leadOrganizationId ===
-        principal.organizationId ||
+      principal.organizationId ||
       (context.kind === ReportKind.PROGRESS &&
         context.ownerOrganizationId === principal.organizationId)
     ) {

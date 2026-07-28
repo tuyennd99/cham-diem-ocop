@@ -1,4 +1,4 @@
-import type { UserStatus } from '../prisma/client';
+import type { UserStatus } from '@prisma/client';
 
 export interface RequestMeta {
   organizationId?: number;

@@ -7,7 +7,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { PERMISSIONS_KEY } from '../decorators/permissions.decorator';
-import { UserStatus } from '../prisma/client';
+import { UserStatus } from '@prisma/client';
 import {
   EffectivePermissions,
   SystemRepository,
@@ -19,7 +19,7 @@ export class PermissionGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly repository: SystemRepository,
-  ) {}
+  ) { }
 
   async canActivate(context: ExecutionContext) {
     const request = context

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { TaskType } from '../prisma/client';
+import { TaskType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { calculateTaskDeadlineStatus } from '../utils/task-deadline-status';
 
@@ -10,7 +10,7 @@ export { calculateTaskDeadlineStatus } from '../utils/task-deadline-status';
 export class TaskStatusJob {
   private readonly logger = new Logger(TaskStatusJob.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   @Cron('5 0 * * *', {
     disabled: process.env.DISABLE_SCHEDULER === 'true',
@@ -55,11 +55,11 @@ export class TaskStatusJob {
       return deadlineStatus === task.deadlineStatus
         ? []
         : [
-            this.prisma.task.update({
-              where: { id: task.id },
-              data: { deadlineStatus },
-            }),
-          ];
+          this.prisma.task.update({
+            where: { id: task.id },
+            data: { deadlineStatus },
+          }),
+        ];
     });
 
     if (updates.length > 0) {

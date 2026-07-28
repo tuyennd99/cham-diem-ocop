@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { uniq } from 'lodash';
-import { Prisma, UserStatus } from '../prisma/client';
+import { Prisma, UserStatus } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser, RefreshSession, RequestMeta } from '../types/auth';
@@ -27,7 +27,7 @@ type AuthUserPayload = Prisma.UserGetPayload<{
 
 @Injectable()
 export class AuthRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async findUserByUsername(username: string): Promise<AuthUser | null> {
     const user = await this.prisma.user.findFirst({
@@ -110,10 +110,10 @@ export class AuthRepository {
           failedLoginWindowStartedAt: windowStartedAt,
           ...(locked
             ? {
-                lockedAt: now,
-                lockedUntil,
-                lockReason: 'FIVE_FAILED_LOGINS',
-              }
+              lockedAt: now,
+              lockedUntil,
+              lockReason: 'FIVE_FAILED_LOGINS',
+            }
             : {}),
         },
       });
@@ -267,11 +267,11 @@ export class AuthRepository {
     });
     return session
       ? {
-          id: session.id,
-          expiresAt: session.expiresAt,
-          revokedAt: session.revokedAt,
-          user: this.toAuthUser(session.user),
-        }
+        id: session.id,
+        expiresAt: session.expiresAt,
+        revokedAt: session.revokedAt,
+        user: this.toAuthUser(session.user),
+      }
       : null;
   }
 
