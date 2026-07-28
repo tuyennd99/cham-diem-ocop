@@ -1,3 +1,4 @@
+import { SCHEDULE_CRON_OPTIONS } from '@nestjs/schedule/dist/schedule.constants';
 import { TaskDeadlineStatus, TaskType } from '../prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { calculateTaskDeadlineStatus, TaskStatusJob } from './task-status.job';
@@ -6,7 +7,13 @@ describe('calculateTaskDeadlineStatus', () => {
   const now = new Date('2026-07-26T00:00:00.000Z');
   const dueAt = new Date('2026-07-28T00:00:00.000Z');
 
-  it.each([
+  const cases: {
+    name: string;
+    completedAt: Date | null;
+    dueAt: Date;
+    now: Date;
+    expected: TaskDeadlineStatus;
+  }[] = [
     {
       name: 'completed on time',
       completedAt: new Date('2026-07-28T00:00:00.000Z'),
@@ -42,14 +49,28 @@ describe('calculateTaskDeadlineStatus', () => {
       now,
       expected: TaskDeadlineStatus.DANG_THUC_HIEN,
     },
-  ])('$name', ({ completedAt, dueAt: deadline, now: current, expected }) => {
-    expect(
-      calculateTaskDeadlineStatus({ completedAt, dueAt: deadline }, current),
-    ).toBe(expected);
-  });
+  ];
+
+  it.each(cases)(
+    '$name',
+    ({ completedAt, dueAt: deadline, now: current, expected }) => {
+      expect(
+        calculateTaskDeadlineStatus({ completedAt, dueAt: deadline }, current),
+      ).toBe(expected);
+    },
+  );
 });
 
 describe('TaskStatusJob', () => {
+  it('runs once a day at 00:05 in Vietnam time', () => {
+    const handler = Reflect.get(TaskStatusJob.prototype, 'handleTaskStatus');
+
+    expect(Reflect.getMetadata(SCHEDULE_CRON_OPTIONS, handler)).toMatchObject({
+      cronTime: '5 0 * * *',
+      timeZone: 'Asia/Ho_Chi_Minh',
+    });
+  });
+
   it('updates only changed ad-hoc task statuses', async () => {
     const now = new Date('2026-07-26T00:00:00.000Z');
     const update = jest.fn().mockResolvedValue({});

@@ -6,15 +6,10 @@ import {
   DashboardTaskRow,
 } from '../repositories/dashboard.repository';
 import { AccessTokenPayload } from '../types/auth';
-
-export type DashboardStatus =
-  | 'HOAN_THANH'
-  | 'DANG_CAP_NHAT'
-  | 'QUA_HAN'
-  | 'SAP_DEN_HAN'
-  | 'CHUA_HOAN_THANH';
-
-type StatusCounts = Record<DashboardStatus, number>;
+import type {
+  DashboardStatus,
+  DashboardStatusCounts,
+} from '../types/dashboard';
 
 @Injectable()
 export class DashboardService {
@@ -96,7 +91,7 @@ export class DashboardService {
     return 'CHUA_HOAN_THANH';
   }
 
-  private emptyStatusCounts(): StatusCounts {
+  private emptyStatusCounts(): DashboardStatusCounts {
     return {
       HOAN_THANH: 0,
       DANG_CAP_NHAT: 0,

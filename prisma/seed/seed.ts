@@ -1,5 +1,5 @@
 import { createPrismaAdapter, PrismaClient } from '../../src/prisma/client';
-import { hashSeedPassword } from './password';
+import { DEFAULT_SEED_PASSWORD, hashSeedPassword } from './password';
 
 const prisma = new PrismaClient({ adapter: createPrismaAdapter() });
 
@@ -55,11 +55,7 @@ const groups = {
 } as const;
 
 async function main() {
-  const password = process.env.SEED_ADMIN_PASSWORD;
-  if (!password)
-    throw new Error(
-      'SEED_ADMIN_PASSWORD is required to seed the sample admin account.',
-    );
+  const password = process.env.SEED_ADMIN_PASSWORD ?? DEFAULT_SEED_PASSWORD;
   const passwordHash = await hashSeedPassword(password);
 
   const [technicalAdmin, standingOffice, sampleUnit] = await Promise.all([

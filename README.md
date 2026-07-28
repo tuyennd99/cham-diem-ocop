@@ -15,7 +15,6 @@ Copy-Item .env.example .env
 pnpm install
 pnpm prisma generate
 pnpm prisma migrate deploy
-$env:SEED_ADMIN_PASSWORD = '<mật-khẩu-tạm-mạnh>'
 pnpm prisma db seed
 pnpm start:dev
 ```
@@ -29,7 +28,8 @@ chạy cổng `3000`.
 
 `DATABASE_URL` phải dùng tài khoản PostgreSQL riêng của ứng dụng. Không dùng
 superuser trong production. Sau lần đăng nhập đầu tiên, đổi ngay mật khẩu tài
-khoản seed `admin`.
+khoản seed `admin` (mật khẩu mặc định `123456`; nên đổi ngay). Có thể ghi đè
+bằng `SEED_ADMIN_PASSWORD`.
 
 ## Kiểm thử
 
@@ -40,7 +40,6 @@ Cluster test tách riêng nằm trong `BE/.postgres-test` và chỉ nghe
 pnpm test:db:setup
 $env:TEST_DATABASE_URL = 'postgresql://postgres@127.0.0.1:5433/congan_task_test?schema=public'
 $env:DATABASE_URL = $env:TEST_DATABASE_URL
-$env:SEED_ADMIN_PASSWORD = 'Test-only-password-123!'
 pnpm prisma migrate deploy
 pnpm prisma db seed
 pnpm test

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { TaskType } from '../prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { calculateTaskDeadlineStatus } from '../utils/task-deadline-status';
@@ -12,8 +12,9 @@ export class TaskStatusJob {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  @Cron(CronExpression.EVERY_MINUTE, {
+  @Cron('5 0 * * *', {
     disabled: process.env.DISABLE_SCHEDULER === 'true',
+    timeZone: 'Asia/Ho_Chi_Minh',
     waitForCompletion: true,
   })
   async handleTaskStatus() {

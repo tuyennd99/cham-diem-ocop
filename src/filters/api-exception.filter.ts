@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { Request, Response } from 'express';
+import { isObjectLike } from 'lodash';
 import { ApiError } from '../types/api';
 
 @Catch()
@@ -21,10 +22,9 @@ export class ApiExceptionFilter implements ExceptionFilter {
         : HttpStatus.INTERNAL_SERVER_ERROR;
     const exceptionResponse =
       exception instanceof HttpException ? exception.getResponse() : undefined;
-    const body: Record<string, unknown> =
-      typeof exceptionResponse === 'object' && exceptionResponse !== null
-        ? (exceptionResponse as Record<string, unknown>)
-        : {};
+    const body: Record<string, unknown> = isObjectLike(exceptionResponse)
+      ? (exceptionResponse as Record<string, unknown>)
+      : {};
     const message =
       typeof exceptionResponse === 'string'
         ? exceptionResponse

@@ -1,15 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import {
+import { uniq } from 'lodash';
+import { NotificationsRepository } from '../repositories/notifications.repository';
+import type {
   NotificationWrite,
-  NotificationsRepository,
-} from '../repositories/notifications.repository';
-
-export interface OrganizationNotification extends Omit<
-  NotificationWrite,
-  'organizationIds'
-> {
-  organizationId: number;
-}
+  OrganizationNotification,
+} from '../types/notifications';
 
 @Injectable()
 export class NotificationsService {
@@ -58,7 +53,7 @@ export class NotificationsService {
   createForOrganizations(input: NotificationWrite) {
     return this.repository.createForActiveUsers({
       ...input,
-      organizationIds: [...new Set(input.organizationIds)],
+      organizationIds: uniq(input.organizationIds),
     });
   }
 

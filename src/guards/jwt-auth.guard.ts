@@ -8,6 +8,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
+import { isObjectLike } from 'lodash';
 import { env } from '../config/env';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { AccessTokenPayload } from '../types/auth';
@@ -51,7 +52,7 @@ export class JwtAuthGuard implements CanActivate {
   }
 
   private isAccessTokenPayload(value: unknown): value is AccessTokenPayload {
-    if (typeof value !== 'object' || value === null) return false;
+    if (!isObjectLike(value)) return false;
     const payload = value as Record<string, unknown>;
     return (
       Number.isInteger(payload.sub) &&

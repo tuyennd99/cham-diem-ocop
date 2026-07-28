@@ -18,9 +18,10 @@ import type { Request } from 'express';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { Permissions } from '../decorators/permissions.decorator';
 import { RejectReportDto, SaveReportDraftDto } from '../dtos/reports.dto';
-import { FilesService, UploadedPrivateFile } from '../services/files.service';
+import { FilesService } from '../services/files.service';
 import { ReportsService } from '../services/reports.service';
 import type { AccessTokenPayload } from '../types/auth';
+import type { UploadedPrivateFile } from '../types/files';
 import { asDownload, privateUploadOptions } from '../utils/private-storage';
 import { requestMeta } from '../utils/request-meta';
 

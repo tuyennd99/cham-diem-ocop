@@ -5,8 +5,8 @@
 1. Tạo database và user PostgreSQL riêng, chỉ cấp quyền trên database ứng dụng.
 2. Sao chép `.env.example` thành `.env`, thay toàn bộ secret và mật khẩu mẫu.
 3. Chạy `pnpm prisma migrate deploy`.
-4. Chỉ khi cần dữ liệu khởi tạo, đặt `SEED_ADMIN_PASSWORD` rồi chạy
-   `pnpm prisma db seed`.
+4. Chỉ khi cần dữ liệu khởi tạo, chạy `pnpm prisma db seed`. Mật khẩu user
+   `admin` mặc định là `123456`; ghi đè bằng `SEED_ADMIN_PASSWORD` khi cần.
 5. Gắn `STORAGE_PATH` vào persistent volume private và chạy Backend cổng `3030`.
 
 ## Reverse proxy và mạng

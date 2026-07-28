@@ -1,25 +1,11 @@
 import { Injectable } from '@nestjs/common';
+import { uniq } from 'lodash';
 import { PeriodStatus, UserStatus } from '../prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-
-export interface NotificationWrite {
-  organizationIds: number[];
-  eventKey: string;
-  type: string;
-  title: string;
-  body?: string | null;
-  entityType?: string | null;
-  entityId?: number | null;
-}
-
-export interface DeadlineNotificationTarget {
-  periodId: number;
-  taskId: number;
-  taskCode: string;
-  taskName: string;
-  dueAt: Date;
-  organizationIds: number[];
-}
+import type {
+  DeadlineNotificationTarget,
+  NotificationWrite,
+} from '../types/notifications';
 
 @Injectable()
 export class NotificationsRepository {
@@ -69,7 +55,7 @@ export class NotificationsRepository {
   }
 
   async createForActiveUsers(input: NotificationWrite) {
-    const organizationIds = [...new Set(input.organizationIds)];
+    const organizationIds = uniq(input.organizationIds);
     if (organizationIds.length === 0) return 0;
     const recipients = await this.prisma.user.findMany({
       where: {

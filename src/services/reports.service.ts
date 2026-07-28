@@ -208,7 +208,7 @@ export class ReportsService {
       { ...meta, organizationId: principal.organizationId },
     );
     if (!reviewed) throw new ConflictException('Report is no longer pending');
-    await this.notifyReview(workspace, 'APPROVED');
+    await this.notifyReview(workspace, ReportStatus.APPROVED);
     return reviewed;
   }
 
@@ -231,7 +231,7 @@ export class ReportsService {
       { ...meta, organizationId: principal.organizationId },
     );
     if (!reviewed) throw new ConflictException('Report is no longer pending');
-    await this.notifyReview(workspace, 'REJECTED', trimmed);
+    await this.notifyReview(workspace, ReportStatus.REJECTED, trimmed);
     return reviewed;
   }
 
@@ -392,11 +392,11 @@ export class ReportsService {
 
   private async notifyReview(
     workspace: ReportWorkspaceView,
-    result: 'APPROVED' | 'REJECTED',
+    result: typeof ReportStatus.APPROVED | typeof ReportStatus.REJECTED,
     reason?: string,
   ) {
-    const versionId = workspace.latestVersion!.id;
-    const approved = result === 'APPROVED';
+    const versionId = workspace.latestVersion.id;
+    const approved = result === ReportStatus.APPROVED;
     await this.safeNotify({
       organizationIds: [workspace.ownerOrganizationId],
       eventKey: `REPORT_${result}:${versionId}`,

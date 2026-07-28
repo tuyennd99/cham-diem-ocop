@@ -6,6 +6,7 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { Request } from 'express';
+import { isObjectLike } from 'lodash';
 import { timingSafeEqual } from 'node:crypto';
 import { env } from '../config/env';
 import { AuthService } from '../services/auth.service';
@@ -23,10 +24,9 @@ export class CsrfGuard implements CanActivate {
 
     const header = request.headers['x-csrf-token'];
     const cookies = (request as unknown as { cookies?: unknown }).cookies;
-    const cookie =
-      typeof cookies === 'object' && cookies !== null
-        ? (cookies as Record<string, unknown>).csrf_token
-        : undefined;
+    const cookie = isObjectLike(cookies)
+      ? (cookies as Record<string, unknown>).csrf_token
+      : undefined;
     if (
       typeof header !== 'string' ||
       typeof cookie !== 'string' ||

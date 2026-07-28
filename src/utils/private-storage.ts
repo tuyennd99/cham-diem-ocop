@@ -52,7 +52,7 @@ class PrivateStorage {
   ) {
     if (!file.path) return callback(null);
     void import('node:fs/promises')
-      .then(({ unlink }) => unlink(file.path!))
+      .then(({ unlink }) => unlink(file.path))
       .then(() => callback(null))
       .catch((error: NodeJS.ErrnoException) =>
         callback(error.code === 'ENOENT' ? null : error),

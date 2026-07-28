@@ -1,5 +1,4 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import {
   createHash,
@@ -8,7 +7,13 @@ import {
   timingSafeEqual,
 } from 'node:crypto';
 import { hashPassword, verifyPassword } from '../../prisma/seed/password';
-import { requireSecret } from '../config/env';
+import {
+  ACCESS_TOKEN_SECONDS,
+  REFRESH_LIFETIME_MS,
+  DUMMY_PASSWORD_HASH,
+} from '../constants/auth';
+import { env } from '../config/env';
+import { UserStatus } from '../prisma/client';
 import { AuthRepository } from '../repositories/auth.repository';
 import {
   AccessTokenPayload,
@@ -17,17 +22,11 @@ import {
   RequestMeta,
 } from '../types/auth';
 
-const ACCESS_TOKEN_SECONDS = 15 * 60;
-const REFRESH_LIFETIME_MS = 3 * 24 * 60 * 60_000;
-const DUMMY_PASSWORD_HASH =
-  '$argon2id$v=19$m=65536,t=3,p=4$+V/bhD/sS9k7L7dE3QRhBw$hdZ3VKkQ7UjdKulRRi9TNLfCzTXEcLrHeiwzYScJFBQ';
-
 @Injectable()
 export class AuthService {
   constructor(
     private readonly repository: AuthRepository,
     private readonly jwtService: JwtService,
-    private readonly configService: ConfigService,
   ) {}
 
   async login(
@@ -93,7 +92,10 @@ export class AuthService {
       );
       throw this.unauthorized('Refresh token expired');
     }
-    if (session.user.status !== 'ACTIVE' || session.user.deletedAt != null) {
+    if (
+      session.user.status !== UserStatus.ACTIVE ||
+      session.user.deletedAt != null
+    ) {
       await this.repository.revokeAllSessions(
         session.user.id,
         now,
@@ -149,7 +151,7 @@ export class AuthService {
 
   async profile(userId: number) {
     const user = await this.repository.findUserById(userId);
-    if (!user || user.status !== 'ACTIVE') throw this.unauthorized();
+    if (!user || user.status !== UserStatus.ACTIVE) throw this.unauthorized();
     return this.publicUser(user);
   }
 
@@ -160,7 +162,7 @@ export class AuthService {
     meta: RequestMeta,
   ) {
     const user = await this.repository.findUserById(userId);
-    if (!user || user.status !== 'ACTIVE') throw this.unauthorized();
+    if (!user || user.status !== UserStatus.ACTIVE) throw this.unauthorized();
     if (!(await verifyPassword(user.passwordHash, currentPassword))) {
       throw this.unauthorized('Current password is incorrect');
     }
@@ -201,7 +203,7 @@ export class AuthService {
     now: Date,
     meta: RequestMeta,
   ) {
-    if (user.status !== 'LOCKED') return;
+    if (user.status !== UserStatus.LOCKED) return;
     if (!user.lockedUntil || user.lockedUntil > now) throw this.locked();
 
     await this.repository.unlockAutomatically(
@@ -210,7 +212,7 @@ export class AuthService {
       now,
       meta,
     );
-    user.status = 'ACTIVE';
+    user.status = UserStatus.ACTIVE;
     user.lockedUntil = null;
     user.failedLoginCount = 0;
     user.failedLoginWindowStartedAt = null;
@@ -283,17 +285,11 @@ export class AuthService {
   }
 
   private csrfSecret() {
-    return requireSecret(
-      'CSRF_SECRET',
-      this.configService.get<string>('CSRF_SECRET'),
-    );
+    return env(process.env).csrfSecret;
   }
 
   private jwtSecret() {
-    return requireSecret(
-      'JWT_SECRET',
-      this.configService.get<string>('JWT_SECRET'),
-    );
+    return env(process.env).jwtSecret;
   }
 
   private unauthorized(message = 'Invalid username or password') {

@@ -1,10 +1,23 @@
-export * from './audit.service';
-export * from './auth.service';
-export * from './dashboard.service';
-export * from './files.service';
-export * from './health.service';
-export * from './notifications.service';
-export * from './reporting-periods.service';
-export * from './reports.service';
-export * from './system.service';
-export * from './tasks.service';
+import { AuditService } from './audit.service';
+import { AuthService } from './auth.service';
+import { DashboardService } from './dashboard.service';
+import { FilesService } from './files.service';
+import { HealthService } from './health.service';
+import { NotificationsService } from './notifications.service';
+import { ReportingPeriodsService } from './reporting-periods.service';
+import { ReportsService } from './reports.service';
+import { SystemService } from './system.service';
+import { TasksService } from './tasks.service';
+
+export const appServices = [
+  AuditService,
+  AuthService,
+  DashboardService,
+  FilesService,
+  HealthService,
+  NotificationsService,
+  ReportingPeriodsService,
+  ReportsService,
+  SystemService,
+  TasksService,
+];

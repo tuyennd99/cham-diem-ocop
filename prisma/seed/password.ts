@@ -9,6 +9,8 @@ const argon2idPrefix = '$argon2id$v=19$m=65536,t=3,p=4$';
 const argon2idPattern =
   /^\$argon2id\$v=19\$m=(\d+),t=(\d+),p=(\d+)\$([A-Za-z0-9+/]+)\$([A-Za-z0-9+/]+)$/;
 
+export const DEFAULT_SEED_PASSWORD = '123456';
+
 export async function hashPassword(password: string) {
   const nonce = randomBytes(16);
   const hash = await derive({

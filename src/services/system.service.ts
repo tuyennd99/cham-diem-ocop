@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { uniq } from 'lodash';
 import { hashPassword } from '../../prisma/seed/password';
 import {
   CreateOrganizationDto,
@@ -354,14 +355,14 @@ export class SystemService {
 
   private async requirePermissionGroups(ids: number[]) {
     const items = await this.repository.findPermissionGroupsByIds(ids);
-    if (items.length !== new Set(ids).size) {
+    if (items.length !== uniq(ids).length) {
       throw this.notFound('Permission group');
     }
   }
 
   private async requirePermissions(ids: number[]) {
     const items = await this.repository.findPermissionsByIds(ids);
-    if (items.length !== new Set(ids).size) {
+    if (items.length !== uniq(ids).length) {
       throw this.notFound('Permission');
     }
   }

@@ -1,3 +1,5 @@
+import type { UserStatus } from '../prisma/client';
+
 export interface RequestMeta {
   organizationId?: number;
   ipAddress?: string;
@@ -22,7 +24,7 @@ export interface AuthUser {
   permissions: string[];
   isAdmin?: boolean;
   isStaff?: boolean;
-  status: 'ACTIVE' | 'LOCKED';
+  status: UserStatus;
   lockedUntil: Date | null;
   failedLoginCount: number;
   failedLoginWindowStartedAt: Date | null;

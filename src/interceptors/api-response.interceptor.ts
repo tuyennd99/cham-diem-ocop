@@ -5,6 +5,7 @@ import {
   StreamableFile,
   NestInterceptor,
 } from '@nestjs/common';
+import { isObjectLike } from 'lodash';
 import { Observable, map } from 'rxjs';
 import { ApiSuccess } from '../types/api';
 
@@ -46,13 +47,12 @@ export class ApiResponseInterceptor<T> implements NestInterceptor<
       totalPages: number;
     };
   } {
-    if (typeof value !== 'object' || value === null) return false;
+    if (!isObjectLike(value)) return false;
     const candidate = value as Record<string, unknown>;
     const meta = candidate.meta;
     return (
       'data' in candidate &&
-      typeof meta === 'object' &&
-      meta !== null &&
+      isObjectLike(meta) &&
       ['page', 'limit', 'total', 'totalPages'].every(
         (key) => typeof (meta as Record<string, unknown>)[key] === 'number',
       )

@@ -1,5 +1,10 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import { Prisma, ReportKind } from '../prisma/client';
+import {
+  PeriodStatus,
+  Prisma,
+  ReportKind,
+  ReportStatus,
+} from '../prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RequestMeta } from '../types/auth';
@@ -21,10 +26,10 @@ type FileContextPayload = Prisma.ReportWorkspaceGetPayload<{
 export interface DraftFileContext {
   id: number;
   kind: ReportKind;
-  status: 'DRAFT' | 'SUBMITTED' | 'REJECTED' | 'APPROVED';
+  status: ReportStatus;
   ownerOrganizationId: number;
   reportingPeriod: {
-    status: 'OPEN' | 'COMPLETED' | 'CANCELED';
+    status: PeriodStatus;
     task: {
       leadOrganizationId: number;
       completedAt: Date | null;
@@ -332,8 +337,9 @@ export class FilesRepository {
 
   private isEditable(context: DraftFileContext) {
     return (
-      (context.status === 'DRAFT' || context.status === 'REJECTED') &&
-      context.reportingPeriod.status === 'OPEN' &&
+      (context.status === ReportStatus.DRAFT ||
+        context.status === ReportStatus.REJECTED) &&
+      context.reportingPeriod.status === PeriodStatus.OPEN &&
       context.reportingPeriod.task.completedAt === null &&
       context.reportingPeriod.task.deletedAt === null
     );

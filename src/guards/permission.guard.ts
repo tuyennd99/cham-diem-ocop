@@ -7,6 +7,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { PERMISSIONS_KEY } from '../decorators/permissions.decorator';
+import { UserStatus } from '../prisma/client';
 import {
   EffectivePermissions,
   SystemRepository,
@@ -35,10 +36,10 @@ export class PermissionGuard implements CanActivate {
       request.user.sub,
     );
     this.assertPermissions(effective, required);
-    request.user.permissions = effective!.permissions;
-    request.user.organizationId = effective!.organizationId;
-    request.user.isAdmin = effective!.isAdmin;
-    request.user.isStaff = effective!.isStaff;
+    request.user.permissions = effective.permissions;
+    request.user.organizationId = effective.organizationId;
+    request.user.isAdmin = effective.isAdmin;
+    request.user.isStaff = effective.isStaff;
     return true;
   }
 
@@ -48,7 +49,7 @@ export class PermissionGuard implements CanActivate {
   ) {
     if (
       !principal ||
-      principal.status !== 'ACTIVE' ||
+      principal.status !== UserStatus.ACTIVE ||
       (!principal.isAdmin &&
         required.some((code) => !principal.permissions.includes(code)))
     ) {

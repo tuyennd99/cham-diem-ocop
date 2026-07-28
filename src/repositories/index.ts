@@ -1,8 +1,19 @@
-export * from './audit.repository';
-export * from './auth.repository';
-export * from './dashboard.repository';
-export * from './files.repository';
-export * from './notifications.repository';
-export * from './reports.repository';
-export * from './system.repository';
-export * from './tasks.repository';
+import { AuditRepository } from './audit.repository';
+import { AuthRepository } from './auth.repository';
+import { DashboardRepository } from './dashboard.repository';
+import { FilesRepository } from './files.repository';
+import { NotificationsRepository } from './notifications.repository';
+import { ReportsRepository } from './reports.repository';
+import { SystemRepository } from './system.repository';
+import { TasksRepository } from './tasks.repository';
+
+export const appRepositories = [
+  AuditRepository,
+  AuthRepository,
+  DashboardRepository,
+  FilesRepository,
+  NotificationsRepository,
+  ReportsRepository,
+  SystemRepository,
+  TasksRepository,
+];

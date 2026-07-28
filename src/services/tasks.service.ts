@@ -6,8 +6,8 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { uniq } from 'lodash';
 import { TaskType } from '../prisma/client';
-import { dayjs } from '../utils/dayjs';
 import { CreateTaskDto, TaskQueryDto, UpdateTaskDto } from '../dtos/tasks.dto';
 import {
   TasksRepository,
@@ -17,6 +17,7 @@ import {
 import { AccessTokenPayload, RequestMeta } from '../types/auth';
 import { NotificationsService } from './notifications.service';
 import { calculateTaskDeadlineStatus } from '../utils/task-deadline-status';
+import dayjs from 'dayjs';
 
 @Injectable()
 export class TasksService {
@@ -264,7 +265,7 @@ export class TasksService {
       throw new BadRequestException('At least one collaborator is required');
     }
     if (
-      new Set(input.collaboratorOrganizationIds).size !==
+      uniq(input.collaboratorOrganizationIds).length !==
       input.collaboratorOrganizationIds.length
     ) {
       throw new BadRequestException('Collaborators must be unique');
@@ -279,16 +280,17 @@ export class TasksService {
       input.leadOrganizationId,
       ...input.collaboratorOrganizationIds,
     ];
+    const uniqueOrganizationIds = uniq(organizationIds);
     const [program, organizations] = await Promise.all([
       this.repository.findActiveProgram(input.programId),
-      this.repository.findActiveOrganizations([...new Set(organizationIds)]),
+      this.repository.findActiveOrganizations(uniqueOrganizationIds),
     ]);
     if (!program) throw new BadRequestException('Program is not active');
     const byId = new Map(
       organizations.map((organization) => [organization.id, organization]),
     );
     if (
-      byId.size !== new Set(organizationIds).size ||
+      byId.size !== uniqueOrganizationIds.length ||
       !byId.get(input.assigningOrganizationId)?.isAssigningAuthority ||
       !byId.get(input.leadOrganizationId)?.isExecutingUnit ||
       input.collaboratorOrganizationIds.some(

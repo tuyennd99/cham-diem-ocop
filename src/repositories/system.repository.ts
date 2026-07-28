@@ -1,5 +1,6 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import { Prisma } from '../prisma/client';
+import { uniq } from 'lodash';
+import { Prisma, UserStatus } from '../prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RequestMeta } from '../types/auth';
@@ -38,7 +39,7 @@ type PermissionGroupPayload = Prisma.PermissionGroupGetPayload<{
 }>;
 
 export interface EffectivePermissions {
-  status: 'ACTIVE' | 'LOCKED';
+  status: UserStatus;
   isAdmin: boolean;
   isStaff: boolean;
   organizationId: number;
@@ -125,15 +126,11 @@ export class SystemRepository {
       isStaff: user.permissionGroups.some(
         ({ permissionGroup }) => permissionGroup.code === 'THUONG_TRUC',
       ),
-      permissions: [
-        ...new Set(
-          user.permissionGroups.flatMap(({ permissionGroup }) =>
-            permissionGroup.permissions.map(
-              ({ permission }) => permission.code,
-            ),
-          ),
+      permissions: uniq(
+        user.permissionGroups.flatMap(({ permissionGroup }) =>
+          permissionGroup.permissions.map(({ permission }) => permission.code),
         ),
-      ],
+      ),
     };
   }
 
@@ -272,7 +269,7 @@ export class SystemRepository {
       const user = await transaction.user.update({
         where: { id },
         data: {
-          status: 'LOCKED',
+          status: UserStatus.LOCKED,
           lockedAt: now,
           lockedUntil: null,
           lockReason: reason,
@@ -299,7 +296,7 @@ export class SystemRepository {
       const user = await transaction.user.update({
         where: { id },
         data: {
-          status: 'ACTIVE',
+          status: UserStatus.ACTIVE,
           lockedAt: null,
           lockedUntil: null,
           lockReason: null,

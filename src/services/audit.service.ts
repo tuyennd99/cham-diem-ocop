@@ -1,4 +1,5 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
+import { isObjectLike } from 'lodash';
 import { Prisma } from '../prisma/client';
 import {
   AuditAppendInput,
@@ -67,7 +68,7 @@ export class AuditService {
         .map((item) => this.sanitizeJson(item))
         .filter((item): item is Prisma.InputJsonValue => item !== undefined);
     }
-    if (typeof value === 'object') {
+    if (isObjectLike(value)) {
       const sanitized: Record<string, Prisma.InputJsonValue> = {};
       for (const [key, item] of Object.entries(
         value as Record<string, unknown>,

@@ -1,16 +1,18 @@
-import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { HttpException } from '@nestjs/common';
 import { hashPassword, verifyPassword } from '../../prisma/seed/password';
 import { AuthRepository } from '../repositories/auth.repository';
 import { AuthService } from './auth.service';
 
-jest.mock('../../prisma/password', () => ({
+jest.mock('../../prisma/seed/password', () => ({
   hashPassword: jest.fn().mockResolvedValue('new-password-hash'),
   verifyPassword: jest.fn(),
 }));
 
 const now = new Date('2026-07-24T00:00:00.000Z');
+const testSecret = 'test-secret-at-least-32-characters';
+const originalJwtSecret = process.env.JWT_SECRET;
+const originalCsrfSecret = process.env.CSRF_SECRET;
 const meta = {
   ipAddress: '127.0.0.1',
   userAgent: 'jest',
@@ -38,6 +40,8 @@ describe('AuthService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers().setSystemTime(now);
+    process.env.JWT_SECRET = testSecret;
+    process.env.CSRF_SECRET = testSecret;
     repo = {
       findUserByUsername: jest.fn(),
       findUserById: jest.fn(),
@@ -57,19 +61,19 @@ describe('AuthService', () => {
     service = new AuthService(
       repo as unknown as AuthRepository,
       jwtService as unknown as JwtService,
-      {
-        get: jest.fn((key: string) =>
-          key === 'CSRF_SECRET' || key === 'JWT_SECRET'
-            ? 'test-secret-at-least-32-characters'
-            : undefined,
-        ),
-      } as unknown as ConfigService,
     );
     jest.mocked(verifyPassword).mockResolvedValue(false);
   });
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  afterAll(() => {
+    if (originalJwtSecret === undefined) delete process.env.JWT_SECRET;
+    else process.env.JWT_SECRET = originalJwtSecret;
+    if (originalCsrfSecret === undefined) delete process.env.CSRF_SECRET;
+    else process.env.CSRF_SECRET = originalCsrfSecret;
   });
 
   it('locks the fifth failed login for five minutes', async () => {
@@ -266,10 +270,10 @@ describe('AuthService', () => {
   });
 
   it('does not fall back when the CSRF secret is missing', () => {
+    delete process.env.CSRF_SECRET;
     service = new AuthService(
       repo as unknown as AuthRepository,
       jwtService as unknown as JwtService,
-      { get: jest.fn() } as unknown as ConfigService,
     );
 
     expect(() => service.createCsrfToken()).toThrow('CSRF_SECRET');

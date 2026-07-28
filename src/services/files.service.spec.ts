@@ -4,10 +4,10 @@ import {
   UnsupportedMediaTypeException,
 } from '@nestjs/common';
 import {
-  MAX_DRAFT_BYTES,
   assertAllowedDocument,
   assertDraftSize,
-} from './files.service';
+} from '../utils/document-files';
+import { MAX_DRAFT_BYTES } from '../utils/private-storage';
 import { FilesRepository } from '../repositories/files.repository';
 import { FilesService } from './files.service';
 

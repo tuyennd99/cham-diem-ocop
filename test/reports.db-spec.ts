@@ -175,7 +175,7 @@ describe('PostgreSQL report invariants', () => {
     });
 
     const persistedFirst = await prisma.reportVersion.findUniqueOrThrow({
-      where: { id: first!.id },
+      where: { id: first.id },
     });
     expect(persistedFirst.content).toBe('Version one');
     expect(second).toMatchObject({

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '../prisma/client';
+import { uniq } from 'lodash';
+import { Prisma, UserStatus } from '../prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser, RefreshSession, RequestMeta } from '../types/auth';
@@ -62,7 +63,7 @@ export class AuthRepository {
         {
           failedLoginCount: number;
           failedLoginWindowStartedAt: Date | null;
-          status: 'ACTIVE' | 'LOCKED';
+          status: UserStatus;
           lockedUntil: Date | null;
         }[]
       >(
@@ -86,7 +87,7 @@ export class AuthRepository {
           ...this.auditMeta(meta),
         },
       } satisfies Prisma.AuditLogCreateArgs;
-      if (current.status === 'LOCKED') {
+      if (current.status === UserStatus.LOCKED) {
         await transaction.auditLog.create(failedAudit);
         return { locked: true, lockedUntil: current.lockedUntil };
       }
@@ -96,7 +97,7 @@ export class AuthRepository {
         now.getTime() - current.failedLoginWindowStartedAt.getTime() <= 60_000;
       const failedLoginCount = insideWindow ? current.failedLoginCount + 1 : 1;
       const windowStartedAt = insideWindow
-        ? current.failedLoginWindowStartedAt!
+        ? current.failedLoginWindowStartedAt
         : now;
       const locked = failedLoginCount >= 5;
       const lockedUntil = locked ? new Date(now.getTime() + 5 * 60_000) : null;
@@ -104,7 +105,7 @@ export class AuthRepository {
       await transaction.user.update({
         where: { id: userId },
         data: {
-          status: locked ? 'LOCKED' : 'ACTIVE',
+          status: locked ? UserStatus.LOCKED : UserStatus.ACTIVE,
           failedLoginCount,
           failedLoginWindowStartedAt: windowStartedAt,
           ...(locked
@@ -156,7 +157,7 @@ export class AuthRepository {
   ) {
     return this.prisma.$transaction(async (transaction) => {
       const rows = await transaction.$queryRaw<
-        { id: number; status: 'ACTIVE' | 'LOCKED'; lockedUntil: Date | null }[]
+        { id: number; status: UserStatus; lockedUntil: Date | null }[]
       >(
         Prisma.sql`
           SELECT "id", "status", "lockedUntil"
@@ -168,7 +169,7 @@ export class AuthRepository {
       const current = rows[0];
       if (
         !current ||
-        current.status !== 'LOCKED' ||
+        current.status !== UserStatus.LOCKED ||
         !current.lockedUntil ||
         current.lockedUntil.getTime() !== expectedLockedUntil.getTime() ||
         current.lockedUntil > now
@@ -179,7 +180,7 @@ export class AuthRepository {
       await transaction.user.update({
         where: { id: userId },
         data: {
-          status: 'ACTIVE',
+          status: UserStatus.ACTIVE,
           lockedAt: null,
           lockedUntil: null,
           lockReason: null,
@@ -214,7 +215,7 @@ export class AuthRepository {
         {
           id: number;
           passwordHash: string;
-          status: 'ACTIVE' | 'LOCKED';
+          status: UserStatus;
           deletedAt: Date | null;
         }[]
       >(
@@ -229,7 +230,7 @@ export class AuthRepository {
       if (
         !current ||
         current.passwordHash !== expectedPasswordHash ||
-        current.status !== 'ACTIVE' ||
+        current.status !== UserStatus.ACTIVE ||
         current.deletedAt != null
       ) {
         return false;
@@ -284,7 +285,7 @@ export class AuthRepository {
   ) {
     return this.prisma.$transaction(async (transaction) => {
       const users = await transaction.$queryRaw<
-        { id: number; status?: 'ACTIVE' | 'LOCKED'; deletedAt?: Date | null }[]
+        { id: number; status?: UserStatus; deletedAt?: Date | null }[]
       >(
         Prisma.sql`
           SELECT "id", "status", "deletedAt"
@@ -295,7 +296,8 @@ export class AuthRepository {
       );
       if (
         !users[0] ||
-        (users[0].status !== undefined && users[0].status !== 'ACTIVE') ||
+        (users[0].status !== undefined &&
+          users[0].status !== UserStatus.ACTIVE) ||
         users[0].deletedAt != null
       ) {
         return false;
@@ -397,7 +399,7 @@ export class AuthRepository {
         {
           id: number;
           passwordHash: string;
-          status: 'ACTIVE' | 'LOCKED';
+          status: UserStatus;
           deletedAt: Date | null;
         }[]
       >(
@@ -412,7 +414,7 @@ export class AuthRepository {
       if (
         !current ||
         current.passwordHash !== expectedPasswordHash ||
-        current.status !== 'ACTIVE' ||
+        current.status !== UserStatus.ACTIVE ||
         current.deletedAt != null
       ) {
         return false;
@@ -462,15 +464,11 @@ export class AuthRepository {
       passwordHash: user.passwordHash,
       organizationId: user.organizationId,
       organization: user.organization,
-      permissions: [
-        ...new Set(
-          user.permissionGroups.flatMap(({ permissionGroup }) =>
-            permissionGroup.permissions.map(
-              ({ permission }) => permission.code,
-            ),
-          ),
+      permissions: uniq(
+        user.permissionGroups.flatMap(({ permissionGroup }) =>
+          permissionGroup.permissions.map(({ permission }) => permission.code),
         ),
-      ],
+      ),
       isAdmin: groupCodes.includes('ADMIN'),
       isStaff: groupCodes.includes('THUONG_TRUC'),
       status: user.status,

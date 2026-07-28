@@ -13,6 +13,7 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
+import { isObjectLike } from 'lodash';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { Public } from '../decorators/public.decorator';
 import { ChangePasswordDto, LoginDto } from '../dtos/auth.dto';
@@ -156,10 +157,9 @@ export class AuthController {
 
   private cookie(request: Request, name: string) {
     const cookies = (request as unknown as { cookies?: unknown }).cookies;
-    const value =
-      typeof cookies === 'object' && cookies !== null
-        ? (cookies as Record<string, unknown>)[name]
-        : undefined;
+    const value = isObjectLike(cookies)
+      ? (cookies as Record<string, unknown>)[name]
+      : undefined;
     return typeof value === 'string' ? value : undefined;
   }
 

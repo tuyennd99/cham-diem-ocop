@@ -3,6 +3,7 @@ import {
   Frequency,
   PeriodStatus,
   Prisma,
+  ReportStatus,
   TaskDeadlineStatus,
   TaskType,
 } from '../prisma/client';
@@ -220,7 +221,7 @@ export class TasksRepository {
           deadlineStatus:
             input.type === TaskType.DOT_XUAT
               ? calculateTaskDeadlineStatus(
-                  { dueAt: input.dueAt!, completedAt: null },
+                  { dueAt: input.dueAt, completedAt: null },
                   now,
                 )
               : null,
@@ -238,10 +239,10 @@ export class TasksRepository {
                 reportingPeriods: {
                   create: {
                     frequency: null,
-                    year: input.dueAt!.getFullYear(),
+                    year: input.dueAt.getFullYear(),
                     sequence: 1,
                     periodStartAt: now,
-                    dueAt: input.dueAt!,
+                    dueAt: input.dueAt,
                   },
                 },
               }
@@ -635,7 +636,7 @@ export class TasksRepository {
       hasSubmittedReport: row.reportingPeriods.some((period) =>
         period.workspaces.some(
           (workspace) =>
-            workspace.status === 'SUBMITTED' &&
+            workspace.status === ReportStatus.SUBMITTED &&
             (globalScope ||
               row.leadOrganizationId === organizationId ||
               workspace.ownerOrganizationId === organizationId),
