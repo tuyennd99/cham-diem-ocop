@@ -69,6 +69,14 @@ export class CreateTaskDto {
   @Min(1, { each: true })
   collaboratorOrganizationIds!: number[];
 
+  @ApiPropertyOptional({ type: [Number], default: [] })
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  userGroupIds?: number[];
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsDateString()
@@ -85,7 +93,7 @@ export class CreateTaskDto {
   periodicStartAt?: string;
 }
 
-export class UpdateTaskDto extends PartialType(CreateTaskDto) { }
+export class UpdateTaskDto extends PartialType(CreateTaskDto) {}
 
 export class TaskQueryDto {
   @ApiPropertyOptional({ default: 1, minimum: 1 })

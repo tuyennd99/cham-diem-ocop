@@ -39,6 +39,9 @@ describe('Task endpoints', () => {
     update: jest.fn().mockResolvedValue({ id: 1, code: 'NV-001' }),
     remove: jest.fn().mockResolvedValue({ id: 1, deletedAt: new Date() }),
     close: jest.fn().mockResolvedValue({ id: 1, closedAt: new Date() }),
+    listUserGroupLookups: jest
+      .fn()
+      .mockResolvedValue([{ id: 5, name: 'Tá»• A', organizationIds: [30] }]),
   };
   const periodsService = {
     list: jest.fn().mockResolvedValue([]),
@@ -92,6 +95,31 @@ describe('Task endpoints', () => {
         dueAt: '2026-08-01T00:00:00.000Z',
       })
       .expect(400);
+  });
+
+  it('rejects duplicate user groups at the HTTP boundary', async () => {
+    await request(server)
+      .post('/api/v1/tasks')
+      .send({
+        code: 'NV-001',
+        name: 'Nhiá»‡m vá»¥',
+        type: 'DOT_XUAT',
+        programId: 1,
+        assigningOrganizationId: 10,
+        leadOrganizationId: 20,
+        collaboratorOrganizationIds: [30],
+        userGroupIds: [5, 5],
+        dueAt: '2026-08-01T00:00:00.000Z',
+      })
+      .expect(400);
+  });
+
+  it('lists user groups with the authenticated principal', async () => {
+    await request(server).get('/api/v1/tasks/lookups/user-groups').expect(200);
+
+    expect(tasksService.listUserGroupLookups).toHaveBeenCalledWith(
+      expect.objectContaining({ sub: 1, organizationId: 10 }),
+    );
   });
 
   it('maps close and period cancellation endpoints', async () => {

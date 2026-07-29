@@ -40,6 +40,8 @@ describe('full application on PostgreSQL', () => {
   let staffOrganizationId: number;
   let leadOrganizationId: number;
   let collaboratorOrganizationId: number;
+  let collaboratorUserId: number;
+  let lockedGroupMemberId: number;
   let programId: number;
 
   beforeAll(async () => {
@@ -67,6 +69,7 @@ describe('full application on PostgreSQL', () => {
         'tasks.assign',
         'tasks.close',
         'tasks.complete',
+        'users.manage',
         'consolidated.review',
         'report_history.read',
         'dashboard.read',
@@ -112,7 +115,7 @@ describe('full application on PostgreSQL', () => {
     leadOrganizationId = leadOrganization.id;
     collaboratorOrganizationId = collaboratorOrganization.id;
     const passwordHash = await hashPassword(password);
-    await Promise.all([
+    const [, , collaboratorUser, lockedGroupMember] = await Promise.all([
       createUser(
         prisma,
         staffUsername,
@@ -134,7 +137,16 @@ describe('full application on PostgreSQL', () => {
         unitGroup.id,
         passwordHash,
       ),
+      createUser(
+        prisma,
+        `locked-group-member-${suffix}`,
+        leadOrganization.id,
+        unitGroup.id,
+        passwordHash,
+      ),
     ]);
+    collaboratorUserId = collaboratorUser.id;
+    lockedGroupMemberId = lockedGroupMember.id;
     const program = await prisma.program.create({
       data: {
         code: `full-e2e-${suffix}`,
@@ -197,6 +209,46 @@ describe('full application on PostgreSQL', () => {
       ),
     ).toBe(true);
 
+    await request(server)
+      .post(`/api/v1/system/users/${lockedGroupMemberId}/lock`)
+      .set('Authorization', `Bearer ${staffToken}`)
+      .send({ reason: 'Lookup regression' })
+      .expect(200);
+    const groupResponse = await request(server)
+      .post('/api/v1/system/user-groups')
+      .set('Authorization', `Bearer ${staffToken}`)
+      .send({
+        name: `Tổ phối hợp ${Date.now()}`,
+        userIds: [collaboratorUserId, lockedGroupMemberId],
+      })
+      .expect(201);
+    const createdGroup = readBody<ApiBody<{ id: number }>>(groupResponse).data;
+    const replacementGroupResponse = await request(server)
+      .post('/api/v1/system/user-groups')
+      .set('Authorization', `Bearer ${staffToken}`)
+      .send({
+        name: `Tổ thay thế ${Date.now()}`,
+        userIds: [collaboratorUserId],
+      })
+      .expect(201);
+    const replacementGroup = readBody<ApiBody<{ id: number }>>(
+      replacementGroupResponse,
+    ).data;
+    const groupLookups = await request(server)
+      .get('/api/v1/tasks/lookups/user-groups')
+      .set('Authorization', `Bearer ${staffToken}`)
+      .expect(200);
+    expect(
+      readBody<
+        ApiBody<Array<{ id: number; name: string; organizationIds: number[] }>>
+      >(groupLookups).data,
+    ).toContainEqual(
+      expect.objectContaining({
+        id: createdGroup.id,
+        organizationIds: [collaboratorOrganizationId],
+      }),
+    );
+
     const dueAt = new Date(Date.now() + 7 * 86_400_000).toISOString();
     const taskInput = {
       code: `http-${Date.now()}`,
@@ -208,6 +260,7 @@ describe('full application on PostgreSQL', () => {
       assigningOrganizationId: staffOrganizationId,
       leadOrganizationId,
       collaboratorOrganizationIds: [collaboratorOrganizationId],
+      userGroupIds: [createdGroup.id],
       dueAt,
     };
     await request(server)
@@ -221,9 +274,37 @@ describe('full application on PostgreSQL', () => {
       .set('Authorization', `Bearer ${staffToken}`)
       .send(taskInput)
       .expect(201);
-    const task =
-      readBody<ApiBody<{ id: number; code: string }>>(taskResponse).data;
+    const task = readBody<
+      ApiBody<{
+        id: number;
+        code: string;
+        collaboratorOrganizationIds: number[];
+        userGroupIds: number[];
+      }>
+    >(taskResponse).data;
+    expect(task.collaboratorOrganizationIds).toEqual([
+      collaboratorOrganizationId,
+    ]);
+    expect(task.userGroupIds).toEqual([createdGroup.id]);
     const taskId = task.id;
+
+    const persistedTask = await request(server)
+      .get(`/api/v1/tasks/${taskId}`)
+      .set('Authorization', `Bearer ${staffToken}`)
+      .expect(200);
+    expect(
+      readBody<
+        ApiBody<{
+          collaboratorOrganizationIds: number[];
+          userGroupIds: number[];
+        }>
+      >(persistedTask).data,
+    ).toEqual(
+      expect.objectContaining({
+        collaboratorOrganizationIds: [collaboratorOrganizationId],
+        userGroupIds: [createdGroup.id],
+      }),
+    );
 
     const periodsResponse = await request(server)
       .get(`/api/v1/tasks/${taskId}/reporting-periods`)
@@ -245,6 +326,47 @@ describe('full application on PostgreSQL', () => {
         leadOrganizationId: collaboratorOrganizationId,
         collaboratorOrganizationIds: [leadOrganizationId],
       })
+      .expect(409);
+
+    const groupUpdate = await request(server)
+      .patch(`/api/v1/tasks/${taskId}`)
+      .set('Authorization', `Bearer ${staffToken}`)
+      .send({ userGroupIds: [replacementGroup.id] })
+      .expect(200);
+    expect(
+      readBody<
+        ApiBody<{
+          collaboratorOrganizationIds: number[];
+          userGroupIds: number[];
+        }>
+      >(groupUpdate).data,
+    ).toEqual(
+      expect.objectContaining({
+        collaboratorOrganizationIds: [collaboratorOrganizationId],
+        userGroupIds: [replacementGroup.id],
+      }),
+    );
+    const updatedTask = await request(server)
+      .get(`/api/v1/tasks/${taskId}`)
+      .set('Authorization', `Bearer ${staffToken}`)
+      .expect(200);
+    expect(
+      readBody<
+        ApiBody<{
+          collaboratorOrganizationIds: number[];
+          userGroupIds: number[];
+        }>
+      >(updatedTask).data,
+    ).toEqual(
+      expect.objectContaining({
+        collaboratorOrganizationIds: [collaboratorOrganizationId],
+        userGroupIds: [replacementGroup.id],
+      }),
+    );
+
+    await request(server)
+      .delete(`/api/v1/system/user-groups/${replacementGroup.id}`)
+      .set('Authorization', `Bearer ${staffToken}`)
       .expect(409);
 
     await request(server)

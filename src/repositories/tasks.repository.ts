@@ -6,6 +6,7 @@ import {
   ReportStatus,
   TaskDeadlineStatus,
   TaskType,
+  UserStatus,
 } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -20,6 +21,9 @@ const taskInclude = {
     include: {
       organization: { select: { id: true, code: true, name: true } },
     },
+  },
+  userGroups: {
+    include: { userGroup: { select: { id: true, name: true } } },
   },
   reportingPeriods: {
     orderBy: [{ periodStartAt: 'desc' as const }, { id: 'desc' as const }],
@@ -36,6 +40,12 @@ const taskInclude = {
 
 type TaskPayload = Prisma.TaskGetPayload<{ include: typeof taskInclude }>;
 
+export type UserGroupLookup = {
+  id: number;
+  name: string;
+  organizationIds: number[];
+};
+
 export interface TaskView {
   id: number;
   code: string;
@@ -47,6 +57,8 @@ export interface TaskView {
   assigningOrganizationId: number;
   leadOrganizationId: number;
   collaboratorOrganizationIds: number[];
+  userGroupIds: number[];
+  userGroups: Array<{ id: number; name: string }>;
   hasSubmittedReport: boolean;
   dueAt: Date | null;
   deadlineStatus: TaskDeadlineStatus | null;
@@ -88,6 +100,7 @@ export interface TaskWrite {
   assigningOrganizationId: number;
   leadOrganizationId: number;
   collaboratorOrganizationIds: number[];
+  userGroupIds: number[];
   dueAt: Date | null;
   frequency: Frequency | null;
   periodicStartAt: Date | null;
@@ -103,7 +116,7 @@ export interface PeriodDraft {
 
 @Injectable()
 export class TasksRepository {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   async list(input: {
     page: number;
@@ -200,6 +213,43 @@ export class TasksRepository {
     });
   }
 
+  findUserGroupsByIds(ids: number[]) {
+    return this.prisma.userGroup.findMany({
+      where: { id: { in: ids } },
+      select: { id: true },
+    });
+  }
+
+  async listUserGroupLookups(): Promise<UserGroupLookup[]> {
+    const groups = await this.prisma.userGroup.findMany({
+      select: {
+        id: true,
+        name: true,
+        members: {
+          where: {
+            user: {
+              deletedAt: null,
+              status: UserStatus.ACTIVE,
+              organization: {
+                status: 'ACTIVE',
+                isExecutingUnit: true,
+              },
+            },
+          },
+          select: { user: { select: { organizationId: true } } },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+    return groups.map(({ id, name, members }) => ({
+      id,
+      name,
+      organizationIds: [
+        ...new Set(members.map(({ user }) => user.organizationId)),
+      ].sort((left, right) => left - right),
+    }));
+  }
+
   async create(
     input: TaskWrite,
     actorId: number,
@@ -221,9 +271,9 @@ export class TasksRepository {
           deadlineStatus:
             input.type === TaskType.DOT_XUAT
               ? calculateTaskDeadlineStatus(
-                { dueAt: input.dueAt, completedAt: null },
-                now,
-              )
+                  { dueAt: input.dueAt, completedAt: null },
+                  now,
+                )
               : null,
           frequency: input.frequency,
           periodicStartAt: input.periodicStartAt,
@@ -234,18 +284,21 @@ export class TasksRepository {
               organizationId,
             })),
           },
+          userGroups: {
+            create: input.userGroupIds.map((userGroupId) => ({ userGroupId })),
+          },
           ...(input.type === TaskType.DOT_XUAT
             ? {
-              reportingPeriods: {
-                create: {
-                  frequency: null,
-                  year: input.dueAt.getFullYear(),
-                  sequence: 1,
-                  periodStartAt: now,
-                  dueAt: input.dueAt,
+                reportingPeriods: {
+                  create: {
+                    frequency: null,
+                    year: input.dueAt.getFullYear(),
+                    sequence: 1,
+                    periodStartAt: now,
+                    dueAt: input.dueAt,
+                  },
                 },
-              },
-            }
+              }
             : {}),
         },
         include: taskInclude,
@@ -302,8 +355,22 @@ export class TasksRepository {
           })),
         });
       }
+      if (input.userGroupIds !== undefined) {
+        await transaction.taskUserGroup.deleteMany({
+          where: { taskId: id },
+        });
+        if (input.userGroupIds.length > 0) {
+          await transaction.taskUserGroup.createMany({
+            data: input.userGroupIds.map((userGroupId) => ({
+              taskId: id,
+              userGroupId,
+            })),
+          });
+        }
+      }
       const taskData = { ...input };
       delete taskData.collaboratorOrganizationIds;
+      delete taskData.userGroupIds;
       const row = await transaction.task.update({
         where: { id },
         data: { ...taskData, updatedById: actorId },
@@ -607,11 +674,11 @@ export class TasksRepository {
       ...(globalScope
         ? {}
         : {
-          OR: [
-            { leadOrganizationId: organizationId },
-            { collaborators: { some: { organizationId } } },
-          ],
-        }),
+            OR: [
+              { leadOrganizationId: organizationId },
+              { collaborators: { some: { organizationId } } },
+            ],
+          }),
     };
   }
 
@@ -633,6 +700,8 @@ export class TasksRepository {
       collaboratorOrganizationIds: row.collaborators.map(
         ({ organizationId }) => organizationId,
       ),
+      userGroupIds: row.userGroups.map(({ userGroupId }) => userGroupId),
+      userGroups: row.userGroups.map(({ userGroup }) => userGroup),
       hasSubmittedReport: row.reportingPeriods.some((period) =>
         period.workspaces.some(
           (workspace) =>
@@ -684,6 +753,7 @@ export class TasksRepository {
       assigningOrganizationId: task.assigningOrganizationId,
       leadOrganizationId: task.leadOrganizationId,
       collaboratorOrganizationIds: task.collaboratorOrganizationIds,
+      userGroupIds: task.userGroupIds,
       dueAt: task.dueAt?.toISOString() ?? null,
       deadlineStatus: task.deadlineStatus,
       frequency: task.frequency,
