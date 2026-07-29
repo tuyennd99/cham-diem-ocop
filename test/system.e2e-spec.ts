@@ -171,6 +171,28 @@ describe('System endpoints', () => {
       .expect(400);
     expect(systemService.createUserGroup).not.toHaveBeenCalled();
   });
+
+  it('rejects a whitespace-only user-group name on create', async () => {
+    effectivePermissions = ['users.manage'];
+
+    await request(server)
+      .post('/api/v1/system/user-groups')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ name: '   ', userIds: [] })
+      .expect(400);
+    expect(systemService.createUserGroup).not.toHaveBeenCalled();
+  });
+
+  it('rejects a whitespace-only user-group name on update', async () => {
+    effectivePermissions = ['users.manage'];
+
+    await request(server)
+      .patch('/api/v1/system/user-groups/40')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ name: '   ' })
+      .expect(400);
+    expect(systemService.updateUserGroup).not.toHaveBeenCalled();
+  });
 });
 
 describe('System permission metadata', () => {
