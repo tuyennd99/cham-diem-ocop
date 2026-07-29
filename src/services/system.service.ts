@@ -10,12 +10,10 @@ import {
   CreatePermissionGroupDto,
   CreateProgramDto,
   CreateUserDto,
-  CreateUserGroupDto,
   UpdateOrganizationDto,
   UpdatePermissionGroupDto,
   UpdateProgramDto,
   UpdateUserDto,
-  UpdateUserGroupDto,
 } from '../dtos/system.dto';
 import { SystemRepository } from '../repositories/system.repository';
 import { RequestMeta } from '../types/auth';
@@ -149,80 +147,6 @@ export class SystemService {
       await hashPassword(password),
       new Date(),
       meta,
-    );
-    return { success: true };
-  }
-
-  listUserGroups() {
-    return this.repository.listUserGroups();
-  }
-
-  async getUserGroup(id: number) {
-    const item = await this.repository.findUserGroupById(id);
-    if (!item) throw this.notFound('User group');
-    return item;
-  }
-
-  async createUserGroup(
-    input: CreateUserGroupDto,
-    actorId: number,
-    meta: RequestMeta,
-  ) {
-    const name = input.name.trim();
-    if (await this.repository.findUserGroupByName(name)) {
-      throw this.conflict('User group name already exists');
-    }
-    await this.requireUsers(input.userIds);
-    return this.translate(() =>
-      this.repository.createUserGroup(
-        {
-          name,
-          description: input.description?.trim(),
-          userIds: input.userIds,
-        },
-        actorId,
-        meta,
-      ),
-    );
-  }
-
-  async updateUserGroup(
-    id: number,
-    input: UpdateUserGroupDto,
-    actorId: number,
-    meta: RequestMeta,
-  ) {
-    await this.getUserGroup(id);
-    if (input.name !== undefined) {
-      const duplicate = await this.repository.findUserGroupByName(
-        input.name.trim(),
-      );
-      if (duplicate && duplicate.id !== id) {
-        throw this.conflict('User group name already exists');
-      }
-    }
-    if (input.userIds !== undefined) await this.requireUsers(input.userIds);
-
-    return this.translate(() =>
-      this.repository.updateUserGroup(
-        id,
-        {
-          ...input,
-          ...(input.name === undefined ? {} : { name: input.name.trim() }),
-          ...(input.description === undefined
-            ? {}
-            : { description: input.description.trim() }),
-        },
-        actorId,
-        meta,
-      ),
-    );
-  }
-
-  async deleteUserGroup(id: number, actorId: number, meta: RequestMeta) {
-    await this.getUserGroup(id);
-    await this.translate(() =>
-      this.repository.deleteUserGroup(id, actorId, meta),
     );
     return { success: true };
   }

@@ -217,28 +217,3 @@ export class CreatePermissionGroupDto {
 export class UpdatePermissionGroupDto extends PartialType(
   CreatePermissionGroupDto,
 ) {}
-
-export class CreateUserGroupDto {
-  @ApiProperty()
-  @Transform(({ value }: { value: unknown }) =>
-    typeof value === 'string' ? value.trim() : value,
-  )
-  @IsString()
-  @MinLength(1)
-  @MaxLength(255)
-  name!: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  @MaxLength(5_000)
-  description?: string;
-
-  @ApiProperty({ type: [Number] })
-  @IsArray()
-  @ArrayUnique()
-  @IsInt({ each: true })
-  userIds!: number[];
-}
-
-export class UpdateUserGroupDto extends PartialType(CreateUserGroupDto) {}

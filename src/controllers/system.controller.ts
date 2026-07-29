@@ -19,14 +19,12 @@ import {
   CreatePermissionGroupDto,
   CreateProgramDto,
   CreateUserDto,
-  CreateUserGroupDto,
   LockUserDto,
   ResetPasswordDto,
   UpdateOrganizationDto,
   UpdatePermissionGroupDto,
   UpdateProgramDto,
   UpdateUserDto,
-  UpdateUserGroupDto,
 } from '../dtos/system.dto';
 import { SystemService } from '../services/system.service';
 import type { AccessTokenPayload, RequestMeta } from '../types/auth';
@@ -125,62 +123,6 @@ export class SystemController {
     return this.service.resetUserPassword(
       id,
       body.password,
-      actor.sub,
-      this.requestMeta(request),
-    );
-  }
-
-  @Get('user-groups')
-  @Permissions('users.manage')
-  listUserGroups() {
-    return this.service.listUserGroups();
-  }
-
-  @Get('user-groups/:id')
-  @Permissions('users.manage')
-  getUserGroup(@Param('id', ParseIntPipe) id: number) {
-    return this.service.getUserGroup(id);
-  }
-
-  @Post('user-groups')
-  @Permissions('users.manage')
-  createUserGroup(
-    @Body() body: CreateUserGroupDto,
-    @CurrentUser() actor: AccessTokenPayload,
-    @Req() request: Request,
-  ) {
-    return this.service.createUserGroup(
-      body,
-      actor.sub,
-      this.requestMeta(request),
-    );
-  }
-
-  @Patch('user-groups/:id')
-  @Permissions('users.manage')
-  updateUserGroup(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() body: UpdateUserGroupDto,
-    @CurrentUser() actor: AccessTokenPayload,
-    @Req() request: Request,
-  ) {
-    return this.service.updateUserGroup(
-      id,
-      body,
-      actor.sub,
-      this.requestMeta(request),
-    );
-  }
-
-  @Delete('user-groups/:id')
-  @Permissions('users.manage')
-  deleteUserGroup(
-    @Param('id', ParseIntPipe) id: number,
-    @CurrentUser() actor: AccessTokenPayload,
-    @Req() request: Request,
-  ) {
-    return this.service.deleteUserGroup(
-      id,
       actor.sub,
       this.requestMeta(request),
     );

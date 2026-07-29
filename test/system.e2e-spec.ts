@@ -38,11 +38,6 @@ describe('System endpoints', () => {
     createUser: jest.fn().mockResolvedValue(safeUser),
     updateUser: jest.fn().mockResolvedValue(safeUser),
     deleteUser: jest.fn().mockResolvedValue({ success: true }),
-    listUserGroups: jest.fn().mockResolvedValue([]),
-    getUserGroup: jest.fn().mockResolvedValue({ id: 40 }),
-    createUserGroup: jest.fn().mockResolvedValue({ id: 40 }),
-    updateUserGroup: jest.fn().mockResolvedValue({ id: 40 }),
-    deleteUserGroup: jest.fn().mockResolvedValue({ success: true }),
     lockUser: jest.fn().mockResolvedValue(safeUser),
     unlockUser: jest.fn().mockResolvedValue(safeUser),
     resetUserPassword: jest.fn().mockResolvedValue({ success: true }),
@@ -124,7 +119,6 @@ describe('System endpoints', () => {
 
   it.each([
     ['/api/v1/system/users', 'users.manage'],
-    ['/api/v1/system/user-groups', 'users.manage'],
     ['/api/v1/system/organizations', 'organizations.manage'],
     ['/api/v1/system/programs', 'programs.manage'],
     ['/api/v1/system/permission-groups', 'permission_groups.manage'],
@@ -161,38 +155,6 @@ describe('System endpoints', () => {
     expect(systemService.createUser).not.toHaveBeenCalled();
   });
 
-  it('rejects duplicate user-group members at the HTTP boundary', async () => {
-    effectivePermissions = ['users.manage'];
-
-    await request(server)
-      .post('/api/v1/system/user-groups')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .send({ name: 'Tổ A', userIds: [2, 2] })
-      .expect(400);
-    expect(systemService.createUserGroup).not.toHaveBeenCalled();
-  });
-
-  it('rejects a whitespace-only user-group name on create', async () => {
-    effectivePermissions = ['users.manage'];
-
-    await request(server)
-      .post('/api/v1/system/user-groups')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .send({ name: '   ', userIds: [] })
-      .expect(400);
-    expect(systemService.createUserGroup).not.toHaveBeenCalled();
-  });
-
-  it('rejects a whitespace-only user-group name on update', async () => {
-    effectivePermissions = ['users.manage'];
-
-    await request(server)
-      .patch('/api/v1/system/user-groups/40')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .send({ name: '   ' })
-      .expect(400);
-    expect(systemService.updateUserGroup).not.toHaveBeenCalled();
-  });
 });
 
 describe('System permission metadata', () => {
@@ -205,11 +167,6 @@ describe('System permission metadata', () => {
     ['lockUser', 'users.manage'],
     ['unlockUser', 'users.manage'],
     ['resetUserPassword', 'users.manage'],
-    ['listUserGroups', 'users.manage'],
-    ['getUserGroup', 'users.manage'],
-    ['createUserGroup', 'users.manage'],
-    ['updateUserGroup', 'users.manage'],
-    ['deleteUserGroup', 'users.manage'],
     ['listOrganizations', 'organizations.manage'],
     ['getOrganization', 'organizations.manage'],
     ['createOrganization', 'organizations.manage'],
@@ -304,25 +261,6 @@ describe('SystemService user safety', () => {
     );
   });
 
-  it('normalizes a user group and rejects a missing member', async () => {
-    const repository = {
-      findUserGroupByName: jest.fn().mockResolvedValue(null),
-      findUsersByIds: jest.fn().mockResolvedValue([{ id: 2 }]),
-      createUserGroup: jest.fn(),
-    };
-    const service = new SystemService(
-      repository as unknown as SystemRepository,
-    );
-
-    await expect(
-      service.createUserGroup(
-        { name: '  Tổ A  ', description: '  Liên đơn vị  ', userIds: [2, 3] },
-        1,
-        {},
-      ),
-    ).rejects.toBeInstanceOf(NotFoundException);
-    expect(repository.createUserGroup).not.toHaveBeenCalled();
-  });
 });
 
 describe('SystemRepository security transactions', () => {
