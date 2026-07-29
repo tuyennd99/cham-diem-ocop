@@ -63,6 +63,67 @@
 
 ---
 
+### Task 0: Restore Frontend Baseline Checks
+
+**Files:**
+
+- Modify: `fe/src/components/multi-combobox.test.tsx`
+- Modify: `fe/vite.config.ts`
+
+**Interfaces:**
+
+- This task changes no product API. It restores a reliable test/build baseline
+  before implementing user groups.
+
+- [ ] **Step 1: Reproduce and identify each failure**
+
+Run:
+
+```powershell
+cd fe
+pnpm test -- src/components/multi-combobox.test.tsx
+pnpm build
+```
+
+Record the exact failure from the rendered markup test and the unused
+`mode` parameter reported by TypeScript. Inspect the test fixture, component,
+and Vite config before changing code.
+
+- [ ] **Step 2: Write or correct the failing behavioral test**
+
+The component test must assert only the labels rendered as visible badges, not
+the entire static markup which can contain hidden fixture text. Use a literal
+expected count (`+1`) and the badge content rather than source text.
+
+- [ ] **Step 3: Apply the smallest fixes**
+
+Keep the component behavior unchanged. Correct only the test assertion so it
+queries the visible badge labels, and remove the unused `mode` parameter from
+the Vite config callback (or replace the callback with the static config
+object if it reads no environment mode).
+
+- [ ] **Step 4: Verify the restored baseline**
+
+Run:
+
+```powershell
+cd fe
+pnpm test
+pnpm build
+```
+
+Expected: all frontend tests pass and the TypeScript/Vite build exits 0.
+
+- [ ] **Step 5: Commit the baseline repair**
+
+```powershell
+cd fe
+git add src/components/multi-combobox.test.tsx vite.config.ts
+git commit -m "fix: restore frontend test baseline"
+```
+
+---
+
 ### Task 1: Backend User-Group Schema and Administration CRUD
 
 **Files:**
