@@ -281,6 +281,7 @@ export class SystemRepository {
 
   async deleteUser(id: number, actorId: number, now: Date, meta: RequestMeta) {
     await this.prisma.$transaction(async (transaction) => {
+      await transaction.userGroupMember.deleteMany({ where: { userId: id } });
       await transaction.user.update({
         where: { id },
         data: { deletedAt: now },

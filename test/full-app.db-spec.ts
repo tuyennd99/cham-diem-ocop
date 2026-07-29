@@ -249,6 +249,33 @@ describe('full application on PostgreSQL', () => {
       }),
     );
 
+    await request(server)
+      .delete(`/api/v1/system/users/${lockedGroupMemberId}`)
+      .set('Authorization', `Bearer ${staffToken}`)
+      .expect(200);
+    const groupAfterMemberDeletion = await request(server)
+      .get(`/api/v1/system/user-groups/${createdGroup.id}`)
+      .set('Authorization', `Bearer ${staffToken}`)
+      .expect(200);
+    const groupAfterMemberDeletionBody = readBody<
+      ApiBody<{ userIds: number[] }>
+    >(groupAfterMemberDeletion).data;
+    expect(groupAfterMemberDeletionBody.userIds).toEqual([
+      collaboratorUserId,
+    ]);
+    const updatedGroupAfterMemberDeletion = await request(server)
+      .patch(`/api/v1/system/user-groups/${createdGroup.id}`)
+      .set('Authorization', `Bearer ${staffToken}`)
+      .send({
+        description: 'Updated after member deletion',
+        userIds: groupAfterMemberDeletionBody.userIds,
+      })
+      .expect(200);
+    expect(
+      readBody<ApiBody<{ userIds: number[] }>>(updatedGroupAfterMemberDeletion)
+        .data.userIds,
+    ).toEqual([collaboratorUserId]);
+
     const dueAt = new Date(Date.now() + 7 * 86_400_000).toISOString();
     const taskInput = {
       code: `http-${Date.now()}`,
