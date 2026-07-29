@@ -88,6 +88,7 @@ model User {
   updatedAt                  DateTime              @updatedAt @db.Timestamptz(3)
   organization               Organization          @relation(fields: [organizationId], references: [id])
   permissionGroups           UserPermissionGroup[]
+  userGroups                 UserGroupMember[]
   createdTasks               Task[]                @relation("TaskCreatedBy")
   updatedTasks               Task[]                @relation("TaskUpdatedBy")
   closedTasks                Task[]                @relation("TaskClosedBy")
@@ -115,6 +116,29 @@ model PermissionGroup {
   users       UserPermissionGroup[]
 
   @@map("permission_groups")
+}
+
+model UserGroup {
+  id          Int               @id @default(autoincrement())
+  name        String            @unique @db.VarChar(255)
+  description String?
+  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime          @updatedAt @db.Timestamptz(3)
+  members     UserGroupMember[]
+  tasks       TaskUserGroup[]
+
+  @@map("user_groups")
+}
+
+model UserGroupMember {
+  userGroupId Int
+  userId      Int
+  userGroup   UserGroup @relation(fields: [userGroupId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userGroupId, userId])
+  @@index([userId])
+  @@map("user_group_members")
 }
 
 model Permission {
@@ -192,6 +216,7 @@ model Task {
   closedBy                User?               @relation("TaskClosedBy", fields: [closedById], references: [id])
   completedBy             User?               @relation("TaskCompletedBy", fields: [completedById], references: [id])
   collaborators           TaskCollaborator[]
+  userGroups              TaskUserGroup[]
   reportingPeriods        ReportingPeriod[]
 
   @@index([programId])
@@ -199,6 +224,17 @@ model Task {
   @@index([type, deadlineStatus])
   @@index([deletedAt])
   @@map("tasks")
+}
+
+model TaskUserGroup {
+  taskId      Int
+  userGroupId Int
+  task        Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userGroup   UserGroup @relation(fields: [userGroupId], references: [id], onDelete: Restrict)
+
+  @@id([taskId, userGroupId])
+  @@index([userGroupId])
+  @@map("task_user_groups")
 }
 
 model TaskCollaborator {

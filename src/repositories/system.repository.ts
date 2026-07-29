@@ -38,6 +38,33 @@ type PermissionGroupPayload = Prisma.PermissionGroupGetPayload<{
   include: typeof permissionGroupInclude;
 }>;
 
+const userGroupInclude = {
+  members: {
+    orderBy: { userId: 'asc' },
+    select: {
+      userId: true,
+      user: {
+        select: {
+          id: true,
+          username: true,
+          fullName: true,
+          status: true,
+          organization: { select: { id: true, code: true, name: true } },
+        },
+      },
+    },
+  },
+} satisfies Prisma.UserGroupInclude;
+
+type UserGroupPayload = Prisma.UserGroupGetPayload<{
+  include: typeof userGroupInclude;
+}>;
+
+export type UserGroupView = Omit<UserGroupPayload, 'members'> & {
+  userIds: number[];
+  users: UserGroupPayload['members'][number]['user'][];
+};
+
 export interface EffectivePermissions {
   status: UserStatus;
   isAdmin: boolean;
@@ -89,9 +116,15 @@ interface PermissionGroupData {
   permissionIds?: number[];
 }
 
+interface UserGroupData {
+  name?: string;
+  description?: string;
+  userIds?: number[];
+}
+
 @Injectable()
 export class SystemRepository {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   async listEffectivePermissions(
     userId: number,
@@ -156,6 +189,13 @@ export class SystemRepository {
     });
   }
 
+  findUsersByIds(ids: number[]) {
+    return this.prisma.user.findMany({
+      where: { id: { in: ids }, deletedAt: null },
+      select: { id: true },
+    });
+  }
+
   async createUser(data: CreateUserData, actorId: number, meta: RequestMeta) {
     return this.prisma.$transaction(async (transaction) => {
       const user = await transaction.user.create({
@@ -213,13 +253,13 @@ export class SystemRepository {
           ...(permissionGroupIds === undefined
             ? {}
             : {
-              permissionGroups: {
-                deleteMany: {},
-                create: permissionGroupIds.map((permissionGroupId) => ({
-                  permissionGroupId,
-                })),
-              },
-            }),
+                permissionGroups: {
+                  deleteMany: {},
+                  create: permissionGroupIds.map((permissionGroupId) => ({
+                    permissionGroupId,
+                  })),
+                },
+              }),
         },
         select: userPublicSelect,
       });
@@ -341,6 +381,119 @@ export class SystemRepository {
           ...this.auditMeta(meta),
         },
       });
+    });
+  }
+
+  async listUserGroups(): Promise<UserGroupView[]> {
+    const groups = await this.prisma.userGroup.findMany({
+      include: userGroupInclude,
+      orderBy: { name: 'asc' },
+    });
+    return groups.map((group) => this.toUserGroup(group));
+  }
+
+  async findUserGroupById(id: number): Promise<UserGroupView | null> {
+    const group = await this.prisma.userGroup.findUnique({
+      where: { id },
+      include: userGroupInclude,
+    });
+    return group ? this.toUserGroup(group) : null;
+  }
+
+  findUserGroupByName(name: string) {
+    return this.prisma.userGroup.findUnique({
+      where: { name },
+      select: { id: true },
+    });
+  }
+
+  async createUserGroup(
+    data: Required<Pick<UserGroupData, 'name' | 'userIds'>> & UserGroupData,
+    actorId: number,
+    meta: RequestMeta,
+  ): Promise<UserGroupView> {
+    return this.prisma.$transaction(async (transaction) => {
+      const group = await transaction.userGroup.create({
+        data: {
+          name: data.name,
+          description: data.description,
+          members: {
+            create: data.userIds.map((userId) => ({ userId })),
+          },
+        },
+        include: userGroupInclude,
+      });
+      await this.writeAudit(
+        transaction,
+        actorId,
+        'SYSTEM_USER_GROUP_CREATED',
+        'UserGroup',
+        group.id,
+        meta,
+      );
+      return this.toUserGroup(group);
+    });
+  }
+
+  async updateUserGroup(
+    id: number,
+    data: UserGroupData,
+    actorId: number,
+    meta: RequestMeta,
+  ): Promise<UserGroupView> {
+    return this.prisma.$transaction(async (transaction) => {
+      const { userIds, ...fields } = data;
+      const group = await transaction.userGroup.update({
+        where: { id },
+        data: {
+          ...fields,
+          ...(userIds === undefined
+            ? {}
+            : {
+                members: {
+                  deleteMany: {},
+                  create: userIds.map((userId) => ({ userId })),
+                },
+              }),
+        },
+        include: userGroupInclude,
+      });
+      await this.writeAudit(
+        transaction,
+        actorId,
+        'SYSTEM_USER_GROUP_UPDATED',
+        'UserGroup',
+        id,
+        meta,
+      );
+      return this.toUserGroup(group);
+    });
+  }
+
+  async deleteUserGroup(id: number, actorId: number, meta: RequestMeta) {
+    return this.prisma.$transaction(async (transaction) => {
+      await transaction.$queryRaw(
+        Prisma.sql`
+          SELECT "id"
+          FROM "user_groups"
+          WHERE "id" = ${id}
+          FOR UPDATE
+        `,
+      );
+      if (
+        await transaction.taskUserGroup.count({ where: { userGroupId: id } })
+      ) {
+        throw new ConflictException('User group is assigned to tasks');
+      }
+      await transaction.userGroup.delete({ where: { id } });
+      await this.writeAudit(
+        transaction,
+        actorId,
+        'SYSTEM_USER_GROUP_DELETED',
+        'UserGroup',
+        id,
+        meta,
+      );
     });
   }
 
@@ -537,13 +690,13 @@ export class SystemRepository {
           ...(permissionIds === undefined
             ? {}
             : {
-              permissions: {
-                deleteMany: {},
-                create: permissionIds.map((permissionId) => ({
-                  permissionId,
-                })),
-              },
-            }),
+                permissions: {
+                  deleteMany: {},
+                  create: permissionIds.map((permissionId) => ({
+                    permissionId,
+                  })),
+                },
+              }),
         },
         include: permissionGroupInclude,
       });
@@ -692,6 +845,15 @@ export class SystemRepository {
     return {
       ...fields,
       permissions: permissions.map(({ permission }) => permission),
+    };
+  }
+
+  private toUserGroup(group: UserGroupPayload): UserGroupView {
+    const { members, ...fields } = group;
+    return {
+      ...fields,
+      userIds: members.map(({ userId }) => userId),
+      users: members.map(({ user }) => user),
     };
   }
 
