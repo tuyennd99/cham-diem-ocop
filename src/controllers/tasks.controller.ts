@@ -62,11 +62,6 @@ export class TasksController {
     return this.tasksService.listProgramLookups(principal);
   }
 
-  @Get('lookups/user-groups')
-  userGroupLookups(@CurrentUser() principal: AccessTokenPayload) {
-    return this.tasksService.listUserGroupLookups(principal);
-  }
-
   @Get(':id')
   get(
     @Param('id', ParseIntPipe) id: number,

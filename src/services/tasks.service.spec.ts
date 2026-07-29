@@ -44,8 +44,6 @@ const existingTask = {
   assigningOrganizationId: 10,
   leadOrganizationId: 20,
   collaboratorOrganizationIds: [30],
-  userGroupIds: [],
-  userGroups: [],
   dueAt: null,
   frequency: 'MONTHLY' as const,
   periodicStartAt: new Date('2026-07-15T00:00:00+07:00'),
@@ -67,14 +65,6 @@ function repositoryMock() {
         })),
       ),
     ),
-    findUserGroupsByIds: jest
-      .fn()
-      .mockImplementation((ids: number[]) =>
-        Promise.resolve(ids.map((id) => ({ id }))),
-      ),
-    listUserGroupLookups: jest
-      .fn()
-      .mockResolvedValue([{ id: 5, name: 'Tá»• A', organizationIds: [30] }]),
     create: jest.fn().mockResolvedValue(existingTask),
     update: jest.fn().mockResolvedValue(existingTask),
     softDelete: jest.fn().mockResolvedValue(existingTask),
@@ -354,71 +344,6 @@ describe('TasksService', () => {
         thuongTruc,
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
-  });
-
-  it('rejects a task that references a missing user group', async () => {
-    const repository = repositoryMock();
-    repository.findUserGroupsByIds.mockResolvedValue([]);
-    const service = new TasksService(repository as unknown as TasksRepository);
-
-    await expect(
-      service.create(
-        {
-          code: 'NV-008',
-          name: 'Nhiá»‡m vá»¥',
-          type: 'DOT_XUAT',
-          programId: 1,
-          assigningOrganizationId: 10,
-          leadOrganizationId: 20,
-          collaboratorOrganizationIds: [30],
-          userGroupIds: [999],
-          dueAt: '2026-08-01T00:00:00.000Z',
-        },
-        thuongTruc,
-      ),
-    ).rejects.toBeInstanceOf(BadRequestException);
-  });
-
-  it('returns group lookups without changing collaborators', async () => {
-    const repository = repositoryMock();
-    const service = new TasksService(repository as unknown as TasksRepository);
-    await expect(service.listUserGroupLookups(thuongTruc)).resolves.toEqual([
-      { id: 5, name: 'Tá»• A', organizationIds: [30] },
-    ]);
-  });
-
-  it('requires assignment authority for group edits without notifying organizations', async () => {
-    const repository = repositoryMock();
-    const notifications = {
-      createForOrganizations: jest.fn().mockResolvedValue(2),
-    };
-    const service = new TasksService(
-      repository as unknown as TasksRepository,
-      notifications as unknown as NotificationsService,
-    );
-
-    await expect(
-      service.update(
-        existingTask.id,
-        { userGroupIds: [5] },
-        {
-          ...thuongTruc,
-          permissions: thuongTruc.permissions.filter(
-            (permission) => permission !== 'tasks.assign',
-          ),
-        },
-      ),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-
-    await service.update(existingTask.id, { userGroupIds: [5] }, thuongTruc);
-
-    expect(repository.update).toHaveBeenCalledWith(
-      existingTask.id,
-      { userGroupIds: [5] },
-      thuongTruc.sub,
-      { organizationId: thuongTruc.organizationId },
-    );
-    expect(notifications.createForOrganizations).not.toHaveBeenCalled();
   });
 
   it('validates type-specific fields', async () => {

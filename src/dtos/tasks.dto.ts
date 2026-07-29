@@ -69,14 +69,6 @@ export class CreateTaskDto {
   @Min(1, { each: true })
   collaboratorOrganizationIds!: number[];
 
-  @ApiPropertyOptional({ type: [Number], default: [] })
-  @IsOptional()
-  @IsArray()
-  @ArrayUnique()
-  @IsInt({ each: true })
-  @Min(1, { each: true })
-  userGroupIds?: number[];
-
   @ApiPropertyOptional()
   @IsOptional()
   @IsDateString()

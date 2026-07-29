@@ -62,11 +62,6 @@ export class TasksService {
     return this.repository.listActivePrograms();
   }
 
-  listUserGroupLookups(principal: AccessTokenPayload) {
-    this.assertPermission(principal, 'tasks.read');
-    return this.repository.listUserGroupLookups();
-  }
-
   async create(
     input: CreateTaskDto,
     principal: AccessTokenPayload,
@@ -105,7 +100,7 @@ export class TasksService {
       input.assigningOrganizationId !== undefined ||
       input.leadOrganizationId !== undefined ||
       input.collaboratorOrganizationIds !== undefined;
-    if (changesOrganizationAssignment || input.userGroupIds !== undefined) {
+    if (changesOrganizationAssignment) {
       this.assertPermission(principal, 'tasks.assign');
       if (input.assigningOrganizationId !== undefined) {
         this.assertAssigningOrganization(
@@ -138,7 +133,6 @@ export class TasksService {
       collaboratorOrganizationIds:
         input.collaboratorOrganizationIds ??
         current.collaboratorOrganizationIds,
-      userGroupIds: input.userGroupIds ?? current.userGroupIds,
       dueAt:
         input.dueAt === undefined ? current.dueAt?.toISOString() : input.dueAt,
       frequency: input.frequency ?? current.frequency ?? undefined,
@@ -287,15 +281,11 @@ export class TasksService {
       ...input.collaboratorOrganizationIds,
     ];
     const uniqueOrganizationIds = uniq(organizationIds);
-    const [program, organizations, userGroups] = await Promise.all([
+    const [program, organizations] = await Promise.all([
       this.repository.findActiveProgram(input.programId),
       this.repository.findActiveOrganizations(uniqueOrganizationIds),
-      this.repository.findUserGroupsByIds(input.userGroupIds),
     ]);
     if (!program) throw new BadRequestException('Program is not active');
-    if (userGroups.length !== input.userGroupIds.length) {
-      throw new BadRequestException('Task user groups must exist');
-    }
     const byId = new Map(
       organizations.map((organization) => [organization.id, organization]),
     );
@@ -349,7 +339,6 @@ export class TasksService {
       assigningOrganizationId: input.assigningOrganizationId,
       leadOrganizationId: input.leadOrganizationId,
       collaboratorOrganizationIds: input.collaboratorOrganizationIds,
-      userGroupIds: input.userGroupIds ?? [],
       dueAt: input.dueAt ? new Date(input.dueAt) : null,
       frequency: input.frequency ?? null,
       periodicStartAt: input.periodicStartAt
