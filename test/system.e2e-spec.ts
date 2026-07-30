@@ -199,7 +199,15 @@ describe('SystemService user safety', () => {
     const repository = {
       findUserByUsername: jest.fn().mockResolvedValue(null),
       findOrganizationById: jest.fn().mockResolvedValue({ id: 10 }),
-      findPermissionGroupsByIds: jest.fn().mockResolvedValue([{ id: 3 }]),
+      findPermissionGroupsByIds: jest.fn().mockResolvedValue([
+        { id: 3, code: 'VIEWER', permissions: [] },
+      ]),
+      listEffectivePermissions: jest.fn().mockResolvedValue({
+        status: 'ACTIVE',
+        isAdmin: true,
+        organizationId: 10,
+        permissions: [],
+      }),
       createUser: jest
         .fn()
         .mockImplementation((data: { passwordHash: string }) => {

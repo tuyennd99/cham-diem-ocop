@@ -482,14 +482,20 @@ export class SystemRepository {
   findPermissionGroupsByIds(ids: number[]) {
     return this.prisma.permissionGroup.findMany({
       where: { id: { in: ids } },
-      select: { id: true },
+      select: {
+        id: true,
+        code: true,
+        permissions: {
+          select: { permission: { select: { code: true } } },
+        },
+      },
     });
   }
 
   findPermissionsByIds(ids: number[]) {
     return this.prisma.permission.findMany({
       where: { id: { in: ids } },
-      select: { id: true },
+      select: { id: true, code: true },
     });
   }
 

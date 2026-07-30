@@ -1,10 +1,12 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { uniq } from 'lodash';
 import { hashPassword } from '../../prisma/seed/password';
+import { ADMIN_GROUP_CODE } from '../constants/role';
 import {
   CreateOrganizationDto,
   CreatePermissionGroupDto,
@@ -39,7 +41,14 @@ export class SystemService {
       throw this.conflict('Username already exists');
     }
     await this.requireOrganization(input.organizationId);
-    await this.requirePermissionGroups(input.permissionGroupIds);
+    const groups = await this.requirePermissionGroups(input.permissionGroupIds);
+    await this.assertCanGrant(
+      actorId,
+      groups.flatMap(({ permissions }) =>
+        permissions.map(({ permission }) => permission.code),
+      ),
+      groups.some(({ code }) => code === ADMIN_GROUP_CODE),
+    );
 
     return this.translate(async () =>
       this.publicUser(
@@ -67,6 +76,12 @@ export class SystemService {
     actorId: number,
     meta: RequestMeta,
   ) {
+    if (id === 1 && input.permissionGroupIds !== undefined) {
+      throw this.forbidden(
+        'DEFAULT_ADMIN_PROTECTED',
+        'Default admin permission groups cannot be changed',
+      );
+    }
     await this.getUser(id);
     if (input.username !== undefined) {
       const duplicate = await this.repository.findUserByUsername(
@@ -80,7 +95,16 @@ export class SystemService {
       await this.requireOrganization(input.organizationId);
     }
     if (input.permissionGroupIds !== undefined) {
-      await this.requirePermissionGroups(input.permissionGroupIds);
+      const groups = await this.requirePermissionGroups(
+        input.permissionGroupIds,
+      );
+      await this.assertCanGrant(
+        actorId,
+        groups.flatMap(({ permissions }) =>
+          permissions.map(({ permission }) => permission.code),
+        ),
+        groups.some(({ code }) => code === ADMIN_GROUP_CODE),
+      );
     }
 
     return this.translate(async () =>
@@ -104,6 +128,12 @@ export class SystemService {
   }
 
   async deleteUser(id: number, actorId: number, meta: RequestMeta) {
+    if (id === 1) {
+      throw this.forbidden(
+        'DEFAULT_ADMIN_PROTECTED',
+        'Default admin cannot be deleted',
+      );
+    }
     await this.getUser(id);
     await this.repository.deleteUser(id, actorId, new Date(), meta);
     return { success: true };
@@ -115,6 +145,12 @@ export class SystemService {
     actorId: number,
     meta: RequestMeta,
   ) {
+    if (id === 1) {
+      throw this.forbidden(
+        'DEFAULT_ADMIN_PROTECTED',
+        'Default admin cannot be locked',
+      );
+    }
     await this.getUser(id);
     return this.publicUser(
       await this.repository.lockUser(
@@ -295,7 +331,11 @@ export class SystemService {
     if (await this.repository.findPermissionGroupByCode(input.code.trim())) {
       throw this.conflict('Permission group code already exists');
     }
-    await this.requirePermissions(input.permissionIds);
+    const permissions = await this.requirePermissions(input.permissionIds);
+    await this.assertCanGrant(
+      actorId,
+      permissions.map(({ code }) => code),
+    );
     return this.translate(() =>
       this.repository.createPermissionGroup(
         { ...input, code: input.code.trim(), name: input.name.trim() },
@@ -311,7 +351,13 @@ export class SystemService {
     actorId: number,
     meta: RequestMeta,
   ) {
-    await this.getPermissionGroup(id);
+    const group = await this.getPermissionGroup(id);
+    if (group.code === ADMIN_GROUP_CODE) {
+      throw this.forbidden(
+        'SYSTEM_GROUP_PROTECTED',
+        'ADMIN permission group cannot be changed',
+      );
+    }
     if (input.code !== undefined) {
       const duplicate = await this.repository.findPermissionGroupByCode(
         input.code.trim(),
@@ -321,7 +367,11 @@ export class SystemService {
       }
     }
     if (input.permissionIds !== undefined) {
-      await this.requirePermissions(input.permissionIds);
+      const permissions = await this.requirePermissions(input.permissionIds);
+      await this.assertCanGrant(
+        actorId,
+        permissions.map(({ code }) => code),
+      );
     }
     return this.translate(() =>
       this.repository.updatePermissionGroup(
@@ -338,7 +388,13 @@ export class SystemService {
   }
 
   async deletePermissionGroup(id: number, actorId: number, meta: RequestMeta) {
-    await this.getPermissionGroup(id);
+    const group = await this.getPermissionGroup(id);
+    if (group.code === ADMIN_GROUP_CODE) {
+      throw this.forbidden(
+        'SYSTEM_GROUP_PROTECTED',
+        'ADMIN permission group cannot be deleted',
+      );
+    }
     await this.repository.deletePermissionGroup(id, actorId, meta);
     return { success: true };
   }
@@ -358,12 +414,35 @@ export class SystemService {
     if (items.length !== uniq(ids).length) {
       throw this.notFound('Permission group');
     }
+    return items;
   }
 
   private async requirePermissions(ids: number[]) {
     const items = await this.repository.findPermissionsByIds(ids);
     if (items.length !== uniq(ids).length) {
       throw this.notFound('Permission');
+    }
+    return items;
+  }
+
+  private async assertCanGrant(
+    actorId: number,
+    permissionCodes: string[],
+    includesAdmin = false,
+  ) {
+    const actor = await this.repository.listEffectivePermissions(actorId);
+    if (!actor) {
+      throw this.forbidden('PRIVILEGE_ESCALATION', 'Actor is unavailable');
+    }
+    if (actor.isAdmin) return;
+    if (
+      includesAdmin ||
+      permissionCodes.some((code) => !actor.permissions.includes(code))
+    ) {
+      throw this.forbidden(
+        'PRIVILEGE_ESCALATION',
+        'Cannot grant permissions you do not have',
+      );
     }
   }
 
@@ -410,6 +489,10 @@ export class SystemService {
 
   private conflict(message: string) {
     return new ConflictException({ errorCode: 'CONFLICT', message });
+  }
+
+  private forbidden(errorCode: string, message: string) {
+    return new ForbiddenException({ errorCode, message });
   }
 
   private notFound(entity: string) {
