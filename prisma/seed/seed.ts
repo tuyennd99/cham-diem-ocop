@@ -1,7 +1,8 @@
 import { PrismaClient } from '@prisma/client';
-import { createPrismaAdapter, } from '../../src/prisma/client';
+import { createPrismaAdapter } from '../../src/prisma/client';
 import { DEFAULT_SEED_PASSWORD, hashSeedPassword } from './password';
 import { ADMIN_GROUP_CODE } from '../../src/constants/role';
+import { seedDefaultAdmin } from './admin';
 
 const prisma = new PrismaClient({ adapter: createPrismaAdapter() });
 
@@ -138,19 +139,9 @@ async function main() {
   const adminGroup = await prisma.permissionGroup.findUniqueOrThrow({
     where: { code: ADMIN_GROUP_CODE },
   });
-  const admin = await prisma.user.upsert({
-    where: { username: 'admin' },
-    update: {
-      fullName: 'Quản trị viên mẫu',
-      passwordHash,
-      organizationId: technicalAdmin.id,
-    },
-    create: {
-      username: 'admin',
-      fullName: 'Quản trị viên mẫu',
-      passwordHash,
-      organizationId: technicalAdmin.id,
-    },
+  const admin = await seedDefaultAdmin(prisma, {
+    passwordHash,
+    organizationId: technicalAdmin.id,
   });
   await prisma.userPermissionGroup.upsert({
     where: {
