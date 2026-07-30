@@ -1,18 +1,15 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 
 export async function seedDefaultAdmin(
-  prisma: PrismaClient | Prisma.TransactionClient,
+  prisma: PrismaClient,
   input: { passwordHash: string; organizationId: number },
 ) {
-  if ('$transaction' in prisma) {
-    return prisma.$transaction((transaction) =>
-      seedDefaultAdminInTransaction(transaction, input),
-    );
-  }
-  return seedDefaultAdminInTransaction(prisma, input);
+  return prisma.$transaction((transaction) =>
+    seedDefaultAdminInTransaction(transaction, input),
+  );
 }
 
-async function seedDefaultAdminInTransaction(
+export async function seedDefaultAdminInTransaction(
   prisma: Prisma.TransactionClient,
   input: { passwordHash: string; organizationId: number },
 ) {

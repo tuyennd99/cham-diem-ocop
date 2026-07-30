@@ -1,6 +1,6 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { createPrismaAdapter } from '../src/prisma/client';
-import { seedDefaultAdmin } from '../prisma/seed/admin';
+import { seedDefaultAdminInTransaction } from '../prisma/seed/admin';
 
 const testUrl = process.env.TEST_DATABASE_URL;
 if (
@@ -31,7 +31,7 @@ describe('default admin seed', () => {
   it('creates admin as id 1 and advances the users sequence', async () => {
     await withRollback(prisma, async (tx) => {
       const organization = await createOrganization(tx);
-      const admin = await seedDefaultAdmin(tx, {
+      const admin = await seedDefaultAdminInTransaction(tx, {
         passwordHash: 'hash',
         organizationId: organization.id,
       });
@@ -56,7 +56,7 @@ describe('default admin seed', () => {
         Prisma.sql`SELECT setval(pg_get_serial_sequence('users', 'id')::regclass, 1000000)`,
       );
 
-      await seedDefaultAdmin(tx, {
+      await seedDefaultAdminInTransaction(tx, {
         passwordHash: 'hash',
         organizationId: organization.id,
       });
@@ -87,7 +87,7 @@ describe('default admin seed', () => {
       });
 
       await expect(
-        seedDefaultAdmin(tx, {
+        seedDefaultAdminInTransaction(tx, {
           passwordHash: 'hash',
           organizationId: organization.id,
         }),
@@ -98,7 +98,7 @@ describe('default admin seed', () => {
   it('reactivates an existing default admin', async () => {
     await withRollback(prisma, async (tx) => {
       const organization = await createOrganization(tx);
-      await seedDefaultAdmin(tx, {
+      await seedDefaultAdminInTransaction(tx, {
         passwordHash: 'hash',
         organizationId: organization.id,
       });
@@ -107,7 +107,7 @@ describe('default admin seed', () => {
         data: { status: 'LOCKED', lockedAt: new Date(), deletedAt: new Date() },
       });
 
-      const admin = await seedDefaultAdmin(tx, {
+      const admin = await seedDefaultAdminInTransaction(tx, {
         passwordHash: 'hash',
         organizationId: organization.id,
       });
@@ -136,7 +136,7 @@ describe('default admin seed', () => {
       });
 
       await expect(
-        seedDefaultAdmin(tx, {
+        seedDefaultAdminInTransaction(tx, {
           passwordHash: 'hash',
           organizationId: organization.id,
         }),
