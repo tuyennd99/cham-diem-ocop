@@ -6,6 +6,7 @@ import { PermissionGuard } from './permission.guard';
 const principal = {
   status: 'ACTIVE' as const,
   isAdmin: false,
+  organizationId: 1,
   permissions: ['tasks.read'],
 };
 
@@ -79,14 +80,13 @@ describe('PermissionGuard', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('replaces stale JWT scope with the effective database scope', async () => {
+  it('refreshes permissions without a fixed staff role', async () => {
     const repository = {
       listEffectivePermissions: jest.fn().mockResolvedValue({
         status: 'ACTIVE',
         isAdmin: false,
-        isStaff: true,
         organizationId: 22,
-        permissions: ['tasks.read'],
+        permissions: ['tasks.read', 'tasks.read.all'],
       }),
     };
     const guard = new PermissionGuard(
@@ -95,15 +95,16 @@ describe('PermissionGuard', () => {
       } as unknown as Reflector,
       repository as unknown as SystemRepository,
     );
-    const user = { sub: 7, organizationId: 10, permissions: ['tasks.assign'] };
+    const user = { sub: 7, organizationId: 10, permissions: [] as string[] };
 
     await guard.canActivate(contextWith(user));
 
-    expect(user).toMatchObject({
+    expect(user).not.toHaveProperty('isStaff');
+    expect(user).toEqual({
+      sub: 7,
       organizationId: 22,
-      permissions: ['tasks.read'],
+      permissions: ['tasks.read', 'tasks.read.all'],
       isAdmin: false,
-      isStaff: true,
     });
   });
 });

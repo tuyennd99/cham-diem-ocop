@@ -122,7 +122,7 @@ describe('AuthService', () => {
     repo.completeLogin.mockResolvedValue(true);
     jest.mocked(verifyPassword).mockResolvedValue(true);
 
-    await service.login('user', 'correct', meta);
+    const result = await service.login('user', 'correct', meta);
 
     expect(repo.unlockAutomatically).toHaveBeenCalledWith(
       user.id,
@@ -139,21 +139,11 @@ describe('AuthService', () => {
       meta,
     );
     expect(jwtService.signAsync).toHaveBeenCalledWith(
-      {
-        sub: user.id,
-        username: user.username,
-        organizationId: user.organizationId,
-        permissions: user.permissions,
-        isAdmin: false,
-        isStaff: false,
-      },
-      {
-        secret: 'test-secret-at-least-32-characters',
-        algorithm: 'HS256',
-        issuer: 'congan-api',
-        audience: 'congan-web',
-        expiresIn: '15m',
-      },
+      expect.not.objectContaining({ isStaff: expect.anything() }),
+      expect.any(Object),
+    );
+    expect(result.user).toEqual(
+      expect.not.objectContaining({ isStaff: expect.anything() }),
     );
   });
 

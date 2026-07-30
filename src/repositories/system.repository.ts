@@ -4,7 +4,7 @@ import { Prisma, UserStatus } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RequestMeta } from '../types/auth';
-import { ROLE } from '../constants/role';
+import { ADMIN_GROUP_CODE } from '../constants/role';
 
 const userPublicSelect = {
   id: true,
@@ -42,7 +42,6 @@ type PermissionGroupPayload = Prisma.PermissionGroupGetPayload<{
 export interface EffectivePermissions {
   status: UserStatus;
   isAdmin: boolean;
-  isStaff: boolean;
   organizationId: number;
   permissions: string[];
 }
@@ -118,15 +117,13 @@ export class SystemRepository {
     });
     if (!user) return null;
 
+    const groupCodes = user.permissionGroups.map(
+      ({ permissionGroup }) => permissionGroup.code,
+    );
     return {
       status: user.status,
       organizationId: user.organizationId,
-      isAdmin: user.permissionGroups.some(
-        ({ permissionGroup }) => permissionGroup.code === ROLE.ADMIN,
-      ),
-      isStaff: user.permissionGroups.some(
-        ({ permissionGroup }) => permissionGroup.code === ROLE.THUONG_TRUC,
-      ),
+      isAdmin: groupCodes.includes(ADMIN_GROUP_CODE),
       permissions: uniq(
         user.permissionGroups.flatMap(({ permissionGroup }) =>
           permissionGroup.permissions.map(({ permission }) => permission.code),

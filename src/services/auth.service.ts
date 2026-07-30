@@ -240,7 +240,6 @@ export class AuthService {
       organizationId: user.organizationId,
       permissions: user.permissions,
       isAdmin: Boolean(user.isAdmin),
-      isStaff: Boolean(user.isStaff),
     };
     return {
       accessToken: await this.jwtService.signAsync(payload, {
@@ -270,7 +269,6 @@ export class AuthService {
       organization: user.organization,
       permissions: user.permissions,
       isAdmin: Boolean(user.isAdmin),
-      isStaff: Boolean(user.isStaff),
     };
   }
 

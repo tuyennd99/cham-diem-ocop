@@ -23,7 +23,6 @@ export interface AuthUser {
   };
   permissions: string[];
   isAdmin?: boolean;
-  isStaff?: boolean;
   status: UserStatus;
   lockedUntil: Date | null;
   failedLoginCount: number;

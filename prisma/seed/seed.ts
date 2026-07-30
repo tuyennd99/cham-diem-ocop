@@ -1,12 +1,13 @@
 import { PrismaClient } from '@prisma/client';
 import { createPrismaAdapter, } from '../../src/prisma/client';
 import { DEFAULT_SEED_PASSWORD, hashSeedPassword } from './password';
-import { ROLE } from '../../src/constants/role';
+import { ADMIN_GROUP_CODE } from '../../src/constants/role';
 
 const prisma = new PrismaClient({ adapter: createPrismaAdapter() });
 
 const permissions = [
   ['tasks.read', 'Xem nhiệm vụ'],
+  ['tasks.read.all', 'Xem nhiệm vụ và báo cáo toàn hệ thống'],
   ['tasks.create', 'Tạo nhiệm vụ'],
   ['tasks.update', 'Sửa nhiệm vụ'],
   ['tasks.delete', 'Xóa mềm nhiệm vụ'],
@@ -21,6 +22,7 @@ const permissions = [
   ['consolidated.review', 'Duyệt/trả báo cáo tổng hợp'],
   ['report_history.read', 'Xem lịch sử báo cáo'],
   ['dashboard.read', 'Xem dashboard'],
+  ['dashboard.read.all', 'Xem dashboard và thống kê toàn hệ thống'],
   ['users.manage', 'Quản lý người dùng'],
   ['organizations.manage', 'Quản lý đơn vị'],
   ['programs.manage', 'Quản lý chương trình'],
@@ -32,6 +34,7 @@ const groups = {
   ADMIN: permissions.map(([code]) => code),
   THUONG_TRUC: [
     'tasks.read',
+    'tasks.read.all',
     'tasks.create',
     'tasks.update',
     'tasks.delete',
@@ -41,6 +44,7 @@ const groups = {
     'consolidated.review',
     'report_history.read',
     'dashboard.read',
+    'dashboard.read.all',
     'audit.read',
   ],
   DON_VI: [
@@ -62,14 +66,14 @@ async function main() {
 
   const [technicalAdmin, standingOffice, sampleUnit] = await Promise.all([
     prisma.organization.upsert({
-      where: { code: ROLE.ADMIN },
+      where: { code: ADMIN_GROUP_CODE },
       update: {
         name: 'Quản trị kỹ thuật',
         isAssigningAuthority: false,
         isExecutingUnit: false,
       },
       create: {
-        code: ROLE.ADMIN,
+        code: ADMIN_GROUP_CODE,
         name: 'Quản trị kỹ thuật',
         isAssigningAuthority: false,
         isExecutingUnit: false,
@@ -132,7 +136,7 @@ async function main() {
   }
 
   const adminGroup = await prisma.permissionGroup.findUniqueOrThrow({
-    where: { code: ROLE.ADMIN },
+    where: { code: ADMIN_GROUP_CODE },
   });
   const admin = await prisma.user.upsert({
     where: { username: 'admin' },
