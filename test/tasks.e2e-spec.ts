@@ -12,9 +12,28 @@ import {
   ReportingPeriodsController,
   TasksController,
 } from '../src/controllers/tasks.controller';
+import { PermissionGuard } from '../src/guards/permission.guard';
+import { SystemRepository } from '../src/repositories/system.repository';
 import { ReportingPeriodsService } from '../src/services/reporting-periods.service';
 import { ReportsService } from '../src/services/reports.service';
 import { TasksService } from '../src/services/tasks.service';
+
+let effectivePermissions = [
+  'tasks.read',
+  'tasks.create',
+  'tasks.assign',
+  'tasks.close',
+];
+const systemRepository = {
+  listEffectivePermissions: jest.fn(() =>
+    Promise.resolve({
+      status: 'ACTIVE',
+      isAdmin: false,
+      organizationId: 10,
+      permissions: effectivePermissions,
+    }),
+  ),
+};
 
 class TestPrincipalGuard implements CanActivate {
   canActivate(context: ExecutionContext) {
@@ -23,7 +42,7 @@ class TestPrincipalGuard implements CanActivate {
       sub: 1,
       username: 'thuongtruc',
       organizationId: 10,
-      permissions: ['tasks.read', 'tasks.create', 'tasks.close'],
+      permissions: [],
     };
     return true;
   }
@@ -57,7 +76,9 @@ describe('Task endpoints', () => {
         { provide: TasksService, useValue: tasksService },
         { provide: ReportingPeriodsService, useValue: periodsService },
         { provide: ReportsService, useValue: reportsService },
+        { provide: SystemRepository, useValue: systemRepository },
         { provide: APP_GUARD, useClass: TestPrincipalGuard },
+        { provide: APP_GUARD, useClass: PermissionGuard },
       ],
     }).compile();
     app = moduleRef.createNestApplication();
@@ -68,6 +89,16 @@ describe('Task endpoints', () => {
 
   afterAll(async () => {
     await app.close();
+  });
+
+  beforeEach(() => {
+    effectivePermissions = [
+      'tasks.read',
+      'tasks.create',
+      'tasks.assign',
+      'tasks.close',
+    ];
+    jest.clearAllMocks();
   });
 
   it('lists tasks with the authenticated principal', async () => {
@@ -92,6 +123,49 @@ describe('Task endpoints', () => {
         dueAt: '2026-08-01T00:00:00.000Z',
       })
       .expect(400);
+  });
+
+  it('denies task creation without tasks.assign', async () => {
+    effectivePermissions = ['tasks.read', 'tasks.create'];
+
+    await request(server)
+      .post('/api/v1/tasks')
+      .send({
+        code: 'NV-001',
+        name: 'Nhiệm vụ',
+        type: 'DOT_XUAT',
+        programId: 1,
+        assigningOrganizationId: 10,
+        leadOrganizationId: 20,
+        collaboratorOrganizationIds: [30],
+        dueAt: '2026-08-01T00:00:00.000Z',
+      })
+      .expect(403);
+  });
+
+  it('allows task creation with tasks.create and tasks.assign', async () => {
+    await request(server)
+      .post('/api/v1/tasks')
+      .send({
+        code: 'NV-001',
+        name: 'Nhiệm vụ',
+        type: 'DOT_XUAT',
+        programId: 1,
+        assigningOrganizationId: 10,
+        leadOrganizationId: 20,
+        collaboratorOrganizationIds: [30],
+        dueAt: '2026-08-01T00:00:00.000Z',
+      })
+      .expect(201);
+  });
+
+  it('denies reporting-period cancellation without tasks.close', async () => {
+    effectivePermissions = ['tasks.read'];
+
+    await request(server)
+      .post('/api/v1/reporting-periods/2/cancel')
+      .send({ reason: 'Không còn áp dụng' })
+      .expect(403);
   });
 
   it('maps close and period cancellation endpoints', async () => {

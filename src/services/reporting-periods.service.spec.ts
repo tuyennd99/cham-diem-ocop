@@ -87,6 +87,36 @@ describe('ReportingPeriodsService', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
+  it('uses tasks.read.all global scope to list periods', async () => {
+    const repository = repositoryMock();
+    const service = new ReportingPeriodsService(
+      repository as unknown as TasksRepository,
+      notificationsMock() as unknown as NotificationsService,
+    );
+
+    await service.list(1, {
+      ...principal,
+      permissions: ['tasks.read', 'tasks.read.all'],
+    });
+
+    expect(repository.findById).toHaveBeenCalledWith(1, 10, true);
+  });
+
+  it('uses tasks.read.all global scope to cancel periods', async () => {
+    const repository = repositoryMock();
+    const service = new ReportingPeriodsService(
+      repository as unknown as TasksRepository,
+      notificationsMock() as unknown as NotificationsService,
+    );
+
+    await service.cancel(5, 'Không còn áp dụng', {
+      ...principal,
+      permissions: ['tasks.read', 'tasks.close', 'tasks.read.all'],
+    });
+
+    expect(repository.findById).toHaveBeenCalledWith(1, 10, true);
+  });
+
   it('cancels only an open period', async () => {
     const repository = repositoryMock();
     const service = new ReportingPeriodsService(
