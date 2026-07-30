@@ -16,11 +16,45 @@ const editorGroup = {
   permissions: [{ permission: { code: 'tasks.update' } }],
 };
 
+type Actor = {
+  status: string;
+  isAdmin: boolean;
+  organizationId: number;
+  permissions: string[];
+} | null;
+
+type GrantGroup = {
+  id: number;
+  code: string;
+  permissions: Array<{ permission: { code: string } }>;
+};
+
+type GrantPermission = { id: number; code: string };
+type GrantValidator<T> = (actor: Actor, items: T[]) => void;
+
 describe('SystemService authorization administration', () => {
   let service: SystemService;
   let repository: Record<string, jest.Mock>;
 
   beforeEach(() => {
+    const validateGroups = async (
+      actorId: number,
+      ids: number[],
+      validate: GrantValidator<GrantGroup>,
+    ) =>
+      validate(
+        await repository.listEffectivePermissions(actorId),
+        await repository.findPermissionGroupsByIds(ids),
+      );
+    const validatePermissions = async (
+      actorId: number,
+      ids: number[],
+      validate: GrantValidator<GrantPermission>,
+    ) =>
+      validate(
+        await repository.listEffectivePermissions(actorId),
+        await repository.findPermissionsByIds(ids),
+      );
     repository = {
       findUserById: jest.fn().mockResolvedValue(user),
       findUserByUsername: jest.fn().mockResolvedValue(null),
@@ -37,12 +71,66 @@ describe('SystemService authorization administration', () => {
         organizationId: 10,
         permissions: ['users.manage'],
       }),
-      createUser: jest.fn().mockResolvedValue(user),
-      updateUser: jest.fn().mockResolvedValue(user),
+      createUser: jest
+        .fn()
+        .mockImplementation(
+          async (
+            data: { permissionGroupIds: number[] },
+            actorId: number,
+            _meta: unknown,
+            validate: GrantValidator<GrantGroup>,
+          ) => {
+            await validateGroups(actorId, data.permissionGroupIds, validate);
+            return user;
+          },
+        ),
+      updateUser: jest
+        .fn()
+        .mockImplementation(
+          async (
+            _id: number,
+            data: { permissionGroupIds?: number[] },
+            actorId: number,
+            _meta: unknown,
+            validate: GrantValidator<GrantGroup>,
+          ) => {
+            if (data.permissionGroupIds !== undefined) {
+              await validateGroups(actorId, data.permissionGroupIds, validate);
+            }
+            return user;
+          },
+        ),
       deleteUser: jest.fn().mockResolvedValue(undefined),
       lockUser: jest.fn().mockResolvedValue(user),
-      createPermissionGroup: jest.fn().mockResolvedValue(editorGroup),
-      updatePermissionGroup: jest.fn().mockResolvedValue(editorGroup),
+      createPermissionGroup: jest
+        .fn()
+        .mockImplementation(
+          async (
+            data: { permissionIds: number[] },
+            actorId: number,
+            _meta: unknown,
+            validate: GrantValidator<GrantPermission>,
+          ) => {
+            await validatePermissions(actorId, data.permissionIds, validate);
+            return editorGroup;
+          },
+        ),
+      updatePermissionGroup: jest
+        .fn()
+        .mockImplementation(
+          async (
+            _id: number,
+            data: { permissionIds?: number[] },
+            actorId: number,
+            _meta: unknown,
+            validate: GrantValidator<GrantPermission>,
+          ) => {
+            if (data.permissionIds !== undefined) {
+              await validatePermissions(actorId, data.permissionIds, validate);
+            }
+            return editorGroup;
+          },
+        ),
       deletePermissionGroup: jest.fn().mockResolvedValue(undefined),
     };
     service = new SystemService(repository as unknown as SystemRepository);
@@ -139,6 +227,35 @@ describe('SystemService authorization administration', () => {
           password: 'strong-password-value',
           organizationId: 10,
           permissionGroupIds: [7],
+        },
+        8,
+        {},
+      ),
+    ).rejects.toMatchObject({
+      response: {
+        errorCode: 'PRIVILEGE_ESCALATION',
+        message: expect.any(String),
+      },
+    });
+  });
+
+  it('rejects creating a user with ADMIN for a non-admin actor', async () => {
+    repository.findPermissionGroupsByIds.mockResolvedValue([
+      {
+        id: 1,
+        code: ADMIN_GROUP_CODE,
+        permissions: [],
+      },
+    ]);
+
+    await expect(
+      service.createUser(
+        {
+          username: 'new-admin',
+          fullName: 'New Admin',
+          password: 'strong-password-value',
+          organizationId: 10,
+          permissionGroupIds: [1],
         },
         8,
         {},

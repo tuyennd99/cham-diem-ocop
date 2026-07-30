@@ -35,8 +35,29 @@ const permissionGroupInclude = {
   },
 } satisfies Prisma.PermissionGroupInclude;
 
+const grantPermissionGroupSelect = {
+  id: true,
+  code: true,
+  permissions: {
+    select: { permission: { select: { code: true } } },
+  },
+} satisfies Prisma.PermissionGroupSelect;
+
+const grantPermissionSelect = {
+  id: true,
+  code: true,
+} satisfies Prisma.PermissionSelect;
+
 type PermissionGroupPayload = Prisma.PermissionGroupGetPayload<{
   include: typeof permissionGroupInclude;
+}>;
+
+type GrantPermissionGroup = Prisma.PermissionGroupGetPayload<{
+  select: typeof grantPermissionGroupSelect;
+}>;
+
+type GrantPermission = Prisma.PermissionGetPayload<{
+  select: typeof grantPermissionSelect;
 }>;
 
 export interface EffectivePermissions {
@@ -45,6 +66,11 @@ export interface EffectivePermissions {
   organizationId: number;
   permissions: string[];
 }
+
+type GrantValidator<T> = (
+  actor: EffectivePermissions | null,
+  items: T[],
+) => void;
 
 interface CreateUserData {
   username: string;
@@ -96,7 +122,14 @@ export class SystemRepository {
   async listEffectivePermissions(
     userId: number,
   ): Promise<EffectivePermissions | null> {
-    const user = await this.prisma.user.findFirst({
+    return this.listEffectivePermissionsWith(this.prisma, userId);
+  }
+
+  private async listEffectivePermissionsWith(
+    client: Pick<Prisma.TransactionClient, 'user'>,
+    userId: number,
+  ): Promise<EffectivePermissions | null> {
+    const user = await client.user.findFirst({
       where: { id: userId, deletedAt: null },
       select: {
         status: true,
@@ -161,8 +194,21 @@ export class SystemRepository {
     });
   }
 
-  async createUser(data: CreateUserData, actorId: number, meta: RequestMeta) {
-    return this.prisma.$transaction(async (transaction) => {
+  async createUser(
+    data: CreateUserData,
+    actorId: number,
+    meta: RequestMeta,
+    validateGrant: GrantValidator<GrantPermissionGroup>,
+  ) {
+    return this.serializable(async (transaction) => {
+      const groups = await this.findPermissionGroupsByIdsWith(
+        transaction,
+        data.permissionGroupIds,
+      );
+      validateGrant(
+        await this.listEffectivePermissionsWith(transaction, actorId),
+        groups,
+      );
       const user = await transaction.user.create({
         data: {
           username: data.username,
@@ -204,9 +250,20 @@ export class SystemRepository {
     data: UpdateUserData,
     actorId: number,
     meta: RequestMeta,
+    validateGrant: GrantValidator<GrantPermissionGroup>,
   ) {
-    return this.prisma.$transaction(async (transaction) => {
+    return this.serializable(async (transaction) => {
       const { permissionGroupIds, ...fields } = data;
+      if (permissionGroupIds !== undefined) {
+        const groups = await this.findPermissionGroupsByIdsWith(
+          transaction,
+          permissionGroupIds,
+        );
+        validateGrant(
+          await this.listEffectivePermissionsWith(transaction, actorId),
+          groups,
+        );
+      }
       const before = await transaction.user.findUniqueOrThrow({
         where: { id },
         select: userPublicSelect,
@@ -480,22 +537,30 @@ export class SystemRepository {
   }
 
   findPermissionGroupsByIds(ids: number[]) {
-    return this.prisma.permissionGroup.findMany({
+    return this.findPermissionGroupsByIdsWith(this.prisma, ids);
+  }
+
+  private findPermissionGroupsByIdsWith(
+    client: Pick<Prisma.TransactionClient, 'permissionGroup'>,
+    ids: number[],
+  ) {
+    return client.permissionGroup.findMany({
       where: { id: { in: ids } },
-      select: {
-        id: true,
-        code: true,
-        permissions: {
-          select: { permission: { select: { code: true } } },
-        },
-      },
+      select: grantPermissionGroupSelect,
     });
   }
 
   findPermissionsByIds(ids: number[]) {
-    return this.prisma.permission.findMany({
+    return this.findPermissionsByIdsWith(this.prisma, ids);
+  }
+
+  private findPermissionsByIdsWith(
+    client: Pick<Prisma.TransactionClient, 'permission'>,
+    ids: number[],
+  ) {
+    return client.permission.findMany({
       where: { id: { in: ids } },
-      select: { id: true, code: true },
+      select: grantPermissionSelect,
     });
   }
 
@@ -506,8 +571,17 @@ export class SystemRepository {
       PermissionGroupData,
     actorId: number,
     meta: RequestMeta,
+    validateGrant: GrantValidator<GrantPermission>,
   ) {
-    return this.prisma.$transaction(async (transaction) => {
+    return this.serializable(async (transaction) => {
+      const permissions = await this.findPermissionsByIdsWith(
+        transaction,
+        data.permissionIds,
+      );
+      validateGrant(
+        await this.listEffectivePermissionsWith(transaction, actorId),
+        permissions,
+      );
       const group = await transaction.permissionGroup.create({
         data: {
           code: data.code,
@@ -538,9 +612,20 @@ export class SystemRepository {
     data: PermissionGroupData,
     actorId: number,
     meta: RequestMeta,
+    validateGrant: GrantValidator<GrantPermission>,
   ) {
-    return this.prisma.$transaction(async (transaction) => {
+    return this.serializable(async (transaction) => {
       const { permissionIds, ...fields } = data;
+      if (permissionIds !== undefined) {
+        const permissions = await this.findPermissionsByIdsWith(
+          transaction,
+          permissionIds,
+        );
+        validateGrant(
+          await this.listEffectivePermissionsWith(transaction, actorId),
+          permissions,
+        );
+      }
       const group = await transaction.permissionGroup.update({
         where: { id },
         data: {
@@ -601,6 +686,22 @@ export class SystemRepository {
 
   listPermissions() {
     return this.prisma.permission.findMany({ orderBy: { code: 'asc' } });
+  }
+
+  private async serializable<T>(
+    operation: (transaction: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await this.prisma.$transaction(operation, {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        });
+      } catch (error) {
+        if ((error as { code?: unknown })?.code !== 'P2034' || attempt === 2) {
+          throw error;
+        }
+      }
+    }
   }
 
   private revokeSessions(

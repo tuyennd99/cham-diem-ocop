@@ -17,7 +17,10 @@ import {
   UpdateProgramDto,
   UpdateUserDto,
 } from '../dtos/system.dto';
-import { SystemRepository } from '../repositories/system.repository';
+import {
+  type EffectivePermissions,
+  SystemRepository,
+} from '../repositories/system.repository';
 import { RequestMeta } from '../types/auth';
 
 @Injectable()
@@ -41,14 +44,6 @@ export class SystemService {
       throw this.conflict('Username already exists');
     }
     await this.requireOrganization(input.organizationId);
-    const groups = await this.requirePermissionGroups(input.permissionGroupIds);
-    await this.assertCanGrant(
-      actorId,
-      groups.flatMap(({ permissions }) =>
-        permissions.map(({ permission }) => permission.code),
-      ),
-      groups.some(({ code }) => code === ADMIN_GROUP_CODE),
-    );
 
     return this.translate(async () =>
       this.publicUser(
@@ -65,6 +60,16 @@ export class SystemService {
           },
           actorId,
           meta,
+          (actor, groups) => {
+            this.requirePermissionGroups(input.permissionGroupIds, groups);
+            this.assertCanGrant(
+              actor,
+              groups.flatMap(({ permissions }) =>
+                permissions.map(({ permission }) => permission.code),
+              ),
+              groups.some(({ code }) => code === ADMIN_GROUP_CODE),
+            );
+          },
         ),
       ),
     );
@@ -94,18 +99,6 @@ export class SystemService {
     if (input.organizationId !== undefined) {
       await this.requireOrganization(input.organizationId);
     }
-    if (input.permissionGroupIds !== undefined) {
-      const groups = await this.requirePermissionGroups(
-        input.permissionGroupIds,
-      );
-      await this.assertCanGrant(
-        actorId,
-        groups.flatMap(({ permissions }) =>
-          permissions.map(({ permission }) => permission.code),
-        ),
-        groups.some(({ code }) => code === ADMIN_GROUP_CODE),
-      );
-    }
 
     return this.translate(async () =>
       this.publicUser(
@@ -122,6 +115,17 @@ export class SystemService {
           },
           actorId,
           meta,
+          (actor, groups) => {
+            if (input.permissionGroupIds === undefined) return;
+            this.requirePermissionGroups(input.permissionGroupIds, groups);
+            this.assertCanGrant(
+              actor,
+              groups.flatMap(({ permissions }) =>
+                permissions.map(({ permission }) => permission.code),
+              ),
+              groups.some(({ code }) => code === ADMIN_GROUP_CODE),
+            );
+          },
         ),
       ),
     );
@@ -331,16 +335,18 @@ export class SystemService {
     if (await this.repository.findPermissionGroupByCode(input.code.trim())) {
       throw this.conflict('Permission group code already exists');
     }
-    const permissions = await this.requirePermissions(input.permissionIds);
-    await this.assertCanGrant(
-      actorId,
-      permissions.map(({ code }) => code),
-    );
     return this.translate(() =>
       this.repository.createPermissionGroup(
         { ...input, code: input.code.trim(), name: input.name.trim() },
         actorId,
         meta,
+        (actor, permissions) => {
+          this.requirePermissions(input.permissionIds, permissions);
+          this.assertCanGrant(
+            actor,
+            permissions.map(({ code }) => code),
+          );
+        },
       ),
     );
   }
@@ -366,13 +372,6 @@ export class SystemService {
         throw this.conflict('Permission group code already exists');
       }
     }
-    if (input.permissionIds !== undefined) {
-      const permissions = await this.requirePermissions(input.permissionIds);
-      await this.assertCanGrant(
-        actorId,
-        permissions.map(({ code }) => code),
-      );
-    }
     return this.translate(() =>
       this.repository.updatePermissionGroup(
         id,
@@ -383,6 +382,14 @@ export class SystemService {
         },
         actorId,
         meta,
+        (actor, permissions) => {
+          if (input.permissionIds === undefined) return;
+          this.requirePermissions(input.permissionIds, permissions);
+          this.assertCanGrant(
+            actor,
+            permissions.map(({ code }) => code),
+          );
+        },
       ),
     );
   }
@@ -409,28 +416,23 @@ export class SystemService {
     return item;
   }
 
-  private async requirePermissionGroups(ids: number[]) {
-    const items = await this.repository.findPermissionGroupsByIds(ids);
+  private requirePermissionGroups(ids: number[], items: Array<{ id: number }>) {
     if (items.length !== uniq(ids).length) {
       throw this.notFound('Permission group');
     }
-    return items;
   }
 
-  private async requirePermissions(ids: number[]) {
-    const items = await this.repository.findPermissionsByIds(ids);
+  private requirePermissions(ids: number[], items: Array<{ id: number }>) {
     if (items.length !== uniq(ids).length) {
       throw this.notFound('Permission');
     }
-    return items;
   }
 
-  private async assertCanGrant(
-    actorId: number,
+  private assertCanGrant(
+    actor: EffectivePermissions | null,
     permissionCodes: string[],
     includesAdmin = false,
   ) {
-    const actor = await this.repository.listEffectivePermissions(actorId);
     if (!actor) {
       throw this.forbidden('PRIVILEGE_ESCALATION', 'Actor is unavailable');
     }
