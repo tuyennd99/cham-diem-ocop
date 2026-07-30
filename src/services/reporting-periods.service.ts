@@ -89,11 +89,6 @@ export class ReportingPeriodsService
     meta: RequestMeta = {},
   ) {
     this.assertPermission(principal, 'tasks.close');
-    if (!principal.isAdmin && !principal.isStaff) {
-      throw new ForbiddenException(
-        'Only Admin or Thường trực may cancel reporting periods',
-      );
-    }
     const period = await this.repository.findReportingPeriod(periodId);
     if (!period) throw new NotFoundException('Reporting period not found');
     const task = await this.repository.findById(
@@ -174,7 +169,9 @@ export class ReportingPeriodsService
   }
 
   private hasGlobalScope(principal: AccessTokenPayload) {
-    return Boolean(principal.isAdmin || principal.isStaff);
+    return Boolean(
+      principal.isAdmin || principal.permissions.includes('tasks.read.all'),
+    );
   }
 
   private assertPermission(principal: AccessTokenPayload, permission: string) {

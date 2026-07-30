@@ -70,7 +70,6 @@ export class TasksService {
     try {
       this.assertPermission(principal, 'tasks.create');
       this.assertPermission(principal, 'tasks.assign');
-      this.assertStaffAssignment(principal);
       this.assertAssigningOrganization(input.assigningOrganizationId, principal);
       const normalized = this.normalize(input);
       await this.validate(normalized);
@@ -95,7 +94,6 @@ export class TasksService {
     meta: RequestMeta = {},
   ) {
     this.assertPermission(principal, 'tasks.update');
-    this.assertStaffAssignment(principal);
     const current = await this.requireTask(id, principal);
     const changesOrganizationAssignment =
       input.assigningOrganizationId !== undefined ||
@@ -168,7 +166,6 @@ export class TasksService {
     meta: RequestMeta = {},
   ) {
     this.assertPermission(principal, 'tasks.delete');
-    this.assertStaffAssignment(principal);
     await this.requireTask(id, principal);
     return this.repository.softDelete(id, new Date(), principal.sub, {
       ...meta,
@@ -183,7 +180,6 @@ export class TasksService {
     meta: RequestMeta = {},
   ) {
     this.assertPermission(principal, 'tasks.close');
-    this.assertStaffAssignment(principal);
     const task = await this.requireTask(id, principal);
     if (task.type !== TaskType.DINH_KY) {
       throw new BadRequestException('Only periodic tasks can be closed');
@@ -355,7 +351,9 @@ export class TasksService {
   }
 
   private hasGlobalScope(principal: AccessTokenPayload) {
-    return Boolean(principal.isAdmin || principal.isStaff);
+    return Boolean(
+      principal.isAdmin || principal.permissions.includes('tasks.read.all'),
+    );
   }
 
   private assertPermission(principal: AccessTokenPayload, permission: string) {
@@ -374,14 +372,6 @@ export class TasksService {
     ) {
       throw new ForbiddenException(
         'Tasks can only be assigned by the current organization',
-      );
-    }
-  }
-
-  private assertStaffAssignment(principal: AccessTokenPayload) {
-    if (!principal.isAdmin && !principal.isStaff) {
-      throw new ForbiddenException(
-        'Only Admin or Thường trực may assign task organizations',
       );
     }
   }

@@ -5,10 +5,9 @@ import { ReportingPeriodsService } from './reporting-periods.service';
 
 const principal = {
   sub: 1,
-  username: 'thuongtruc',
+  username: 'manager',
   organizationId: 10,
   permissions: ['tasks.read', 'tasks.close', 'tasks.assign'],
-  isStaff: true,
 };
 
 function repositoryMock() {
@@ -115,18 +114,24 @@ describe('ReportingPeriodsService', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('does not let a custom tasks.close group cancel a reporting period', async () => {
+  it('lets tasks.close cancel an in-scope reporting period', async () => {
+    const repository = repositoryMock();
+    repository.cancelReportingPeriod.mockResolvedValue({
+      id: 9,
+      status: 'CANCELED',
+    });
     const service = new ReportingPeriodsService(
-      repositoryMock() as unknown as TasksRepository,
+      repository as unknown as TasksRepository,
       notificationsMock() as unknown as NotificationsService,
     );
 
     await expect(
-      service.cancel(5, 'Không còn yêu cầu', {
+      service.cancel(9, 'Không còn áp dụng', {
         ...principal,
-        isStaff: false,
+        isAdmin: false,
+        permissions: ['tasks.read', 'tasks.close'],
       }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).resolves.toMatchObject({ id: 9, status: 'CANCELED' });
   });
 
   it('uses the same daily timestamp for period and notification generation', async () => {

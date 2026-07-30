@@ -13,6 +13,7 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { CurrentUser } from '../decorators/current-user.decorator';
+import { Permissions } from '../decorators/permissions.decorator';
 import { ResponseMessage } from '../decorators/response-message.decorator';
 import {
   CancelReportingPeriodDto,
@@ -37,6 +38,7 @@ export class TasksController {
   ) {}
 
   @Get()
+  @Permissions('tasks.read')
   list(
     @Query() query: TaskQueryDto,
     @CurrentUser() principal: AccessTokenPayload,
@@ -45,6 +47,7 @@ export class TasksController {
   }
 
   @Post()
+  @Permissions('tasks.create', 'tasks.assign')
   @ResponseMessage('Tạo nhiệm vụ thành công')
   create(
     @Body() body: CreateTaskDto,
@@ -55,16 +58,19 @@ export class TasksController {
   }
 
   @Get('lookups/organizations')
+  @Permissions('tasks.read')
   organizationLookups(@CurrentUser() principal: AccessTokenPayload) {
     return this.tasksService.listOrganizationLookups(principal);
   }
 
   @Get('lookups/programs')
+  @Permissions('tasks.read')
   programLookups(@CurrentUser() principal: AccessTokenPayload) {
     return this.tasksService.listProgramLookups(principal);
   }
 
   @Get(':id')
+  @Permissions('tasks.read')
   get(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() principal: AccessTokenPayload,
@@ -73,6 +79,7 @@ export class TasksController {
   }
 
   @Patch(':id')
+  @Permissions('tasks.update')
   @ResponseMessage('Cập nhật nhiệm vụ thành công')
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -84,6 +91,7 @@ export class TasksController {
   }
 
   @Delete(':id')
+  @Permissions('tasks.delete')
   @ResponseMessage('Xóa nhiệm vụ thành công')
   remove(
     @Param('id', ParseIntPipe) id: number,
@@ -94,6 +102,7 @@ export class TasksController {
   }
 
   @Post(':id/close')
+  @Permissions('tasks.close')
   @ResponseMessage('Đóng nhiệm vụ thành công')
   close(
     @Param('id', ParseIntPipe) id: number,
@@ -110,6 +119,7 @@ export class TasksController {
   }
 
   @Post(':id/complete')
+  @Permissions('tasks.complete')
   @ResponseMessage('Hoàn thành nhiệm vụ thành công')
   complete(
     @Param('id', ParseIntPipe) id: number,
@@ -120,6 +130,7 @@ export class TasksController {
   }
 
   @Get(':id/reporting-periods')
+  @Permissions('tasks.read')
   periods(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() principal: AccessTokenPayload,
@@ -138,6 +149,7 @@ export class ReportingPeriodsController {
   ) {}
 
   @Get(':id/report-workspaces')
+  @Permissions('tasks.read')
   listReportWorkspaces(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() principal: AccessTokenPayload,
@@ -146,6 +158,7 @@ export class ReportingPeriodsController {
   }
 
   @Post(':id/cancel')
+  @Permissions('tasks.close')
   @ResponseMessage('Hủy kỳ báo cáo thành công')
   cancel(
     @Param('id', ParseIntPipe) id: number,

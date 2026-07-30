@@ -7,7 +7,7 @@ import { TasksRepository } from '../repositories/tasks.repository';
 import { NotificationsService } from './notifications.service';
 import { TasksService } from './tasks.service';
 
-const thuongTruc = {
+const taskManager = {
   sub: 1,
   username: 'thuongtruc',
   organizationId: 10,
@@ -20,7 +20,6 @@ const thuongTruc = {
     'tasks.close',
     'tasks.complete',
   ],
-  isStaff: true,
 };
 
 const unitUser = {
@@ -92,17 +91,32 @@ describe('TasksService', () => {
     });
   });
 
+  it('uses global scope when tasks.read.all is granted', async () => {
+    const repository = repositoryMock();
+    repository.list.mockResolvedValue({ data: [], total: 0 });
+    const service = new TasksService(repository as unknown as TasksRepository);
+
+    await service.list(
+      { page: 1, limit: 20 },
+      { ...taskManager, permissions: ['tasks.read', 'tasks.read.all'] },
+    );
+
+    expect(repository.list).toHaveBeenCalledWith(
+      expect.objectContaining({ globalScope: true }),
+    );
+  });
+
   it('soft deletes without removing reports', async () => {
     const repository = repositoryMock();
     const service = new TasksService(repository as unknown as TasksRepository);
 
-    await service.remove(existingTask.id, thuongTruc);
+    await service.remove(existingTask.id, taskManager);
 
     expect(repository.softDelete).toHaveBeenCalledWith(
       existingTask.id,
       expect.any(Date),
-      thuongTruc.sub,
-      { organizationId: thuongTruc.organizationId },
+      taskManager.sub,
+      { organizationId: taskManager.organizationId },
     );
   });
 
@@ -140,46 +154,44 @@ describe('TasksService', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('does not treat a custom tasks.assign group as Thường trực', async () => {
+  it('lets any principal with task permissions manage tasks in scope', async () => {
     const repository = repositoryMock();
     const service = new TasksService(repository as unknown as TasksRepository);
-
-    await expect(
-      service.update(
-        existingTask.id,
-        { collaboratorOrganizationIds: [40] },
-        {
-          ...unitUser,
-          permissions: ['tasks.read', 'tasks.update', 'tasks.assign'],
-          isStaff: false,
-        },
-      ),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-  });
-
-  it('does not let custom task permissions bypass the Admin or Thường trực role', async () => {
-    const service = new TasksService(
-      repositoryMock() as unknown as TasksRepository,
-    );
     const custom = {
-      ...unitUser,
+      ...taskManager,
+      isAdmin: false,
       permissions: [
         'tasks.read',
+        'tasks.read.all',
+        'tasks.create',
         'tasks.update',
         'tasks.delete',
+        'tasks.assign',
         'tasks.close',
       ],
     };
 
     await expect(
-      service.update(existingTask.id, { name: 'Tên mới' }, custom),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+      service.create(
+        {
+          code: 'NV-008',
+          name: 'Nhiệm vụ',
+          type: 'DOT_XUAT',
+          programId: 1,
+          assigningOrganizationId: 10,
+          leadOrganizationId: 20,
+          collaboratorOrganizationIds: [30],
+          dueAt: '2026-08-01T00:00:00.000Z',
+        },
+        custom,
+      ),
+    ).resolves.toMatchObject({ id: 7 });
+    await expect(
+      service.update(existingTask.id, { name: 'Đổi tên' }, custom),
+    ).resolves.toBeDefined();
     await expect(
       service.remove(existingTask.id, custom),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-    await expect(
-      service.close(existingTask.id, 'Đóng', custom),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).resolves.toBeDefined();
   });
 
   it('requires assignment authority for every organization assignment field', async () => {
@@ -213,7 +225,7 @@ describe('TasksService', () => {
           collaboratorOrganizationIds: [30],
           dueAt: '2026-08-01T00:00:00.000Z',
         },
-        thuongTruc,
+        taskManager,
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
@@ -235,7 +247,7 @@ describe('TasksService', () => {
           collaboratorOrganizationIds: [30],
           dueAt: '2026-08-01T00:00:00.000Z',
         },
-        thuongTruc,
+        taskManager,
       ),
     ).rejects.toBeInstanceOf(ConflictException);
   });
@@ -261,7 +273,7 @@ describe('TasksService', () => {
         collaboratorOrganizationIds: [30],
         dueAt: '2026-08-01T00:00:00.000Z',
       },
-      thuongTruc,
+      taskManager,
     );
 
     expect(notifications.createForOrganizations).toHaveBeenCalledWith(
@@ -291,7 +303,7 @@ describe('TasksService', () => {
           collaboratorOrganizationIds: [30],
           dueAt: '2026-08-01T00:00:00.000Z',
         },
-        thuongTruc,
+        taskManager,
       ),
     ).rejects.toBeInstanceOf(ConflictException);
   });
@@ -314,7 +326,7 @@ describe('TasksService', () => {
           collaboratorOrganizationIds: [30],
           dueAt: '2026-08-01T00:00:00.000Z',
         },
-        thuongTruc,
+        taskManager,
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
@@ -335,13 +347,13 @@ describe('TasksService', () => {
     await expect(
       service.create(
         { ...common, collaboratorOrganizationIds: [] },
-        thuongTruc,
+        taskManager,
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
     await expect(
       service.create(
         { ...common, collaboratorOrganizationIds: [20] },
-        thuongTruc,
+        taskManager,
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
@@ -359,7 +371,7 @@ describe('TasksService', () => {
     };
 
     await expect(
-      service.create({ ...common, type: 'DOT_XUAT' }, thuongTruc),
+      service.create({ ...common, type: 'DOT_XUAT' }, taskManager),
     ).rejects.toBeInstanceOf(BadRequestException);
     await expect(
       service.create(
@@ -369,7 +381,7 @@ describe('TasksService', () => {
           frequency: 'MONTHLY',
           periodicStartAt: '2026-07-14T00:00:00+07:00',
         },
-        thuongTruc,
+        taskManager,
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
@@ -380,7 +392,7 @@ describe('TasksService', () => {
 
     repository.countOpenPeriods.mockResolvedValue(1);
     await expect(
-      service.close(existingTask.id, 'Kết thúc chương trình', thuongTruc),
+      service.close(existingTask.id, 'Kết thúc chương trình', taskManager),
     ).rejects.toBeInstanceOf(ConflictException);
 
     repository.findById.mockResolvedValue({
@@ -388,7 +400,7 @@ describe('TasksService', () => {
       type: 'DOT_XUAT',
     });
     await expect(
-      service.close(existingTask.id, 'Kết thúc chương trình', thuongTruc),
+      service.close(existingTask.id, 'Kết thúc chương trình', taskManager),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
@@ -410,14 +422,14 @@ describe('TasksService', () => {
     });
     const service = new TasksService(repository as unknown as TasksRepository);
 
-    await service.complete(adHocTask.id, thuongTruc, {}, completedAt);
+    await service.complete(adHocTask.id, taskManager, {}, completedAt);
 
     expect(repository.complete).toHaveBeenCalledWith(
       adHocTask.id,
       completedAt,
       'HOAN_THANH_DUNG_HAN',
-      thuongTruc.sub,
-      { organizationId: thuongTruc.organizationId },
+      taskManager.sub,
+      { organizationId: taskManager.organizationId },
     );
   });
 
@@ -445,7 +457,7 @@ describe('TasksService', () => {
     const service = new TasksService(repository as unknown as TasksRepository);
 
     await expect(
-      service.complete(existingTask.id, thuongTruc),
+      service.complete(existingTask.id, taskManager),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(repository.complete).not.toHaveBeenCalled();
   });
