@@ -134,7 +134,7 @@ describe('AuthService', () => {
       user.id,
       user.passwordHash,
       expect.any(String),
-      new Date(now.getTime() + 3 * 24 * 60 * 60_000),
+      new Date(now.getTime() + 30 * 24 * 60 * 60_000),
       now,
       meta,
     );
