@@ -34,10 +34,14 @@ const lead = {
 
 const reviewer = {
   sub: 1,
-  username: 'thuongtruc',
+  username: 'custom-reviewer',
   organizationId: 10,
-  permissions: ['consolidated.review', 'report_history.read', 'tasks.assign'],
-  isStaff: true,
+  permissions: [
+    'tasks.read',
+    'tasks.read.all',
+    'consolidated.review',
+    'report_history.read',
+  ],
 };
 
 const progressWorkspace = {
@@ -219,6 +223,19 @@ describe('ReportsService', () => {
     );
   });
 
+  it('uses tasks.read.all for global report history scope', async () => {
+    const repository = repositoryMock();
+    const service = new ReportsService(
+      repository as unknown as ReportsRepository,
+    );
+
+    await service.history({ page: 1, limit: 20 }, reviewer);
+
+    expect(repository.listHistory).toHaveBeenCalledWith(
+      expect.objectContaining({ globalScope: true }),
+    );
+  });
+
   it('lists every submitted collaborator workspace for the lead organization', async () => {
     const repository = repositoryMock();
     const service = new ReportsService(
@@ -244,6 +261,34 @@ describe('ReportsService', () => {
     expect(repository.listPeriodWorkspaces).toHaveBeenCalledWith(7);
   });
 
+  it('lets tasks.read.all list report workspaces outside the lead organization', async () => {
+    const repository = repositoryMock();
+    const service = new ReportsService(
+      repository as unknown as ReportsRepository,
+    );
+    repository.findPeriodContext.mockResolvedValue({
+      id: 7,
+      status: 'OPEN',
+      task: {
+        id: 5,
+        type: 'DINH_KY',
+        leadOrganizationId: 20,
+        completedAt: null,
+        deletedAt: null,
+        collaboratorOrganizationIds: [30, 40],
+      },
+      approvedProgressCount: 0,
+    });
+
+    await expect(
+      service.listPeriodWorkspaces(7, {
+        ...reviewer,
+        organizationId: 99,
+        permissions: ['tasks.read', 'tasks.read.all', 'progress.review'],
+      }),
+    ).resolves.toHaveLength(2);
+  });
+
   it('rejects an inverted submitted history range', async () => {
     const repository = repositoryMock();
     const service = new ReportsService(
@@ -263,7 +308,7 @@ describe('ReportsService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('lets Thường trực approve a submitted consolidated report', async () => {
+  it('lets a custom group with consolidated.review review globally', async () => {
     const repository = repositoryMock();
     repository.findWorkspace.mockResolvedValue({
       ...progressWorkspace,
@@ -288,34 +333,6 @@ describe('ReportsService', () => {
     expect(repository.approveLatest).toHaveBeenCalledWith(12, reviewer.sub, {
       organizationId: reviewer.organizationId,
     });
-  });
-
-  it('does not let a custom permission group review consolidated reports globally', async () => {
-    const repository = repositoryMock();
-    repository.findWorkspace.mockResolvedValue({
-      ...progressWorkspace,
-      kind: 'CONSOLIDATED',
-      status: 'SUBMITTED',
-      ownerOrganizationId: 20,
-      reportingPeriod: {
-        ...progressWorkspace.reportingPeriod,
-        task: {
-          ...progressWorkspace.reportingPeriod.task,
-          type: 'DINH_KY',
-        },
-      },
-      latestVersion: { id: 201, status: 'SUBMITTED' },
-    });
-    const service = new ReportsService(
-      repository as unknown as ReportsRepository,
-    );
-
-    await expect(
-      service.approve(12, 'CONSOLIDATED', {
-        ...reviewer,
-        isStaff: false,
-      }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('notifies the reviewer on submit and the owner on review', async () => {

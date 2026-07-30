@@ -3,6 +3,7 @@ import {
   PayloadTooLargeException,
   UnsupportedMediaTypeException,
 } from '@nestjs/common';
+import { createReadStream } from 'node:fs';
 import {
   assertAllowedDocument,
   assertDraftSize,
@@ -10,6 +11,8 @@ import {
 import { MAX_DRAFT_BYTES } from '../utils/private-storage';
 import { FilesRepository } from '../repositories/files.repository';
 import { FilesService } from './files.service';
+
+jest.mock('node:fs', () => ({ createReadStream: jest.fn() }));
 
 const unitUser = {
   sub: 2,
@@ -115,6 +118,51 @@ describe('FilesService', () => {
       service.downloadWorkspaceFile(11, 99, {
         ...unitUser,
         permissions: [],
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('uses tasks.read.all for cross-organization private downloads', async () => {
+    const repository = repositoryMock();
+    repository.findWorkspaceDownload.mockResolvedValue({
+      id: 99,
+      originalName: 'report.pdf',
+      storageKey: '44b4bb72-bdde-4bd8-83ee-58d4f35e3081',
+      mimeType: 'application/pdf',
+      sizeBytes: 10,
+      context: {
+        id: 11,
+        kind: 'PROGRESS',
+        status: 'DRAFT',
+        ownerOrganizationId: 30,
+        reportingPeriod: {
+          status: 'OPEN',
+          task: {
+            leadOrganizationId: 20,
+            completedAt: null,
+            collaboratorOrganizationIds: [30],
+          },
+        },
+      },
+    });
+    const service = new FilesService(
+      repository as unknown as FilesRepository,
+      'E:\\private-storage',
+    );
+    const outsider = {
+      ...unitUser,
+      organizationId: 99,
+      permissions: ['tasks.read', 'tasks.read.all'],
+    };
+    (createReadStream as jest.Mock).mockReturnValue({});
+
+    await expect(service.downloadWorkspaceFile(11, 99, outsider)).resolves.toEqual(
+      expect.objectContaining({ originalName: 'report.pdf' }),
+    );
+    await expect(
+      service.downloadWorkspaceFile(11, 99, {
+        ...outsider,
+        permissions: ['tasks.read'],
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });

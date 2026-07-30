@@ -21,10 +21,13 @@ export class DashboardService {
     now = new Date(),
   ) {
     this.assertPermission(principal);
+    const globalDashboardScope =
+      principal.isAdmin === true ||
+      principal.permissions.includes('dashboard.read.all');
     const tasks = await this.repository.loadSummaryRows({
       filters,
       organizationId: principal.organizationId,
-      globalScope: principal.isAdmin === true || principal.isStaff === true,
+      globalScope: globalDashboardScope,
     });
     const taskStatusCounts = this.emptyStatusCounts();
     const periodStatusCounts = this.emptyStatusCounts();

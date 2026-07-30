@@ -36,7 +36,6 @@ export interface AccessTokenPayload {
   organizationId: number;
   permissions: string[];
   isAdmin?: boolean;
-  isStaff?: boolean;
   iat?: number;
   exp?: number;
 }

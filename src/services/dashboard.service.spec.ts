@@ -126,7 +126,7 @@ describe('DashboardService', () => {
     });
   });
 
-  it('grants global dashboard scope only to Admin or Thường trực', async () => {
+  it('uses dashboard.read.all for global dashboard scope', async () => {
     repository.loadSummaryRows.mockResolvedValue([]);
 
     await service.summary(
@@ -134,7 +134,6 @@ describe('DashboardService', () => {
       {
         ...principal,
         permissions: ['dashboard.read', 'tasks.assign'],
-        isStaff: false,
       },
       now,
     );
@@ -142,7 +141,14 @@ describe('DashboardService', () => {
       expect.objectContaining({ globalScope: false }),
     );
 
-    await service.summary({}, { ...principal, isStaff: true }, now);
+    await service.summary(
+      {},
+      {
+        ...principal,
+        permissions: ['dashboard.read', 'dashboard.read.all'],
+      },
+      now,
+    );
     expect(repository.loadSummaryRows).toHaveBeenLastCalledWith(
       expect.objectContaining({ globalScope: true }),
     );

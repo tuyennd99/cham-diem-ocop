@@ -199,7 +199,7 @@ export class FilesService {
     }
     if (
       principal.isAdmin ||
-      principal.isStaff ||
+      principal.permissions.includes('tasks.read.all') ||
       context.reportingPeriod.task.leadOrganizationId ===
       principal.organizationId ||
       (context.kind === ReportKind.PROGRESS &&

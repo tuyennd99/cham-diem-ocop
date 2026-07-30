@@ -108,16 +108,18 @@ export class ReportsService {
   ) {
     this.assertPermission(principal, 'tasks.read');
     const period = await this.requirePeriod(reportingPeriodId);
+    const globalTaskScope =
+      principal.isAdmin === true ||
+      principal.permissions.includes('tasks.read.all');
     if (
-      !principal.isAdmin &&
-      !principal.isStaff &&
+      !globalTaskScope &&
       period.task.leadOrganizationId !== principal.organizationId
     ) {
       throw new ForbiddenException(
-        'Only the lead organization or Thường trực may list reports',
+        'Only the lead organization may list reports',
       );
     }
-    if (!principal.isAdmin && !principal.isStaff) {
+    if (!principal.isAdmin) {
       this.assertPermission(principal, 'progress.review');
     }
     return this.repository.listPeriodWorkspaces(reportingPeriodId);
@@ -246,12 +248,15 @@ export class ReportsService {
         'submittedFrom must not be after submittedTo',
       );
     }
+    const globalTaskScope =
+      principal.isAdmin === true ||
+      principal.permissions.includes('tasks.read.all');
     const result = await this.repository.listHistory({
       ...query,
       taskCode: query.taskCode?.trim() || undefined,
       taskName: query.taskName?.trim() || undefined,
       organizationId: principal.organizationId,
-      globalScope: Boolean(principal.isAdmin) || Boolean(principal.isStaff),
+      globalScope: globalTaskScope,
     });
     return {
       data: result.data,
@@ -328,7 +333,7 @@ export class ReportsService {
   ) {
     if (
       principal.isAdmin ||
-      principal.isStaff ||
+      principal.permissions.includes('tasks.read.all') ||
       workspace.reportingPeriod.task.leadOrganizationId ===
       principal.organizationId ||
       (workspace.kind === ReportKind.PROGRESS &&
@@ -348,15 +353,6 @@ export class ReportsService {
         ? 'progress.review'
         : 'consolidated.review';
     this.assertPermission(principal, permission);
-    if (
-      workspace.kind === ReportKind.CONSOLIDATED &&
-      !principal.isAdmin &&
-      !principal.isStaff
-    ) {
-      throw new ForbiddenException(
-        'Only Admin or Thường trực may review consolidated reports',
-      );
-    }
     if (
       workspace.kind === ReportKind.PROGRESS &&
       !principal.isAdmin &&
