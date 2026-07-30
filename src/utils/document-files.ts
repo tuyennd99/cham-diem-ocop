@@ -35,10 +35,14 @@ export function assertAllowedDocument(
     throw new UnsupportedMediaTypeException('Invalid file name');
   }
   const extension = extname(originalName).slice(1).toLowerCase();
+  // Nội dung đã xác thực bằng magic-byte (detectedType) và extension phải khớp
+  // detectedType — đó là hai lớp thật. declaredMime do trình duyệt gửi, .doc/.xls
+  // trên một số OS gửi rỗng/generic → chỉ bắt khớp khi trình duyệt gửi MIME cụ thể.
+  const genericMimes = new Set(['', 'application/octet-stream', 'application/x-msdownload']);
   if (
     detectedType === 'unknown' ||
     extension !== detectedType ||
-    documentMimes[detectedType] !== declaredMime
+    (!genericMimes.has(declaredMime) && documentMimes[detectedType] !== declaredMime)
   ) {
     throw new UnsupportedMediaTypeException(
       'File extension, MIME, and content must match',
