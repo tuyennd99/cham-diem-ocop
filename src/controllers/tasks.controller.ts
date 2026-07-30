@@ -13,6 +13,7 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { CurrentUser } from '../decorators/current-user.decorator';
+import { ResponseMessage } from '../decorators/response-message.decorator';
 import {
   CancelReportingPeriodDto,
   CloseTaskDto,
@@ -44,6 +45,7 @@ export class TasksController {
   }
 
   @Post()
+  @ResponseMessage('Tạo nhiệm vụ thành công')
   create(
     @Body() body: CreateTaskDto,
     @CurrentUser() principal: AccessTokenPayload,
@@ -71,6 +73,7 @@ export class TasksController {
   }
 
   @Patch(':id')
+  @ResponseMessage('Cập nhật nhiệm vụ thành công')
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateTaskDto,
@@ -81,6 +84,7 @@ export class TasksController {
   }
 
   @Delete(':id')
+  @ResponseMessage('Xóa nhiệm vụ thành công')
   remove(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() principal: AccessTokenPayload,
@@ -90,6 +94,7 @@ export class TasksController {
   }
 
   @Post(':id/close')
+  @ResponseMessage('Đóng nhiệm vụ thành công')
   close(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: CloseTaskDto,
@@ -105,6 +110,7 @@ export class TasksController {
   }
 
   @Post(':id/complete')
+  @ResponseMessage('Hoàn thành nhiệm vụ thành công')
   complete(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() principal: AccessTokenPayload,
@@ -140,6 +146,7 @@ export class ReportingPeriodsController {
   }
 
   @Post(':id/cancel')
+  @ResponseMessage('Hủy kỳ báo cáo thành công')
   cancel(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: CancelReportingPeriodDto,

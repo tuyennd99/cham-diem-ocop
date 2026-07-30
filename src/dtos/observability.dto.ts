@@ -1,140 +1,43 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
 import { Frequency } from '@prisma/client';
-import { Transform, Type } from 'class-transformer';
-import {
-  IsBoolean,
-  IsDateString,
-  IsEnum,
-  IsInt,
-  IsOptional,
-  IsString,
-  Max,
-  MaxLength,
-  Min,
-} from 'class-validator';
 
-class PaginationQueryDto {
-  @ApiPropertyOptional({ default: 1, minimum: 1 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  page = 1;
+const isoDate = z.iso.datetime({ offset: true, local: true });
 
-  @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 100 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  limit = 20;
-}
+const paginationShape = {
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+};
 
-export class NotificationsQueryDto extends PaginationQueryDto {
-  @ApiPropertyOptional({ default: false })
-  @IsOptional()
-  @Transform(({ value }: { value: unknown }) => {
-    if (value === 'true' || value === true) return true;
-    if (value === 'false' || value === false) return false;
-    return value;
-  })
-  @IsBoolean()
-  unreadOnly = false;
-}
+export class NotificationsQueryDto extends createZodDto(
+  z.strictObject({
+    ...paginationShape,
+    unreadOnly: z.stringbool().default(false),
+  }),
+) {}
 
-export class DashboardQueryDto {
-  @ApiPropertyOptional({ maxLength: 100 })
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  taskCode?: string;
+export class DashboardQueryDto extends createZodDto(
+  z.strictObject({
+    taskCode: z.string().max(100).optional(),
+    taskName: z.string().max(500).optional(),
+    frequency: z.enum(Frequency).optional(),
+    year: z.coerce.number().int().min(2000).max(2100).optional(),
+    sequence: z.coerce.number().int().min(1).max(12).optional(),
+    programId: z.coerce.number().int().min(1).optional(),
+    dueFrom: isoDate.optional(),
+    dueTo: isoDate.optional(),
+  }),
+) {}
 
-  @ApiPropertyOptional({ maxLength: 500 })
-  @IsOptional()
-  @IsString()
-  @MaxLength(500)
-  taskName?: string;
-
-  @ApiPropertyOptional({ enum: Frequency })
-  @IsOptional()
-  @IsEnum(Frequency)
-  frequency?: Frequency;
-
-  @ApiPropertyOptional({ minimum: 2000, maximum: 2100 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(2000)
-  @Max(2100)
-  year?: number;
-
-  @ApiPropertyOptional({ minimum: 1, maximum: 12 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(12)
-  sequence?: number;
-
-  @ApiPropertyOptional({ minimum: 1 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  programId?: number;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsDateString()
-  dueFrom?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsDateString()
-  dueTo?: string;
-}
-
-export class AuditLogsQueryDto extends PaginationQueryDto {
-  @ApiPropertyOptional({ maxLength: 100 })
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  action?: string;
-
-  @ApiPropertyOptional({ maxLength: 100 })
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  entityType?: string;
-
-  @ApiPropertyOptional({ minimum: 1 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  entityId?: number;
-
-  @ApiPropertyOptional({ minimum: 1 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  actorId?: number;
-
-  @ApiPropertyOptional({ minimum: 1 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  organizationId?: number;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsDateString()
-  createdFrom?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsDateString()
-  createdTo?: string;
-}
+export class AuditLogsQueryDto extends createZodDto(
+  z.strictObject({
+    ...paginationShape,
+    action: z.string().max(100).optional(),
+    entityType: z.string().max(100).optional(),
+    entityId: z.coerce.number().int().min(1).optional(),
+    actorId: z.coerce.number().int().min(1).optional(),
+    organizationId: z.coerce.number().int().min(1).optional(),
+    createdFrom: isoDate.optional(),
+    createdTo: isoDate.optional(),
+  }),
+) {}

@@ -17,6 +17,7 @@ import { ReportKind } from '@prisma/client';
 import type { Request } from 'express';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { Permissions } from '../decorators/permissions.decorator';
+import { ResponseMessage } from '../decorators/response-message.decorator';
 import { RejectReportDto, SaveReportDraftDto } from '../dtos/reports.dto';
 import { FilesService } from '../services/files.service';
 import { ReportsService } from '../services/reports.service';
@@ -54,6 +55,7 @@ export class ProgressReportsController {
 
   @Patch(':id')
   @Permissions('progress.edit')
+  @ResponseMessage('Lưu báo cáo thành công')
   save(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: SaveReportDraftDto,
@@ -71,6 +73,7 @@ export class ProgressReportsController {
 
   @Post(':id/submit')
   @Permissions('progress.submit')
+  @ResponseMessage('Gửi báo cáo thành công')
   submit(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() principal: AccessTokenPayload,
@@ -86,6 +89,7 @@ export class ProgressReportsController {
 
   @Post(':id/approve')
   @Permissions('progress.review')
+  @ResponseMessage('Phê duyệt báo cáo thành công')
   approve(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() principal: AccessTokenPayload,
@@ -101,6 +105,7 @@ export class ProgressReportsController {
 
   @Post(':id/reject')
   @Permissions('progress.review')
+  @ResponseMessage('Từ chối báo cáo thành công')
   reject(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: RejectReportDto,
@@ -118,6 +123,7 @@ export class ProgressReportsController {
 
   @Post(':id/files')
   @Permissions('progress.edit')
+  @ResponseMessage('Tải tệp lên thành công')
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file', privateUploadOptions()))
   upload(
@@ -136,6 +142,7 @@ export class ProgressReportsController {
 
   @Delete(':id/files/:fileId')
   @Permissions('progress.edit')
+  @ResponseMessage('Xóa tệp thành công')
   removeFile(
     @Param('id', ParseIntPipe) id: number,
     @Param('fileId', ParseIntPipe) fileId: number,

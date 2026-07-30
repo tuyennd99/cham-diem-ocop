@@ -71,7 +71,7 @@ let SystemRepository = class SystemRepository {
         return {
             status: user.status,
             organizationId: user.organizationId,
-            isAdmin: user.permissionGroups.some(({ permissionGroup }) => permissionGroup.code === 'ADMIN'),
+            isAdmin: user.permissionGroups.some(({ permissionGroup }) => permissionGroup.code === ROLE.ADMIN),
             isStaff: user.permissionGroups.some(({ permissionGroup }) => permissionGroup.code === 'THUONG_TRUC'),
             permissions: [
                 ...new Set(user.permissionGroups.flatMap(({ permissionGroup }) => permissionGroup.permissions.map(({ permission }) => permission.code))),
@@ -376,7 +376,7 @@ let SystemRepository = class SystemRepository {
     }
     deletePermissionGroup(id, actorId, meta) {
         return this.prisma.$transaction(async (transaction) => {
-            await transaction.$queryRaw(client_1.Prisma.sql `
+            await transaction.$queryRaw(client_1.Prisma.sql`
           SELECT "id"
           FROM "permission_groups"
           WHERE "id" = ${id}

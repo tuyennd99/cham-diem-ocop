@@ -1,121 +1,44 @@
-import { Type } from 'class-transformer';
-import {
-  ArrayMinSize,
-  ArrayUnique,
-  IsArray,
-  IsDateString,
-  IsEnum,
-  IsInt,
-  IsOptional,
-  IsString,
-  Max,
-  MaxLength,
-  Min,
-  MinLength,
-} from 'class-validator';
-import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
 import { Frequency, TaskType } from '@prisma/client';
 
-export class CreateTaskDto {
-  @ApiProperty({ maxLength: 100 })
-  @IsString()
-  @MinLength(1)
-  @MaxLength(100)
-  code!: string;
+const unique = (a: number[]) => new Set(a).size === a.length;
+const uniqueMsg = { message: 'Giá trị trong mảng phải là duy nhất' };
+const isoDate = z.iso.datetime({ offset: true, local: true });
 
-  @ApiProperty({ maxLength: 500 })
-  @IsString()
-  @MinLength(1)
-  @MaxLength(500)
-  name!: string;
+const createTaskSchema = z.strictObject({
+  code: z.string().min(1).max(100),
+  name: z.string().min(1).max(500),
+  description: z.string().optional(),
+  expectedOutput: z.string().optional(),
+  type: z.enum(TaskType),
+  programId: z.coerce.number().int().min(1),
+  assigningOrganizationId: z.coerce.number().int().min(1),
+  leadOrganizationId: z.coerce.number().int().min(1),
+  collaboratorOrganizationIds: z
+    .array(z.number().int().min(1))
+    .min(1)
+    .refine(unique, uniqueMsg),
+  dueAt: isoDate.optional(),
+  frequency: z.enum(Frequency).optional(),
+  periodicStartAt: isoDate.optional(),
+});
 
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  description?: string;
+export class CreateTaskDto extends createZodDto(createTaskSchema) {}
 
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  expectedOutput?: string;
+export class UpdateTaskDto extends createZodDto(createTaskSchema.partial()) {}
 
-  @ApiProperty({ enum: TaskType })
-  @IsEnum(TaskType)
-  type!: TaskType;
+export class TaskQueryDto extends createZodDto(
+  z.strictObject({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+  }),
+) {}
 
-  @ApiProperty()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  programId!: number;
+export class CloseTaskDto extends createZodDto(
+  z.strictObject({ reason: z.string().min(1).max(1000) }),
+) {}
 
-  @ApiProperty()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  assigningOrganizationId!: number;
-
-  @ApiProperty()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  leadOrganizationId!: number;
-
-  @ApiProperty({ type: [Number], minItems: 1 })
-  @IsArray()
-  @ArrayMinSize(1)
-  @ArrayUnique()
-  @IsInt({ each: true })
-  @Min(1, { each: true })
-  collaboratorOrganizationIds!: number[];
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsDateString()
-  dueAt?: string;
-
-  @ApiPropertyOptional({ enum: Frequency })
-  @IsOptional()
-  @IsEnum(Frequency)
-  frequency?: Frequency;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsDateString()
-  periodicStartAt?: string;
-}
-
-export class UpdateTaskDto extends PartialType(CreateTaskDto) {}
-
-export class TaskQueryDto {
-  @ApiPropertyOptional({ default: 1, minimum: 1 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  page = 1;
-
-  @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 100 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  limit = 20;
-}
-
-export class CloseTaskDto {
-  @ApiProperty({ maxLength: 1000 })
-  @IsString()
-  @MinLength(1)
-  @MaxLength(1000)
-  reason!: string;
-}
-
-export class CancelReportingPeriodDto {
-  @ApiProperty({ maxLength: 1000 })
-  @IsString()
-  @MinLength(1)
-  @MaxLength(1000)
-  reason!: string;
-}
+export class CancelReportingPeriodDto extends createZodDto(
+  z.strictObject({ reason: z.string().min(1).max(1000) }),
+) {}

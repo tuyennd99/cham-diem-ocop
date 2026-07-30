@@ -16,6 +16,7 @@ import type { Request, Response } from 'express';
 import { isObjectLike } from 'lodash';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { Public } from '../decorators/public.decorator';
+import { ResponseMessage } from '../decorators/response-message.decorator';
 import { ChangePasswordDto, LoginDto } from '../dtos/auth.dto';
 import { CsrfGuard } from '../guards/csrf.guard';
 import { AuthService } from '../services/auth.service';
@@ -75,6 +76,7 @@ export class AuthController {
   @HttpCode(200)
   @UseGuards(CsrfGuard)
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @ResponseMessage('Đăng xuất thành công')
   async logout(
     @Headers('x-csrf-token') csrfToken: string,
     @Req() request: Request & { cookies?: Record<string, unknown> },
@@ -99,6 +101,7 @@ export class AuthController {
   @HttpCode(200)
   @ApiBearerAuth()
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ResponseMessage('Đổi mật khẩu thành công')
   async changePassword(
     @CurrentUser() user: AccessTokenPayload,
     @Body() body: ChangePasswordDto,

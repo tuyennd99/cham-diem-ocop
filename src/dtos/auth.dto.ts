@@ -1,30 +1,16 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsString, MaxLength, MinLength } from 'class-validator';
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
 
-export class LoginDto {
-  @ApiProperty()
-  @IsString()
-  @MinLength(1)
-  @MaxLength(100)
-  username!: string;
+export class LoginDto extends createZodDto(
+  z.strictObject({
+    username: z.string().min(1).max(100),
+    password: z.string().min(1).max(256),
+  }),
+) {}
 
-  @ApiProperty()
-  @IsString()
-  @MinLength(1)
-  @MaxLength(256)
-  password!: string;
-}
-
-export class ChangePasswordDto {
-  @ApiProperty()
-  @IsString()
-  @MinLength(1)
-  @MaxLength(256)
-  currentPassword!: string;
-
-  @ApiProperty({ minLength: 12 })
-  @IsString()
-  @MinLength(12)
-  @MaxLength(256)
-  newPassword!: string;
-}
+export class ChangePasswordDto extends createZodDto(
+  z.strictObject({
+    currentPassword: z.string().min(1).max(256),
+    newPassword: z.string().min(6).max(256),
+  }),
+) {}

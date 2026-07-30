@@ -36,9 +36,9 @@ async function main() {
     const passwordHash = await (0, password_1.hashSeedPassword)(password);
     const [technicalAdmin, standingOffice, sampleUnit] = await Promise.all([
         prisma.organization.upsert({
-            where: { code: 'ADMIN' },
+            where: { code: ROLE.ADMIN },
             update: { name: 'Quản trị kỹ thuật', isAssigningAuthority: false, isExecutingUnit: false },
-            create: { code: 'ADMIN', name: 'Quản trị kỹ thuật', isAssigningAuthority: false, isExecutingUnit: false },
+            create: { code: ROLE.ADMIN, name: 'Quản trị kỹ thuật', isAssigningAuthority: false, isExecutingUnit: false },
         }),
         prisma.organization.upsert({
             where: { code: 'THUONG_TRUC' },
@@ -73,7 +73,7 @@ async function main() {
             data: selected.map((permission) => ({ permissionGroupId: group.id, permissionId: permission.id })),
         });
     }
-    const adminGroup = await prisma.permissionGroup.findUniqueOrThrow({ where: { code: 'ADMIN' } });
+    const adminGroup = await prisma.permissionGroup.findUniqueOrThrow({ where: { code: ROLE.ADMIN } });
     const admin = await prisma.user.upsert({
         where: { username: 'admin' },
         update: { fullName: 'Quản trị viên mẫu', passwordHash, organizationId: technicalAdmin.id },
@@ -91,7 +91,7 @@ async function main() {
 main()
     .finally(() => prisma.$disconnect())
     .catch((error) => {
-    console.error(error);
-    process.exitCode = 1;
-});
+        console.error(error);
+        process.exitCode = 1;
+    });
 //# sourceMappingURL=seed.js.map

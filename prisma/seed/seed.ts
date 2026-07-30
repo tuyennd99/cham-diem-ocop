@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { createPrismaAdapter, } from '../../src/prisma/client';
 import { DEFAULT_SEED_PASSWORD, hashSeedPassword } from './password';
+import { ROLE } from '../../src/constants/role';
 
 const prisma = new PrismaClient({ adapter: createPrismaAdapter() });
 
@@ -61,14 +62,14 @@ async function main() {
 
   const [technicalAdmin, standingOffice, sampleUnit] = await Promise.all([
     prisma.organization.upsert({
-      where: { code: 'ADMIN' },
+      where: { code: ROLE.ADMIN },
       update: {
         name: 'Quản trị kỹ thuật',
         isAssigningAuthority: false,
         isExecutingUnit: false,
       },
       create: {
-        code: 'ADMIN',
+        code: ROLE.ADMIN,
         name: 'Quản trị kỹ thuật',
         isAssigningAuthority: false,
         isExecutingUnit: false,
@@ -131,7 +132,7 @@ async function main() {
   }
 
   const adminGroup = await prisma.permissionGroup.findUniqueOrThrow({
-    where: { code: 'ADMIN' },
+    where: { code: ROLE.ADMIN },
   });
   const admin = await prisma.user.upsert({
     where: { username: 'admin' },

@@ -1,84 +1,27 @@
-import { Type } from 'class-transformer';
-import {
-  IsDateString,
-  IsEnum,
-  IsInt,
-  IsOptional,
-  IsString,
-  Max,
-  MaxLength,
-  Min,
-  MinLength,
-} from 'class-validator';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
 import { Frequency } from '@prisma/client';
 
-export class SaveReportDraftDto {
-  @ApiProperty()
-  @IsString()
-  content!: string;
-}
+const isoDate = z.iso.datetime({ offset: true, local: true });
 
-export class RejectReportDto {
-  @ApiProperty({ maxLength: 1000 })
-  @IsString()
-  @MinLength(1)
-  @MaxLength(1000)
-  reason!: string;
-}
+export class SaveReportDraftDto extends createZodDto(
+  z.strictObject({ content: z.string() }),
+) {}
 
-export class ReportHistoryQueryDto {
-  @ApiPropertyOptional({ default: 1, minimum: 1 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  page = 1;
+export class RejectReportDto extends createZodDto(
+  z.strictObject({ reason: z.string().min(1).max(1000) }),
+) {}
 
-  @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 100 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  limit = 20;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  taskCode?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  @MaxLength(500)
-  taskName?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsDateString()
-  submittedFrom?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsDateString()
-  submittedTo?: string;
-
-  @ApiPropertyOptional({ enum: Frequency })
-  @IsOptional()
-  @IsEnum(Frequency)
-  reportingPeriod?: Frequency;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsDateString()
-  dueAt?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  programId?: number;
-}
+export class ReportHistoryQueryDto extends createZodDto(
+  z.strictObject({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+    taskCode: z.string().max(100).optional(),
+    taskName: z.string().max(500).optional(),
+    submittedFrom: isoDate.optional(),
+    submittedTo: isoDate.optional(),
+    reportingPeriod: z.enum(Frequency).optional(),
+    dueAt: isoDate.optional(),
+    programId: z.coerce.number().int().min(1).optional(),
+  }),
+) {}

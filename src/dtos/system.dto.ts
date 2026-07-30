@@ -1,219 +1,75 @@
-import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
-import {
-  ArrayUnique,
-  IsArray,
-  IsBoolean,
-  IsIn,
-  IsInt,
-  IsOptional,
-  IsString,
-  Matches,
-  MaxLength,
-  MinLength,
-} from 'class-validator';
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
 
 const CODE_PATTERN = /^[A-Za-z0-9._-]+$/;
+const unique = (a: number[]) => new Set(a).size === a.length;
+const uniqueMsg = { message: 'Giá trị trong mảng phải là duy nhất' };
+const idArray = z.array(z.number().int()).refine(unique, uniqueMsg);
+const status = z.enum(['ACTIVE', 'INACTIVE']);
 
-export class CreateUserDto {
-  @ApiProperty()
-  @IsString()
-  @MinLength(1)
-  @MaxLength(100)
-  @Matches(CODE_PATTERN)
-  username!: string;
+const createUserSchema = z.strictObject({
+  username: z.string().min(1).max(100).regex(CODE_PATTERN),
+  fullName: z.string().min(1).max(255),
+  position: z.string().max(255).optional(),
+  rank: z.string().max(255).optional(),
+  phone: z.string().max(30).optional(),
+  password: z.string().min(6).max(256),
+  organizationId: z.number().int(),
+  permissionGroupIds: idArray,
+});
 
-  @ApiProperty()
-  @IsString()
-  @MinLength(1)
-  @MaxLength(255)
-  fullName!: string;
+export class CreateUserDto extends createZodDto(createUserSchema) {}
 
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  @MaxLength(255)
-  position?: string;
+export class UpdateUserDto extends createZodDto(createUserSchema.partial()) {}
 
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  @MaxLength(255)
-  rank?: string;
+export class LockUserDto extends createZodDto(
+  z.strictObject({ reason: z.string().min(1).max(500) }),
+) {}
 
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  @MaxLength(30)
-  phone?: string;
+export class ResetPasswordDto extends createZodDto(
+  z.strictObject({ password: z.string().min(6).max(256) }),
+) {}
 
-  @ApiProperty({ minLength: 12 })
-  @IsString()
-  @MinLength(12)
-  @MaxLength(256)
-  password!: string;
+const createOrganizationSchema = z.strictObject({
+  code: z.string().min(1).max(50).regex(CODE_PATTERN),
+  name: z.string().min(1).max(255),
+  isAssigningAuthority: z.boolean().optional(),
+  isExecutingUnit: z.boolean().optional(),
+  status: status.optional(),
+});
 
-  @ApiProperty()
-  @IsInt()
-  organizationId!: number;
+export class CreateOrganizationDto extends createZodDto(
+  createOrganizationSchema,
+) {}
 
-  @ApiProperty({ type: [Number] })
-  @IsArray()
-  @ArrayUnique()
-  @IsInt({ each: true })
-  permissionGroupIds!: number[];
-}
+export class UpdateOrganizationDto extends createZodDto(
+  createOrganizationSchema.partial(),
+) {}
 
-export class UpdateUserDto {
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  @MinLength(1)
-  @MaxLength(100)
-  @Matches(CODE_PATTERN)
-  username?: string;
+const createProgramSchema = z.strictObject({
+  code: z.string().min(1).max(50).regex(CODE_PATTERN),
+  name: z.string().min(1).max(255),
+  description: z.string().max(5_000).optional(),
+  status: status.optional(),
+});
 
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  @MinLength(1)
-  @MaxLength(255)
-  fullName?: string;
+export class CreateProgramDto extends createZodDto(createProgramSchema) {}
 
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  @MaxLength(255)
-  position?: string;
+export class UpdateProgramDto extends createZodDto(
+  createProgramSchema.partial(),
+) {}
 
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  @MaxLength(255)
-  rank?: string;
+const createPermissionGroupSchema = z.strictObject({
+  code: z.string().min(1).max(100).regex(CODE_PATTERN),
+  name: z.string().min(1).max(255),
+  description: z.string().max(5_000).optional(),
+  permissionIds: idArray,
+});
 
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  @MaxLength(30)
-  phone?: string;
+export class CreatePermissionGroupDto extends createZodDto(
+  createPermissionGroupSchema,
+) {}
 
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsInt()
-  organizationId?: number;
-
-  @ApiPropertyOptional({ type: [Number] })
-  @IsOptional()
-  @IsArray()
-  @ArrayUnique()
-  @IsInt({ each: true })
-  permissionGroupIds?: number[];
-}
-
-export class LockUserDto {
-  @ApiProperty()
-  @IsString()
-  @MinLength(1)
-  @MaxLength(500)
-  reason!: string;
-}
-
-export class ResetPasswordDto {
-  @ApiProperty({ minLength: 12 })
-  @IsString()
-  @MinLength(12)
-  @MaxLength(256)
-  password!: string;
-}
-
-export class CreateOrganizationDto {
-  @ApiProperty()
-  @IsString()
-  @MinLength(1)
-  @MaxLength(50)
-  @Matches(CODE_PATTERN)
-  code!: string;
-
-  @ApiProperty()
-  @IsString()
-  @MinLength(1)
-  @MaxLength(255)
-  name!: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsBoolean()
-  isAssigningAuthority?: boolean;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsBoolean()
-  isExecutingUnit?: boolean;
-
-  @ApiPropertyOptional({ enum: ['ACTIVE', 'INACTIVE'] })
-  @IsOptional()
-  @IsIn(['ACTIVE', 'INACTIVE'])
-  status?: 'ACTIVE' | 'INACTIVE';
-}
-
-export class UpdateOrganizationDto extends PartialType(CreateOrganizationDto) {}
-
-export class CreateProgramDto {
-  @ApiProperty()
-  @IsString()
-  @MinLength(1)
-  @MaxLength(50)
-  @Matches(CODE_PATTERN)
-  code!: string;
-
-  @ApiProperty()
-  @IsString()
-  @MinLength(1)
-  @MaxLength(255)
-  name!: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  @MaxLength(5_000)
-  description?: string;
-
-  @ApiPropertyOptional({ enum: ['ACTIVE', 'INACTIVE'] })
-  @IsOptional()
-  @IsIn(['ACTIVE', 'INACTIVE'])
-  status?: 'ACTIVE' | 'INACTIVE';
-}
-
-export class UpdateProgramDto extends PartialType(CreateProgramDto) {}
-
-export class CreatePermissionGroupDto {
-  @ApiProperty()
-  @IsString()
-  @MinLength(1)
-  @MaxLength(100)
-  @Matches(CODE_PATTERN)
-  code!: string;
-
-  @ApiProperty()
-  @IsString()
-  @MinLength(1)
-  @MaxLength(255)
-  name!: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  @MaxLength(5_000)
-  description?: string;
-
-  @ApiProperty({ type: [Number] })
-  @IsArray()
-  @ArrayUnique()
-  @IsInt({ each: true })
-  permissionIds!: number[];
-}
-
-export class UpdatePermissionGroupDto extends PartialType(
-  CreatePermissionGroupDto,
+export class UpdatePermissionGroupDto extends createZodDto(
+  createPermissionGroupSchema.partial(),
 ) {}

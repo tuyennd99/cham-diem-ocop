@@ -14,6 +14,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { Permissions } from '../decorators/permissions.decorator';
+import { ResponseMessage } from '../decorators/response-message.decorator';
 import {
   CreateOrganizationDto,
   CreatePermissionGroupDto,
@@ -49,6 +50,7 @@ export class SystemController {
 
   @Post('users')
   @Permissions('users.manage')
+  @ResponseMessage('Tạo người dùng thành công')
   createUser(
     @Body() body: CreateUserDto,
     @CurrentUser() actor: AccessTokenPayload,
@@ -59,6 +61,7 @@ export class SystemController {
 
   @Patch('users/:id')
   @Permissions('users.manage')
+  @ResponseMessage('Cập nhật người dùng thành công')
   updateUser(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateUserDto,
@@ -75,6 +78,7 @@ export class SystemController {
 
   @Delete('users/:id')
   @Permissions('users.manage')
+  @ResponseMessage('Xóa người dùng thành công')
   deleteUser(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() actor: AccessTokenPayload,
@@ -86,6 +90,7 @@ export class SystemController {
   @Post('users/:id/lock')
   @HttpCode(200)
   @Permissions('users.manage')
+  @ResponseMessage('Khóa người dùng thành công')
   lockUser(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: LockUserDto,
@@ -103,6 +108,7 @@ export class SystemController {
   @Post('users/:id/unlock')
   @HttpCode(200)
   @Permissions('users.manage')
+  @ResponseMessage('Mở khóa người dùng thành công')
   unlockUser(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() actor: AccessTokenPayload,
@@ -114,6 +120,7 @@ export class SystemController {
   @Post('users/:id/reset-password')
   @HttpCode(200)
   @Permissions('users.manage')
+  @ResponseMessage('Đặt lại mật khẩu thành công')
   resetUserPassword(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: ResetPasswordDto,
@@ -142,6 +149,7 @@ export class SystemController {
 
   @Post('organizations')
   @Permissions('organizations.manage')
+  @ResponseMessage('Tạo đơn vị thành công')
   createOrganization(
     @Body() body: CreateOrganizationDto,
     @CurrentUser() actor: AccessTokenPayload,
@@ -156,6 +164,7 @@ export class SystemController {
 
   @Patch('organizations/:id')
   @Permissions('organizations.manage')
+  @ResponseMessage('Cập nhật đơn vị thành công')
   updateOrganization(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateOrganizationDto,
@@ -172,6 +181,7 @@ export class SystemController {
 
   @Delete('organizations/:id')
   @Permissions('organizations.manage')
+  @ResponseMessage('Xóa đơn vị thành công')
   deleteOrganization(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() actor: AccessTokenPayload,
@@ -198,6 +208,7 @@ export class SystemController {
 
   @Post('programs')
   @Permissions('programs.manage')
+  @ResponseMessage('Tạo chương trình thành công')
   createProgram(
     @Body() body: CreateProgramDto,
     @CurrentUser() actor: AccessTokenPayload,
@@ -212,6 +223,7 @@ export class SystemController {
 
   @Patch('programs/:id')
   @Permissions('programs.manage')
+  @ResponseMessage('Cập nhật chương trình thành công')
   updateProgram(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateProgramDto,
@@ -228,6 +240,7 @@ export class SystemController {
 
   @Delete('programs/:id')
   @Permissions('programs.manage')
+  @ResponseMessage('Xóa chương trình thành công')
   deleteProgram(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() actor: AccessTokenPayload,
@@ -250,6 +263,7 @@ export class SystemController {
 
   @Post('permission-groups')
   @Permissions('permission_groups.manage')
+  @ResponseMessage('Tạo nhóm quyền thành công')
   createPermissionGroup(
     @Body() body: CreatePermissionGroupDto,
     @CurrentUser() actor: AccessTokenPayload,
@@ -264,6 +278,7 @@ export class SystemController {
 
   @Patch('permission-groups/:id')
   @Permissions('permission_groups.manage')
+  @ResponseMessage('Cập nhật nhóm quyền thành công')
   updatePermissionGroup(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdatePermissionGroupDto,
@@ -280,6 +295,7 @@ export class SystemController {
 
   @Delete('permission-groups/:id')
   @Permissions('permission_groups.manage')
+  @ResponseMessage('Xóa nhóm quyền thành công')
   deletePermissionGroup(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() actor: AccessTokenPayload,

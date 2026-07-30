@@ -61,7 +61,7 @@ let AuthRepository = class AuthRepository {
     }
     async registerFailedLogin(userId, now, meta) {
         return this.prisma.$transaction(async (transaction) => {
-            const rows = await transaction.$queryRaw(client_1.Prisma.sql `
+            const rows = await transaction.$queryRaw(client_1.Prisma.sql`
           SELECT "failedLoginCount", "failedLoginWindowStartedAt",
                  "status", "lockedUntil"
           FROM "users"
@@ -139,7 +139,7 @@ let AuthRepository = class AuthRepository {
     }
     async unlockAutomatically(userId, expectedLockedUntil, now, meta) {
         return this.prisma.$transaction(async (transaction) => {
-            const rows = await transaction.$queryRaw(client_1.Prisma.sql `
+            const rows = await transaction.$queryRaw(client_1.Prisma.sql`
           SELECT "id", "status", "lockedUntil"
           FROM "users"
           WHERE "id" = ${userId}
@@ -179,7 +179,7 @@ let AuthRepository = class AuthRepository {
     }
     async completeLogin(userId, expectedPasswordHash, tokenHash, expiresAt, now, meta) {
         return this.prisma.$transaction(async (transaction) => {
-            const rows = await transaction.$queryRaw(client_1.Prisma.sql `
+            const rows = await transaction.$queryRaw(client_1.Prisma.sql`
           SELECT "id", "passwordHash", "status", "deletedAt"
           FROM "users"
           WHERE "id" = ${userId}
@@ -231,7 +231,7 @@ let AuthRepository = class AuthRepository {
     }
     async rotateSession(sessionId, userId, tokenHash, expiresAt, now, meta) {
         return this.prisma.$transaction(async (transaction) => {
-            const users = await transaction.$queryRaw(client_1.Prisma.sql `
+            const users = await transaction.$queryRaw(client_1.Prisma.sql`
           SELECT "id", "status", "deletedAt"
           FROM "users"
           WHERE "id" = ${userId}
@@ -289,7 +289,7 @@ let AuthRepository = class AuthRepository {
     }
     async revokeAllSessions(userId, now, reason, meta) {
         await this.prisma.$transaction(async (transaction) => {
-            await transaction.$queryRaw(client_1.Prisma.sql `
+            await transaction.$queryRaw(client_1.Prisma.sql`
           SELECT "id"
           FROM "users"
           WHERE "id" = ${userId}
@@ -312,7 +312,7 @@ let AuthRepository = class AuthRepository {
     }
     async changePassword(userId, expectedPasswordHash, newPasswordHash, now, meta) {
         return this.prisma.$transaction(async (transaction) => {
-            const rows = await transaction.$queryRaw(client_1.Prisma.sql `
+            const rows = await transaction.$queryRaw(client_1.Prisma.sql`
           SELECT "id", "passwordHash", "status", "deletedAt"
           FROM "users"
           WHERE "id" = ${userId}
@@ -369,7 +369,7 @@ let AuthRepository = class AuthRepository {
             permissions: [
                 ...new Set(user.permissionGroups.flatMap(({ permissionGroup }) => permissionGroup.permissions.map(({ permission }) => permission.code))),
             ],
-            isAdmin: groupCodes.includes('ADMIN'),
+            isAdmin: groupCodes.includes(ROLE.ADMIN),
             isStaff: groupCodes.includes('THUONG_TRUC'),
             status: user.status,
             lockedUntil: user.lockedUntil,

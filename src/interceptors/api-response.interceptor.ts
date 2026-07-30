@@ -5,8 +5,10 @@ import {
   StreamableFile,
   NestInterceptor,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { isObjectLike } from 'lodash';
 import { Observable, map } from 'rxjs';
+import { RESPONSE_MESSAGE_KEY } from '../decorators/response-message.decorator';
 import { ApiSuccess } from '../types/api';
 
 @Injectable()
@@ -14,6 +16,8 @@ export class ApiResponseInterceptor<T> implements NestInterceptor<
   T,
   ApiSuccess<T>
 > {
+  private readonly reflector = new Reflector();
+
   intercept(
     context: ExecutionContext,
     next: CallHandler<T>,
@@ -26,16 +30,43 @@ export class ApiResponseInterceptor<T> implements NestInterceptor<
         const statusCode = context
           .switchToHttp()
           .getResponse<{ statusCode: number }>().statusCode;
+        const message = this.resolveMessage(context);
+        const withMessage = message ? { message } : {};
         if (this.isPaginated(data)) {
           return {
             statusCode,
             data: data.data,
             meta: data.meta,
+            ...withMessage,
           } as ApiSuccess<T>;
         }
-        return { statusCode, data };
+        return { statusCode, data, ...withMessage };
       }),
     );
+  }
+
+  private resolveMessage(context: ExecutionContext): string | undefined {
+    const explicit = this.reflector.get<string>(
+      RESPONSE_MESSAGE_KEY,
+      context.getHandler(),
+    );
+    if (explicit) return explicit;
+
+    // Fallback theo HTTP verb — chỉ áp cho các request thay đổi dữ liệu.
+    const method = context
+      .switchToHttp()
+      .getRequest<{ method?: string }>().method;
+    switch (method) {
+      case 'POST':
+        return 'Thao tác thành công';
+      case 'PUT':
+      case 'PATCH':
+        return 'Cập nhật thành công';
+      case 'DELETE':
+        return 'Xóa thành công';
+      default:
+        return undefined;
+    }
   }
 
   private isPaginated(value: unknown): value is {

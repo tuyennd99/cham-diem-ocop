@@ -26,7 +26,7 @@ export class TasksService {
   constructor(
     private readonly repository: TasksRepository,
     private readonly notificationsService?: NotificationsService,
-  ) {}
+  ) { }
 
   async list(query: TaskQueryDto, principal: AccessTokenPayload) {
     this.assertPermission(principal, 'tasks.read');
@@ -67,13 +67,13 @@ export class TasksService {
     principal: AccessTokenPayload,
     meta: RequestMeta = {},
   ) {
-    this.assertPermission(principal, 'tasks.create');
-    this.assertPermission(principal, 'tasks.assign');
-    this.assertStaffAssignment(principal);
-    this.assertAssigningOrganization(input.assigningOrganizationId, principal);
-    const normalized = this.normalize(input);
-    await this.validate(normalized);
     try {
+      this.assertPermission(principal, 'tasks.create');
+      this.assertPermission(principal, 'tasks.assign');
+      this.assertStaffAssignment(principal);
+      this.assertAssigningOrganization(input.assigningOrganizationId, principal);
+      const normalized = this.normalize(input);
+      await this.validate(normalized);
       const task = await this.repository.create(
         normalized,
         principal.sub,
@@ -83,6 +83,7 @@ export class TasksService {
       await this.notifyAssignment(task);
       return task;
     } catch (error) {
+      console.log("🚀 ~ TasksService ~ create ~ error:", error)
       this.rethrowUniqueCode(error);
     }
   }

@@ -4,6 +4,7 @@ import { Prisma, UserStatus } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RequestMeta } from '../types/auth';
+import { ROLE } from '../constants/role';
 
 const userPublicSelect = {
   id: true,
@@ -91,7 +92,7 @@ interface PermissionGroupData {
 
 @Injectable()
 export class SystemRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async listEffectivePermissions(
     userId: number,
@@ -121,10 +122,10 @@ export class SystemRepository {
       status: user.status,
       organizationId: user.organizationId,
       isAdmin: user.permissionGroups.some(
-        ({ permissionGroup }) => permissionGroup.code === 'ADMIN',
+        ({ permissionGroup }) => permissionGroup.code === ROLE.ADMIN,
       ),
       isStaff: user.permissionGroups.some(
-        ({ permissionGroup }) => permissionGroup.code === 'THUONG_TRUC',
+        ({ permissionGroup }) => permissionGroup.code === ROLE.THUONG_TRUC,
       ),
       permissions: uniq(
         user.permissionGroups.flatMap(({ permissionGroup }) =>
@@ -220,13 +221,13 @@ export class SystemRepository {
           ...(permissionGroupIds === undefined
             ? {}
             : {
-                permissionGroups: {
-                  deleteMany: {},
-                  create: permissionGroupIds.map((permissionGroupId) => ({
-                    permissionGroupId,
-                  })),
-                },
-              }),
+              permissionGroups: {
+                deleteMany: {},
+                create: permissionGroupIds.map((permissionGroupId) => ({
+                  permissionGroupId,
+                })),
+              },
+            }),
         },
         select: userPublicSelect,
       });
@@ -544,13 +545,13 @@ export class SystemRepository {
           ...(permissionIds === undefined
             ? {}
             : {
-                permissions: {
-                  deleteMany: {},
-                  create: permissionIds.map((permissionId) => ({
-                    permissionId,
-                  })),
-                },
-              }),
+              permissions: {
+                deleteMany: {},
+                create: permissionIds.map((permissionId) => ({
+                  permissionId,
+                })),
+              },
+            }),
         },
         include: permissionGroupInclude,
       });

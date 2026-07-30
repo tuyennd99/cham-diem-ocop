@@ -160,10 +160,12 @@ export class FilesRepository {
       await transaction.draftAttachment.delete({
         where: { workspaceId_storedFileId: { workspaceId, storedFileId } },
       });
-      const [draftReferences, versionReferences] = await Promise.all([
-        transaction.draftAttachment.count({ where: { storedFileId } }),
-        transaction.versionAttachment.count({ where: { storedFileId } }),
-      ]);
+      const draftReferences = await transaction.draftAttachment.count({
+        where: { storedFileId },
+      });
+      const versionReferences = await transaction.versionAttachment.count({
+        where: { storedFileId },
+      });
       const orphaned = draftReferences + versionReferences === 0;
       if (orphaned) {
         await transaction.storedFile.delete({ where: { id: storedFileId } });

@@ -1,11 +1,11 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { ApiExceptionFilter } from '../filters/api-exception.filter';
 import { ApiResponseInterceptor } from '../interceptors/api-response.interceptor';
 import { env } from './env';
-import { cleanupOpenApiDoc } from 'nestjs-zod';
+import { cleanupOpenApiDoc, ZodValidationPipe } from 'nestjs-zod';
 
 export function configureApp(app: INestApplication) {
   const { allowedOrigins, trustProxyHops } = env(process.env);
@@ -40,13 +40,7 @@ export function configureApp(app: INestApplication) {
   app.setGlobalPrefix('api/v1');
   app.use(helmet());
   app.use(cookieParser());
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
+  app.useGlobalPipes(new ZodValidationPipe());
   app.useGlobalFilters(new ApiExceptionFilter());
   app.useGlobalInterceptors(new ApiResponseInterceptor());
 
