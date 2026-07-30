@@ -49,6 +49,30 @@ describe('default admin seed', () => {
     });
   });
 
+  it('does not lower an advanced users sequence', async () => {
+    await withRollback(prisma, async (tx) => {
+      const organization = await createOrganization(tx);
+      await tx.$queryRaw(
+        Prisma.sql`SELECT setval(pg_get_serial_sequence('users', 'id')::regclass, 1000000)`,
+      );
+
+      await seedDefaultAdmin(tx, {
+        passwordHash: 'hash',
+        organizationId: organization.id,
+      });
+      const next = await tx.user.create({
+        data: {
+          username: `high-water-${organization.id}`,
+          fullName: 'High water user',
+          passwordHash: 'hash',
+          organizationId: organization.id,
+        },
+      });
+
+      expect(next.id).toBeGreaterThan(1_000_000);
+    });
+  });
+
   it('fails when id 1 belongs to another username', async () => {
     await withRollback(prisma, async (tx) => {
       const organization = await createOrganization(tx);
@@ -121,7 +145,7 @@ describe('default admin seed', () => {
   });
 });
 
-async function createOrganization(prisma: PrismaClient) {
+async function createOrganization(prisma: Prisma.TransactionClient) {
   const suffix = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
   return prisma.organization.create({
     data: { code: `seed-${suffix}`, name: `Seed ${suffix}` },
@@ -130,21 +154,37 @@ async function createOrganization(prisma: PrismaClient) {
 
 async function withRollback(
   prisma: PrismaClient,
-  run: (transaction: PrismaClient) => Promise<void>,
+  run: (transaction: Prisma.TransactionClient) => Promise<void>,
 ) {
   try {
     await prisma.$transaction(async (transaction) => {
       await transaction.$executeRaw(Prisma.sql`TRUNCATE TABLE "users" CASCADE`);
-      await run(transaction as PrismaClient);
+      await run(transaction);
       throw new Rollback();
     });
   } catch (error) {
     if (error instanceof Rollback) return;
     throw error;
   } finally {
-    await prisma.$queryRaw(
-      Prisma.sql`SELECT setval(pg_get_serial_sequence('users', 'id'), COALESCE((SELECT MAX(id) FROM users), 1))`,
-    );
+    await prisma.$transaction(async (transaction) => {
+      await transaction.$executeRaw(
+        Prisma.sql`LOCK TABLE "users" IN SHARE ROW EXCLUSIVE MODE`,
+      );
+      await transaction.$queryRaw(
+        Prisma.sql`
+          SELECT setval(
+            pg_get_serial_sequence('users', 'id')::regclass,
+            GREATEST(
+              COALESCE((SELECT MAX(id) FROM users), 1),
+              COALESCE(
+                pg_sequence_last_value(pg_get_serial_sequence('users', 'id')::regclass),
+                1
+              )
+            )
+          )
+        `,
+      );
+    });
   }
 }
 

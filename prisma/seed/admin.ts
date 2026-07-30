@@ -1,9 +1,24 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 
 export async function seedDefaultAdmin(
-  prisma: PrismaClient,
+  prisma: PrismaClient | Prisma.TransactionClient,
   input: { passwordHash: string; organizationId: number },
 ) {
+  if ('$transaction' in prisma) {
+    return prisma.$transaction((transaction) =>
+      seedDefaultAdminInTransaction(transaction, input),
+    );
+  }
+  return seedDefaultAdminInTransaction(prisma, input);
+}
+
+async function seedDefaultAdminInTransaction(
+  prisma: Prisma.TransactionClient,
+  input: { passwordHash: string; organizationId: number },
+) {
+  await prisma.$executeRaw(
+    Prisma.sql`LOCK TABLE "users" IN SHARE ROW EXCLUSIVE MODE`,
+  );
   const [idOne, namedAdmin] = await Promise.all([
     prisma.user.findUnique({ where: { id: 1 } }),
     prisma.user.findUnique({ where: { username: 'admin' } }),
@@ -36,7 +51,18 @@ export async function seedDefaultAdmin(
     },
   });
   await prisma.$queryRaw(
-    Prisma.sql`SELECT setval(pg_get_serial_sequence('users', 'id'), (SELECT MAX(id) FROM users))`,
+    Prisma.sql`
+      SELECT setval(
+        pg_get_serial_sequence('users', 'id')::regclass,
+        GREATEST(
+          (SELECT MAX(id) FROM users),
+          COALESCE(
+            pg_sequence_last_value(pg_get_serial_sequence('users', 'id')::regclass),
+            1
+          )
+        )
+      )
+    `,
   );
   return admin;
 }
