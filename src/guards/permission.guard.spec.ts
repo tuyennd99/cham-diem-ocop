@@ -80,7 +80,7 @@ describe('PermissionGuard', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('refreshes permissions without a fixed staff role', async () => {
+  it('removes a legacy staff claim while refreshing permissions', async () => {
     const repository = {
       listEffectivePermissions: jest.fn().mockResolvedValue({
         status: 'ACTIVE',
@@ -95,7 +95,12 @@ describe('PermissionGuard', () => {
       } as unknown as Reflector,
       repository as unknown as SystemRepository,
     );
-    const user = { sub: 7, organizationId: 10, permissions: [] as string[] };
+    const user = {
+      sub: 7,
+      organizationId: 10,
+      permissions: [] as string[],
+      isStaff: true,
+    };
 
     await guard.canActivate(contextWith(user));
 

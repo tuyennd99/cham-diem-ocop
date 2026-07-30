@@ -39,6 +39,7 @@ export class PermissionGuard implements CanActivate {
     request.user.permissions = effective.permissions;
     request.user.organizationId = effective.organizationId;
     request.user.isAdmin = effective.isAdmin;
+    delete request.user.isStaff;
     return true;
   }
 
