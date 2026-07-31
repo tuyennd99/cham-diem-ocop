@@ -18,7 +18,7 @@ import {
   FilesRepository,
 } from '../repositories/files.repository';
 import { AccessTokenPayload, RequestMeta } from '../types/auth';
-import type { DocumentType, UploadedPrivateFile } from '../types/files';
+import type { UploadedPrivateFile } from '../types/files';
 import {
   assertAllowedDocument,
   assertDraftSize,
@@ -53,8 +53,8 @@ export class FilesService {
     try {
       await this.requireEditable(workspaceId, principal);
       this.assertStoredUpload(file);
+      const documentType = assertAllowedDocument(file.originalname);
       const inspected = await inspectDocument(file.path);
-      assertAllowedDocument(file.originalname, file.mimetype, inspected.type);
       assertDraftSize(
         (await this.repository.draftSize(workspaceId)) + inspected.sizeBytes,
       );
@@ -63,9 +63,7 @@ export class FilesService {
         {
           originalName: file.originalname,
           storageKey: file.filename,
-          mimeType: documentMime(
-            inspected.type as Exclude<DocumentType, 'unknown'>,
-          ),
+          mimeType: documentMime(documentType),
           sizeBytes: inspected.sizeBytes,
           checksum: inspected.checksum,
         },

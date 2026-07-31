@@ -54,20 +54,15 @@ describe('FilesService', () => {
     );
   });
 
-  it('requires extension, declared MIME, and detected document type to agree', () => {
-    expect(() =>
-      assertAllowedDocument('report.pdf', 'application/pdf', 'pdf'),
-    ).not.toThrow();
-    expect(() =>
-      assertAllowedDocument('report.pdf', 'application/pdf', 'docx'),
-    ).toThrow(UnsupportedMediaTypeException);
-    expect(() =>
-      assertAllowedDocument(
-        'report.exe',
-        'application/octet-stream',
-        'unknown',
-      ),
-    ).toThrow(UnsupportedMediaTypeException);
+  it('accepts allowed extensions and rejects the rest by file name only', () => {
+    expect(assertAllowedDocument('report.pdf')).toBe('pdf');
+    expect(assertAllowedDocument('report.PDF')).toBe('pdf');
+    expect(() => assertAllowedDocument('report.exe')).toThrow(
+      UnsupportedMediaTypeException,
+    );
+    expect(() => assertAllowedDocument('../evil.pdf')).toThrow(
+      UnsupportedMediaTypeException,
+    );
   });
 
   it('does not let a collaborator edit another organization draft', async () => {

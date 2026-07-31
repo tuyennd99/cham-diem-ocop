@@ -24,9 +24,7 @@ export function assertDraftSize(sizeBytes: number) {
 
 export function assertAllowedDocument(
   originalName: string,
-  declaredMime: string,
-  detectedType: DocumentType,
-) {
+): Exclude<DocumentType, 'unknown'> {
   if (
     !originalName ||
     originalName !== basename(originalName) ||
@@ -35,19 +33,11 @@ export function assertAllowedDocument(
     throw new UnsupportedMediaTypeException('Invalid file name');
   }
   const extension = extname(originalName).slice(1).toLowerCase();
-  // Nội dung đã xác thực bằng magic-byte (detectedType) và extension phải khớp
-  // detectedType — đó là hai lớp thật. declaredMime do trình duyệt gửi, .doc/.xls
-  // trên một số OS gửi rỗng/generic → chỉ bắt khớp khi trình duyệt gửi MIME cụ thể.
-  const genericMimes = new Set(['', 'application/octet-stream', 'application/x-msdownload']);
-  if (
-    detectedType === 'unknown' ||
-    extension !== detectedType ||
-    (!genericMimes.has(declaredMime) && documentMimes[detectedType] !== declaredMime)
-  ) {
-    throw new UnsupportedMediaTypeException(
-      'File extension, MIME, and content must match',
-    );
+  // Chỉ kiểm tra phần mở rộng tên tệp, không đọc nội dung/magic-byte.
+  if (!(extension in documentMimes)) {
+    throw new UnsupportedMediaTypeException('Unsupported file extension');
   }
+  return extension as Exclude<DocumentType, 'unknown'>;
 }
 
 export function documentMime(type: Exclude<DocumentType, 'unknown'>) {
@@ -56,45 +46,11 @@ export function documentMime(type: Exclude<DocumentType, 'unknown'>) {
 
 export async function inspectDocument(path: string) {
   const checksum = createHash('sha256');
-  const pdf = Buffer.from('%PDF-');
-  const zip = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
-  const ole = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
-  const word = Buffer.from('word/');
-  const excel = Buffer.from('xl/');
-  const wordDocument = Buffer.from('WordDocument', 'utf16le');
-  const workbook = Buffer.from('Workbook', 'utf16le');
-  const book = Buffer.from('Book', 'utf16le');
-  let first = Buffer.alloc(0);
-  let carry = Buffer.alloc(0);
   let sizeBytes = 0;
-  let hasWord = false;
-  let hasExcel = false;
-  let hasWordDocument = false;
-  let hasWorkbook = false;
-
   for await (const value of createReadStream(path)) {
     const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value);
     checksum.update(chunk);
     sizeBytes += chunk.length;
-    if (first.length < 8) {
-      first = Buffer.concat([first, chunk]).subarray(0, 8);
-    }
-    const probe = Buffer.concat([carry, chunk]);
-    hasWord ||= probe.includes(word);
-    hasExcel ||= probe.includes(excel);
-    hasWordDocument ||= probe.includes(wordDocument);
-    hasWorkbook ||= probe.includes(workbook) || probe.includes(book);
-    carry = probe.subarray(Math.max(0, probe.length - 64));
   }
-
-  let type: DocumentType = 'unknown';
-  if (first.subarray(0, pdf.length).equals(pdf)) type = 'pdf';
-  else if (first.subarray(0, zip.length).equals(zip)) {
-    if (hasWord) type = 'docx';
-    else if (hasExcel) type = 'xlsx';
-  } else if (first.equals(ole)) {
-    if (hasWordDocument) type = 'doc';
-    else if (hasWorkbook) type = 'xls';
-  }
-  return { type, sizeBytes, checksum: checksum.digest('hex') };
+  return { sizeBytes, checksum: checksum.digest('hex') };
 }
