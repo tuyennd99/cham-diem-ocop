@@ -6,7 +6,10 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
-import { PERMISSIONS_KEY } from '../decorators/permissions.decorator';
+import {
+  ANY_PERMISSIONS_KEY,
+  PERMISSIONS_KEY,
+} from '../decorators/permissions.decorator';
 import { UserStatus } from '@prisma/client';
 import {
   EffectivePermissions,
@@ -32,10 +35,15 @@ export class PermissionGuard implements CanActivate {
         context.getHandler(),
         context.getClass(),
       ]) ?? [];
+    const anyRequired =
+      this.reflector.getAllAndOverride<string[]>(ANY_PERMISSIONS_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ]) ?? [];
     const effective = await this.repository.listEffectivePermissions(
       request.user.sub,
     );
-    this.assertPermissions(effective, required);
+    this.assertPermissions(effective, required, anyRequired);
     request.user.permissions = effective.permissions;
     request.user.organizationId = effective.organizationId;
     request.user.isAdmin = effective.isAdmin;
@@ -46,13 +54,19 @@ export class PermissionGuard implements CanActivate {
   assertPermissions(
     principal: EffectivePermissions | null,
     required: string[],
+    anyRequired: string[] = [],
   ) {
-    if (
-      !principal ||
-      principal.status !== UserStatus.ACTIVE ||
-      (!principal.isAdmin &&
-        required.some((code) => !principal.permissions.includes(code)))
-    ) {
+    if (!principal || principal.status !== UserStatus.ACTIVE) {
+      throw new ForbiddenException('Insufficient permissions');
+    }
+    if (principal.isAdmin) return;
+    const missingAll = required.some(
+      (code) => !principal.permissions.includes(code),
+    );
+    const missingAny =
+      anyRequired.length > 0 &&
+      !anyRequired.some((code) => principal.permissions.includes(code));
+    if (missingAll || missingAny) {
       throw new ForbiddenException('Insufficient permissions');
     }
   }

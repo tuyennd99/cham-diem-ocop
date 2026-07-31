@@ -13,7 +13,7 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { CurrentUser } from '../decorators/current-user.decorator';
-import { Permissions } from '../decorators/permissions.decorator';
+import { AnyPermissions, Permissions } from '../decorators/permissions.decorator';
 import { ResponseMessage } from '../decorators/response-message.decorator';
 import {
   CancelReportingPeriodDto,
@@ -57,14 +57,16 @@ export class TasksController {
     return this.tasksService.create(body, principal, requestMeta(request));
   }
 
+  // Lookup dùng chung bởi form đọc/tạo/sửa nhiệm vụ → cho phép bất kỳ quyền
+  // task-liên-quan, tránh 403 khi user tạo/sửa (không có tasks.read) mở form.
   @Get('lookups/organizations')
-  @Permissions('tasks.read')
+  @AnyPermissions('tasks.read', 'tasks.create', 'tasks.update')
   organizationLookups(@CurrentUser() principal: AccessTokenPayload) {
     return this.tasksService.listOrganizationLookups(principal);
   }
 
   @Get('lookups/programs')
-  @Permissions('tasks.read')
+  @AnyPermissions('tasks.read', 'tasks.create', 'tasks.update')
   programLookups(@CurrentUser() principal: AccessTokenPayload) {
     return this.tasksService.listProgramLookups(principal);
   }
