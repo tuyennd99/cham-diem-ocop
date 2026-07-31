@@ -13,15 +13,16 @@ export function env(values: NodeJS.ProcessEnv) {
   if (!Number.isInteger(trustProxyHops) || trustProxyHops < 0) {
     throw new Error('TRUST_PROXY_HOPS must be a non-negative integer');
   }
+  const allowedOrigins = (values.CORS_ORIGINS ?? defaultOrigin)
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean)
 
   return {
     port: Number.isInteger(port) && port > 0 ? port : 3030,
     jwtSecret: requireSecret('JWT_SECRET', values.JWT_SECRET),
     csrfSecret: requireSecret('CSRF_SECRET', values.CSRF_SECRET),
     trustProxyHops,
-    allowedOrigins: (values.CORS_ORIGINS ?? defaultOrigin)
-      .split(',')
-      .map((origin) => origin.trim())
-      .filter(Boolean),
+    allowedOrigins,
   };
 }

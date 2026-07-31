@@ -317,9 +317,6 @@ export class TasksService {
         'frequency and periodicStartAt are required for periodic tasks',
       );
     }
-    if (dayjs(input.periodicStartAt).date() !== 15) {
-      throw new BadRequestException('periodicStartAt must be on day 15');
-    }
     if (input.dueAt) {
       throw new BadRequestException('Periodic tasks cannot have dueAt');
     }
