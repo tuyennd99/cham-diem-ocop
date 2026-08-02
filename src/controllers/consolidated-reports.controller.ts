@@ -121,6 +121,24 @@ export class ConsolidatedReportsController {
     );
   }
 
+  @Post(':id/return')
+  @Permissions('consolidated.review')
+  @ResponseMessage('Trả lại báo cáo tổng hợp thành công')
+  returnReport(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: RejectReportDto,
+    @CurrentUser() principal: AccessTokenPayload,
+    @Req() request: Request,
+  ) {
+    return this.reports.returnApproved(
+      id,
+      ReportKind.CONSOLIDATED,
+      body.reason,
+      principal,
+      requestMeta(request),
+    );
+  }
+
   @Post(':id/files')
   @Permissions('consolidated.edit')
   @ResponseMessage('Tải tệp lên thành công')

@@ -221,8 +221,9 @@ export class ReportsService {
     return reviewed;
   }
 
-  // Trả lại báo cáo ĐÃ DUYỆT về REJECTED để đơn vị làm lại. Chỉ áp dụng cho
-  // báo cáo phối hợp (PROGRESS) — tổng hợp đã duyệt sẽ đóng kỳ, không trả ở đây.
+  // Trả lại báo cáo ĐÃ DUYỆT về REJECTED để đơn vị làm lại. Với tổng hợp,
+  // duyệt đã đóng kỳ nên trả lại sẽ mở lại kỳ (đảo side-effect) — xử lý trong
+  // repository.returnLatest.
   async returnApproved(
     workspaceId: number,
     kind: ReportKind,
@@ -230,12 +231,6 @@ export class ReportsService {
     principal: AccessTokenPayload,
     meta: RequestMeta = {},
   ) {
-    if (kind !== ReportKind.PROGRESS) {
-      throw new ConflictException({
-        errorCode: ErrorCode.REPORTING_PERIOD_OR_ASSIGNMENT_HAS_CHANGED,
-        message: 'Chỉ báo cáo phối hợp mới được trả lại sau khi duyệt',
-      });
-    }
     const workspace = await this.requireWorkspace(workspaceId, kind);
     this.assertReviewer(workspace, principal);
     this.assertApproved(workspace);
@@ -396,10 +391,14 @@ export class ReportsService {
   }
 
   private assertApproved(workspace: ReportWorkspaceView) {
-    if (
-      workspace.reportingPeriod.status !== PeriodStatus.OPEN ||
-      workspace.reportingPeriod.task.deletedAt
-    ) {
+    // Trả lại tổng hợp: duyệt đã đóng kỳ (COMPLETED), nên chấp nhận kỳ COMPLETED
+    // cho tổng hợp — repository sẽ mở lại. Progress vẫn yêu cầu kỳ OPEN.
+    const period = workspace.reportingPeriod;
+    const periodOk =
+      period.status === PeriodStatus.OPEN ||
+      (workspace.kind === ReportKind.CONSOLIDATED &&
+        period.status === PeriodStatus.COMPLETED);
+    if (!periodOk || period.task.deletedAt || period.task.completedAt) {
       throw new ConflictException('Reporting period is not open');
     }
     if (

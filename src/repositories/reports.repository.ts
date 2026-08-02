@@ -414,21 +414,8 @@ export class ReportsRepository {
       ) {
         return null;
       }
-      if (workspace.kind === ReportKind.CONSOLIDATED) {
-        const collaboratorIds =
-          workspace.reportingPeriod.task.collaborators.map(
-            ({ organizationId }) => organizationId,
-          );
-        const approved = await transaction.reportWorkspace.count({
-          where: {
-            reportingPeriodId: workspace.reportingPeriodId,
-            kind: ReportKind.PROGRESS,
-            status: ReportStatus.APPROVED,
-            ownerOrganizationId: { in: collaboratorIds },
-          },
-        });
-        if (approved !== collaboratorIds.length) return null;
-      }
+      // Lead được gửi báo cáo tổng hợp bất kể báo cáo phối hợp đã duyệt hết
+      // chưa — có thể duyệt phối hợp sau.
       const version = await transaction.reportVersion.create({
         data: {
           workspaceId,
@@ -612,17 +599,40 @@ export class ReportsRepository {
         },
       });
       const latest = workspace?.versions[0];
+      // Trả lại tổng hợp đã duyệt: kỳ đang COMPLETED (do chính lần duyệt này
+      // đóng), nên chấp nhận và mở lại kỳ bên dưới. Thao tác khác vẫn cần OPEN.
+      const returningConsolidated =
+        status === ReportStatus.REJECTED &&
+        fromStatus === ReportStatus.APPROVED &&
+        workspace?.kind === ReportKind.CONSOLIDATED;
+      const periodOk =
+        workspace?.reportingPeriod.status === PeriodStatus.OPEN ||
+        (returningConsolidated &&
+          workspace?.reportingPeriod.status === PeriodStatus.COMPLETED);
       if (
         !workspace ||
         workspace.status !== fromStatus ||
         !latest ||
-        workspace.reportingPeriod.status !== PeriodStatus.OPEN ||
+        !periodOk ||
         workspace.reportingPeriod.task.deletedAt !== null ||
         workspace.reportingPeriod.task.completedAt !== null
       ) {
         return null;
       }
       const reviewedAt = new Date();
+      if (
+        returningConsolidated &&
+        workspace.reportingPeriod.status === PeriodStatus.COMPLETED
+      ) {
+        const reopened = await transaction.reportingPeriod.updateMany({
+          where: {
+            id: workspace.reportingPeriodId,
+            status: PeriodStatus.COMPLETED,
+          },
+          data: { status: PeriodStatus.OPEN, completedAt: null },
+        });
+        if (reopened.count !== 1) return null;
+      }
       if (
         status === ReportStatus.APPROVED &&
         workspace.kind === ReportKind.CONSOLIDATED
