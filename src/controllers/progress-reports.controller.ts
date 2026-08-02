@@ -121,6 +121,24 @@ export class ProgressReportsController {
     );
   }
 
+  @Post(':id/return')
+  @Permissions('progress.review')
+  @ResponseMessage('Trả lại báo cáo thành công')
+  returnReport(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: RejectReportDto,
+    @CurrentUser() principal: AccessTokenPayload,
+    @Req() request: Request,
+  ) {
+    return this.reports.returnApproved(
+      id,
+      ReportKind.PROGRESS,
+      body.reason,
+      principal,
+      requestMeta(request),
+    );
+  }
+
   @Post(':id/files')
   @Permissions('progress.edit')
   @ResponseMessage('Tải tệp lên thành công')

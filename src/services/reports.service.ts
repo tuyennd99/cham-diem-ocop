@@ -14,6 +14,7 @@ import {
 } from '../repositories/reports.repository';
 import { AccessTokenPayload, RequestMeta } from '../types/auth';
 import { NotificationsService } from './notifications.service';
+import { ErrorCode } from '../types/error-code';
 
 @Injectable()
 export class ReportsService {
@@ -32,7 +33,10 @@ export class ReportsService {
         principal.organizationId,
       )
     ) {
-      throw new ForbiddenException('Only an assigned collaborator may report');
+      throw new ForbiddenException({
+        errorCode: ErrorCode.ONLY_AN_ASSIGNED_COLLABORATOR_MAY_REPORT,
+        message: 'Chỉ đơn vị được phân công phối hợp mới được báo cáo',
+      });
     }
     this.assertPeriodEditable(period);
     const workspace = await this.repository.findOrCreateWorkspace(
@@ -41,7 +45,10 @@ export class ReportsService {
       principal.organizationId,
     );
     if (!workspace) {
-      throw new ConflictException('Reporting period or assignment has changed');
+      throw new ConflictException({
+        errorCode: ErrorCode.REPORTING_PERIOD_OR_ASSIGNMENT_HAS_CHANGED,
+        message: 'Kỳ báo cáo hoặc phân công đã thay đổi',
+      });
     }
     return workspace;
   }
@@ -58,9 +65,10 @@ export class ReportsService {
       period.task.leadOrganizationId !== principal.organizationId &&
       !principal.isAdmin
     ) {
-      throw new ForbiddenException(
-        'Only the lead organization may consolidate',
-      );
+      throw new ForbiddenException({
+        errorCode: ErrorCode.ONLY_THE_LEAD_ORGANIZATION_MAY_CONSOLIDATE,
+        message: 'Chỉ cơ quan chủ trì được lập báo cáo tổng hợp',
+      });
     }
     this.assertPeriodEditable(period);
     // Lead được lập báo cáo tổng hợp bất kể báo cáo phối hợp đã duyệt hết chưa.
@@ -70,7 +78,10 @@ export class ReportsService {
       period.task.leadOrganizationId,
     );
     if (!workspace) {
-      throw new ConflictException('Reporting period or assignment has changed');
+      throw new ConflictException({
+        errorCode: ErrorCode.REPORTING_PERIOD_OR_ASSIGNMENT_HAS_CHANGED,
+        message: 'Kỳ báo cáo hoặc phân công đã thay đổi',
+      });
     }
     return workspace;
   }
@@ -206,6 +217,37 @@ export class ReportsService {
       { ...meta, organizationId: principal.organizationId },
     );
     if (!reviewed) throw new ConflictException('Report is no longer pending');
+    await this.notifyReview(workspace, ReportStatus.REJECTED, trimmed);
+    return reviewed;
+  }
+
+  // Trả lại báo cáo ĐÃ DUYỆT về REJECTED để đơn vị làm lại. Chỉ áp dụng cho
+  // báo cáo phối hợp (PROGRESS) — tổng hợp đã duyệt sẽ đóng kỳ, không trả ở đây.
+  async returnApproved(
+    workspaceId: number,
+    kind: ReportKind,
+    reason: string,
+    principal: AccessTokenPayload,
+    meta: RequestMeta = {},
+  ) {
+    if (kind !== ReportKind.PROGRESS) {
+      throw new ConflictException({
+        errorCode: ErrorCode.REPORTING_PERIOD_OR_ASSIGNMENT_HAS_CHANGED,
+        message: 'Chỉ báo cáo phối hợp mới được trả lại sau khi duyệt',
+      });
+    }
+    const workspace = await this.requireWorkspace(workspaceId, kind);
+    this.assertReviewer(workspace, principal);
+    this.assertApproved(workspace);
+    const trimmed = reason.trim();
+    if (!trimmed) throw new BadRequestException('Rejection reason is required');
+    const reviewed = await this.repository.returnLatest(
+      workspaceId,
+      principal.sub,
+      trimmed,
+      { ...meta, organizationId: principal.organizationId },
+    );
+    if (!reviewed) throw new ConflictException('Report is no longer approved');
     await this.notifyReview(workspace, ReportStatus.REJECTED, trimmed);
     return reviewed;
   }
@@ -350,6 +392,21 @@ export class ReportsService {
       workspace.latestVersion?.status !== ReportStatus.SUBMITTED
     ) {
       throw new ConflictException('Report is not pending review');
+    }
+  }
+
+  private assertApproved(workspace: ReportWorkspaceView) {
+    if (
+      workspace.reportingPeriod.status !== PeriodStatus.OPEN ||
+      workspace.reportingPeriod.task.deletedAt
+    ) {
+      throw new ConflictException('Reporting period is not open');
+    }
+    if (
+      workspace.status !== ReportStatus.APPROVED ||
+      workspace.latestVersion?.status !== ReportStatus.APPROVED
+    ) {
+      throw new ConflictException('Report is not approved');
     }
   }
 

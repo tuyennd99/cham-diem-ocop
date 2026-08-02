@@ -298,20 +298,13 @@ export class ReportsRepository {
       const collaboratorIds = period.task.collaborators.map(
         ({ organizationId }) => organizationId,
       );
+      // Lead lập báo cáo tổng hợp gửi cơ quan giao cho CẢ định kỳ lẫn đột xuất,
+      // không chờ báo cáo phối hợp duyệt hết. Chỉ chốt owner phải là lead.
       if (
         (kind === ReportKind.PROGRESS &&
           !collaboratorIds.includes(ownerOrganizationId)) ||
         (kind === ReportKind.CONSOLIDATED &&
-          (period.task.type !== TaskType.DINH_KY ||
-            period.task.leadOrganizationId !== ownerOrganizationId ||
-            (await transaction.reportWorkspace.count({
-              where: {
-                reportingPeriodId,
-                kind: ReportKind.PROGRESS,
-                status: ReportStatus.APPROVED,
-                ownerOrganizationId: { in: collaboratorIds },
-              },
-            })) !== collaboratorIds.length))
+          period.task.leadOrganizationId !== ownerOrganizationId)
       ) {
         return null;
       }
@@ -502,6 +495,25 @@ export class ReportsRepository {
     );
   }
 
+  // Trả lại báo cáo ĐÃ DUYỆT: thao tác trên bản APPROVED thay vì SUBMITTED,
+  // đưa về REJECTED + khôi phục draft để đơn vị làm lại. Chỉ dùng cho PROGRESS
+  // (consolidated approve đã complete kỳ, không hỗ trợ trả lại ở đây).
+  async returnLatest(
+    workspaceId: number,
+    actorId: number,
+    reason: string,
+    meta: RequestMeta = {},
+  ) {
+    return this.reviewLatest(
+      workspaceId,
+      actorId,
+      ReportStatus.REJECTED,
+      reason,
+      meta,
+      ReportStatus.APPROVED,
+    );
+  }
+
   async listHistory(filters: HistoryFilters) {
     const workspace: Prisma.ReportWorkspaceWhereInput = filters.globalScope
       ? {}
@@ -573,6 +585,7 @@ export class ReportsRepository {
     status: typeof ReportStatus.APPROVED | typeof ReportStatus.REJECTED,
     rejectionReason?: string,
     meta: RequestMeta = {},
+    fromStatus: ReportStatus = ReportStatus.SUBMITTED,
   ) {
     return this.prisma.$transaction(async (transaction) => {
       await this.lockWorkspaceContext(transaction, workspaceId);
@@ -589,7 +602,7 @@ export class ReportsRepository {
             },
           },
           versions: {
-            where: { status: ReportStatus.SUBMITTED },
+            where: { status: fromStatus },
             orderBy: { versionNumber: 'desc' },
             take: 1,
             include: {
@@ -601,7 +614,7 @@ export class ReportsRepository {
       const latest = workspace?.versions[0];
       if (
         !workspace ||
-        workspace.status !== ReportStatus.SUBMITTED ||
+        workspace.status !== fromStatus ||
         !latest ||
         workspace.reportingPeriod.status !== PeriodStatus.OPEN ||
         workspace.reportingPeriod.task.deletedAt !== null ||
