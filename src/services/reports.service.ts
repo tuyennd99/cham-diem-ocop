@@ -5,14 +5,8 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-  UnprocessableEntityException,
 } from '@nestjs/common';
-import {
-  PeriodStatus,
-  ReportKind,
-  ReportStatus,
-  TaskType,
-} from '@prisma/client';
+import { PeriodStatus, ReportKind, ReportStatus } from '@prisma/client';
 import { ReportHistoryQueryDto } from '../dtos/reports.dto';
 import {
   ReportWorkspaceView,
@@ -58,11 +52,8 @@ export class ReportsService {
   ) {
     this.assertPermission(principal, 'consolidated.edit');
     const period = await this.requirePeriod(reportingPeriodId);
-    if (period.task.type !== TaskType.DINH_KY) {
-      throw new UnprocessableEntityException(
-        'Ad-hoc tasks do not have consolidated reports',
-      );
-    }
+    // Cả nhiệm vụ đột xuất lẫn định kỳ đều có kỳ báo cáo (đột xuất được cấp 1
+    // kỳ khi tạo), nên lead lập báo cáo tổng hợp gửi cơ quan giao cho cả hai.
     if (
       period.task.leadOrganizationId !== principal.organizationId &&
       !principal.isAdmin
@@ -72,14 +63,7 @@ export class ReportsService {
       );
     }
     this.assertPeriodEditable(period);
-    if (
-      period.approvedProgressCount !==
-      period.task.collaboratorOrganizationIds.length
-    ) {
-      throw new UnprocessableEntityException(
-        'Every progress report must be approved first',
-      );
-    }
+    // Lead được lập báo cáo tổng hợp bất kể báo cáo phối hợp đã duyệt hết chưa.
     const workspace = await this.repository.findOrCreateWorkspace(
       reportingPeriodId,
       ReportKind.CONSOLIDATED,
@@ -162,17 +146,6 @@ export class ReportsService {
     const workspace = await this.requireWorkspace(workspaceId, kind);
     this.assertOwner(workspace, principal);
     this.assertDraftEditable(workspace);
-    if (kind === ReportKind.CONSOLIDATED) {
-      const period = await this.requirePeriod(workspace.reportingPeriod.id);
-      if (
-        period.approvedProgressCount !==
-        period.task.collaboratorOrganizationIds.length
-      ) {
-        throw new UnprocessableEntityException(
-          'Every progress report must be approved first',
-        );
-      }
-    }
     const version = await this.repository.createVersionFromDraft(
       workspaceId,
       principal.sub,

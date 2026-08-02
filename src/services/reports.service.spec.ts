@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  UnprocessableEntityException,
-} from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ReportsRepository } from '../repositories/reports.repository';
 import { NotificationsService } from './notifications.service';
 import { ReportsService } from './reports.service';
@@ -154,53 +150,41 @@ describe('ReportsService', () => {
     );
   });
 
-  it('opens a consolidated workspace only for a periodic period with all progress reports approved', async () => {
+  it('opens a consolidated workspace for both ad-hoc and periodic tasks without requiring approved progress', async () => {
     const repository = repositoryMock();
     const service = new ReportsService(
       repository as unknown as ReportsRepository,
     );
-    repository.findPeriodContext.mockResolvedValue({
-      id: 7,
-      status: 'OPEN',
-      task: {
-        id: 5,
-        type: 'DINH_KY',
-        leadOrganizationId: 20,
-        completedAt: null,
-        collaboratorOrganizationIds: [30, 40],
-      },
-      approvedProgressCount: 1,
-    });
-
-    await expect(service.openConsolidated(7, lead)).rejects.toBeInstanceOf(
-      UnprocessableEntityException,
-    );
-
-    repository.findPeriodContext.mockResolvedValue({
-      id: 7,
-      status: 'OPEN',
-      task: {
-        id: 5,
-        type: 'DINH_KY',
-        leadOrganizationId: 20,
-        completedAt: null,
-        collaboratorOrganizationIds: [30, 40],
-      },
-      approvedProgressCount: 2,
-    });
     repository.findOrCreateWorkspace.mockResolvedValue({
       ...progressWorkspace,
       kind: 'CONSOLIDATED',
       ownerOrganizationId: 20,
     });
 
-    await service.openConsolidated(7, lead);
+    // Cả đột xuất lẫn định kỳ đều mở được, kể cả khi chưa duyệt báo cáo phối hợp.
+    for (const type of ['DOT_XUAT', 'DINH_KY']) {
+      repository.findPeriodContext.mockResolvedValue({
+        id: 7,
+        status: 'OPEN',
+        task: {
+          id: 5,
+          type,
+          leadOrganizationId: 20,
+          completedAt: null,
+          collaboratorOrganizationIds: [30, 40],
+        },
+        approvedProgressCount: 0,
+      });
+
+      await service.openConsolidated(7, lead);
+    }
 
     expect(repository.findOrCreateWorkspace).toHaveBeenCalledWith(
       7,
       'CONSOLIDATED',
       lead.organizationId,
     );
+    expect(repository.findOrCreateWorkspace).toHaveBeenCalledTimes(2);
   });
 
   it('passes history filters with collaborator-only scope', async () => {
