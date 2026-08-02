@@ -1,5 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import type { NotificationsRepository } from '../repositories/notifications.repository';
+import type { NotificationsGateway } from '../gateways/notifications.gateway';
 import { NotificationsService } from './notifications.service';
 
 describe('NotificationsService', () => {
@@ -23,7 +24,10 @@ describe('NotificationsService', () => {
       createForActiveUsers: jest.fn(),
       findDeadlineTargets: jest.fn(),
     };
-    service = new NotificationsService(repository as NotificationsRepository);
+    service = new NotificationsService(
+      repository as NotificationsRepository,
+      { notifyOrganizations: jest.fn() } as unknown as NotificationsGateway,
+    );
   });
 
   it('creates an event for every ACTIVE user in the destination organization', async () => {

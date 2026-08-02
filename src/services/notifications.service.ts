@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { uniq } from 'lodash';
 import { NotificationsRepository } from '../repositories/notifications.repository';
+import { NotificationsGateway } from '../gateways/notifications.gateway';
 import type {
   NotificationWrite,
   OrganizationNotification,
@@ -8,7 +9,10 @@ import type {
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly repository: NotificationsRepository) {}
+  constructor(
+    private readonly repository: NotificationsRepository,
+    private readonly gateway: NotificationsGateway,
+  ) {}
 
   async list(
     recipientId: number,
@@ -42,19 +46,24 @@ export class NotificationsService {
     };
   }
 
-  createForOrganization(input: OrganizationNotification) {
+  async createForOrganization(input: OrganizationNotification) {
     const { organizationId, ...notification } = input;
-    return this.repository.createForActiveUsers({
+    const created = await this.repository.createForActiveUsers({
       organizationIds: [organizationId],
       ...notification,
     });
+    this.gateway.notifyOrganizations([organizationId]);
+    return created;
   }
 
-  createForOrganizations(input: NotificationWrite) {
-    return this.repository.createForActiveUsers({
+  async createForOrganizations(input: NotificationWrite) {
+    const organizationIds = uniq(input.organizationIds);
+    const created = await this.repository.createForActiveUsers({
       ...input,
-      organizationIds: uniq(input.organizationIds),
+      organizationIds,
     });
+    this.gateway.notifyOrganizations(organizationIds);
+    return created;
   }
 
   async generateDailyDeadlineNotifications(now = new Date()) {
