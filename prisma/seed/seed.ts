@@ -3,63 +3,40 @@ import { createPrismaAdapter } from '../../src/prisma/client';
 import { DEFAULT_SEED_PASSWORD, hashSeedPassword } from './password';
 import { ADMIN_GROUP_CODE } from '../../src/constants/role';
 import { seedDefaultAdmin } from './admin';
+import { MAP_PERMISSIONS, LIST_PERMISSIONS } from '../../src/constants/permission';
 
 const prisma = new PrismaClient({ adapter: createPrismaAdapter() });
 
-const permissions = [
-  ['tasks.read', 'Xem nhiệm vụ'],
-  ['tasks.read.all', 'Xem nhiệm vụ và báo cáo toàn hệ thống'],
-  ['tasks.create', 'Tạo nhiệm vụ'],
-  ['tasks.update', 'Sửa nhiệm vụ'],
-  ['tasks.delete', 'Xóa mềm nhiệm vụ'],
-  ['tasks.assign', 'Phân công đơn vị'],
-  ['tasks.close', 'Đóng nhiệm vụ định kỳ'],
-  ['tasks.complete', 'Hoàn thành nhiệm vụ đột xuất'],
-  ['progress.edit', 'Soạn báo cáo tiến độ'],
-  ['progress.submit', 'Gửi báo cáo tiến độ'],
-  ['progress.review', 'Duyệt/trả báo cáo tiến độ'],
-  ['consolidated.edit', 'Soạn báo cáo tổng hợp'],
-  ['consolidated.submit', 'Gửi báo cáo tổng hợp'],
-  ['consolidated.review', 'Duyệt/trả báo cáo tổng hợp'],
-  ['report_history.read', 'Xem lịch sử báo cáo'],
-  ['dashboard.read', 'Xem dashboard'],
-  ['dashboard.read.all', 'Xem dashboard và thống kê toàn hệ thống'],
-  ['users.manage', 'Quản lý người dùng'],
-  ['organizations.manage', 'Quản lý đơn vị'],
-  ['programs.manage', 'Quản lý chương trình'],
-  ['permission_groups.manage', 'Quản lý nhóm quyền'],
-  ['audit.read', 'Xem audit log'],
-] as const;
-
 const groups = {
-  ADMIN: permissions.map(([code]) => code),
+  ADMIN: LIST_PERMISSIONS.map(([code]) => code),
   THUONG_TRUC: [
-    'tasks.read',
-    'tasks.read.all',
-    'tasks.create',
-    'tasks.update',
-    'tasks.delete',
-    'tasks.assign',
-    'tasks.close',
-    'tasks.complete',
-    'consolidated.review',
-    'report_history.read',
-    'dashboard.read',
-    'dashboard.read.all',
-    'audit.read',
+    MAP_PERMISSIONS.TASKS_READ,
+    MAP_PERMISSIONS.TASKS_READ_ALL,
+    MAP_PERMISSIONS.TASKS_CREATE,
+    MAP_PERMISSIONS.TASKS_UPDATE,
+    MAP_PERMISSIONS.TASKS_DELETE,
+    MAP_PERMISSIONS.TASKS_ASSIGN,
+    MAP_PERMISSIONS.TASKS_CLOSE,
+    MAP_PERMISSIONS.TASKS_COMPLETE,
+    MAP_PERMISSIONS.CONSOLIDATED_REVIEW,
+    MAP_PERMISSIONS.REPORT_HISTORY_READ,
+    MAP_PERMISSIONS.DASHBOARD_READ,
+    MAP_PERMISSIONS.DASHBOARD_READ_ALL,
+    MAP_PERMISSIONS.AUDIT_READ,
   ],
   DON_VI: [
-    'tasks.read',
-    'progress.edit',
-    'progress.submit',
-    'progress.review',
-    'consolidated.edit',
-    'consolidated.submit',
-    'report_history.read',
-    'dashboard.read',
+    MAP_PERMISSIONS.TASKS_READ,
+    MAP_PERMISSIONS.PROGRESS_EDIT,
+    MAP_PERMISSIONS.PROGRESS_SUBMIT,
+    MAP_PERMISSIONS.PROGRESS_REVIEW,
+    MAP_PERMISSIONS.CONSOLIDATED_EDIT,
+    MAP_PERMISSIONS.CONSOLIDATED_SUBMIT,
+    MAP_PERMISSIONS.REPORT_HISTORY_READ,
+    MAP_PERMISSIONS.DASHBOARD_READ,
   ],
-  VIEWER: ['tasks.read', 'report_history.read', 'dashboard.read'],
+  VIEWER: [MAP_PERMISSIONS.TASKS_READ, MAP_PERMISSIONS.REPORT_HISTORY_READ, MAP_PERMISSIONS.DASHBOARD_READ],
 } as const;
+
 
 async function main() {
   const password = process.env.SEED_ADMIN_PASSWORD ?? DEFAULT_SEED_PASSWORD;
@@ -108,7 +85,7 @@ async function main() {
     },
   });
 
-  for (const [code, name] of permissions) {
+  for (const [code, name] of LIST_PERMISSIONS) {
     await prisma.permission.upsert({
       where: { code },
       update: { name },

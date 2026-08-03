@@ -11,6 +11,9 @@ import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RequestMeta } from '../types/auth';
 import { calculateTaskDeadlineStatus } from '../utils/task-deadline-status';
+import { PeriodDraft, TaskView, TaskWrite } from '../constants/task';
+import { ACTIONS_TASK } from '../constants/actions';
+import { ErrorCode } from '../types/error-code';
 
 const taskInclude = {
   program: { select: { id: true, code: true, name: true } },
@@ -36,70 +39,6 @@ const taskInclude = {
 
 type TaskPayload = Prisma.TaskGetPayload<{ include: typeof taskInclude }>;
 
-export interface TaskView {
-  id: number;
-  code: string;
-  name: string;
-  description: string | null;
-  expectedOutput: string | null;
-  type: TaskType;
-  programId: number;
-  assigningOrganizationId: number;
-  leadOrganizationId: number;
-  collaboratorOrganizationIds: number[];
-  hasSubmittedReport: boolean;
-  dueAt: Date | null;
-  deadlineStatus: TaskDeadlineStatus | null;
-  frequency: Frequency | null;
-  periodicStartAt: Date | null;
-  closedAt: Date | null;
-  closeReason: string | null;
-  completedAt: Date | null;
-  deletedAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-  program: { id: number; code: string; name: string };
-  assigningOrganization: { id: number; code: string; name: string };
-  leadOrganization: { id: number; code: string; name: string };
-  collaboratorOrganizations: { id: number; code: string; name: string }[];
-  reportingPeriods: {
-    id: number;
-    taskId: number;
-    frequency: Frequency | null;
-    year: number;
-    sequence: number;
-    periodStartAt: Date;
-    dueAt: Date;
-    status: PeriodStatus;
-    completedAt: Date | null;
-    canceledAt: Date | null;
-    cancelReason: string | null;
-    createdAt: Date;
-  }[];
-}
-
-export interface TaskWrite {
-  code: string;
-  name: string;
-  description?: string | null;
-  expectedOutput?: string | null;
-  type: TaskType;
-  programId: number;
-  assigningOrganizationId: number;
-  leadOrganizationId: number;
-  collaboratorOrganizationIds: number[];
-  dueAt: Date | null;
-  frequency: Frequency | null;
-  periodicStartAt: Date | null;
-}
-
-export interface PeriodDraft {
-  frequency: Frequency;
-  year: number;
-  sequence: number;
-  periodStartAt: Date;
-  dueAt: Date;
-}
 
 @Injectable()
 export class TasksRepository {
@@ -253,7 +192,7 @@ export class TasksRepository {
       await transaction.auditLog.create({
         data: {
           actorId,
-          action: 'TASK_CREATED',
+          action: ACTIONS_TASK.TASK_CREATED,
           entityType: 'Task',
           entityId: row.id,
           afterData: this.taskAudit(this.toTask(row)),
@@ -288,7 +227,7 @@ export class TasksRepository {
           })) > 0)
       ) {
         throw new ConflictException(
-          'Task assignment cannot be changed after reporting has started',
+          ErrorCode.TASK_ASSIGNMENT_CANNOT_BE_CHANGED,
         );
       }
       if (input.collaboratorOrganizationIds) {
@@ -319,8 +258,8 @@ export class TasksRepository {
         data: {
           actorId,
           action: changesAssignment
-            ? 'TASK_ASSIGNMENT_UPDATED'
-            : 'TASK_UPDATED',
+            ? ACTIONS_TASK.TASK_ASSIGNMENT_UPDATED
+            : ACTIONS_TASK.TASK_UPDATED,
           entityType: 'Task',
           entityId: id,
           beforeData: this.taskAudit(this.toTask(before)),
@@ -380,7 +319,7 @@ export class TasksRepository {
       await transaction.auditLog.create({
         data: {
           actorId,
-          action: 'TASK_SOFT_DELETED',
+          action: ACTIONS_TASK.TASK_SOFT_DELETED,
           entityType: 'Task',
           entityId: id,
           beforeData: this.taskAudit(this.toTask(before)),
@@ -437,7 +376,7 @@ export class TasksRepository {
       await transaction.auditLog.create({
         data: {
           actorId,
-          action: 'TASK_CLOSED',
+          action: ACTIONS_TASK.TASK_CLOSED,
           entityType: 'Task',
           entityId: id,
           reason,
@@ -585,7 +524,7 @@ export class TasksRepository {
       await transaction.auditLog.create({
         data: {
           actorId,
-          action: 'REPORTING_PERIOD_CANCELED',
+          action: ACTIONS_TASK.REPORTING_PERIOD_CANCELED,
           entityType: 'ReportingPeriod',
           entityId: id,
           reason,

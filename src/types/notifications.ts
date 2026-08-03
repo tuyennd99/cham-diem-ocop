@@ -1,7 +1,9 @@
+import { NotificationType } from '@prisma/client';
+
 export interface NotificationWrite {
   organizationIds: number[];
   eventKey: string;
-  type: string;
+  type: NotificationType;
   title: string;
   body?: string | null;
   entityType?: string | null;

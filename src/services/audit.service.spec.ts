@@ -1,14 +1,5 @@
-import { ForbiddenException } from '@nestjs/common';
 import type { AuditRepository } from '../repositories/audit.repository';
 import { AuditService } from './audit.service';
-
-const auditor = {
-  sub: 1,
-  username: 'auditor',
-  organizationId: 1,
-  permissions: ['audit.read'],
-  isAdmin: false,
-};
 
 describe('AuditService', () => {
   let repository: jest.Mocked<Pick<AuditRepository, 'append' | 'list'>>;
@@ -92,7 +83,7 @@ describe('AuditService', () => {
       ],
     });
 
-    const result = await service.list({ page: 1, limit: 20 }, auditor);
+    const result = await service.list({ page: 1, limit: 20 });
 
     expect(result.data[0]?.afterData).toEqual({ status: 'ACTIVE' });
     expect(result.meta).toEqual({
@@ -101,15 +92,5 @@ describe('AuditService', () => {
       total: 1,
       totalPages: 1,
     });
-  });
-
-  it('requires audit.read for audit log access', async () => {
-    await expect(
-      service.list(
-        { page: 1, limit: 20 },
-        { ...auditor, permissions: [], isAdmin: false },
-      ),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-    expect(repository.list).not.toHaveBeenCalled();
   });
 });

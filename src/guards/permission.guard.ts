@@ -11,6 +11,7 @@ import {
   PERMISSIONS_KEY,
 } from '../decorators/permissions.decorator';
 import { UserStatus } from '@prisma/client';
+import { PERMISSION_LABELS } from '../constants/permission';
 import {
   EffectivePermissions,
   SystemRepository,
@@ -60,14 +61,19 @@ export class PermissionGuard implements CanActivate {
       throw new ForbiddenException('Insufficient permissions');
     }
     if (principal.isAdmin) return;
-    const missingAll = required.some(
+    const missing = required.filter(
       (code) => !principal.permissions.includes(code),
     );
     const missingAny =
       anyRequired.length > 0 &&
       !anyRequired.some((code) => principal.permissions.includes(code));
-    if (missingAll || missingAny) {
-      throw new ForbiddenException('Insufficient permissions');
+    if (missing.length || missingAny) {
+      const label = (code: string) => PERMISSION_LABELS.get(code) ?? code;
+      const parts: string[] = [];
+      if (missing.length) parts.push(missing.map(label).join(', '));
+      if (missingAny)
+        parts.push(`một trong: ${anyRequired.map(label).join(', ')}`);
+      throw new ForbiddenException(`Thiếu quyền: ${parts.join('; ')}`);
     }
   }
 }

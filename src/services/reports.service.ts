@@ -15,6 +15,7 @@ import {
 import { AccessTokenPayload, RequestMeta } from '../types/auth';
 import { NotificationsService } from './notifications.service';
 import { ErrorCode } from '../types/error-code';
+import { MAP_PERMISSIONS } from '../constants/permission';
 
 @Injectable()
 export class ReportsService {
@@ -330,11 +331,14 @@ export class ReportsService {
       throw new ForbiddenException('Report belongs to another organization');
     }
     const task = workspace.reportingPeriod.task;
-    const validRole =
+    // Trách nhiệm theo nhiệm vụ: PROGRESS do đơn vị phối hợp (collaborator) nộp,
+    // CONSOLIDATED do đơn vị chủ trì (lead) nộp. Không phải role tài khoản.
+    const validResponsibility =
       workspace.kind === ReportKind.PROGRESS
         ? task.collaboratorOrganizationIds.includes(principal.organizationId)
         : task.leadOrganizationId === principal.organizationId;
-    if (!validRole) throw new ForbiddenException('Invalid task role');
+    if (!validResponsibility)
+      throw new ForbiddenException(ErrorCode.INVALID_TASK_RESPONSIBILITY);
   }
 
   private assertReadScope(
@@ -343,7 +347,7 @@ export class ReportsService {
   ) {
     if (
       principal.isAdmin ||
-      principal.permissions.includes('tasks.read.all') ||
+      principal.permissions.includes(MAP_PERMISSIONS.TASKS_READ_ALL) ||
       workspace.reportingPeriod.task.leadOrganizationId ===
       principal.organizationId ||
       (workspace.kind === ReportKind.PROGRESS &&
@@ -351,7 +355,7 @@ export class ReportsService {
     ) {
       return;
     }
-    throw new ForbiddenException('Report is outside your scope');
+    throw new ForbiddenException(ErrorCode.REPORT_IS_OUTSIDE_YOUR_SCOPE);
   }
 
   private assertReviewer(
@@ -360,8 +364,8 @@ export class ReportsService {
   ) {
     const permission =
       workspace.kind === ReportKind.PROGRESS
-        ? 'progress.review'
-        : 'consolidated.review';
+        ? MAP_PERMISSIONS.PROGRESS_REVIEW
+        : MAP_PERMISSIONS.CONSOLIDATED_REVIEW;
     this.assertPermission(principal, permission);
     if (
       workspace.kind === ReportKind.PROGRESS &&
@@ -369,9 +373,7 @@ export class ReportsService {
       workspace.reportingPeriod.task.leadOrganizationId !==
       principal.organizationId
     ) {
-      throw new ForbiddenException(
-        'Only the lead organization may review progress',
-      );
+      throw new ForbiddenException(ErrorCode.INVALID_TASK_RESPONSIBILITY);
     }
   }
 
@@ -380,13 +382,13 @@ export class ReportsService {
       workspace.reportingPeriod.status !== PeriodStatus.OPEN ||
       workspace.reportingPeriod.task.deletedAt
     ) {
-      throw new ConflictException('Reporting period is not open');
+      throw new ConflictException(ErrorCode.REPORTING_PERIOD_IS_NOT_OPEN);
     }
     if (
       workspace.status !== ReportStatus.SUBMITTED ||
       workspace.latestVersion?.status !== ReportStatus.SUBMITTED
     ) {
-      throw new ConflictException('Report is not pending review');
+      throw new ConflictException(ErrorCode.REPORT_IS_NOT_PENDING_REVIEW);
     }
   }
 
@@ -399,13 +401,13 @@ export class ReportsService {
       (workspace.kind === ReportKind.CONSOLIDATED &&
         period.status === PeriodStatus.COMPLETED);
     if (!periodOk || period.task.deletedAt || period.task.completedAt) {
-      throw new ConflictException('Reporting period is not open');
+      throw new ConflictException(ErrorCode.REPORTING_PERIOD_IS_NOT_OPEN);
     }
     if (
       workspace.status !== ReportStatus.APPROVED ||
       workspace.latestVersion?.status !== ReportStatus.APPROVED
     ) {
-      throw new ConflictException('Report is not approved');
+      throw new ConflictException(ErrorCode.REPORT_IS_NOT_APPROVED);
     }
   }
 

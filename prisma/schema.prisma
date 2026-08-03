@@ -49,13 +49,29 @@ enum PeriodStatus {
   CANCELED
 }
 
+enum NotificationType {
+  BAO_CAO_DUYET
+  BAO_CAO_TRA
+  BAO_CAO_GUI
+  GIAO_NHIEM_VU
+  NHIEM_VU_DONG
+  KY_BAO_CAO_MOI
+  QUA_HAN
+  SAP_DEN_HAN
+}
+
+enum EntityStatus {
+  ACTIVE
+  INACTIVE
+}
+
 model Organization {
   id                   Int                @id @default(autoincrement())
   code                 String             @unique @db.VarChar(50)
   name                 String             @db.VarChar(255)
   isAssigningAuthority Boolean            @default(false)
   isExecutingUnit      Boolean            @default(true)
-  status               String             @default("ACTIVE") @db.VarChar(20)
+  status               EntityStatus       @default(ACTIVE)
   createdAt            DateTime           @default(now()) @db.Timestamptz(3)
   updatedAt            DateTime           @updatedAt @db.Timestamptz(3)
   users                User[]
@@ -150,11 +166,11 @@ model UserPermissionGroup {
 model Program {
   id          Int      @id @default(autoincrement())
   code        String   @unique @db.VarChar(50)
-  name        String   @db.VarChar(255)
+  name        String       @db.VarChar(255)
   description String?
-  status      String   @default("ACTIVE") @db.VarChar(20)
-  createdAt   DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+  status      EntityStatus @default(ACTIVE)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
   tasks       Task[]
 
   @@map("programs")
@@ -311,8 +327,8 @@ model VersionAttachment {
 model Notification {
   id          Int       @id @default(autoincrement())
   recipientId Int
-  eventKey    String    @db.VarChar(255)
-  type        String    @db.VarChar(100)
+  eventKey    String           @db.VarChar(255)
+  type        NotificationType
   title       String    @db.VarChar(255)
   body        String?
   entityType  String?   @db.VarChar(100)

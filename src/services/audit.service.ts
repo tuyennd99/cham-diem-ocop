@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { isObjectLike } from 'lodash';
 import { Prisma } from '@prisma/client';
 import {
@@ -6,7 +6,6 @@ import {
   AuditListFilters,
   AuditRepository,
 } from '../repositories/audit.repository';
-import { AccessTokenPayload } from '../types/auth';
 
 const SECRET_FIELD =
   /password|passcode|token|cookie|secret|authorization|storageKey|checksum|binary|dataUrl|buffer/i;
@@ -33,10 +32,7 @@ export class AuditService {
     });
   }
 
-  async list(filters: AuditListFilters, principal: AccessTokenPayload) {
-    if (!principal.isAdmin && !principal.permissions.includes('audit.read')) {
-      throw new ForbiddenException('audit.read is required');
-    }
+  async list(filters: AuditListFilters) {
     const { data, total } = await this.repository.list(filters);
     return {
       data: data.map((row) => ({
