@@ -1,6 +1,6 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { uniq } from 'lodash';
-import { Prisma, UserStatus } from '@prisma/client';
+import { EntityStatus, Prisma, UserStatus } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RequestMeta } from '../types/auth';
@@ -98,14 +98,14 @@ interface OrganizationData {
   name?: string;
   isAssigningAuthority?: boolean;
   isExecutingUnit?: boolean;
-  status?: string;
+  status?: EntityStatus;
 }
 
 interface ProgramData {
   code?: string;
   name?: string;
   description?: string;
-  status?: string;
+  status?: EntityStatus;
 }
 
 interface PermissionGroupData {

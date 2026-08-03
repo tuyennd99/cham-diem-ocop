@@ -280,7 +280,7 @@ describe('TasksService', () => {
       expect.objectContaining({
         organizationIds: [20, 30],
         eventKey: `TASK_ASSIGNED:${existingTask.id}`,
-        type: 'GIAO',
+        type: 'GIAO_NHIEM_VU',
         entityType: 'Task',
         entityId: existingTask.id,
       }),
@@ -421,7 +421,7 @@ describe('TasksService', () => {
     expect(notifications.createForOrganizations).toHaveBeenCalledWith(
       expect.objectContaining({
         eventKey: `TASK_CLOSED:${existingTask.id}`,
-        type: 'TASK_CLOSED',
+        type: 'DONG_NHIEM_VU',
         entityType: 'Task',
         entityId: existingTask.id,
       }),

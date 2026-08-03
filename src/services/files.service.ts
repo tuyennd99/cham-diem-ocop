@@ -47,6 +47,7 @@ export class FilesService {
     principal: AccessTokenPayload,
     meta: RequestMeta = {},
   ) {
+    console.log("🚀 ~ FilesService ~ uploadDraftFile ~ file:", file)
     if (!file) {
       throw new UnsupportedMediaTypeException('A document file is required');
     }

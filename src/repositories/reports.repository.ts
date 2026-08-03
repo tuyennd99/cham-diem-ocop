@@ -553,7 +553,7 @@ export class ReportsRepository {
         },
       },
     };
-    const [rows, total] = await this.prisma.$transaction([
+    const [rows, total] = await Promise.all([
       this.prisma.reportVersion.findMany({
         where,
         include: versionHistoryInclude,

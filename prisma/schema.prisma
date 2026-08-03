@@ -50,12 +50,12 @@ enum PeriodStatus {
 }
 
 enum NotificationType {
-  BAO_CAO_DUYET
-  BAO_CAO_TRA
-  BAO_CAO_GUI
   GIAO_NHIEM_VU
-  NHIEM_VU_DONG
-  KY_BAO_CAO_MOI
+  DONG_NHIEM_VU
+  GUI_BAO_CAO
+  DUYET_BAO_CAO
+  TRA_BAO_CAO
+  MO_KY_BAO_CAO
   QUA_HAN
   SAP_DEN_HAN
 }
@@ -164,8 +164,8 @@ model UserPermissionGroup {
 }
 
 model Program {
-  id          Int      @id @default(autoincrement())
-  code        String   @unique @db.VarChar(50)
+  id          Int          @id @default(autoincrement())
+  code        String       @unique @db.VarChar(50)
   name        String       @db.VarChar(255)
   description String?
   status      EntityStatus @default(ACTIVE)
@@ -325,17 +325,17 @@ model VersionAttachment {
 }
 
 model Notification {
-  id          Int       @id @default(autoincrement())
+  id          Int              @id @default(autoincrement())
   recipientId Int
   eventKey    String           @db.VarChar(255)
   type        NotificationType
-  title       String    @db.VarChar(255)
+  title       String           @db.VarChar(255)
   body        String?
-  entityType  String?   @db.VarChar(100)
+  entityType  String?          @db.VarChar(100)
   entityId    Int?
-  readAt      DateTime? @db.Timestamptz(3)
-  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
-  recipient   User      @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  readAt      DateTime?        @db.Timestamptz(3)
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+  recipient   User             @relation(fields: [recipientId], references: [id], onDelete: Cascade)
 
   @@unique([recipientId, eventKey])
   @@index([recipientId, readAt])

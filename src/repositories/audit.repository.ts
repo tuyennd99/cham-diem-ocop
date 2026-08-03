@@ -105,7 +105,7 @@ export class AuditRepository {
         }
         : {}),
     };
-    const [data, total] = await this.prisma.$transaction([
+    const [data, total] = await Promise.all([
       this.prisma.auditLog.findMany({
         where,
         select: auditSelect,

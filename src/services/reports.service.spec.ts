@@ -334,7 +334,7 @@ describe('ReportsService', () => {
       expect.objectContaining({
         organizationIds: [lead.organizationId],
         eventKey: 'REPORT_SUBMITTED:101',
-        type: 'REPORT_SUBMITTED',
+        type: 'GUI_BAO_CAO',
         entityType: 'Task',
         entityId: progressWorkspace.reportingPeriod.task.id,
       }),
@@ -350,7 +350,7 @@ describe('ReportsService', () => {
       expect.objectContaining({
         organizationIds: [collaborator.organizationId],
         eventKey: 'REPORT_APPROVED:101',
-        type: 'REPORT_APPROVED',
+        type: 'DUYET_BAO_CAO',
         entityType: 'Task',
         entityId: progressWorkspace.reportingPeriod.task.id,
       }),
@@ -366,7 +366,7 @@ describe('ReportsService', () => {
       expect.objectContaining({
         organizationIds: [collaborator.organizationId],
         eventKey: 'REPORT_REJECTED:101',
-        type: 'REPORT_REJECTED',
+        type: 'TRA_BAO_CAO',
         entityType: 'Task',
         entityId: progressWorkspace.reportingPeriod.task.id,
       }),

@@ -339,12 +339,12 @@ export class AuthRepository {
     reason: string,
     meta: RequestMeta,
   ) {
-    await this.prisma.$transaction([
-      this.prisma.refreshSession.updateMany({
+    await this.prisma.$transaction(async (tx) => {
+      await tx.refreshSession.updateMany({
         where: { id: sessionId, revokedAt: null },
         data: { revokedAt: now },
-      }),
-      this.prisma.auditLog.create({
+      });
+      await tx.auditLog.create({
         data: {
           actorId: userId,
           action: 'AUTH_SESSION_REVOKED',
@@ -353,8 +353,8 @@ export class AuthRepository {
           reason,
           ...this.auditMeta(meta),
         },
-      }),
-    ]);
+      });
+    });
   }
 
   async revokeAllSessions(

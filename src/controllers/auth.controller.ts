@@ -26,13 +26,13 @@ import type {
   RequestMeta,
 } from '../types/auth';
 
-const REFRESH_MAX_AGE_MS = 3 * 24 * 60 * 60_000;
+const REFRESH_MAX_AGE_MS = 30 * 24 * 60 * 60_000;
 const REFRESH_COOKIE_PATH = '/api/v1/auth';
 
 @ApiTags('Authentication')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @Public()
   @Post('login')
@@ -173,7 +173,7 @@ export class AuthController {
       userAgent: request.headers['user-agent'],
       requestId:
         typeof requestId === 'string' &&
-        /^[A-Za-z0-9._-]{1,100}$/.test(requestId)
+          /^[A-Za-z0-9._-]{1,100}$/.test(requestId)
           ? requestId
           : undefined,
     };

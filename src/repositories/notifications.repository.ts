@@ -21,7 +21,7 @@ export class NotificationsRepository {
       recipientId: input.recipientId,
       ...(input.unreadOnly ? { readAt: null } : {}),
     };
-    const [data, total] = await this.prisma.$transaction([
+    const [data, total] = await Promise.all([
       this.prisma.notification.findMany({
         where,
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],

@@ -38,7 +38,7 @@ describe('NotificationsService', () => {
     const count = await service.createForOrganization({
       organizationId: 12,
       eventKey: 'TASK_ASSIGNED:44',
-      type: 'GIAO',
+      type: 'GIAO_NHIEM_VU',
       title: 'Nhiệm vụ mới',
       body: 'NV-44',
       entityType: 'Task',
@@ -49,7 +49,7 @@ describe('NotificationsService', () => {
     expect(repository.createForActiveUsers).toHaveBeenCalledWith({
       organizationIds: [12],
       eventKey: 'TASK_ASSIGNED:44',
-      type: 'GIAO',
+      type: 'GIAO_NHIEM_VU',
       title: 'Nhiệm vụ mới',
       body: 'NV-44',
       entityType: 'Task',
@@ -62,7 +62,7 @@ describe('NotificationsService', () => {
     await service.createForOrganization({
       organizationId: 12,
       eventKey: 'TASK_ASSIGNED:44',
-      type: 'GIAO',
+      type: 'GIAO_NHIEM_VU',
       title: 'New task',
       entityType: 'Task',
       entityId: 44,

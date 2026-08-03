@@ -6,7 +6,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { PeriodStatus, ReportKind, ReportStatus } from '@prisma/client';
+import { NotificationType, PeriodStatus, ReportKind, ReportStatus } from '@prisma/client';
 import { ReportHistoryQueryDto } from '../dtos/reports.dto';
 import {
   ReportWorkspaceView,
@@ -15,7 +15,7 @@ import {
 import { AccessTokenPayload, RequestMeta } from '../types/auth';
 import { NotificationsService } from './notifications.service';
 import { ErrorCode } from '../types/error-code';
-import { MAP_PERMISSIONS } from '../constants/permission';
+import { MAP_PERMISSIONS, PERMISSION_LABELS } from '../constants/permission';
 
 @Injectable()
 export class ReportsService {
@@ -24,10 +24,10 @@ export class ReportsService {
   constructor(
     private readonly repository: ReportsRepository,
     private readonly notificationsService?: NotificationsService,
-  ) {}
+  ) { }
 
   async openProgress(reportingPeriodId: number, principal: AccessTokenPayload) {
-    this.assertPermission(principal, 'progress.edit');
+    this.assertPermission(principal, MAP_PERMISSIONS.PROGRESS_EDIT);
     const period = await this.requirePeriod(reportingPeriodId);
     if (
       !period.task.collaboratorOrganizationIds.includes(
@@ -58,7 +58,7 @@ export class ReportsService {
     reportingPeriodId: number,
     principal: AccessTokenPayload,
   ) {
-    this.assertPermission(principal, 'consolidated.edit');
+    this.assertPermission(principal, MAP_PERMISSIONS.CONSOLIDATED_EDIT);
     const period = await this.requirePeriod(reportingPeriodId);
     // Cả nhiệm vụ đột xuất lẫn định kỳ đều có kỳ báo cáo (đột xuất được cấp 1
     // kỳ khi tạo), nên lead lập báo cáo tổng hợp gửi cơ quan giao cho cả hai.
@@ -92,7 +92,7 @@ export class ReportsService {
     kind: ReportKind,
     principal: AccessTokenPayload,
   ) {
-    this.assertPermission(principal, 'tasks.read');
+    this.assertPermission(principal, MAP_PERMISSIONS.TASKS_READ);
     const workspace = await this.requireWorkspace(workspaceId, kind);
     this.assertReadScope(workspace, principal);
     return workspace;
@@ -102,11 +102,11 @@ export class ReportsService {
     reportingPeriodId: number,
     principal: AccessTokenPayload,
   ) {
-    this.assertPermission(principal, 'tasks.read');
+    this.assertPermission(principal, MAP_PERMISSIONS.TASKS_READ);
     const period = await this.requirePeriod(reportingPeriodId);
     const globalTaskScope =
       principal.isAdmin === true ||
-      principal.permissions.includes('tasks.read.all');
+      principal.permissions.includes(MAP_PERMISSIONS.TASKS_READ_ALL);
     if (
       !globalTaskScope &&
       period.task.leadOrganizationId !== principal.organizationId
@@ -116,7 +116,7 @@ export class ReportsService {
       );
     }
     if (!principal.isAdmin) {
-      this.assertPermission(principal, 'progress.review');
+      this.assertPermission(principal, MAP_PERMISSIONS.PROGRESS_REVIEW);
     }
     return this.repository.listPeriodWorkspaces(reportingPeriodId);
   }
@@ -130,7 +130,7 @@ export class ReportsService {
   ) {
     this.assertPermission(
       principal,
-      kind === ReportKind.PROGRESS ? 'progress.edit' : 'consolidated.edit',
+      kind === ReportKind.PROGRESS ? MAP_PERMISSIONS.PROGRESS_EDIT : MAP_PERMISSIONS.CONSOLIDATED_EDIT,
     );
     const workspace = await this.requireWorkspace(workspaceId, kind);
     this.assertOwner(workspace, principal);
@@ -153,7 +153,7 @@ export class ReportsService {
   ) {
     this.assertPermission(
       principal,
-      kind === ReportKind.PROGRESS ? 'progress.submit' : 'consolidated.submit',
+      kind === ReportKind.PROGRESS ? MAP_PERMISSIONS.PROGRESS_SUBMIT : MAP_PERMISSIONS.CONSOLIDATED_SUBMIT,
     );
     const workspace = await this.requireWorkspace(workspaceId, kind);
     this.assertOwner(workspace, principal);
@@ -171,7 +171,7 @@ export class ReportsService {
     await this.safeNotify({
       organizationIds: [destination],
       eventKey: `REPORT_SUBMITTED:${version.id}`,
-      type: 'REPORT_SUBMITTED',
+      type: NotificationType.GUI_BAO_CAO,
       title: 'Báo cáo mới chờ duyệt',
       body: `${workspace.reportingPeriod.task.code} - ${workspace.reportingPeriod.task.name}`,
       entityType: 'Task',
@@ -249,7 +249,7 @@ export class ReportsService {
   }
 
   async history(query: ReportHistoryQueryDto, principal: AccessTokenPayload) {
-    this.assertPermission(principal, 'report_history.read');
+    this.assertPermission(principal, MAP_PERMISSIONS.REPORT_HISTORY_READ);
     if (
       query.submittedFrom &&
       query.submittedTo &&
@@ -261,7 +261,7 @@ export class ReportsService {
     }
     const globalTaskScope =
       principal.isAdmin === true ||
-      principal.permissions.includes('tasks.read.all');
+      principal.permissions.includes(MAP_PERMISSIONS.TASKS_READ_ALL);
     const result = await this.repository.listHistory({
       ...query,
       taskCode: query.taskCode?.trim() || undefined,
@@ -349,7 +349,7 @@ export class ReportsService {
       principal.isAdmin ||
       principal.permissions.includes(MAP_PERMISSIONS.TASKS_READ_ALL) ||
       workspace.reportingPeriod.task.leadOrganizationId ===
-        principal.organizationId ||
+      principal.organizationId ||
       (workspace.kind === ReportKind.PROGRESS &&
         workspace.ownerOrganizationId === principal.organizationId)
     ) {
@@ -371,7 +371,7 @@ export class ReportsService {
       workspace.kind === ReportKind.PROGRESS &&
       !principal.isAdmin &&
       workspace.reportingPeriod.task.leadOrganizationId !==
-        principal.organizationId
+      principal.organizationId
     ) {
       throw new ForbiddenException(ErrorCode.INVALID_TASK_RESPONSIBILITY);
     }
@@ -413,7 +413,8 @@ export class ReportsService {
 
   private assertPermission(principal: AccessTokenPayload, permission: string) {
     if (!principal.isAdmin && !principal.permissions.includes(permission)) {
-      throw new ForbiddenException(`${permission} is required`);
+      const label = PERMISSION_LABELS.get(permission);
+      throw new ForbiddenException(`${label} is required`);
     }
   }
 
@@ -427,7 +428,7 @@ export class ReportsService {
     await this.safeNotify({
       organizationIds: [workspace.ownerOrganizationId],
       eventKey: `REPORT_${result}:${versionId}`,
-      type: approved ? 'REPORT_APPROVED' : 'REPORT_REJECTED',
+      type: approved ? 'DUYET_BAO_CAO' : 'TRA_BAO_CAO',
       title: approved ? 'Báo cáo đã được duyệt' : 'Báo cáo chưa đạt yêu cầu',
       body: reason
         ? `${workspace.reportingPeriod.task.code} - ${reason}`
