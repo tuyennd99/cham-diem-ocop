@@ -26,6 +26,7 @@ import {
   inspectDocument,
 } from '../utils/document-files';
 import { MAX_DRAFT_BYTES, storageRoot } from '../utils/private-storage';
+import { can, canAny, assertPermission } from '../utils/principal';
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -158,9 +159,7 @@ export class FilesService {
       context.kind === ReportKind.PROGRESS
         ? 'progress.edit'
         : 'consolidated.edit';
-    if (!principal.isAdmin && !principal.permissions.includes(permission)) {
-      throw new ForbiddenException(`${permission} is required`);
-    }
+    assertPermission(principal, permission);
     if (
       !principal.isAdmin &&
       (context.ownerOrganizationId !== principal.organizationId ||
@@ -189,16 +188,11 @@ export class FilesService {
     context: DraftFileContext,
     principal: AccessTokenPayload,
   ) {
-    if (
-      !principal.isAdmin &&
-      !principal.permissions.includes('tasks.read') &&
-      !principal.permissions.includes('report_history.read')
-    ) {
+    if (!canAny(principal, 'tasks.read', 'report_history.read')) {
       throw new ForbiddenException('Report read permission is required');
     }
     if (
-      principal.isAdmin ||
-      principal.permissions.includes('tasks.read.all') ||
+      can(principal, 'tasks.read.all') ||
       context.reportingPeriod.task.leadOrganizationId ===
       principal.organizationId ||
       (context.kind === ReportKind.PROGRESS &&

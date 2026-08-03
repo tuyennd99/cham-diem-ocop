@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PeriodStatus, ReportStatus } from '@prisma/client';
 import {
   DashboardFilters,
@@ -10,6 +10,7 @@ import type {
   DashboardStatus,
   DashboardStatusCounts,
 } from '../types/dashboard';
+import { can, assertPermission } from '../utils/principal';
 
 @Injectable()
 export class DashboardService {
@@ -20,14 +21,11 @@ export class DashboardService {
     principal: AccessTokenPayload,
     now = new Date(),
   ) {
-    this.assertPermission(principal);
-    const globalDashboardScope =
-      principal.isAdmin === true ||
-      principal.permissions.includes('dashboard.read.all');
+    assertPermission(principal, 'dashboard.read');
     const tasks = await this.repository.loadSummaryRows({
       filters,
       organizationId: principal.organizationId,
-      globalScope: globalDashboardScope,
+      globalScope: can(principal, 'dashboard.read.all'),
     });
     const taskStatusCounts = this.emptyStatusCounts();
     const periodStatusCounts = this.emptyStatusCounts();
@@ -102,14 +100,5 @@ export class DashboardService {
       SAP_DEN_HAN: 0,
       CHUA_HOAN_THANH: 0,
     };
-  }
-
-  private assertPermission(principal: AccessTokenPayload) {
-    if (
-      !principal.isAdmin &&
-      !principal.permissions.includes('dashboard.read')
-    ) {
-      throw new ForbiddenException('dashboard.read is required');
-    }
   }
 }

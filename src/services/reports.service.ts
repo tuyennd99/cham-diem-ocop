@@ -16,6 +16,7 @@ import { AccessTokenPayload, RequestMeta } from '../types/auth';
 import { NotificationsService } from './notifications.service';
 import { ErrorCode } from '../types/error-code';
 import { MAP_PERMISSIONS, PERMISSION_LABELS } from '../constants/permission';
+import { can } from '../utils/principal';
 
 @Injectable()
 export class ReportsService {
@@ -104,9 +105,7 @@ export class ReportsService {
   ) {
     this.assertPermission(principal, MAP_PERMISSIONS.TASKS_READ);
     const period = await this.requirePeriod(reportingPeriodId);
-    const globalTaskScope =
-      principal.isAdmin === true ||
-      principal.permissions.includes(MAP_PERMISSIONS.TASKS_READ_ALL);
+    const globalTaskScope = can(principal, MAP_PERMISSIONS.TASKS_READ_ALL);
     if (
       !globalTaskScope &&
       period.task.leadOrganizationId !== principal.organizationId
@@ -259,9 +258,7 @@ export class ReportsService {
         'submittedFrom must not be after submittedTo',
       );
     }
-    const globalTaskScope =
-      principal.isAdmin === true ||
-      principal.permissions.includes(MAP_PERMISSIONS.TASKS_READ_ALL);
+    const globalTaskScope = can(principal, MAP_PERMISSIONS.TASKS_READ_ALL);
     const result = await this.repository.listHistory({
       ...query,
       taskCode: query.taskCode?.trim() || undefined,
@@ -346,8 +343,7 @@ export class ReportsService {
     principal: AccessTokenPayload,
   ) {
     if (
-      principal.isAdmin ||
-      principal.permissions.includes(MAP_PERMISSIONS.TASKS_READ_ALL) ||
+      can(principal, MAP_PERMISSIONS.TASKS_READ_ALL) ||
       workspace.reportingPeriod.task.leadOrganizationId ===
       principal.organizationId ||
       (workspace.kind === ReportKind.PROGRESS &&

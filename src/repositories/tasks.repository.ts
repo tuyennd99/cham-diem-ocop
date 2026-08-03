@@ -51,6 +51,7 @@ export class TasksRepository {
     globalScope: boolean;
   }) {
     const where = this.taskScope(input.organizationId, input.globalScope);
+    console.log("🚀 ~ TasksRepository ~ list ~ where:", where)
     const [rows, total] = await Promise.all([
       this.prisma.task.findMany({
         where,

@@ -1,6 +1,5 @@
 import {
   ConflictException,
-  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -12,6 +11,7 @@ import type { PeriodDraft } from '../constants/task';
 import { TasksRepository } from '../repositories/tasks.repository';
 import { AccessTokenPayload, RequestMeta } from '../types/auth';
 import { buildPeriod } from '../utils/periods';
+import { can, assertPermission } from '../utils/principal';
 import { NotificationsService } from './notifications.service';
 
 @Injectable()
@@ -74,11 +74,11 @@ export class ReportingPeriodsService
   }
 
   async list(taskId: number, principal: AccessTokenPayload) {
-    this.assertPermission(principal, 'tasks.read');
+    assertPermission(principal, 'tasks.read');
     const task = await this.repository.findById(
       taskId,
       principal.organizationId,
-      this.hasGlobalScope(principal),
+      can(principal, 'tasks.read.all'),
     );
     if (!task) throw new NotFoundException('Task not found');
     return this.repository.listReportingPeriods(taskId);
@@ -90,13 +90,13 @@ export class ReportingPeriodsService
     principal: AccessTokenPayload,
     meta: RequestMeta = {},
   ) {
-    this.assertPermission(principal, 'tasks.close');
+    assertPermission(principal, 'tasks.close');
     const period = await this.repository.findReportingPeriod(periodId);
     if (!period) throw new NotFoundException('Reporting period not found');
     const task = await this.repository.findById(
       period.taskId,
       principal.organizationId,
-      this.hasGlobalScope(principal),
+      can(principal, 'tasks.read.all'),
     );
     if (!task) throw new NotFoundException('Reporting period not found');
     if (period.status !== PeriodStatus.OPEN) {
@@ -168,18 +168,6 @@ export class ReportingPeriodsService
       anchor = new Date(period.dueAt.getTime() + 1);
     }
     return periods;
-  }
-
-  private hasGlobalScope(principal: AccessTokenPayload) {
-    return Boolean(
-      principal.isAdmin || principal.permissions.includes('tasks.read.all'),
-    );
-  }
-
-  private assertPermission(principal: AccessTokenPayload, permission: string) {
-    if (!principal.isAdmin && !principal.permissions.includes(permission)) {
-      throw new ForbiddenException(`${permission} is required`);
-    }
   }
 
   private async safeNotify(

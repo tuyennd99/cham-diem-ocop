@@ -14,7 +14,9 @@ import { TasksRepository } from '../repositories/tasks.repository';
 import { AccessTokenPayload, RequestMeta } from '../types/auth';
 import { NotificationsService } from './notifications.service';
 import { calculateTaskDeadlineStatus } from '../utils/task-deadline-status';
+import { can, assertPermission } from '../utils/principal';
 import dayjs from 'dayjs';
+import { ErrorCode } from '../types/error-code';
 
 @Injectable()
 export class TasksService {
@@ -23,15 +25,15 @@ export class TasksService {
   constructor(
     private readonly repository: TasksRepository,
     private readonly notificationsService?: NotificationsService,
-  ) {}
+  ) { }
 
   async list(query: TaskQueryDto, principal: AccessTokenPayload) {
-    this.assertPermission(principal, 'tasks.read');
+    assertPermission(principal, 'tasks.read');
     const { data, total } = await this.repository.list({
       page: query.page,
       limit: query.limit,
       organizationId: principal.organizationId,
-      globalScope: this.hasGlobalScope(principal),
+      globalScope: can(principal, 'tasks.read.all'),
     });
     return {
       data,
@@ -45,17 +47,17 @@ export class TasksService {
   }
 
   async get(id: number, principal: AccessTokenPayload) {
-    this.assertPermission(principal, 'tasks.read');
+    assertPermission(principal, 'tasks.read');
     return this.requireTask(id, principal);
   }
 
   listOrganizationLookups(principal: AccessTokenPayload) {
-    this.assertPermission(principal, 'tasks.read');
+    assertPermission(principal, 'tasks.read');
     return this.repository.listActiveOrganizations();
   }
 
   listProgramLookups(principal: AccessTokenPayload) {
-    this.assertPermission(principal, 'tasks.read');
+    assertPermission(principal, 'tasks.read');
     return this.repository.listActivePrograms();
   }
 
@@ -65,8 +67,8 @@ export class TasksService {
     meta: RequestMeta = {},
   ) {
     try {
-      this.assertPermission(principal, 'tasks.create');
-      this.assertPermission(principal, 'tasks.assign');
+      assertPermission(principal, 'tasks.create');
+      assertPermission(principal, 'tasks.assign');
       this.assertAssigningOrganization(
         input.assigningOrganizationId,
         principal,
@@ -93,14 +95,14 @@ export class TasksService {
     principal: AccessTokenPayload,
     meta: RequestMeta = {},
   ) {
-    this.assertPermission(principal, 'tasks.update');
+    assertPermission(principal, 'tasks.update');
     const current = await this.requireTask(id, principal);
     const changesOrganizationAssignment =
       input.assigningOrganizationId !== undefined ||
       input.leadOrganizationId !== undefined ||
       input.collaboratorOrganizationIds !== undefined;
     if (changesOrganizationAssignment) {
-      this.assertPermission(principal, 'tasks.assign');
+      assertPermission(principal, 'tasks.assign');
       if (input.assigningOrganizationId !== undefined) {
         this.assertAssigningOrganization(
           input.assigningOrganizationId,
@@ -165,7 +167,7 @@ export class TasksService {
     principal: AccessTokenPayload,
     meta: RequestMeta = {},
   ) {
-    this.assertPermission(principal, 'tasks.delete');
+    assertPermission(principal, 'tasks.delete');
     await this.requireTask(id, principal);
     return this.repository.softDelete(id, new Date(), principal.sub, {
       ...meta,
@@ -179,7 +181,7 @@ export class TasksService {
     principal: AccessTokenPayload,
     meta: RequestMeta = {},
   ) {
-    this.assertPermission(principal, 'tasks.close');
+    assertPermission(principal, 'tasks.close');
     const task = await this.requireTask(id, principal);
     if (task.type !== TaskType.DINH_KY) {
       throw new BadRequestException('Only periodic tasks can be closed');
@@ -218,7 +220,7 @@ export class TasksService {
     meta: RequestMeta = {},
     completedAt = new Date(),
   ) {
-    this.assertPermission(principal, 'tasks.complete');
+    assertPermission(principal, 'tasks.complete');
     const task = await this.requireTask(id, principal);
     if (task.type !== TaskType.DOT_XUAT || !task.dueAt) {
       throw new BadRequestException('Only ad-hoc tasks can be completed');
@@ -248,7 +250,7 @@ export class TasksService {
     const task = await this.repository.findById(
       id,
       principal.organizationId,
-      this.hasGlobalScope(principal),
+      can(principal, 'tasks.read.all'),
     );
     if (!task) throw new NotFoundException('Task not found');
     return task;
@@ -347,18 +349,6 @@ export class TasksService {
     return trimmed;
   }
 
-  private hasGlobalScope(principal: AccessTokenPayload) {
-    return Boolean(
-      principal.isAdmin || principal.permissions.includes('tasks.read.all'),
-    );
-  }
-
-  private assertPermission(principal: AccessTokenPayload, permission: string) {
-    if (!principal.isAdmin && !principal.permissions.includes(permission)) {
-      throw new ForbiddenException(`${permission} is required`);
-    }
-  }
-
   private assertAssigningOrganization(
     assigningOrganizationId: number,
     principal: AccessTokenPayload,
@@ -368,7 +358,7 @@ export class TasksService {
       assigningOrganizationId !== principal.organizationId
     ) {
       throw new ForbiddenException(
-        'Tasks can only be assigned by the current organization',
+        ErrorCode.TASK_CAN_ONLY_BE_ASSIGNED_BY_THE_CURRENT_ORGANIZATION
       );
     }
   }
@@ -380,7 +370,7 @@ export class TasksService {
       'code' in error &&
       error.code === 'P2002'
     ) {
-      throw new ConflictException('Task code already exists');
+      throw new ConflictException(ErrorCode.TASK_CODE_ALREADY_EXISTS);
     }
     throw error;
   }
