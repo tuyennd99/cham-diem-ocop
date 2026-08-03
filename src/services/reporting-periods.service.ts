@@ -8,21 +8,23 @@ import {
   OnApplicationShutdown,
 } from '@nestjs/common';
 import { Frequency, PeriodStatus } from '@prisma/client';
-import { PeriodDraft, TasksRepository } from '../repositories/tasks.repository';
+import type { PeriodDraft } from '../constants/task';
+import { TasksRepository } from '../repositories/tasks.repository';
 import { AccessTokenPayload, RequestMeta } from '../types/auth';
 import { buildPeriod } from '../utils/periods';
 import { NotificationsService } from './notifications.service';
 
 @Injectable()
 export class ReportingPeriodsService
-  implements OnApplicationBootstrap, OnApplicationShutdown {
+  implements OnApplicationBootstrap, OnApplicationShutdown
+{
   private readonly logger = new Logger(ReportingPeriodsService.name);
   private timer?: NodeJS.Timeout;
 
   constructor(
     private readonly repository: TasksRepository,
     private readonly notificationsService: NotificationsService,
-  ) { }
+  ) {}
 
   async onApplicationBootstrap() {
     if (process.env.DISABLE_SCHEDULER === 'true') return;
@@ -159,7 +161,7 @@ export class ReportingPeriodsService
   ): PeriodDraft[] {
     const periods: PeriodDraft[] = [];
     let anchor = startAt;
-    for (; ;) {
+    for (;;) {
       const period = buildPeriod(frequency, anchor);
       if (period.periodStartAt > now) break;
       periods.push({ frequency, ...period });

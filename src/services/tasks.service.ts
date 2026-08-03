@@ -8,12 +8,9 @@ import {
 } from '@nestjs/common';
 import { uniq } from 'lodash';
 import { TaskType } from '@prisma/client';
+import type { TaskView, TaskWrite } from '../constants/task';
 import { CreateTaskDto, TaskQueryDto, UpdateTaskDto } from '../dtos/tasks.dto';
-import {
-  TasksRepository,
-  TaskView,
-  TaskWrite,
-} from '../repositories/tasks.repository';
+import { TasksRepository } from '../repositories/tasks.repository';
 import { AccessTokenPayload, RequestMeta } from '../types/auth';
 import { NotificationsService } from './notifications.service';
 import { calculateTaskDeadlineStatus } from '../utils/task-deadline-status';
@@ -26,7 +23,7 @@ export class TasksService {
   constructor(
     private readonly repository: TasksRepository,
     private readonly notificationsService?: NotificationsService,
-  ) { }
+  ) {}
 
   async list(query: TaskQueryDto, principal: AccessTokenPayload) {
     this.assertPermission(principal, 'tasks.read');
@@ -70,7 +67,10 @@ export class TasksService {
     try {
       this.assertPermission(principal, 'tasks.create');
       this.assertPermission(principal, 'tasks.assign');
-      this.assertAssigningOrganization(input.assigningOrganizationId, principal);
+      this.assertAssigningOrganization(
+        input.assigningOrganizationId,
+        principal,
+      );
       const normalized = this.normalize(input);
       await this.validate(normalized);
       const task = await this.repository.create(
@@ -82,7 +82,7 @@ export class TasksService {
       await this.notifyAssignment(task);
       return task;
     } catch (error) {
-      console.log("🚀 ~ TasksService ~ create ~ error:", error)
+      console.log('🚀 ~ TasksService ~ create ~ error:', error);
       this.rethrowUniqueCode(error);
     }
   }
