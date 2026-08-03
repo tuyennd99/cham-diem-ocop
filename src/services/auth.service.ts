@@ -247,7 +247,7 @@ export class AuthService {
         algorithm: 'HS256',
         issuer: 'congan-api',
         audience: 'congan-web',
-        expiresIn: '15m',
+        expiresIn: ACCESS_TOKEN_SECONDS,
       }),
       expiresIn: ACCESS_TOKEN_SECONDS,
       refreshToken,

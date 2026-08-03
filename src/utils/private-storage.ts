@@ -62,6 +62,8 @@ class PrivateStorage {
 
 export function privateUploadOptions(): MulterOptions {
   return {
+    // busboy mặc định decode filename bằng latin1 → tên UTF-8 (tiếng Việt) hỏng.
+    defParamCharset: 'utf8',
     limits: { fileSize: MAX_DRAFT_BYTES, files: 1 },
     storage: new PrivateStorage(),
   };
