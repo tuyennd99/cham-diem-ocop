@@ -10,7 +10,6 @@ import type {
   DashboardStatus,
   DashboardStatusCounts,
 } from '../types/dashboard';
-import { can, assertPermission } from '../utils/principal';
 
 @Injectable()
 export class DashboardService {
@@ -21,11 +20,10 @@ export class DashboardService {
     principal: AccessTokenPayload,
     now = new Date(),
   ) {
-    assertPermission(principal, 'dashboard.read');
     const tasks = await this.repository.loadSummaryRows({
       filters,
       organizationId: principal.organizationId,
-      globalScope: can(principal, 'dashboard.read.all'),
+      globalScope: principal.isAdmin === true,
     });
     const taskStatusCounts = this.emptyStatusCounts();
     const periodStatusCounts = this.emptyStatusCounts();

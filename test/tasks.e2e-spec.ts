@@ -125,24 +125,6 @@ describe('Task endpoints', () => {
       .expect(400);
   });
 
-  it('denies task creation without tasks.assign', async () => {
-    effectivePermissions = ['tasks.read', 'tasks.create'];
-
-    await request(server)
-      .post('/api/v1/tasks')
-      .send({
-        code: 'NV-001',
-        name: 'Nhiệm vụ',
-        type: 'DOT_XUAT',
-        programId: 1,
-        assigningOrganizationId: 10,
-        leadOrganizationId: 20,
-        collaboratorOrganizationIds: [30],
-        dueAt: '2026-08-01T00:00:00.000Z',
-      })
-      .expect(403);
-  });
-
   it('allows task creation with tasks.create and tasks.assign', async () => {
     await request(server)
       .post('/api/v1/tasks')
@@ -157,15 +139,6 @@ describe('Task endpoints', () => {
         dueAt: '2026-08-01T00:00:00.000Z',
       })
       .expect(201);
-  });
-
-  it('denies reporting-period cancellation without tasks.close', async () => {
-    effectivePermissions = ['tasks.read'];
-
-    await request(server)
-      .post('/api/v1/reporting-periods/2/cancel')
-      .send({ reason: 'Không còn áp dụng' })
-      .expect(403);
   });
 
   it('maps close and period cancellation endpoints', async () => {

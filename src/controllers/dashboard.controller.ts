@@ -1,7 +1,6 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../decorators/current-user.decorator';
-import { Permissions } from '../decorators/permissions.decorator';
 import { DashboardQueryDto } from '../dtos/observability.dto';
 import { DashboardService } from '../services/dashboard.service';
 import type { AccessTokenPayload } from '../types/auth';
@@ -13,7 +12,6 @@ export class DashboardController {
   constructor(private readonly service: DashboardService) {}
 
   @Get('dashboard/summary')
-  @Permissions('dashboard.read')
   summary(
     @Query() query: DashboardQueryDto,
     @CurrentUser() principal: AccessTokenPayload,
@@ -22,7 +20,6 @@ export class DashboardController {
   }
 
   @Get('statistics/tasks')
-  @Permissions('dashboard.read')
   statistics(
     @Query() query: DashboardQueryDto,
     @CurrentUser() principal: AccessTokenPayload,

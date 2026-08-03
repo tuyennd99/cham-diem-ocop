@@ -126,29 +126,15 @@ describe('DashboardService', () => {
     });
   });
 
-  it('uses dashboard.read.all for global dashboard scope', async () => {
+  it('uses admin for global dashboard scope', async () => {
     repository.loadSummaryRows.mockResolvedValue([]);
 
-    await service.summary(
-      {},
-      {
-        ...principal,
-        permissions: ['dashboard.read', 'tasks.assign'],
-      },
-      now,
-    );
+    await service.summary({}, { ...principal, isAdmin: false }, now);
     expect(repository.loadSummaryRows).toHaveBeenLastCalledWith(
       expect.objectContaining({ globalScope: false }),
     );
 
-    await service.summary(
-      {},
-      {
-        ...principal,
-        permissions: ['dashboard.read', 'dashboard.read.all'],
-      },
-      now,
-    );
+    await service.summary({}, { ...principal, isAdmin: true }, now);
     expect(repository.loadSummaryRows).toHaveBeenLastCalledWith(
       expect.objectContaining({ globalScope: true }),
     );

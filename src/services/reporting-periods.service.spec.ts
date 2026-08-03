@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException } from '@nestjs/common';
+import { ConflictException } from '@nestjs/common';
 import { TasksRepository } from '../repositories/tasks.repository';
 import { NotificationsService } from './notifications.service';
 import { ReportingPeriodsService } from './reporting-periods.service';
@@ -37,7 +37,7 @@ function repositoryMock() {
         return Promise.resolve(count);
       },
     ),
-    findById: jest.fn().mockResolvedValue({ id: 1 }),
+    findById: jest.fn().mockResolvedValue({ id: 1, assigningOrganizationId: 10 }),
     listReportingPeriods: jest.fn().mockResolvedValue([]),
     findReportingPeriod: jest.fn().mockResolvedValue({
       id: 5,
@@ -75,34 +75,19 @@ describe('ReportingPeriodsService', () => {
     expect(repository.createReportingPeriods).toHaveBeenCalledTimes(2);
   });
 
-  it('requires tasks.read to list periods', async () => {
+  it('uses admin global scope to list periods', async () => {
     const repository = repositoryMock();
     const service = new ReportingPeriodsService(
       repository as unknown as TasksRepository,
       notificationsMock() as unknown as NotificationsService,
     );
 
-    await expect(
-      service.list(1, { ...principal, permissions: [] }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-  });
-
-  it('uses tasks.read.all global scope to list periods', async () => {
-    const repository = repositoryMock();
-    const service = new ReportingPeriodsService(
-      repository as unknown as TasksRepository,
-      notificationsMock() as unknown as NotificationsService,
-    );
-
-    await service.list(1, {
-      ...principal,
-      permissions: ['tasks.read', 'tasks.read.all'],
-    });
+    await service.list(1, { ...principal, isAdmin: true });
 
     expect(repository.findById).toHaveBeenCalledWith(1, 10, true);
   });
 
-  it('uses tasks.read.all global scope to cancel periods', async () => {
+  it('uses admin global scope to cancel periods', async () => {
     const repository = repositoryMock();
     const service = new ReportingPeriodsService(
       repository as unknown as TasksRepository,
@@ -111,10 +96,27 @@ describe('ReportingPeriodsService', () => {
 
     await service.cancel(5, 'Không còn áp dụng', {
       ...principal,
-      permissions: ['tasks.read', 'tasks.close', 'tasks.read.all'],
+      isAdmin: true,
     });
 
     expect(repository.findById).toHaveBeenCalledWith(1, 10, true);
+  });
+
+  it('rejects reporting-period cancel from a related non-assigning organization', async () => {
+    const repository = repositoryMock();
+    repository.findById.mockResolvedValue({ id: 1, assigningOrganizationId: 10 });
+    const service = new ReportingPeriodsService(
+      repository as unknown as TasksRepository,
+      notificationsMock() as unknown as NotificationsService,
+    );
+
+    await expect(
+      service.cancel(5, 'Không còn áp dụng', {
+        ...principal,
+        isAdmin: false,
+        organizationId: 20,
+      }),
+    ).rejects.toMatchObject({ status: 403 });
   });
 
   it('cancels only an open period', async () => {

@@ -91,15 +91,12 @@ describe('TasksService', () => {
     });
   });
 
-  it('uses global scope when tasks.read.all is granted', async () => {
+  it('uses global scope only for an admin principal', async () => {
     const repository = repositoryMock();
     repository.list.mockResolvedValue({ data: [], total: 0 });
     const service = new TasksService(repository as unknown as TasksRepository);
 
-    await service.list(
-      { page: 1, limit: 20 },
-      { ...taskManager, permissions: ['tasks.read', 'tasks.read.all'] },
-    );
+    await service.list({ page: 1, limit: 20 }, { ...taskManager, isAdmin: true });
 
     expect(repository.list).toHaveBeenCalledWith(
       expect.objectContaining({ globalScope: true }),
@@ -484,5 +481,68 @@ describe('TasksService', () => {
       service.complete(existingTask.id, taskManager),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(repository.complete).not.toHaveBeenCalled();
+  });
+
+  describe('restricts lifecycle mutations to the assigning organization', () => {
+    // A related lead organization (20) can SEE the task but is not assigning (10).
+    const relatedNonAssigning = {
+      ...taskManager,
+      isAdmin: false,
+      organizationId: 20,
+    };
+    const periodicTask = { ...existingTask, assigningOrganizationId: 10 };
+    const adHocTask = {
+      ...existingTask,
+      assigningOrganizationId: 10,
+      type: 'DOT_XUAT' as const,
+      dueAt: new Date('2026-07-28T00:00:00.000Z'),
+      frequency: null,
+      periodicStartAt: null,
+    };
+
+    const cases: [string, (s: TasksService) => Promise<unknown>, unknown][] = [
+      ['update', (s) => s.update(existingTask.id, { name: 'Đổi tên' }, relatedNonAssigning), periodicTask],
+      ['remove', (s) => s.remove(existingTask.id, relatedNonAssigning), periodicTask],
+      ['close', (s) => s.close(existingTask.id, 'Kết thúc', relatedNonAssigning), periodicTask],
+      ['complete', (s) => s.complete(existingTask.id, relatedNonAssigning), adHocTask],
+    ];
+
+    it.each(cases)(
+      'rejects %s from a related non-assigning organization',
+      async (_name, invoke, task) => {
+        const repository = repositoryMock();
+        repository.findById.mockResolvedValue(task);
+        const service = new TasksService(
+          repository as unknown as TasksRepository,
+        );
+
+        await expect(invoke(service)).rejects.toMatchObject({ status: 403 });
+      },
+    );
+
+    it.each(cases)(
+      'lets an admin perform %s on any organization task',
+      async (_name, _invoke, task) => {
+        const repository = repositoryMock();
+        repository.findById.mockResolvedValue(task);
+        repository.complete.mockResolvedValue({
+          ...adHocTask,
+          completedAt: new Date(),
+          deadlineStatus: 'HOAN_THANH_DUNG_HAN',
+        });
+        const service = new TasksService(
+          repository as unknown as TasksRepository,
+        );
+        const admin = { ...taskManager, isAdmin: true, organizationId: 99 };
+        const invokers: Record<string, () => Promise<unknown>> = {
+          update: () => service.update(existingTask.id, { name: 'X' }, admin),
+          remove: () => service.remove(existingTask.id, admin),
+          close: () => service.close(existingTask.id, 'Kết thúc', admin),
+          complete: () => service.complete(existingTask.id, admin),
+        };
+
+        await expect(invokers[_name]()).resolves.toBeDefined();
+      },
+    );
   });
 });

@@ -548,6 +548,7 @@ export class TasksRepository {
         ? {}
         : {
           OR: [
+            { assigningOrganizationId: organizationId },
             { leadOrganizationId: organizationId },
             { collaborators: { some: { organizationId } } },
           ],

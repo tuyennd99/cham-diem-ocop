@@ -76,6 +76,7 @@ export class DashboardRepository {
           ? {}
           : {
             OR: [
+              { assigningOrganizationId: input.organizationId },
               { leadOrganizationId: input.organizationId },
               {
                 collaborators: {

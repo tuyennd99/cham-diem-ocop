@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -11,7 +12,7 @@ import type { PeriodDraft } from '../constants/task';
 import { TasksRepository } from '../repositories/tasks.repository';
 import { AccessTokenPayload, RequestMeta } from '../types/auth';
 import { buildPeriod } from '../utils/periods';
-import { can, assertPermission } from '../utils/principal';
+import { ErrorCode } from '../types/error-code';
 import { NotificationsService } from './notifications.service';
 
 @Injectable()
@@ -74,11 +75,10 @@ export class ReportingPeriodsService
   }
 
   async list(taskId: number, principal: AccessTokenPayload) {
-    assertPermission(principal, 'tasks.read');
     const task = await this.repository.findById(
       taskId,
       principal.organizationId,
-      can(principal, 'tasks.read.all'),
+      principal.isAdmin === true,
     );
     if (!task) throw new NotFoundException('Task not found');
     return this.repository.listReportingPeriods(taskId);
@@ -90,15 +90,22 @@ export class ReportingPeriodsService
     principal: AccessTokenPayload,
     meta: RequestMeta = {},
   ) {
-    assertPermission(principal, 'tasks.close');
     const period = await this.repository.findReportingPeriod(periodId);
     if (!period) throw new NotFoundException('Reporting period not found');
     const task = await this.repository.findById(
       period.taskId,
       principal.organizationId,
-      can(principal, 'tasks.read.all'),
+      principal.isAdmin === true,
     );
     if (!task) throw new NotFoundException('Reporting period not found');
+    if (
+      principal.isAdmin !== true &&
+      task.assigningOrganizationId !== principal.organizationId
+    ) {
+      throw new ForbiddenException(
+        ErrorCode.TASK_CAN_ONLY_BE_ASSIGNED_BY_THE_CURRENT_ORGANIZATION,
+      );
+    }
     if (period.status !== PeriodStatus.OPEN) {
       throw new ConflictException(
         'Only open reporting periods can be canceled',

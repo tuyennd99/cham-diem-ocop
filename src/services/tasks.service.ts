@@ -14,7 +14,6 @@ import { TasksRepository } from '../repositories/tasks.repository';
 import { AccessTokenPayload, RequestMeta } from '../types/auth';
 import { NotificationsService } from './notifications.service';
 import { calculateTaskDeadlineStatus } from '../utils/task-deadline-status';
-import { can, assertPermission } from '../utils/principal';
 import dayjs from 'dayjs';
 import { ErrorCode } from '../types/error-code';
 
@@ -28,12 +27,11 @@ export class TasksService {
   ) { }
 
   async list(query: TaskQueryDto, principal: AccessTokenPayload) {
-    assertPermission(principal, 'tasks.read');
     const { data, total } = await this.repository.list({
       page: query.page,
       limit: query.limit,
       organizationId: principal.organizationId,
-      globalScope: can(principal, 'tasks.read.all'),
+      globalScope: principal.isAdmin === true,
     });
     return {
       data,
@@ -47,17 +45,14 @@ export class TasksService {
   }
 
   async get(id: number, principal: AccessTokenPayload) {
-    assertPermission(principal, 'tasks.read');
     return this.requireTask(id, principal);
   }
 
-  listOrganizationLookups(principal: AccessTokenPayload) {
-    assertPermission(principal, 'tasks.read');
+  listOrganizationLookups(_principal: AccessTokenPayload) {
     return this.repository.listActiveOrganizations();
   }
 
-  listProgramLookups(principal: AccessTokenPayload) {
-    assertPermission(principal, 'tasks.read');
+  listProgramLookups(_principal: AccessTokenPayload) {
     return this.repository.listActivePrograms();
   }
 
@@ -67,8 +62,6 @@ export class TasksService {
     meta: RequestMeta = {},
   ) {
     try {
-      assertPermission(principal, 'tasks.create');
-      assertPermission(principal, 'tasks.assign');
       this.assertAssigningOrganization(
         input.assigningOrganizationId,
         principal,
@@ -95,14 +88,13 @@ export class TasksService {
     principal: AccessTokenPayload,
     meta: RequestMeta = {},
   ) {
-    assertPermission(principal, 'tasks.update');
     const current = await this.requireTask(id, principal);
+    this.assertAssigningOrganization(current.assigningOrganizationId, principal);
     const changesOrganizationAssignment =
       input.assigningOrganizationId !== undefined ||
       input.leadOrganizationId !== undefined ||
       input.collaboratorOrganizationIds !== undefined;
     if (changesOrganizationAssignment) {
-      assertPermission(principal, 'tasks.assign');
       if (input.assigningOrganizationId !== undefined) {
         this.assertAssigningOrganization(
           input.assigningOrganizationId,
@@ -167,8 +159,8 @@ export class TasksService {
     principal: AccessTokenPayload,
     meta: RequestMeta = {},
   ) {
-    assertPermission(principal, 'tasks.delete');
-    await this.requireTask(id, principal);
+    const task = await this.requireTask(id, principal);
+    this.assertAssigningOrganization(task.assigningOrganizationId, principal);
     return this.repository.softDelete(id, new Date(), principal.sub, {
       ...meta,
       organizationId: principal.organizationId,
@@ -181,8 +173,8 @@ export class TasksService {
     principal: AccessTokenPayload,
     meta: RequestMeta = {},
   ) {
-    assertPermission(principal, 'tasks.close');
     const task = await this.requireTask(id, principal);
+    this.assertAssigningOrganization(task.assigningOrganizationId, principal);
     if (task.type !== TaskType.DINH_KY) {
       throw new BadRequestException('Only periodic tasks can be closed');
     }
@@ -220,12 +212,11 @@ export class TasksService {
     meta: RequestMeta = {},
     completedAt = new Date(),
   ) {
-    assertPermission(principal, 'tasks.complete');
     const task = await this.requireTask(id, principal);
+    this.assertAssigningOrganization(task.assigningOrganizationId, principal);
     if (task.type !== TaskType.DOT_XUAT || !task.dueAt) {
       throw new BadRequestException('Only ad-hoc tasks can be completed');
     }
-    this.assertAssigningOrganization(task.assigningOrganizationId, principal);
     if (task.completedAt) {
       throw new ConflictException('Task is already completed');
     }
@@ -250,7 +241,7 @@ export class TasksService {
     const task = await this.repository.findById(
       id,
       principal.organizationId,
-      can(principal, 'tasks.read.all'),
+      principal.isAdmin === true,
     );
     if (!task) throw new NotFoundException('Task not found');
     return task;
