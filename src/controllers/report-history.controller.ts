@@ -9,7 +9,6 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { CurrentUser } from '../decorators/current-user.decorator';
-import { Permissions } from '../decorators/permissions.decorator';
 import { ReportHistoryQueryDto } from '../dtos/reports.dto';
 import { FilesService } from '../services/files.service';
 import { ReportsService } from '../services/reports.service';
@@ -19,7 +18,6 @@ import { requestMeta } from '../utils/request-meta';
 
 @ApiTags('Report history')
 @ApiBearerAuth()
-@Permissions('report_history.read')
 @Controller('report-history')
 export class ReportHistoryController {
   constructor(

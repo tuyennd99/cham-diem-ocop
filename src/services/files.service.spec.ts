@@ -18,7 +18,29 @@ const unitUser = {
   sub: 2,
   username: 'unit',
   organizationId: 30,
-  permissions: ['progress.edit'],
+  permissions: [],
+};
+
+const downloadRecord = {
+  id: 99,
+  originalName: 'report.pdf',
+  storageKey: '44b4bb72-bdde-4bd8-83ee-58d4f35e3081',
+  mimeType: 'application/pdf',
+  sizeBytes: 10,
+  context: {
+    id: 11,
+    kind: 'PROGRESS',
+    status: 'DRAFT',
+    ownerOrganizationId: 30,
+    reportingPeriod: {
+      status: 'OPEN',
+      task: {
+        leadOrganizationId: 20,
+        completedAt: null,
+        collaboratorOrganizationIds: [30],
+      },
+    },
+  },
 };
 
 function repositoryMock() {
@@ -40,7 +62,7 @@ function repositoryMock() {
     addDraftFile: jest.fn(),
     removeDraftFile: jest.fn(),
     findDownload: jest.fn(),
-    findWorkspaceDownload: jest.fn(),
+    findWorkspaceDownload: jest.fn().mockResolvedValue(downloadRecord),
     findVersionDownload: jest.fn(),
     recordDownload: jest.fn(),
   };
@@ -81,29 +103,8 @@ describe('FilesService', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('requires read permission again before opening a private download', async () => {
+  it('denies a private download to a non-participant organization', async () => {
     const repository = repositoryMock();
-    repository.findWorkspaceDownload = jest.fn().mockResolvedValue({
-      id: 99,
-      originalName: 'report.pdf',
-      storageKey: '44b4bb72-bdde-4bd8-83ee-58d4f35e3081',
-      mimeType: 'application/pdf',
-      sizeBytes: 10,
-      context: {
-        id: 11,
-        kind: 'PROGRESS',
-        status: 'DRAFT',
-        ownerOrganizationId: 30,
-        reportingPeriod: {
-          status: 'OPEN',
-          task: {
-            leadOrganizationId: 20,
-            completedAt: null,
-            collaboratorOrganizationIds: [30],
-          },
-        },
-      },
-    });
     const service = new FilesService(
       repository as unknown as FilesRepository,
       'E:\\private-storage',
@@ -112,53 +113,25 @@ describe('FilesService', () => {
     await expect(
       service.downloadWorkspaceFile(11, 99, {
         ...unitUser,
-        permissions: [],
+        organizationId: 99,
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('uses tasks.read.all for cross-organization private downloads', async () => {
+  it('lets an admin download cross-organization files but denies other outsiders', async () => {
     const repository = repositoryMock();
-    repository.findWorkspaceDownload.mockResolvedValue({
-      id: 99,
-      originalName: 'report.pdf',
-      storageKey: '44b4bb72-bdde-4bd8-83ee-58d4f35e3081',
-      mimeType: 'application/pdf',
-      sizeBytes: 10,
-      context: {
-        id: 11,
-        kind: 'PROGRESS',
-        status: 'DRAFT',
-        ownerOrganizationId: 30,
-        reportingPeriod: {
-          status: 'OPEN',
-          task: {
-            leadOrganizationId: 20,
-            completedAt: null,
-            collaboratorOrganizationIds: [30],
-          },
-        },
-      },
-    });
     const service = new FilesService(
       repository as unknown as FilesRepository,
       'E:\\private-storage',
     );
-    const outsider = {
-      ...unitUser,
-      organizationId: 99,
-      permissions: ['tasks.read', 'tasks.read.all'],
-    };
+    const outsider = { ...unitUser, organizationId: 99 };
     (createReadStream as jest.Mock).mockReturnValue({});
 
-    await expect(service.downloadWorkspaceFile(11, 99, outsider)).resolves.toEqual(
-      expect.objectContaining({ originalName: 'report.pdf' }),
-    );
     await expect(
-      service.downloadWorkspaceFile(11, 99, {
-        ...outsider,
-        permissions: ['tasks.read'],
-      }),
+      service.downloadWorkspaceFile(11, 99, { ...outsider, isAdmin: true }),
+    ).resolves.toEqual(expect.objectContaining({ originalName: 'report.pdf' }));
+    await expect(
+      service.downloadWorkspaceFile(11, 99, outsider),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });

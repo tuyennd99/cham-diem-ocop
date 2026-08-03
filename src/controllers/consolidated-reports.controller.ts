@@ -16,7 +16,6 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ReportKind } from '@prisma/client';
 import type { Request } from 'express';
 import { CurrentUser } from '../decorators/current-user.decorator';
-import { Permissions } from '../decorators/permissions.decorator';
 import { ResponseMessage } from '../decorators/response-message.decorator';
 import { RejectReportDto, SaveReportDraftDto } from '../dtos/reports.dto';
 import { FilesService } from '../services/files.service';
@@ -36,7 +35,6 @@ export class ConsolidatedReportsController {
   ) { }
 
   @Get('periods/:periodId')
-  @Permissions('consolidated.edit')
   open(
     @Param('periodId', ParseIntPipe) periodId: number,
     @CurrentUser() principal: AccessTokenPayload,
@@ -45,7 +43,6 @@ export class ConsolidatedReportsController {
   }
 
   @Get(':id')
-  @Permissions('tasks.read')
   get(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() principal: AccessTokenPayload,
@@ -54,7 +51,6 @@ export class ConsolidatedReportsController {
   }
 
   @Patch(':id')
-  @Permissions('consolidated.edit')
   @ResponseMessage('Lưu báo cáo tổng hợp thành công')
   save(
     @Param('id', ParseIntPipe) id: number,
@@ -72,7 +68,6 @@ export class ConsolidatedReportsController {
   }
 
   @Post(':id/submit')
-  @Permissions('consolidated.submit')
   @ResponseMessage('Gửi báo cáo tổng hợp thành công')
   submit(
     @Param('id', ParseIntPipe) id: number,
@@ -88,7 +83,6 @@ export class ConsolidatedReportsController {
   }
 
   @Post(':id/approve')
-  @Permissions('consolidated.review')
   @ResponseMessage('Phê duyệt báo cáo tổng hợp thành công')
   approve(
     @Param('id', ParseIntPipe) id: number,
@@ -104,7 +98,6 @@ export class ConsolidatedReportsController {
   }
 
   @Post(':id/reject')
-  @Permissions('consolidated.review')
   @ResponseMessage('Từ chối báo cáo tổng hợp thành công')
   reject(
     @Param('id', ParseIntPipe) id: number,
@@ -122,7 +115,6 @@ export class ConsolidatedReportsController {
   }
 
   @Post(':id/return')
-  @Permissions('consolidated.review')
   @ResponseMessage('Trả lại báo cáo tổng hợp thành công')
   returnReport(
     @Param('id', ParseIntPipe) id: number,
@@ -140,7 +132,6 @@ export class ConsolidatedReportsController {
   }
 
   @Post(':id/files')
-  @Permissions('consolidated.edit')
   @ResponseMessage('Tải tệp lên thành công')
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file', privateUploadOptions()))
@@ -159,7 +150,6 @@ export class ConsolidatedReportsController {
   }
 
   @Delete(':id/files/:fileId')
-  @Permissions('consolidated.edit')
   @ResponseMessage('Xóa tệp thành công')
   removeFile(
     @Param('id', ParseIntPipe) id: number,
@@ -176,7 +166,6 @@ export class ConsolidatedReportsController {
   }
 
   @Get(':id/files/:fileId/download')
-  @Permissions('tasks.read')
   async download(
     @Param('id', ParseIntPipe) id: number,
     @Param('fileId', ParseIntPipe) fileId: number,

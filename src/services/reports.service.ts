@@ -15,8 +15,7 @@ import {
 import { AccessTokenPayload, RequestMeta } from '../types/auth';
 import { NotificationsService } from './notifications.service';
 import { ErrorCode } from '../types/error-code';
-import { MAP_PERMISSIONS, PERMISSION_LABELS } from '../constants/permission';
-import { can } from '../utils/principal';
+import { canAccessTask } from '../utils/task-access';
 
 @Injectable()
 export class ReportsService {
@@ -27,13 +26,20 @@ export class ReportsService {
     private readonly notificationsService?: NotificationsService,
   ) { }
 
-  async openProgress(reportingPeriodId: number, principal: AccessTokenPayload) {
-    this.assertPermission(principal, MAP_PERMISSIONS.PROGRESS_EDIT);
+  async openProgress(
+    reportingPeriodId: number,
+    principal: AccessTokenPayload,
+    requestedOwnerOrganizationId?: number,
+  ) {
     const period = await this.requirePeriod(reportingPeriodId);
+    // Đơn vị báo cáo tiến độ luôn là đơn vị của người dùng; admin phải chọn
+    // rõ một đơn vị phối hợp được phân công của nhiệm vụ.
+    const ownerOrganizationId = principal.isAdmin
+      ? requestedOwnerOrganizationId
+      : principal.organizationId;
     if (
-      !period.task.collaboratorOrganizationIds.includes(
-        principal.organizationId,
-      )
+      !ownerOrganizationId ||
+      !period.task.collaboratorOrganizationIds.includes(ownerOrganizationId)
     ) {
       throw new ForbiddenException({
         errorCode: ErrorCode.ONLY_AN_ASSIGNED_COLLABORATOR_MAY_REPORT,
@@ -44,7 +50,7 @@ export class ReportsService {
     const workspace = await this.repository.findOrCreateWorkspace(
       reportingPeriodId,
       ReportKind.PROGRESS,
-      principal.organizationId,
+      ownerOrganizationId,
     );
     if (!workspace) {
       throw new ConflictException({
@@ -59,7 +65,6 @@ export class ReportsService {
     reportingPeriodId: number,
     principal: AccessTokenPayload,
   ) {
-    this.assertPermission(principal, MAP_PERMISSIONS.CONSOLIDATED_EDIT);
     const period = await this.requirePeriod(reportingPeriodId);
     // Cả nhiệm vụ đột xuất lẫn định kỳ đều có kỳ báo cáo (đột xuất được cấp 1
     // kỳ khi tạo), nên lead lập báo cáo tổng hợp gửi cơ quan giao cho cả hai.
@@ -93,7 +98,6 @@ export class ReportsService {
     kind: ReportKind,
     principal: AccessTokenPayload,
   ) {
-    this.assertPermission(principal, MAP_PERMISSIONS.TASKS_READ);
     const workspace = await this.requireWorkspace(workspaceId, kind);
     this.assertReadScope(workspace, principal);
     return workspace;
@@ -103,19 +107,9 @@ export class ReportsService {
     reportingPeriodId: number,
     principal: AccessTokenPayload,
   ) {
-    this.assertPermission(principal, MAP_PERMISSIONS.TASKS_READ);
     const period = await this.requirePeriod(reportingPeriodId);
-    const globalTaskScope = can(principal, MAP_PERMISSIONS.TASKS_READ_ALL);
-    if (
-      !globalTaskScope &&
-      period.task.leadOrganizationId !== principal.organizationId
-    ) {
-      throw new ForbiddenException(
-        'Only the lead organization may list reports',
-      );
-    }
-    if (!principal.isAdmin) {
-      this.assertPermission(principal, MAP_PERMISSIONS.PROGRESS_REVIEW);
+    if (!canAccessTask(principal, period.task)) {
+      throw new ForbiddenException(ErrorCode.REPORT_IS_OUTSIDE_YOUR_SCOPE);
     }
     return this.repository.listPeriodWorkspaces(reportingPeriodId);
   }
@@ -127,10 +121,6 @@ export class ReportsService {
     principal: AccessTokenPayload,
     meta: RequestMeta = {},
   ) {
-    this.assertPermission(
-      principal,
-      kind === ReportKind.PROGRESS ? MAP_PERMISSIONS.PROGRESS_EDIT : MAP_PERMISSIONS.CONSOLIDATED_EDIT,
-    );
     const workspace = await this.requireWorkspace(workspaceId, kind);
     this.assertOwner(workspace, principal);
     this.assertDraftEditable(workspace);
@@ -150,10 +140,6 @@ export class ReportsService {
     principal: AccessTokenPayload,
     meta: RequestMeta = {},
   ) {
-    this.assertPermission(
-      principal,
-      kind === ReportKind.PROGRESS ? MAP_PERMISSIONS.PROGRESS_SUBMIT : MAP_PERMISSIONS.CONSOLIDATED_SUBMIT,
-    );
     const workspace = await this.requireWorkspace(workspaceId, kind);
     this.assertOwner(workspace, principal);
     this.assertDraftEditable(workspace);
@@ -248,7 +234,6 @@ export class ReportsService {
   }
 
   async history(query: ReportHistoryQueryDto, principal: AccessTokenPayload) {
-    this.assertPermission(principal, MAP_PERMISSIONS.REPORT_HISTORY_READ);
     if (
       query.submittedFrom &&
       query.submittedTo &&
@@ -258,13 +243,12 @@ export class ReportsService {
         'submittedFrom must not be after submittedTo',
       );
     }
-    const globalTaskScope = can(principal, MAP_PERMISSIONS.TASKS_READ_ALL);
     const result = await this.repository.listHistory({
       ...query,
       taskCode: query.taskCode?.trim() || undefined,
       taskName: query.taskName?.trim() || undefined,
       organizationId: principal.organizationId,
-      globalScope: globalTaskScope,
+      globalScope: principal.isAdmin === true,
     });
     return {
       data: result.data,
@@ -342,15 +326,8 @@ export class ReportsService {
     workspace: ReportWorkspaceView,
     principal: AccessTokenPayload,
   ) {
-    if (
-      can(principal, MAP_PERMISSIONS.TASKS_READ_ALL) ||
-      workspace.reportingPeriod.task.leadOrganizationId ===
-      principal.organizationId ||
-      (workspace.kind === ReportKind.PROGRESS &&
-        workspace.ownerOrganizationId === principal.organizationId)
-    ) {
-      return;
-    }
+    // Mọi đơn vị tham gia nhiệm vụ (giao/chủ trì/phối hợp) đều đọc được báo cáo.
+    if (canAccessTask(principal, workspace.reportingPeriod.task)) return;
     throw new ForbiddenException(ErrorCode.REPORT_IS_OUTSIDE_YOUR_SCOPE);
   }
 
@@ -358,17 +335,15 @@ export class ReportsService {
     workspace: ReportWorkspaceView,
     principal: AccessTokenPayload,
   ) {
-    const permission =
+    // Duyệt theo trách nhiệm nhiệm vụ: chủ trì duyệt tiến độ, cơ quan giao duyệt
+    // tổng hợp; admin bỏ qua cả hai.
+    if (principal.isAdmin) return;
+    const task = workspace.reportingPeriod.task;
+    const reviewerOrganizationId =
       workspace.kind === ReportKind.PROGRESS
-        ? MAP_PERMISSIONS.PROGRESS_REVIEW
-        : MAP_PERMISSIONS.CONSOLIDATED_REVIEW;
-    this.assertPermission(principal, permission);
-    if (
-      workspace.kind === ReportKind.PROGRESS &&
-      !principal.isAdmin &&
-      workspace.reportingPeriod.task.leadOrganizationId !==
-      principal.organizationId
-    ) {
+        ? task.leadOrganizationId
+        : task.assigningOrganizationId;
+    if (reviewerOrganizationId !== principal.organizationId) {
       throw new ForbiddenException(ErrorCode.INVALID_TASK_RESPONSIBILITY);
     }
   }
@@ -404,13 +379,6 @@ export class ReportsService {
       workspace.latestVersion?.status !== ReportStatus.APPROVED
     ) {
       throw new ConflictException(ErrorCode.REPORT_IS_NOT_APPROVED);
-    }
-  }
-
-  private assertPermission(principal: AccessTokenPayload, permission: string) {
-    if (!principal.isAdmin && !principal.permissions.includes(permission)) {
-      const label = PERMISSION_LABELS.get(permission);
-      throw new ForbiddenException(`${label} is required`);
     }
   }
 

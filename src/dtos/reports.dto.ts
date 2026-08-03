@@ -12,6 +12,11 @@ export class RejectReportDto extends createZodDto(
   z.strictObject({ reason: z.string().min(1).max(1000) }),
 ) {}
 
+const openProgressQuery = z.strictObject({
+  ownerOrganizationId: z.coerce.number().int().optional(),
+});
+export class OpenProgressQueryDto extends createZodDto(openProgressQuery) {}
+
 export class ReportHistoryQueryDto extends createZodDto(
   z.strictObject({
     page: z.coerce.number().int().min(1).default(1),

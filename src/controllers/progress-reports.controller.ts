@@ -7,6 +7,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
   Req,
   UploadedFile,
   UseInterceptors,
@@ -16,9 +17,12 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ReportKind } from '@prisma/client';
 import type { Request } from 'express';
 import { CurrentUser } from '../decorators/current-user.decorator';
-import { Permissions } from '../decorators/permissions.decorator';
 import { ResponseMessage } from '../decorators/response-message.decorator';
-import { RejectReportDto, SaveReportDraftDto } from '../dtos/reports.dto';
+import {
+  OpenProgressQueryDto,
+  RejectReportDto,
+  SaveReportDraftDto,
+} from '../dtos/reports.dto';
 import { FilesService } from '../services/files.service';
 import { ReportsService } from '../services/reports.service';
 import type { AccessTokenPayload } from '../types/auth';
@@ -36,16 +40,19 @@ export class ProgressReportsController {
   ) { }
 
   @Get('periods/:periodId')
-  @Permissions('progress.edit')
   open(
     @Param('periodId', ParseIntPipe) periodId: number,
+    @Query() query: OpenProgressQueryDto,
     @CurrentUser() principal: AccessTokenPayload,
   ) {
-    return this.reports.openProgress(periodId, principal);
+    return this.reports.openProgress(
+      periodId,
+      principal,
+      query.ownerOrganizationId,
+    );
   }
 
   @Get(':id')
-  @Permissions('tasks.read')
   get(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() principal: AccessTokenPayload,
@@ -54,7 +61,6 @@ export class ProgressReportsController {
   }
 
   @Patch(':id')
-  @Permissions('progress.edit')
   @ResponseMessage('Lưu báo cáo thành công')
   save(
     @Param('id', ParseIntPipe) id: number,
@@ -72,7 +78,6 @@ export class ProgressReportsController {
   }
 
   @Post(':id/submit')
-  @Permissions('progress.submit')
   @ResponseMessage('Gửi báo cáo thành công')
   submit(
     @Param('id', ParseIntPipe) id: number,
@@ -88,7 +93,6 @@ export class ProgressReportsController {
   }
 
   @Post(':id/approve')
-  @Permissions('progress.review')
   @ResponseMessage('Phê duyệt báo cáo thành công')
   approve(
     @Param('id', ParseIntPipe) id: number,
@@ -104,7 +108,6 @@ export class ProgressReportsController {
   }
 
   @Post(':id/reject')
-  @Permissions('progress.review')
   @ResponseMessage('Từ chối báo cáo thành công')
   reject(
     @Param('id', ParseIntPipe) id: number,
@@ -122,7 +125,6 @@ export class ProgressReportsController {
   }
 
   @Post(':id/return')
-  @Permissions('progress.review')
   @ResponseMessage('Trả lại báo cáo thành công')
   returnReport(
     @Param('id', ParseIntPipe) id: number,
@@ -140,7 +142,6 @@ export class ProgressReportsController {
   }
 
   @Post(':id/files')
-  @Permissions('progress.edit')
   @ResponseMessage('Tải tệp lên thành công')
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file', privateUploadOptions()))
@@ -159,7 +160,6 @@ export class ProgressReportsController {
   }
 
   @Delete(':id/files/:fileId')
-  @Permissions('progress.edit')
   @ResponseMessage('Xóa tệp thành công')
   removeFile(
     @Param('id', ParseIntPipe) id: number,
@@ -176,7 +176,6 @@ export class ProgressReportsController {
   }
 
   @Get(':id/files/:fileId/download')
-  @Permissions('tasks.read')
   async download(
     @Param('id', ParseIntPipe) id: number,
     @Param('fileId', ParseIntPipe) fileId: number,

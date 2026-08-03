@@ -117,6 +117,7 @@ export interface PeriodReportContext {
   task: {
     id: number;
     type: TaskType;
+    assigningOrganizationId: number;
     leadOrganizationId: number;
     completedAt: Date | null;
     deletedAt: Date | null;
@@ -225,6 +226,7 @@ export class ReportsRepository {
       task: {
         id: row.task.id,
         type: row.task.type,
+        assigningOrganizationId: row.task.assigningOrganizationId,
         leadOrganizationId: row.task.leadOrganizationId,
         completedAt: row.task.completedAt,
         deletedAt: row.task.deletedAt,
@@ -502,19 +504,15 @@ export class ReportsRepository {
   }
 
   async listHistory(filters: HistoryFilters) {
-    const workspace: Prisma.ReportWorkspaceWhereInput = filters.globalScope
+    // Phạm vi lịch sử theo nhiệm vụ: mọi đơn vị tham gia (giao/chủ trì/phối hợp)
+    // đều thấy; admin (globalScope) không giới hạn.
+    const taskScope: Prisma.TaskWhereInput = filters.globalScope
       ? {}
       : {
         OR: [
-          {
-            reportingPeriod: {
-              task: { leadOrganizationId: filters.organizationId },
-            },
-          },
-          {
-            kind: ReportKind.PROGRESS,
-            ownerOrganizationId: filters.organizationId,
-          },
+          { assigningOrganizationId: filters.organizationId },
+          { leadOrganizationId: filters.organizationId },
+          { collaborators: { some: { organizationId: filters.organizationId } } },
         ],
       };
     const where: Prisma.ReportVersionWhereInput = {
@@ -525,13 +523,13 @@ export class ReportsRepository {
         ...(filters.submittedTo ? { lte: new Date(filters.submittedTo) } : {}),
       },
       workspace: {
-        ...workspace,
         reportingPeriod: {
           ...(filters.reportingPeriod
             ? { frequency: filters.reportingPeriod }
             : {}),
           ...(filters.dueAt ? { dueAt: new Date(filters.dueAt) } : {}),
           task: {
+            ...taskScope,
             ...(filters.taskCode
               ? {
                 code: {

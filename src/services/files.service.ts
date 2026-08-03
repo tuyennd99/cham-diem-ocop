@@ -26,7 +26,7 @@ import {
   inspectDocument,
 } from '../utils/document-files';
 import { MAX_DRAFT_BYTES, storageRoot } from '../utils/private-storage';
-import { can, canAny, assertPermission } from '../utils/principal';
+import { canAccessTask } from '../utils/task-access';
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -155,11 +155,6 @@ export class FilesService {
   ) {
     const context = await this.repository.findDraftContext(workspaceId);
     if (!context) throw new NotFoundException('Report workspace not found');
-    const permission =
-      context.kind === ReportKind.PROGRESS
-        ? 'progress.edit'
-        : 'consolidated.edit';
-    assertPermission(principal, permission);
     if (
       !principal.isAdmin &&
       (context.ownerOrganizationId !== principal.organizationId ||
@@ -188,18 +183,8 @@ export class FilesService {
     context: DraftFileContext,
     principal: AccessTokenPayload,
   ) {
-    if (!canAny(principal, 'tasks.read', 'report_history.read')) {
-      throw new ForbiddenException('Report read permission is required');
-    }
-    if (
-      can(principal, 'tasks.read.all') ||
-      context.reportingPeriod.task.leadOrganizationId ===
-      principal.organizationId ||
-      (context.kind === ReportKind.PROGRESS &&
-        context.ownerOrganizationId === principal.organizationId)
-    ) {
-      return;
-    }
+    // Mọi đơn vị tham gia nhiệm vụ đều tải được tệp báo cáo; admin bỏ qua.
+    if (canAccessTask(principal, context.reportingPeriod.task)) return;
     throw new ForbiddenException('File is outside your report scope');
   }
 
