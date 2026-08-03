@@ -16,7 +16,13 @@ type NotificationSocketData = {
 // xác thực JWT ở handshake. Khi tạo notification, service emit tới các org room
 // tương ứng để client refetch — thay cho polling.
 @WebSocketGateway({
-  cors: { origin: true, credentials: true },
+  cors: {
+    origin: (origin, callback) => {
+      const { allowedOrigins } = env(process.env);
+      callback(null, !origin || allowedOrigins.includes(origin));
+    },
+    credentials: true,
+  },
   path: '/api/socket.io',
 })
 export class NotificationsGateway

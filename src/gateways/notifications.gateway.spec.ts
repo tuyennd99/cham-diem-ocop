@@ -1,4 +1,6 @@
 import { JwtService } from '@nestjs/jwt';
+import { GATEWAY_OPTIONS } from '@nestjs/websockets/constants';
+import type { GatewayMetadata } from '@nestjs/websockets/interfaces';
 import type { Server, Socket } from 'socket.io';
 import { NotificationsGateway } from './notifications.gateway';
 
@@ -76,5 +78,33 @@ describe('NotificationsGateway', () => {
 
     expect(next).toHaveBeenCalledWith();
     expect(join).toHaveBeenCalledWith('org:12');
+  });
+
+  it('uses the configured REST origin allowlist', () => {
+    const previousOrigins = process.env.CORS_ORIGINS;
+    process.env.CORS_ORIGINS = 'https://allowed.example,https://second.example';
+    try {
+      const options = Reflect.getMetadata(
+        GATEWAY_OPTIONS,
+        NotificationsGateway,
+      ) as GatewayMetadata;
+      const origin = options.cors?.origin;
+      expect(typeof origin).toBe('function');
+      if (typeof origin !== 'function') return;
+
+      const callback = jest.fn();
+      origin('https://allowed.example', callback);
+      expect(callback).toHaveBeenLastCalledWith(null, true);
+      origin('https://blocked.example', callback);
+      expect(callback).toHaveBeenLastCalledWith(null, false);
+      origin(undefined, callback);
+      expect(callback).toHaveBeenLastCalledWith(null, true);
+    } finally {
+      if (previousOrigins === undefined) {
+        delete process.env.CORS_ORIGINS;
+      } else {
+        process.env.CORS_ORIGINS = previousOrigins;
+      }
+    }
   });
 });

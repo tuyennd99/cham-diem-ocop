@@ -58,7 +58,7 @@ export class ReportingPeriodsService
               ...task.collaborators.map(({ organizationId }) => organizationId),
             ],
             eventKey: `REPORTING_PERIOD_OPENED:${task.id}:${period.year}:${period.sequence}`,
-            type: 'KY_BAO_CAO_MOI',
+            type: 'PERIOD_OPENED',
             title: 'Kỳ báo cáo mới được mở',
             body: `${task.code} - ${task.name}`,
             entityType: 'Task',

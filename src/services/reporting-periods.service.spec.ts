@@ -184,6 +184,7 @@ describe('ReportingPeriodsService', () => {
         eventKey: expect.stringMatching(
           /^REPORTING_PERIOD_OPENED:1:/,
         ) as string,
+        type: 'PERIOD_OPENED',
       }),
     );
   });
