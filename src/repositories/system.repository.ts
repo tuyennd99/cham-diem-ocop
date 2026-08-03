@@ -4,7 +4,6 @@ import { EntityStatus, Prisma, UserStatus } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RequestMeta } from '../types/auth';
-import { ADMIN_GROUP_CODE } from '../constants/role';
 
 const userPublicSelect = {
   id: true,
@@ -150,13 +149,10 @@ export class SystemRepository {
     });
     if (!user) return null;
 
-    const groupCodes = user.permissionGroups.map(
-      ({ permissionGroup }) => permissionGroup.code,
-    );
     return {
       status: user.status,
       organizationId: user.organizationId,
-      isAdmin: groupCodes.includes(ADMIN_GROUP_CODE),
+      isAdmin: userId === 1,
       permissions: uniq(
         user.permissionGroups.flatMap(({ permissionGroup }) =>
           permissionGroup.permissions.map(({ permission }) => permission.code),

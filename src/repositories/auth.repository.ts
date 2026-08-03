@@ -4,7 +4,6 @@ import { Prisma, UserStatus } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser, RefreshSession, RequestMeta } from '../types/auth';
-import { ADMIN_GROUP_CODE } from '../constants/role';
 
 const authUserInclude = {
   organization: { select: { id: true, code: true, name: true } },
@@ -452,9 +451,6 @@ export class AuthRepository {
   }
 
   private toAuthUser(user: AuthUserPayload): AuthUser {
-    const groupCodes = user.permissionGroups.map(
-      ({ permissionGroup }) => permissionGroup.code,
-    );
     return {
       id: user.id,
       username: user.username,
@@ -470,7 +466,7 @@ export class AuthRepository {
           permissionGroup.permissions.map(({ permission }) => permission.code),
         ),
       ),
-      isAdmin: groupCodes.includes(ADMIN_GROUP_CODE),
+      isAdmin: user.id === 1,
       status: user.status,
       lockedUntil: user.lockedUntil,
       failedLoginCount: user.failedLoginCount,

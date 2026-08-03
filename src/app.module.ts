@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import appModules from './modules';
 import { APP_GUARD } from '@nestjs/core';
+import { AccountGuard } from './guards/account.guard';
 import { CsrfGuard } from './guards/csrf.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { PermissionGuard } from './guards/permission.guard';
@@ -22,6 +23,7 @@ import { appRepositories } from './repositories';
     CsrfGuard,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: UserThrottlerGuard },
+    { provide: APP_GUARD, useClass: AccountGuard },
     { provide: APP_GUARD, useClass: PermissionGuard },
   ],
 })

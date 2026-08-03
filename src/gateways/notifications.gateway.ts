@@ -6,7 +6,9 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import type { Server, Socket } from 'socket.io';
+import { UserStatus } from '@prisma/client';
 import { env } from '../config/env';
+import { AuthRepository } from '../repositories/auth.repository';
 
 type NotificationSocketData = {
   organizationId?: number;
@@ -31,11 +33,14 @@ export class NotificationsGateway
   @WebSocketServer()
   private readonly server!: Server;
 
-  constructor(private readonly jwtService: JwtService) {}
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly authRepository: AuthRepository,
+  ) {}
 
   afterInit(server: Server) {
     server.use((client, next) => {
-      void (async () => {
+      return (async () => {
         try {
           const header = client.handshake.headers.authorization;
           const token =
@@ -43,17 +48,19 @@ export class NotificationsGateway
             (header?.startsWith('Bearer ') ? header.slice(7) : undefined);
           if (!token) throw new Error('missing token');
           const payload = await this.jwtService.verifyAsync<{
-            organizationId?: number;
+            sub?: number;
           }>(token, {
             secret: env(process.env).jwtSecret,
             algorithms: ['HS256'],
             issuer: 'congan-api',
             audience: 'congan-web',
           });
-          if (!payload.organizationId)
-            throw new Error('missing organizationId');
+          if (!Number.isInteger(payload.sub)) throw new Error('missing sub');
+          const user = await this.authRepository.findUserById(payload.sub!);
+          if (!user || user.status !== UserStatus.ACTIVE)
+            throw new Error('inactive account');
           (client.data as NotificationSocketData).organizationId =
-            payload.organizationId;
+            user.organizationId;
           next();
         } catch {
           const error = new Error('Unauthorized') as Error & {

@@ -40,7 +40,7 @@ describe('PermissionGuard', () => {
     expect(repository.listEffectivePermissions).toHaveBeenCalledWith(7);
   });
 
-  it('allows an ACTIVE ADMIN group without requiring every permission row', async () => {
+  it('allows an ACTIVE admin (user id 1) without requiring every permission row', async () => {
     const repository = {
       listEffectivePermissions: jest.fn().mockResolvedValue({
         status: 'ACTIVE',
@@ -58,9 +58,11 @@ describe('PermissionGuard', () => {
     await expect(guard.canActivate(contextWith({ sub: 1 }))).resolves.toBe(
       true,
     );
+    // Admin is derived from user id 1 by the repository, never a group code.
+    expect(repository.listEffectivePermissions).toHaveBeenCalledWith(1);
   });
 
-  it('rejects a LOCKED ADMIN group', async () => {
+  it('rejects a LOCKED admin (user id 1)', async () => {
     const repository = {
       listEffectivePermissions: jest.fn().mockResolvedValue({
         status: 'LOCKED',
