@@ -1,47 +1,74 @@
-import { Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import {
   OnGatewayConnection,
+  OnGatewayInit,
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
 import type { Server, Socket } from 'socket.io';
 import { env } from '../config/env';
 
+type NotificationSocketData = {
+  organizationId?: number;
+};
+
 // Realtime notification: mỗi socket join room theo tổ chức (org:{id}) sau khi
 // xác thực JWT ở handshake. Khi tạo notification, service emit tới các org room
 // tương ứng để client refetch — thay cho polling.
 @WebSocketGateway({
-  cors: { origin: true, credentials: true },
+  cors: {
+    origin: (origin, callback) => {
+      const { allowedOrigins } = env(process.env);
+      callback(null, !origin || allowedOrigins.includes(origin));
+    },
+    credentials: true,
+  },
+  path: '/api/socket.io',
 })
-export class NotificationsGateway implements OnGatewayConnection {
-  private readonly logger = new Logger(NotificationsGateway.name);
-
+export class NotificationsGateway
+  implements OnGatewayConnection, OnGatewayInit
+{
   @WebSocketServer()
   private readonly server!: Server;
 
   constructor(private readonly jwtService: JwtService) {}
 
+  afterInit(server: Server) {
+    server.use((client, next) => {
+      void (async () => {
+        try {
+          const header = client.handshake.headers.authorization;
+          const token =
+            (client.handshake.auth?.token as string | undefined) ??
+            (header?.startsWith('Bearer ') ? header.slice(7) : undefined);
+          if (!token) throw new Error('missing token');
+          const payload = await this.jwtService.verifyAsync<{
+            organizationId?: number;
+          }>(token, {
+            secret: env(process.env).jwtSecret,
+            algorithms: ['HS256'],
+            issuer: 'congan-api',
+            audience: 'congan-web',
+          });
+          if (!payload.organizationId)
+            throw new Error('missing organizationId');
+          (client.data as NotificationSocketData).organizationId =
+            payload.organizationId;
+          next();
+        } catch {
+          const error = new Error('Unauthorized') as Error & {
+            data: { code: string };
+          };
+          error.data = { code: 'UNAUTHORIZED' };
+          next(error);
+        }
+      })();
+    });
+  }
+
   async handleConnection(client: Socket) {
-    try {
-      const header = client.handshake.headers.authorization;
-      const token =
-        (client.handshake.auth?.token as string | undefined) ??
-        (header?.startsWith('Bearer ') ? header.slice(7) : undefined);
-      if (!token) throw new Error('missing token');
-      const payload = await this.jwtService.verifyAsync<{
-        organizationId?: number;
-      }>(token, {
-        secret: env(process.env).jwtSecret,
-        algorithms: ['HS256'],
-        issuer: 'congan-api',
-        audience: 'congan-web',
-      });
-      if (!payload.organizationId) throw new Error('missing organizationId');
-      await client.join(`org:${payload.organizationId}`);
-    } catch {
-      client.disconnect(true);
-    }
+    const { organizationId } = client.data as NotificationSocketData;
+    await client.join(`org:${organizationId}`);
   }
 
   notifyOrganizations(organizationIds: number[]) {

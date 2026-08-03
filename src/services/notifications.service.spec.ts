@@ -14,6 +14,7 @@ describe('NotificationsService', () => {
       | 'findDeadlineTargets'
     >
   >;
+  let gateway: { notifyOrganizations: jest.Mock };
   let service: NotificationsService;
 
   beforeEach(() => {
@@ -24,9 +25,10 @@ describe('NotificationsService', () => {
       createForActiveUsers: jest.fn(),
       findDeadlineTargets: jest.fn(),
     };
+    gateway = { notifyOrganizations: jest.fn() };
     service = new NotificationsService(
       repository as NotificationsRepository,
-      { notifyOrganizations: jest.fn() } as unknown as NotificationsGateway,
+      gateway as unknown as NotificationsGateway,
     );
   });
 
@@ -53,6 +55,20 @@ describe('NotificationsService', () => {
       entityType: 'Task',
       entityId: 44,
     });
+  });
+
+  it('does not emit when no notification row was created', async () => {
+    repository.createForActiveUsers.mockResolvedValue(0);
+    await service.createForOrganization({
+      organizationId: 12,
+      eventKey: 'TASK_ASSIGNED:44',
+      type: 'GIAO',
+      title: 'New task',
+      entityType: 'Task',
+      entityId: 44,
+    });
+
+    expect(gateway.notifyOrganizations).not.toHaveBeenCalled();
   });
 
   it('uses stable event keys for one-time near-due and overdue generation', async () => {
@@ -92,6 +108,8 @@ describe('NotificationsService', () => {
         organizationIds: [2, 3],
         eventKey: 'REPORTING_PERIOD_DUE_SOON:10',
         type: 'SAP_DEN_HAN',
+        entityType: 'Task',
+        entityId: 1,
       }),
     );
     expect(repository.createForActiveUsers).toHaveBeenNthCalledWith(
@@ -100,6 +118,8 @@ describe('NotificationsService', () => {
         organizationIds: [4],
         eventKey: 'REPORTING_PERIOD_OVERDUE:11',
         type: 'QUA_HAN',
+        entityType: 'Task',
+        entityId: 2,
       }),
     );
   });

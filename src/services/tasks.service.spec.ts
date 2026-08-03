@@ -280,6 +280,7 @@ describe('TasksService', () => {
       expect.objectContaining({
         organizationIds: [20, 30],
         eventKey: `TASK_ASSIGNED:${existingTask.id}`,
+        type: 'GIAO',
         entityType: 'Task',
         entityId: existingTask.id,
       }),
@@ -380,6 +381,7 @@ describe('TasksService', () => {
           type: 'DINH_KY',
           frequency: 'MONTHLY',
           periodicStartAt: '2026-07-14T00:00:00+07:00',
+          dueAt: '2026-08-01T00:00:00.000Z',
         },
         taskManager,
       ),
@@ -402,6 +404,28 @@ describe('TasksService', () => {
     await expect(
       service.close(existingTask.id, 'Kết thúc chương trình', taskManager),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('uses the canonical task-closed notification type', async () => {
+    const repository = repositoryMock();
+    const notifications = {
+      createForOrganizations: jest.fn().mockResolvedValue(3),
+    };
+    const service = new TasksService(
+      repository as unknown as TasksRepository,
+      notifications as unknown as NotificationsService,
+    );
+
+    await service.close(existingTask.id, 'Finished program', taskManager);
+
+    expect(notifications.createForOrganizations).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventKey: `TASK_CLOSED:${existingTask.id}`,
+        type: 'TASK_CLOSED',
+        entityType: 'Task',
+        entityId: existingTask.id,
+      }),
+    );
   });
 
   it('lets the assigning organization complete an ad-hoc task at any time', async () => {

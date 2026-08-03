@@ -52,7 +52,7 @@ export class NotificationsService {
       organizationIds: [organizationId],
       ...notification,
     });
-    this.gateway.notifyOrganizations([organizationId]);
+    if (created > 0) this.gateway.notifyOrganizations([organizationId]);
     return created;
   }
 
@@ -62,7 +62,7 @@ export class NotificationsService {
       ...input,
       organizationIds,
     });
-    this.gateway.notifyOrganizations(organizationIds);
+    if (created > 0) this.gateway.notifyOrganizations(organizationIds);
     return created;
   }
 
@@ -83,8 +83,8 @@ export class NotificationsService {
         type: overdue ? 'QUA_HAN' : 'SAP_DEN_HAN',
         title: overdue ? 'Nhiệm vụ đã quá hạn' : 'Nhiệm vụ sắp đến hạn',
         body: `${target.taskCode} - ${target.taskName}`,
-        entityType: 'ReportingPeriod',
-        entityId: target.periodId,
+        entityType: 'Task',
+        entityId: target.taskId,
       });
     }
     return { targets: targets.length, created };
