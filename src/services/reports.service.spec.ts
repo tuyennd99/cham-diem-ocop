@@ -319,7 +319,7 @@ describe('ReportsService', () => {
     });
   });
 
-  it('notifies the reviewer on submit and the owner on review', async () => {
+  it('uses canonical report types and navigable task targets', async () => {
     const repository = repositoryMock();
     const notifications = {
       createForOrganizations: jest.fn().mockResolvedValue(1),
@@ -334,6 +334,9 @@ describe('ReportsService', () => {
       expect.objectContaining({
         organizationIds: [lead.organizationId],
         eventKey: 'REPORT_SUBMITTED:101',
+        type: 'REPORT_SUBMITTED',
+        entityType: 'Task',
+        entityId: progressWorkspace.reportingPeriod.task.id,
       }),
     );
 
@@ -347,6 +350,25 @@ describe('ReportsService', () => {
       expect.objectContaining({
         organizationIds: [collaborator.organizationId],
         eventKey: 'REPORT_APPROVED:101',
+        type: 'REPORT_APPROVED',
+        entityType: 'Task',
+        entityId: progressWorkspace.reportingPeriod.task.id,
+      }),
+    );
+
+    await service.reject(
+      progressWorkspace.id,
+      'PROGRESS',
+      'Missing attachment',
+      lead,
+    );
+    expect(notifications.createForOrganizations).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        organizationIds: [collaborator.organizationId],
+        eventKey: 'REPORT_REJECTED:101',
+        type: 'REPORT_REJECTED',
+        entityType: 'Task',
+        entityId: progressWorkspace.reportingPeriod.task.id,
       }),
     );
   });

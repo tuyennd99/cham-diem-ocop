@@ -23,7 +23,7 @@ export class ReportsService {
   constructor(
     private readonly repository: ReportsRepository,
     private readonly notificationsService?: NotificationsService,
-  ) { }
+  ) {}
 
   async openProgress(reportingPeriodId: number, principal: AccessTokenPayload) {
     this.assertPermission(principal, 'progress.edit');
@@ -170,11 +170,11 @@ export class ReportsService {
     await this.safeNotify({
       organizationIds: [destination],
       eventKey: `REPORT_SUBMITTED:${version.id}`,
-      type: 'BAO_CAO_GUI',
+      type: 'REPORT_SUBMITTED',
       title: 'Báo cáo mới chờ duyệt',
       body: `${workspace.reportingPeriod.task.code} - ${workspace.reportingPeriod.task.name}`,
-      entityType: 'ReportVersion',
-      entityId: version.id,
+      entityType: 'Task',
+      entityId: workspace.reportingPeriod.task.id,
     });
     return version;
   }
@@ -345,7 +345,7 @@ export class ReportsService {
       principal.isAdmin ||
       principal.permissions.includes('tasks.read.all') ||
       workspace.reportingPeriod.task.leadOrganizationId ===
-      principal.organizationId ||
+        principal.organizationId ||
       (workspace.kind === ReportKind.PROGRESS &&
         workspace.ownerOrganizationId === principal.organizationId)
     ) {
@@ -367,7 +367,7 @@ export class ReportsService {
       workspace.kind === ReportKind.PROGRESS &&
       !principal.isAdmin &&
       workspace.reportingPeriod.task.leadOrganizationId !==
-      principal.organizationId
+        principal.organizationId
     ) {
       throw new ForbiddenException(
         'Only the lead organization may review progress',
@@ -425,13 +425,13 @@ export class ReportsService {
     await this.safeNotify({
       organizationIds: [workspace.ownerOrganizationId],
       eventKey: `REPORT_${result}:${versionId}`,
-      type: approved ? 'BAO_CAO_DUYET' : 'BAO_CAO_TRA',
+      type: approved ? 'REPORT_APPROVED' : 'REPORT_REJECTED',
       title: approved ? 'Báo cáo đã được duyệt' : 'Báo cáo chưa đạt yêu cầu',
       body: reason
         ? `${workspace.reportingPeriod.task.code} - ${reason}`
         : `${workspace.reportingPeriod.task.code} - ${workspace.reportingPeriod.task.name}`,
-      entityType: 'ReportVersion',
-      entityId: versionId,
+      entityType: 'Task',
+      entityId: workspace.reportingPeriod.task.id,
     });
   }
 

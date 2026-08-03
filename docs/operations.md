@@ -13,6 +13,8 @@
 
 - Internet chỉ truy cập HTTPS `443`.
 - Reverse proxy chuyển `/api` vào `127.0.0.1:3030`.
+- The `/api/socket.io` route must proxy HTTP/1.1 WebSocket upgrades, including
+  the `Upgrade` and `Connection` headers.
 - PostgreSQL chỉ nhận kết nối từ Backend; không public cổng `5432`.
 - Cấu hình `CORS_ORIGINS` đúng danh sách origin Frontend, không dùng `*`.
 
