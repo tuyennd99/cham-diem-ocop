@@ -25,7 +25,6 @@ const user = {
   passwordHash: 'password-hash',
   organizationId: 10,
   organization: { id: 10, code: 'UNIT', name: 'Test Unit' },
-  permissions: ['tasks.read'],
   status: 'ACTIVE' as const,
   lockedUntil: null,
   failedLoginCount: 0,
@@ -139,11 +138,11 @@ describe('AuthService', () => {
       meta,
     );
     expect(jwtService.signAsync).toHaveBeenCalledWith(
-      expect.not.objectContaining({ isStaff: expect.anything() }),
+      expect.not.objectContaining({ permissions: expect.anything() }),
       expect.any(Object),
     );
     expect(result.user).toEqual(
-      expect.not.objectContaining({ isStaff: expect.anything() }),
+      expect.not.objectContaining({ permissions: expect.anything() }),
     );
   });
 

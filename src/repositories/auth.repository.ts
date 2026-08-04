@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { uniq } from 'lodash';
 import { Prisma, UserStatus } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -7,18 +6,6 @@ import { AuthUser, RefreshSession, RequestMeta } from '../types/auth';
 
 const authUserInclude = {
   organization: { select: { id: true, code: true, name: true } },
-  permissionGroups: {
-    select: {
-      permissionGroup: {
-        select: {
-          code: true,
-          permissions: {
-            select: { permission: { select: { code: true } } },
-          },
-        },
-      },
-    },
-  },
 } satisfies Prisma.UserInclude;
 
 type AuthUserPayload = Prisma.UserGetPayload<{
@@ -461,11 +448,6 @@ export class AuthRepository {
       passwordHash: user.passwordHash,
       organizationId: user.organizationId,
       organization: user.organization,
-      permissions: uniq(
-        user.permissionGroups.flatMap(({ permissionGroup }) =>
-          permissionGroup.permissions.map(({ permission }) => permission.code),
-        ),
-      ),
       isAdmin: user.id === 1,
       status: user.status,
       lockedUntil: user.lockedUntil,

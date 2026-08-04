@@ -161,7 +161,6 @@ describe('ReportingPeriodsService', () => {
       service.cancel(9, 'Không còn áp dụng', {
         ...principal,
         isAdmin: false,
-        permissions: ['tasks.read', 'tasks.close'],
       }),
     ).resolves.toMatchObject({ id: 9, status: 'CANCELED' });
   });

@@ -4,23 +4,16 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { uniq } from 'lodash';
 import { hashPassword } from '../../prisma/seed/password';
-import { ADMIN_GROUP_CODE } from '../constants/role';
 import {
   CreateOrganizationDto,
-  CreatePermissionGroupDto,
   CreateProgramDto,
   CreateUserDto,
   UpdateOrganizationDto,
-  UpdatePermissionGroupDto,
   UpdateProgramDto,
   UpdateUserDto,
 } from '../dtos/system.dto';
-import {
-  type EffectivePermissions,
-  SystemRepository,
-} from '../repositories/system.repository';
+import { SystemRepository } from '../repositories/system.repository';
 import { RequestMeta } from '../types/auth';
 
 @Injectable()
@@ -56,20 +49,9 @@ export class SystemService {
             phone: input.phone?.trim() || undefined,
             passwordHash: await hashPassword(input.password),
             organizationId: input.organizationId,
-            permissionGroupIds: input.permissionGroupIds,
           },
           actorId,
           meta,
-          (actor, groups) => {
-            this.requirePermissionGroups(input.permissionGroupIds, groups);
-            this.assertCanGrant(
-              actor,
-              groups.flatMap(({ permissions }) =>
-                permissions.map(({ permission }) => permission.code),
-              ),
-              groups.some(({ code }) => code === ADMIN_GROUP_CODE),
-            );
-          },
         ),
       ),
     );
@@ -81,12 +63,6 @@ export class SystemService {
     actorId: number,
     meta: RequestMeta,
   ) {
-    if (id === 1 && input.permissionGroupIds !== undefined) {
-      throw this.forbidden(
-        'DEFAULT_ADMIN_PROTECTED',
-        'Default admin permission groups cannot be changed',
-      );
-    }
     await this.getUser(id);
     if (input.username !== undefined) {
       const duplicate = await this.repository.findUserByUsername(
@@ -115,17 +91,6 @@ export class SystemService {
           },
           actorId,
           meta,
-          (actor, groups) => {
-            if (input.permissionGroupIds === undefined) return;
-            this.requirePermissionGroups(input.permissionGroupIds, groups);
-            this.assertCanGrant(
-              actor,
-              groups.flatMap(({ permissions }) =>
-                permissions.map(({ permission }) => permission.code),
-              ),
-              groups.some(({ code }) => code === ADMIN_GROUP_CODE),
-            );
-          },
         ),
       ),
     );
@@ -317,140 +282,10 @@ export class SystemService {
     return { success: true };
   }
 
-  listPermissionGroups() {
-    return this.repository.listPermissionGroups();
-  }
-
-  async getPermissionGroup(id: number) {
-    const item = await this.repository.findPermissionGroupById(id);
-    if (!item) throw this.notFound('Permission group');
-    return item;
-  }
-
-  async createPermissionGroup(
-    input: CreatePermissionGroupDto,
-    actorId: number,
-    meta: RequestMeta,
-  ) {
-    if (await this.repository.findPermissionGroupByCode(input.code.trim())) {
-      throw this.conflict('Permission group code already exists');
-    }
-    return this.translate(() =>
-      this.repository.createPermissionGroup(
-        { ...input, code: input.code.trim(), name: input.name.trim() },
-        actorId,
-        meta,
-        (actor, permissions) => {
-          this.requirePermissions(input.permissionIds, permissions);
-          this.assertCanGrant(
-            actor,
-            permissions.map(({ code }) => code),
-          );
-        },
-      ),
-    );
-  }
-
-  async updatePermissionGroup(
-    id: number,
-    input: UpdatePermissionGroupDto,
-    actorId: number,
-    meta: RequestMeta,
-  ) {
-    const group = await this.getPermissionGroup(id);
-    if (group.code === ADMIN_GROUP_CODE) {
-      throw this.forbidden(
-        'SYSTEM_GROUP_PROTECTED',
-        'ADMIN permission group cannot be changed',
-      );
-    }
-    if (input.code !== undefined) {
-      const duplicate = await this.repository.findPermissionGroupByCode(
-        input.code.trim(),
-      );
-      if (duplicate && duplicate.id !== id) {
-        throw this.conflict('Permission group code already exists');
-      }
-    }
-    return this.translate(() =>
-      this.repository.updatePermissionGroup(
-        id,
-        {
-          ...input,
-          ...(input.code === undefined ? {} : { code: input.code.trim() }),
-          ...(input.name === undefined ? {} : { name: input.name.trim() }),
-        },
-        actorId,
-        meta,
-        (actor, permissions) => {
-          if (input.permissionIds === undefined) return;
-          this.requirePermissions(input.permissionIds, permissions);
-          this.assertCanGrant(
-            actor,
-            permissions.map(({ code }) => code),
-          );
-        },
-      ),
-    );
-  }
-
-  async deletePermissionGroup(id: number, actorId: number, meta: RequestMeta) {
-    const group = await this.getPermissionGroup(id);
-    if (group.code === ADMIN_GROUP_CODE) {
-      throw this.forbidden(
-        'SYSTEM_GROUP_PROTECTED',
-        'ADMIN permission group cannot be deleted',
-      );
-    }
-    await this.repository.deletePermissionGroup(id, actorId, meta);
-    return { success: true };
-  }
-
-  listPermissions() {
-    return this.repository.listPermissions();
-  }
-
   private async requireOrganization(id: number) {
     const item = await this.repository.findOrganizationById(id);
     if (!item) throw this.notFound('Organization');
     return item;
-  }
-
-  private requirePermissionGroups(ids: number[], items: Array<{ id: number }>) {
-    if (items.length !== uniq(ids).length) {
-      throw this.notFound('Permission group');
-    }
-  }
-
-  private requirePermissions(ids: number[], items: Array<{ id: number }>) {
-    if (items.length !== uniq(ids).length) {
-      throw this.notFound('Permission');
-    }
-  }
-
-  private assertCanGrant(
-    actor: EffectivePermissions | null,
-    permissionCodes: string[],
-    includesAdmin = false,
-  ) {
-    if (!actor) {
-      throw this.forbidden('PRIVILEGE_ESCALATION', 'Actor is unavailable');
-    }
-    if (actor.isAdmin) return;
-    if (
-      includesAdmin ||
-      permissionCodes.some((code) => !actor.permissions.includes(code))
-    ) {
-      throw this.forbidden(
-        'PRIVILEGE_ESCALATION',
-        'Cannot grant permissions you do not have',
-      );
-    }
-  }
-
-  private async requireUsers(ids: number[]) {
-    const items = await this.repository.findUsersByIds(ids);
-    if (items.length !== ids.length) throw this.notFound('User');
   }
 
   private publicUser<T extends Record<string, unknown>>(user: T) {

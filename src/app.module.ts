@@ -4,7 +4,6 @@ import { APP_GUARD } from '@nestjs/core';
 import { AccountGuard } from './guards/account.guard';
 import { CsrfGuard } from './guards/csrf.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { PermissionGuard } from './guards/permission.guard';
 import { UserThrottlerGuard } from './guards/user-throttler.guard';
 import { TaskStatusJob } from './jobs/task-status.job';
 import { PrismaService } from './prisma/prisma.service';
@@ -24,7 +23,6 @@ import { appRepositories } from './repositories';
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: UserThrottlerGuard },
     { provide: APP_GUARD, useClass: AccountGuard },
-    { provide: APP_GUARD, useClass: PermissionGuard },
   ],
 })
 export class AppModule {}

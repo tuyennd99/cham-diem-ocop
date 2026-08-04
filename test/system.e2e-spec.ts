@@ -9,8 +9,7 @@ import { Server } from 'node:http';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/config/app';
-import { PERMISSIONS_KEY } from '../src/decorators/permissions.decorator';
-import { SystemController } from '../src/controllers/system.controller';
+import { AuthRepository } from '../src/repositories/auth.repository';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { SystemRepository } from '../src/repositories/system.repository';
 import { SystemService } from '../src/services/system.service';
@@ -22,16 +21,21 @@ const safeUser = {
   organizationId: 10,
   status: 'ACTIVE',
   organization: { id: 10, code: 'UNIT', name: 'Test Unit' },
-  permissionGroups: [{ id: 3, code: 'VIEWER', name: 'Viewer' }],
   createdAt: new Date('2026-07-24T00:00:00.000Z'),
   updatedAt: new Date('2026-07-24T00:00:00.000Z'),
 };
 
-describe('System endpoints', () => {
+const activeUser = {
+  id: 1,
+  username: 'admin',
+  status: 'ACTIVE',
+  organizationId: 10,
+};
+
+describe('System endpoints (admin only)', () => {
   let app: INestApplication;
   let server: Server;
-  let accessToken: string;
-  let effectivePermissions: string[];
+  let bearerToken: string;
   const systemService = {
     listUsers: jest.fn().mockResolvedValue([safeUser]),
     getUser: jest.fn().mockResolvedValue(safeUser),
@@ -51,22 +55,10 @@ describe('System endpoints', () => {
     createProgram: jest.fn().mockResolvedValue({ id: 20 }),
     updateProgram: jest.fn().mockResolvedValue({ id: 20 }),
     deleteProgram: jest.fn().mockResolvedValue({ success: true }),
-    listPermissionGroups: jest.fn().mockResolvedValue([]),
-    getPermissionGroup: jest.fn().mockResolvedValue({ id: 30 }),
-    createPermissionGroup: jest.fn().mockResolvedValue({ id: 30 }),
-    updatePermissionGroup: jest.fn().mockResolvedValue({ id: 30 }),
-    deletePermissionGroup: jest.fn().mockResolvedValue({ success: true }),
-    listPermissions: jest.fn().mockResolvedValue([]),
   };
-  const systemRepository = {
-    listEffectivePermissions: jest.fn().mockImplementation(() =>
-      Promise.resolve({
-        status: 'ACTIVE',
-        isAdmin: false,
-        organizationId: 10,
-        permissions: effectivePermissions,
-      }),
-    ),
+  // AccountGuard resolves admin from AuthRepository.findUserById → id === 1.
+  const authRepository = {
+    findUserById: jest.fn().mockResolvedValue(activeUser),
   };
 
   beforeAll(async () => {
@@ -78,30 +70,22 @@ describe('System endpoints', () => {
     })
       .overrideProvider(SystemService)
       .useValue(systemService)
-      .overrideProvider(SystemRepository)
-      .useValue(systemRepository)
+      .overrideProvider(AuthRepository)
+      .useValue(authRepository)
       .compile();
 
-    accessToken = await moduleRef.get(JwtService).signAsync(
-      {
-        sub: 1,
-        username: 'admin',
-        organizationId: 10,
-        permissions: [
-          'users.manage',
-          'organizations.manage',
-          'programs.manage',
-          'permission_groups.manage',
-        ],
-      },
-      {
-        secret: process.env.JWT_SECRET,
-        algorithm: 'HS256',
-        issuer: 'congan-api',
-        audience: 'congan-web',
-        expiresIn: '15m',
-      },
-    );
+    bearerToken =
+      'Bearer ' +
+      (await moduleRef.get(JwtService).signAsync(
+        { sub: 1, username: 'admin', organizationId: 10 },
+        {
+          secret: process.env.JWT_SECRET,
+          algorithm: 'HS256',
+          issuer: 'congan-api',
+          audience: 'congan-web',
+          expiresIn: '15m',
+        },
+      ));
     app = moduleRef.createNestApplication();
     configureApp(app);
     await app.init();
@@ -109,8 +93,8 @@ describe('System endpoints', () => {
   });
 
   beforeEach(() => {
-    effectivePermissions = [];
     jest.clearAllMocks();
+    authRepository.findUserById.mockResolvedValue(activeUser);
   });
 
   afterAll(async () => {
@@ -118,78 +102,46 @@ describe('System endpoints', () => {
   });
 
   it.each([
-    ['/api/v1/system/users', 'users.manage'],
-    ['/api/v1/system/organizations', 'organizations.manage'],
-    ['/api/v1/system/programs', 'programs.manage'],
-    ['/api/v1/system/permission-groups', 'permission_groups.manage'],
-    ['/api/v1/system/permissions', 'permission_groups.manage'],
-  ])('protects GET %s with fresh %s permission', async (url, permission) => {
-    effectivePermissions = [permission];
+    '/api/v1/system/users',
+    '/api/v1/system/organizations',
+    '/api/v1/system/programs',
+  ])('rejects a normal user at %s', async (url) => {
+    authRepository.findUserById.mockResolvedValue({ ...activeUser, id: 2 });
     await request(server)
       .get(url)
-      .set('Authorization', `Bearer ${accessToken}`)
-      .expect(200);
-
-    effectivePermissions = [];
-    await request(server)
-      .get(url)
-      .set('Authorization', `Bearer ${accessToken}`)
+      .set('Authorization', bearerToken)
       .expect(403);
   });
 
-  it('rejects non-whitelisted user fields at the HTTP boundary', async () => {
-    effectivePermissions = ['users.manage'];
+  it('allows admin id 1 to list users', async () => {
+    authRepository.findUserById.mockResolvedValue({ ...activeUser, id: 1 });
+    await request(server)
+      .get('/api/v1/system/users')
+      .set('Authorization', bearerToken)
+      .expect(200);
+  });
 
+  it.each([
+    '/api/v1/system/permission-groups',
+    '/api/v1/system/permissions',
+  ])('removes RBAC endpoint %s', (url) =>
+    request(server).get(url).set('Authorization', bearerToken).expect(404),
+  );
+
+  it('rejects removed user group fields at the HTTP boundary', async () => {
+    authRepository.findUserById.mockResolvedValue({ ...activeUser, id: 1 });
     await request(server)
       .post('/api/v1/system/users')
-      .set('Authorization', `Bearer ${accessToken}`)
+      .set('Authorization', bearerToken)
       .send({
         username: 'managed-user',
         fullName: 'Managed User',
         password: 'strong-password-value',
         organizationId: 10,
         permissionGroupIds: [3],
-        passwordHash: 'must-not-be-accepted',
       })
       .expect(400);
     expect(systemService.createUser).not.toHaveBeenCalled();
-  });
-
-});
-
-describe('System permission metadata', () => {
-  it.each([
-    ['listUsers', 'users.manage'],
-    ['getUser', 'users.manage'],
-    ['createUser', 'users.manage'],
-    ['updateUser', 'users.manage'],
-    ['deleteUser', 'users.manage'],
-    ['lockUser', 'users.manage'],
-    ['unlockUser', 'users.manage'],
-    ['resetUserPassword', 'users.manage'],
-    ['listOrganizations', 'organizations.manage'],
-    ['getOrganization', 'organizations.manage'],
-    ['createOrganization', 'organizations.manage'],
-    ['updateOrganization', 'organizations.manage'],
-    ['deleteOrganization', 'organizations.manage'],
-    ['listPrograms', 'programs.manage'],
-    ['getProgram', 'programs.manage'],
-    ['createProgram', 'programs.manage'],
-    ['updateProgram', 'programs.manage'],
-    ['deleteProgram', 'programs.manage'],
-    ['listPermissionGroups', 'permission_groups.manage'],
-    ['getPermissionGroup', 'permission_groups.manage'],
-    ['createPermissionGroup', 'permission_groups.manage'],
-    ['updatePermissionGroup', 'permission_groups.manage'],
-    ['deletePermissionGroup', 'permission_groups.manage'],
-    ['listPermissions', 'permission_groups.manage'],
-  ])('%s requires exactly %s', (methodName, permission) => {
-    const handler = (
-      SystemController.prototype as unknown as Record<string, unknown>
-    )[methodName];
-    expect(Reflect.getMetadata(PERMISSIONS_KEY, handler as object)).toEqual([
-      permission,
-    ]);
   });
 });
 
@@ -199,15 +151,6 @@ describe('SystemService user safety', () => {
     const repository = {
       findUserByUsername: jest.fn().mockResolvedValue(null),
       findOrganizationById: jest.fn().mockResolvedValue({ id: 10 }),
-      findPermissionGroupsByIds: jest.fn().mockResolvedValue([
-        { id: 3, code: 'VIEWER', permissions: [] },
-      ]),
-      listEffectivePermissions: jest.fn().mockResolvedValue({
-        status: 'ACTIVE',
-        isAdmin: true,
-        organizationId: 10,
-        permissions: [],
-      }),
       createUser: jest
         .fn()
         .mockImplementation((data: { passwordHash: string }) => {
@@ -230,7 +173,6 @@ describe('SystemService user safety', () => {
         fullName: 'Managed User',
         password: 'strong-password-value',
         organizationId: 10,
-        permissionGroupIds: [3],
       },
       1,
       {},
@@ -258,7 +200,6 @@ describe('SystemService user safety', () => {
           fullName: 'Duplicate',
           password: 'strong-password-value',
           organizationId: 10,
-          permissionGroupIds: [],
         },
         1,
         {},
@@ -268,7 +209,6 @@ describe('SystemService user safety', () => {
       NotFoundException,
     );
   });
-
 });
 
 describe('SystemRepository security transactions', () => {

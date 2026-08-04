@@ -465,10 +465,7 @@ describe('TasksService', () => {
     const service = new TasksService(repository as unknown as TasksRepository);
 
     await expect(
-      service.complete(existingTask.id, {
-        ...unitUser,
-        permissions: [...unitUser.permissions, 'tasks.complete'],
-      }),
+      service.complete(existingTask.id, { ...unitUser }),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(repository.complete).not.toHaveBeenCalled();
   });

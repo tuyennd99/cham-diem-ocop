@@ -14,7 +14,7 @@ import { AuditLogsController } from '../src/controllers/audit-logs.controller';
 import { DashboardController } from '../src/controllers/dashboard.controller';
 import { NotificationsController } from '../src/controllers/notifications.controller';
 import { configureApp } from '../src/config/app';
-import { PERMISSIONS_KEY } from '../src/decorators/permissions.decorator';
+import { ADMIN_ONLY_KEY } from '../src/decorators/admin-only.decorator';
 import { AuditRepository } from '../src/repositories/audit.repository';
 import { DashboardRepository } from '../src/repositories/dashboard.repository';
 import { NotificationsRepository } from '../src/repositories/notifications.repository';
@@ -24,22 +24,18 @@ import { NotificationsService } from '../src/services/notifications.service';
 import type { AccessTokenPayload } from '../src/types/auth';
 
 @Injectable()
-class TestPermissionGuard implements CanActivate {
+class TestAdminGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext) {
-    const required =
-      this.reflector.getAllAndOverride<string[]>(PERMISSIONS_KEY, [
-        context.getHandler(),
-        context.getClass(),
-      ]) ?? [];
+    const adminOnly = this.reflector.getAllAndOverride<boolean>(
+      ADMIN_ONLY_KEY,
+      [context.getHandler(), context.getClass()],
+    );
     const principal = context
       .switchToHttp()
       .getRequest<Request & { user: AccessTokenPayload }>().user;
-    if (
-      !principal.isAdmin &&
-      required.some((code) => !principal.permissions.includes(code))
-    ) {
+    if (adminOnly && !principal.isAdmin) {
       throw new ForbiddenException('Insufficient permissions');
     }
     return true;
@@ -81,7 +77,7 @@ describe('Observability endpoints', () => {
         { provide: NotificationsRepository, useValue: notificationsRepository },
         { provide: DashboardRepository, useValue: dashboardRepository },
         { provide: AuditRepository, useValue: auditRepository },
-        { provide: APP_GUARD, useClass: TestPermissionGuard },
+        { provide: APP_GUARD, useClass: TestAdminGuard },
       ],
     }).compile();
 
@@ -92,14 +88,10 @@ describe('Observability endpoints', () => {
         _res: Response,
         next: NextFunction,
       ) => {
-        const permissions = String(req.headers['x-test-permissions'] ?? '')
-          .split(',')
-          .filter(Boolean);
         req.user = {
           sub: 7,
           username: 'test-user',
           organizationId: 20,
-          permissions,
           isAdmin: req.headers['x-test-admin'] === 'true',
         };
         next();

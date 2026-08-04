@@ -1,5 +1,4 @@
-import { ConflictException, Injectable } from '@nestjs/common';
-import { uniq } from 'lodash';
+import { Injectable } from '@nestjs/common';
 import { EntityStatus, Prisma, UserStatus } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -17,59 +16,7 @@ const userPublicSelect = {
   createdAt: true,
   updatedAt: true,
   organization: { select: { id: true, code: true, name: true } },
-  permissionGroups: {
-    select: {
-      permissionGroup: { select: { id: true, code: true, name: true } },
-    },
-  },
 } satisfies Prisma.UserSelect;
-
-const permissionGroupInclude = {
-  permissions: {
-    select: {
-      permission: {
-        select: { id: true, code: true, name: true, description: true },
-      },
-    },
-  },
-} satisfies Prisma.PermissionGroupInclude;
-
-const grantPermissionGroupSelect = {
-  id: true,
-  code: true,
-  permissions: {
-    select: { permission: { select: { code: true } } },
-  },
-} satisfies Prisma.PermissionGroupSelect;
-
-const grantPermissionSelect = {
-  id: true,
-  code: true,
-} satisfies Prisma.PermissionSelect;
-
-type PermissionGroupPayload = Prisma.PermissionGroupGetPayload<{
-  include: typeof permissionGroupInclude;
-}>;
-
-type GrantPermissionGroup = Prisma.PermissionGroupGetPayload<{
-  select: typeof grantPermissionGroupSelect;
-}>;
-
-type GrantPermission = Prisma.PermissionGetPayload<{
-  select: typeof grantPermissionSelect;
-}>;
-
-export interface EffectivePermissions {
-  status: UserStatus;
-  isAdmin: boolean;
-  organizationId: number;
-  permissions: string[];
-}
-
-type GrantValidator<T> = (
-  actor: EffectivePermissions | null,
-  items: T[],
-) => void;
 
 interface CreateUserData {
   username: string;
@@ -79,7 +26,6 @@ interface CreateUserData {
   phone?: string;
   passwordHash: string;
   organizationId: number;
-  permissionGroupIds: number[];
 }
 
 interface UpdateUserData {
@@ -89,7 +35,6 @@ interface UpdateUserData {
   rank?: string;
   phone?: string;
   organizationId?: number;
-  permissionGroupIds?: number[];
 }
 
 interface OrganizationData {
@@ -107,59 +52,9 @@ interface ProgramData {
   status?: EntityStatus;
 }
 
-interface PermissionGroupData {
-  code?: string;
-  name?: string;
-  description?: string;
-  permissionIds?: number[];
-}
-
 @Injectable()
 export class SystemRepository {
   constructor(private readonly prisma: PrismaService) { }
-
-  async listEffectivePermissions(
-    userId: number,
-  ): Promise<EffectivePermissions | null> {
-    return this.listEffectivePermissionsWith(this.prisma, userId);
-  }
-
-  private async listEffectivePermissionsWith(
-    client: Pick<Prisma.TransactionClient, 'user'>,
-    userId: number,
-  ): Promise<EffectivePermissions | null> {
-    const user = await client.user.findFirst({
-      where: { id: userId, deletedAt: null },
-      select: {
-        status: true,
-        organizationId: true,
-        permissionGroups: {
-          select: {
-            permissionGroup: {
-              select: {
-                code: true,
-                permissions: {
-                  select: { permission: { select: { code: true } } },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
-    if (!user) return null;
-
-    return {
-      status: user.status,
-      organizationId: user.organizationId,
-      isAdmin: userId === 1,
-      permissions: uniq(
-        user.permissionGroups.flatMap(({ permissionGroup }) =>
-          permissionGroup.permissions.map(({ permission }) => permission.code),
-        ),
-      ),
-    };
-  }
 
   listUsers() {
     return this.prisma.user.findMany({
@@ -183,28 +78,8 @@ export class SystemRepository {
     });
   }
 
-  findUsersByIds(ids: number[]) {
-    return this.prisma.user.findMany({
-      where: { id: { in: ids }, deletedAt: null },
-      select: { id: true },
-    });
-  }
-
-  async createUser(
-    data: CreateUserData,
-    actorId: number,
-    meta: RequestMeta,
-    validateGrant: GrantValidator<GrantPermissionGroup>,
-  ) {
-    return this.serializable(async (transaction) => {
-      const groups = await this.findPermissionGroupsByIdsWith(
-        transaction,
-        data.permissionGroupIds,
-      );
-      validateGrant(
-        await this.listEffectivePermissionsWith(transaction, actorId),
-        groups,
-      );
+  async createUser(data: CreateUserData, actorId: number, meta: RequestMeta) {
+    return this.prisma.$transaction(async (transaction) => {
       const user = await transaction.user.create({
         data: {
           username: data.username,
@@ -214,11 +89,6 @@ export class SystemRepository {
           phone: data.phone,
           passwordHash: data.passwordHash,
           organizationId: data.organizationId,
-          permissionGroups: {
-            create: data.permissionGroupIds.map((permissionGroupId) => ({
-              permissionGroupId,
-            })),
-          },
         },
         select: userPublicSelect,
       });
@@ -232,7 +102,6 @@ export class SystemRepository {
           afterData: {
             username: user.username,
             organizationId: user.organizationId,
-            permissionGroupIds: data.permissionGroupIds,
           },
           ...this.auditMeta(meta),
         },
@@ -246,39 +115,15 @@ export class SystemRepository {
     data: UpdateUserData,
     actorId: number,
     meta: RequestMeta,
-    validateGrant: GrantValidator<GrantPermissionGroup>,
   ) {
-    return this.serializable(async (transaction) => {
-      const { permissionGroupIds, ...fields } = data;
-      if (permissionGroupIds !== undefined) {
-        const groups = await this.findPermissionGroupsByIdsWith(
-          transaction,
-          permissionGroupIds,
-        );
-        validateGrant(
-          await this.listEffectivePermissionsWith(transaction, actorId),
-          groups,
-        );
-      }
+    return this.prisma.$transaction(async (transaction) => {
       const before = await transaction.user.findUniqueOrThrow({
         where: { id },
         select: userPublicSelect,
       });
       const user = await transaction.user.update({
         where: { id },
-        data: {
-          ...fields,
-          ...(permissionGroupIds === undefined
-            ? {}
-            : {
-              permissionGroups: {
-                deleteMany: {},
-                create: permissionGroupIds.map((permissionGroupId) => ({
-                  permissionGroupId,
-                })),
-              },
-            }),
-        },
+        data,
         select: userPublicSelect,
       });
       await transaction.auditLog.create({
@@ -508,198 +353,6 @@ export class SystemRepository {
     );
   }
 
-  async listPermissionGroups() {
-    const groups = await this.prisma.permissionGroup.findMany({
-      include: permissionGroupInclude,
-      orderBy: { code: 'asc' },
-    });
-    return groups.map((group) => this.toPermissionGroup(group));
-  }
-
-  async findPermissionGroupById(id: number) {
-    const group = await this.prisma.permissionGroup.findUnique({
-      where: { id },
-      include: permissionGroupInclude,
-    });
-    return group ? this.toPermissionGroup(group) : null;
-  }
-
-  async findPermissionGroupByCode(code: string) {
-    const group = await this.prisma.permissionGroup.findUnique({
-      where: { code },
-      include: permissionGroupInclude,
-    });
-    return group ? this.toPermissionGroup(group) : null;
-  }
-
-  findPermissionGroupsByIds(ids: number[]) {
-    return this.findPermissionGroupsByIdsWith(this.prisma, ids);
-  }
-
-  private findPermissionGroupsByIdsWith(
-    client: Pick<Prisma.TransactionClient, 'permissionGroup'>,
-    ids: number[],
-  ) {
-    return client.permissionGroup.findMany({
-      where: { id: { in: ids } },
-      select: grantPermissionGroupSelect,
-    });
-  }
-
-  findPermissionsByIds(ids: number[]) {
-    return this.findPermissionsByIdsWith(this.prisma, ids);
-  }
-
-  private findPermissionsByIdsWith(
-    client: Pick<Prisma.TransactionClient, 'permission'>,
-    ids: number[],
-  ) {
-    return client.permission.findMany({
-      where: { id: { in: ids } },
-      select: grantPermissionSelect,
-    });
-  }
-
-  async createPermissionGroup(
-    data: Required<
-      Pick<PermissionGroupData, 'code' | 'name' | 'permissionIds'>
-    > &
-      PermissionGroupData,
-    actorId: number,
-    meta: RequestMeta,
-    validateGrant: GrantValidator<GrantPermission>,
-  ) {
-    return this.serializable(async (transaction) => {
-      const permissions = await this.findPermissionsByIdsWith(
-        transaction,
-        data.permissionIds,
-      );
-      validateGrant(
-        await this.listEffectivePermissionsWith(transaction, actorId),
-        permissions,
-      );
-      const group = await transaction.permissionGroup.create({
-        data: {
-          code: data.code,
-          name: data.name,
-          description: data.description,
-          permissions: {
-            create: data.permissionIds.map((permissionId) => ({
-              permissionId,
-            })),
-          },
-        },
-        include: permissionGroupInclude,
-      });
-      await this.writeAudit(
-        transaction,
-        actorId,
-        'SYSTEM_PERMISSION_GROUP_CREATED',
-        'PermissionGroup',
-        group.id,
-        meta,
-      );
-      return this.toPermissionGroup(group);
-    });
-  }
-
-  async updatePermissionGroup(
-    id: number,
-    data: PermissionGroupData,
-    actorId: number,
-    meta: RequestMeta,
-    validateGrant: GrantValidator<GrantPermission>,
-  ) {
-    return this.serializable(async (transaction) => {
-      const { permissionIds, ...fields } = data;
-      if (permissionIds !== undefined) {
-        const permissions = await this.findPermissionsByIdsWith(
-          transaction,
-          permissionIds,
-        );
-        validateGrant(
-          await this.listEffectivePermissionsWith(transaction, actorId),
-          permissions,
-        );
-      }
-      const group = await transaction.permissionGroup.update({
-        where: { id },
-        data: {
-          ...fields,
-          ...(permissionIds === undefined
-            ? {}
-            : {
-              permissions: {
-                deleteMany: {},
-                create: permissionIds.map((permissionId) => ({
-                  permissionId,
-                })),
-              },
-            }),
-        },
-        include: permissionGroupInclude,
-      });
-      await this.writeAudit(
-        transaction,
-        actorId,
-        'SYSTEM_PERMISSION_GROUP_UPDATED',
-        'PermissionGroup',
-        id,
-        meta,
-      );
-      return this.toPermissionGroup(group);
-    });
-  }
-
-  deletePermissionGroup(id: number, actorId: number, meta: RequestMeta) {
-    return this.prisma.$transaction(async (transaction) => {
-      await transaction.$queryRaw(
-        Prisma.sql`
-          SELECT "id"
-          FROM "permission_groups"
-          WHERE "id" = ${id}
-          FOR UPDATE
-        `,
-      );
-      const assignedUsers = await transaction.userPermissionGroup.count({
-        where: { permissionGroupId: id },
-      });
-      if (assignedUsers > 0) {
-        throw new ConflictException('Permission group is assigned to users');
-      }
-      const group = await transaction.permissionGroup.delete({ where: { id } });
-      await this.writeAudit(
-        transaction,
-        actorId,
-        'SYSTEM_PERMISSION_GROUP_DELETED',
-        'PermissionGroup',
-        id,
-        meta,
-      );
-      return group;
-    });
-  }
-
-  listPermissions() {
-    return this.prisma.permission.findMany({ orderBy: { code: 'asc' } });
-  }
-
-  private async serializable<T>(
-    operation: (transaction: Prisma.TransactionClient) => Promise<T>,
-  ): Promise<T> {
-    for (let attempt = 0; ; attempt += 1) {
-      try {
-        return await this.prisma.$transaction(operation, {
-          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-        });
-      } catch (error) {
-        if ((error as { code?: unknown })?.code !== 'P2034' || attempt === 2) {
-          throw error;
-        }
-      }
-    }
-  }
-
   private revokeSessions(
     transaction: Prisma.TransactionClient,
     userId: number,
@@ -795,14 +448,6 @@ export class SystemRepository {
     });
   }
 
-  private toPermissionGroup(group: PermissionGroupPayload) {
-    const { permissions, ...fields } = group;
-    return {
-      ...fields,
-      permissions: permissions.map(({ permission }) => permission),
-    };
-  }
-
   private userAudit(
     user: Prisma.UserGetPayload<{ select: typeof userPublicSelect }>,
   ) {
@@ -813,9 +458,6 @@ export class SystemRepository {
       rank: user.rank,
       phone: user.phone,
       organizationId: user.organizationId,
-      permissionGroupIds: user.permissionGroups.map(
-        ({ permissionGroup }) => permissionGroup.id,
-      ),
     };
   }
 

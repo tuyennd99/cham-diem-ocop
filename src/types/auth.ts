@@ -21,7 +21,6 @@ export interface AuthUser {
     code: string;
     name: string;
   };
-  permissions: string[];
   isAdmin?: boolean;
   status: UserStatus;
   lockedUntil: Date | null;
@@ -34,7 +33,6 @@ export interface AccessTokenPayload {
   sub: number;
   username: string;
   organizationId: number;
-  permissions: string[];
   isAdmin?: boolean;
   iat?: number;
   exp?: number;

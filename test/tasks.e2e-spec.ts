@@ -12,28 +12,9 @@ import {
   ReportingPeriodsController,
   TasksController,
 } from '../src/controllers/tasks.controller';
-import { PermissionGuard } from '../src/guards/permission.guard';
-import { SystemRepository } from '../src/repositories/system.repository';
 import { ReportingPeriodsService } from '../src/services/reporting-periods.service';
 import { ReportsService } from '../src/services/reports.service';
 import { TasksService } from '../src/services/tasks.service';
-
-let effectivePermissions = [
-  'tasks.read',
-  'tasks.create',
-  'tasks.assign',
-  'tasks.close',
-];
-const systemRepository = {
-  listEffectivePermissions: jest.fn(() =>
-    Promise.resolve({
-      status: 'ACTIVE',
-      isAdmin: false,
-      organizationId: 10,
-      permissions: effectivePermissions,
-    }),
-  ),
-};
 
 class TestPrincipalGuard implements CanActivate {
   canActivate(context: ExecutionContext) {
@@ -42,7 +23,6 @@ class TestPrincipalGuard implements CanActivate {
       sub: 1,
       username: 'thuongtruc',
       organizationId: 10,
-      permissions: [],
     };
     return true;
   }
@@ -76,9 +56,7 @@ describe('Task endpoints', () => {
         { provide: TasksService, useValue: tasksService },
         { provide: ReportingPeriodsService, useValue: periodsService },
         { provide: ReportsService, useValue: reportsService },
-        { provide: SystemRepository, useValue: systemRepository },
         { provide: APP_GUARD, useClass: TestPrincipalGuard },
-        { provide: APP_GUARD, useClass: PermissionGuard },
       ],
     }).compile();
     app = moduleRef.createNestApplication();
@@ -92,12 +70,6 @@ describe('Task endpoints', () => {
   });
 
   beforeEach(() => {
-    effectivePermissions = [
-      'tasks.read',
-      'tasks.create',
-      'tasks.assign',
-      'tasks.close',
-    ];
     jest.clearAllMocks();
   });
 

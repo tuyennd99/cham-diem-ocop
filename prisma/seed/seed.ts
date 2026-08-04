@@ -3,40 +3,8 @@ import { createPrismaAdapter } from '../../src/prisma/client';
 import { DEFAULT_SEED_PASSWORD, hashSeedPassword } from './password';
 import { ADMIN_GROUP_CODE } from '../../src/constants/role';
 import { seedDefaultAdmin } from './admin';
-import { MAP_PERMISSIONS, LIST_PERMISSIONS } from '../../src/constants/permission';
 
 const prisma = new PrismaClient({ adapter: createPrismaAdapter() });
-
-const groups = {
-  ADMIN: LIST_PERMISSIONS.map(([code]) => code),
-  THUONG_TRUC: [
-    MAP_PERMISSIONS.TASKS_READ,
-    MAP_PERMISSIONS.TASKS_READ_ALL,
-    MAP_PERMISSIONS.TASKS_CREATE,
-    MAP_PERMISSIONS.TASKS_UPDATE,
-    MAP_PERMISSIONS.TASKS_DELETE,
-    MAP_PERMISSIONS.TASKS_ASSIGN,
-    MAP_PERMISSIONS.TASKS_CLOSE,
-    MAP_PERMISSIONS.TASKS_COMPLETE,
-    MAP_PERMISSIONS.CONSOLIDATED_REVIEW,
-    MAP_PERMISSIONS.REPORT_HISTORY_READ,
-    MAP_PERMISSIONS.DASHBOARD_READ,
-    MAP_PERMISSIONS.DASHBOARD_READ_ALL,
-    MAP_PERMISSIONS.AUDIT_READ,
-  ],
-  DON_VI: [
-    MAP_PERMISSIONS.TASKS_READ,
-    MAP_PERMISSIONS.PROGRESS_EDIT,
-    MAP_PERMISSIONS.PROGRESS_SUBMIT,
-    MAP_PERMISSIONS.PROGRESS_REVIEW,
-    MAP_PERMISSIONS.CONSOLIDATED_EDIT,
-    MAP_PERMISSIONS.CONSOLIDATED_SUBMIT,
-    MAP_PERMISSIONS.REPORT_HISTORY_READ,
-    MAP_PERMISSIONS.DASHBOARD_READ,
-  ],
-  VIEWER: [MAP_PERMISSIONS.TASKS_READ, MAP_PERMISSIONS.REPORT_HISTORY_READ, MAP_PERMISSIONS.DASHBOARD_READ],
-} as const;
-
 
 async function main() {
   const password = process.env.SEED_ADMIN_PASSWORD ?? DEFAULT_SEED_PASSWORD;
@@ -85,51 +53,11 @@ async function main() {
     },
   });
 
-  for (const [code, name] of LIST_PERMISSIONS) {
-    await prisma.permission.upsert({
-      where: { code },
-      update: { name },
-      create: { code, name },
-    });
-  }
-
-  for (const [code, permissionCodes] of Object.entries(groups)) {
-    const group = await prisma.permissionGroup.upsert({
-      where: { code },
-      update: { name: code },
-      create: { code, name: code },
-    });
-    const selected = await prisma.permission.findMany({
-      where: { code: { in: [...permissionCodes] } },
-    });
-    await prisma.permissionGroupPermission.deleteMany({
-      where: { permissionGroupId: group.id },
-    });
-    await prisma.permissionGroupPermission.createMany({
-      data: selected.map((permission) => ({
-        permissionGroupId: group.id,
-        permissionId: permission.id,
-      })),
-    });
-  }
-
-  const adminGroup = await prisma.permissionGroup.findUniqueOrThrow({
-    where: { code: ADMIN_GROUP_CODE },
-  });
   const admin = await seedDefaultAdmin(prisma, {
     passwordHash,
     organizationId: technicalAdmin.id,
   });
-  await prisma.userPermissionGroup.upsert({
-    where: {
-      userId_permissionGroupId: {
-        userId: admin.id,
-        permissionGroupId: adminGroup.id,
-      },
-    },
-    update: {},
-    create: { userId: admin.id, permissionGroupId: adminGroup.id },
-  });
+
 }
 
 main()

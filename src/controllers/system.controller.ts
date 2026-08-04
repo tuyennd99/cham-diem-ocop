@@ -12,18 +12,16 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
+import { AdminOnly } from '../decorators/admin-only.decorator';
 import { CurrentUser } from '../decorators/current-user.decorator';
-import { Permissions } from '../decorators/permissions.decorator';
 import { ResponseMessage } from '../decorators/response-message.decorator';
 import {
   CreateOrganizationDto,
-  CreatePermissionGroupDto,
   CreateProgramDto,
   CreateUserDto,
   LockUserDto,
   ResetPasswordDto,
   UpdateOrganizationDto,
-  UpdatePermissionGroupDto,
   UpdateProgramDto,
   UpdateUserDto,
 } from '../dtos/system.dto';
@@ -32,24 +30,22 @@ import type { AccessTokenPayload, RequestMeta } from '../types/auth';
 
 @ApiTags('System administration')
 @ApiBearerAuth()
+@AdminOnly()
 @Controller('system')
 export class SystemController {
   constructor(private readonly service: SystemService) {}
 
   @Get('users')
-  @Permissions('users.manage')
   listUsers() {
     return this.service.listUsers();
   }
 
   @Get('users/:id')
-  @Permissions('users.manage')
   getUser(@Param('id', ParseIntPipe) id: number) {
     return this.service.getUser(id);
   }
 
   @Post('users')
-  @Permissions('users.manage')
   @ResponseMessage('Tạo người dùng thành công')
   createUser(
     @Body() body: CreateUserDto,
@@ -60,7 +56,6 @@ export class SystemController {
   }
 
   @Patch('users/:id')
-  @Permissions('users.manage')
   @ResponseMessage('Cập nhật người dùng thành công')
   updateUser(
     @Param('id', ParseIntPipe) id: number,
@@ -77,7 +72,6 @@ export class SystemController {
   }
 
   @Delete('users/:id')
-  @Permissions('users.manage')
   @ResponseMessage('Xóa người dùng thành công')
   deleteUser(
     @Param('id', ParseIntPipe) id: number,
@@ -89,7 +83,6 @@ export class SystemController {
 
   @Post('users/:id/lock')
   @HttpCode(200)
-  @Permissions('users.manage')
   @ResponseMessage('Khóa người dùng thành công')
   lockUser(
     @Param('id', ParseIntPipe) id: number,
@@ -107,7 +100,6 @@ export class SystemController {
 
   @Post('users/:id/unlock')
   @HttpCode(200)
-  @Permissions('users.manage')
   @ResponseMessage('Mở khóa người dùng thành công')
   unlockUser(
     @Param('id', ParseIntPipe) id: number,
@@ -119,7 +111,6 @@ export class SystemController {
 
   @Post('users/:id/reset-password')
   @HttpCode(200)
-  @Permissions('users.manage')
   @ResponseMessage('Đặt lại mật khẩu thành công')
   resetUserPassword(
     @Param('id', ParseIntPipe) id: number,
@@ -136,19 +127,16 @@ export class SystemController {
   }
 
   @Get('organizations')
-  @Permissions('organizations.manage')
   listOrganizations() {
     return this.service.listOrganizations();
   }
 
   @Get('organizations/:id')
-  @Permissions('organizations.manage')
   getOrganization(@Param('id', ParseIntPipe) id: number) {
     return this.service.getOrganization(id);
   }
 
   @Post('organizations')
-  @Permissions('organizations.manage')
   @ResponseMessage('Tạo đơn vị thành công')
   createOrganization(
     @Body() body: CreateOrganizationDto,
@@ -163,7 +151,6 @@ export class SystemController {
   }
 
   @Patch('organizations/:id')
-  @Permissions('organizations.manage')
   @ResponseMessage('Cập nhật đơn vị thành công')
   updateOrganization(
     @Param('id', ParseIntPipe) id: number,
@@ -180,7 +167,6 @@ export class SystemController {
   }
 
   @Delete('organizations/:id')
-  @Permissions('organizations.manage')
   @ResponseMessage('Xóa đơn vị thành công')
   deleteOrganization(
     @Param('id', ParseIntPipe) id: number,
@@ -195,19 +181,16 @@ export class SystemController {
   }
 
   @Get('programs')
-  @Permissions('programs.manage')
   listPrograms() {
     return this.service.listPrograms();
   }
 
   @Get('programs/:id')
-  @Permissions('programs.manage')
   getProgram(@Param('id', ParseIntPipe) id: number) {
     return this.service.getProgram(id);
   }
 
   @Post('programs')
-  @Permissions('programs.manage')
   @ResponseMessage('Tạo chương trình thành công')
   createProgram(
     @Body() body: CreateProgramDto,
@@ -222,7 +205,6 @@ export class SystemController {
   }
 
   @Patch('programs/:id')
-  @Permissions('programs.manage')
   @ResponseMessage('Cập nhật chương trình thành công')
   updateProgram(
     @Param('id', ParseIntPipe) id: number,
@@ -239,7 +221,6 @@ export class SystemController {
   }
 
   @Delete('programs/:id')
-  @Permissions('programs.manage')
   @ResponseMessage('Xóa chương trình thành công')
   deleteProgram(
     @Param('id', ParseIntPipe) id: number,
@@ -247,71 +228,6 @@ export class SystemController {
     @Req() request: Request,
   ) {
     return this.service.deleteProgram(id, actor.sub, this.requestMeta(request));
-  }
-
-  @Get('permission-groups')
-  @Permissions('permission_groups.manage')
-  listPermissionGroups() {
-    return this.service.listPermissionGroups();
-  }
-
-  @Get('permission-groups/:id')
-  @Permissions('permission_groups.manage')
-  getPermissionGroup(@Param('id', ParseIntPipe) id: number) {
-    return this.service.getPermissionGroup(id);
-  }
-
-  @Post('permission-groups')
-  @Permissions('permission_groups.manage')
-  @ResponseMessage('Tạo nhóm quyền thành công')
-  createPermissionGroup(
-    @Body() body: CreatePermissionGroupDto,
-    @CurrentUser() actor: AccessTokenPayload,
-    @Req() request: Request,
-  ) {
-    return this.service.createPermissionGroup(
-      body,
-      actor.sub,
-      this.requestMeta(request),
-    );
-  }
-
-  @Patch('permission-groups/:id')
-  @Permissions('permission_groups.manage')
-  @ResponseMessage('Cập nhật nhóm quyền thành công')
-  updatePermissionGroup(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() body: UpdatePermissionGroupDto,
-    @CurrentUser() actor: AccessTokenPayload,
-    @Req() request: Request,
-  ) {
-    return this.service.updatePermissionGroup(
-      id,
-      body,
-      actor.sub,
-      this.requestMeta(request),
-    );
-  }
-
-  @Delete('permission-groups/:id')
-  @Permissions('permission_groups.manage')
-  @ResponseMessage('Xóa nhóm quyền thành công')
-  deletePermissionGroup(
-    @Param('id', ParseIntPipe) id: number,
-    @CurrentUser() actor: AccessTokenPayload,
-    @Req() request: Request,
-  ) {
-    return this.service.deletePermissionGroup(
-      id,
-      actor.sub,
-      this.requestMeta(request),
-    );
-  }
-
-  @Get('permissions')
-  @Permissions('permission_groups.manage')
-  listPermissions() {
-    return this.service.listPermissions();
   }
 
   private requestMeta(request: Request): RequestMeta {

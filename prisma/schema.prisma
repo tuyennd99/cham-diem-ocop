@@ -85,31 +85,30 @@ model Organization {
 }
 
 model User {
-  id                         Int                   @id @default(autoincrement())
-  username                   String                @unique @db.VarChar(100)
-  fullName                   String                @db.VarChar(255)
-  position                   String?               @db.VarChar(255)
-  rank                       String?               @db.VarChar(255)
-  phone                      String?               @db.VarChar(30)
-  passwordHash               String                @db.VarChar(255)
+  id                         Int              @id @default(autoincrement())
+  username                   String           @unique @db.VarChar(100)
+  fullName                   String           @db.VarChar(255)
+  position                   String?          @db.VarChar(255)
+  rank                       String?          @db.VarChar(255)
+  phone                      String?          @db.VarChar(30)
+  passwordHash               String           @db.VarChar(255)
   organizationId             Int
-  status                     UserStatus            @default(ACTIVE)
-  lockedAt                   DateTime?             @db.Timestamptz(3)
-  lockedUntil                DateTime?             @db.Timestamptz(3)
-  lockReason                 String?               @db.VarChar(500)
-  failedLoginCount           Int                   @default(0)
-  failedLoginWindowStartedAt DateTime?             @db.Timestamptz(3)
-  deletedAt                  DateTime?             @db.Timestamptz(3)
-  createdAt                  DateTime              @default(now()) @db.Timestamptz(3)
-  updatedAt                  DateTime              @updatedAt @db.Timestamptz(3)
-  organization               Organization          @relation(fields: [organizationId], references: [id])
-  permissionGroups           UserPermissionGroup[]
-  createdTasks               Task[]                @relation("TaskCreatedBy")
-  updatedTasks               Task[]                @relation("TaskUpdatedBy")
-  closedTasks                Task[]                @relation("TaskClosedBy")
-  completedTasks             Task[]                @relation("TaskCompletedBy")
-  submittedVersions          ReportVersion[]       @relation("ReportVersionSubmittedBy")
-  reviewedVersions           ReportVersion[]       @relation("ReportVersionReviewedBy")
+  status                     UserStatus       @default(ACTIVE)
+  lockedAt                   DateTime?        @db.Timestamptz(3)
+  lockedUntil                DateTime?        @db.Timestamptz(3)
+  lockReason                 String?          @db.VarChar(500)
+  failedLoginCount           Int              @default(0)
+  failedLoginWindowStartedAt DateTime?        @db.Timestamptz(3)
+  deletedAt                  DateTime?        @db.Timestamptz(3)
+  createdAt                  DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime         @updatedAt @db.Timestamptz(3)
+  organization               Organization     @relation(fields: [organizationId], references: [id])
+  createdTasks               Task[]           @relation("TaskCreatedBy")
+  updatedTasks               Task[]           @relation("TaskUpdatedBy")
+  closedTasks                Task[]           @relation("TaskClosedBy")
+  completedTasks             Task[]           @relation("TaskCompletedBy")
+  submittedVersions          ReportVersion[]  @relation("ReportVersionSubmittedBy")
+  reviewedVersions           ReportVersion[]  @relation("ReportVersionReviewedBy")
   uploadedFiles              StoredFile[]
   notifications              Notification[]
   auditLogs                  AuditLog[]
@@ -118,49 +117,6 @@ model User {
   @@index([organizationId])
   @@index([status])
   @@map("users")
-}
-
-model PermissionGroup {
-  id          Int                         @id @default(autoincrement())
-  code        String                      @unique @db.VarChar(100)
-  name        String                      @db.VarChar(255)
-  description String?
-  createdAt   DateTime                    @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime                    @updatedAt @db.Timestamptz(3)
-  permissions PermissionGroupPermission[]
-  users       UserPermissionGroup[]
-
-  @@map("permission_groups")
-}
-
-model Permission {
-  id          Int                         @id @default(autoincrement())
-  code        String                      @unique @db.VarChar(100)
-  name        String                      @db.VarChar(255)
-  description String?
-  groups      PermissionGroupPermission[]
-
-  @@map("permissions")
-}
-
-model PermissionGroupPermission {
-  permissionGroupId Int
-  permissionId      Int
-  permissionGroup   PermissionGroup @relation(fields: [permissionGroupId], references: [id], onDelete: Cascade)
-  permission        Permission      @relation(fields: [permissionId], references: [id], onDelete: Cascade)
-
-  @@id([permissionGroupId, permissionId])
-  @@map("permission_group_permissions")
-}
-
-model UserPermissionGroup {
-  userId            Int
-  permissionGroupId Int
-  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  permissionGroup   PermissionGroup @relation(fields: [permissionGroupId], references: [id], onDelete: Cascade)
-
-  @@id([userId, permissionGroupId])
-  @@map("user_permission_groups")
 }
 
 model Program {

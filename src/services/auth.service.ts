@@ -238,7 +238,6 @@ export class AuthService {
       sub: user.id,
       username: user.username,
       organizationId: user.organizationId,
-      permissions: user.permissions,
       isAdmin: Boolean(user.isAdmin),
     };
     return {
@@ -267,7 +266,6 @@ export class AuthService {
       phone: user.phone,
       organizationId: user.organizationId,
       organization: user.organization,
-      permissions: user.permissions,
       isAdmin: Boolean(user.isAdmin),
     };
   }

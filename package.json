@@ -9,7 +9,7 @@
     "node": ">=24.7 <25"
   },
   "scripts": {
-    "build": "nest build",
+    "build": "nest build --tsc",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "dev": "nest start --watch",

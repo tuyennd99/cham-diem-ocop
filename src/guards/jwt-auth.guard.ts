@@ -61,9 +61,7 @@ export class JwtAuthGuard implements CanActivate {
       Number.isFinite(payload.iat) &&
       typeof payload.exp === 'number' &&
       Number.isFinite(payload.exp) &&
-      typeof payload.username === 'string' &&
-      Array.isArray(payload.permissions) &&
-      payload.permissions.every((permission) => typeof permission === 'string')
+      typeof payload.username === 'string'
     );
   }
 

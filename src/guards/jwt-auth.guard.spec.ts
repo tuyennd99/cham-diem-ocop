@@ -7,7 +7,6 @@ const claims = {
   sub: 1,
   username: 'user',
   organizationId: 10,
-  permissions: ['tasks.read'],
   iat: 1_753_315_200,
   exp: 1_753_316_100,
 };
@@ -54,7 +53,6 @@ describe('JwtAuthGuard', () => {
     { ...claims, iat: 'now' },
     { ...claims, exp: undefined },
     { ...claims, username: 1 },
-    { ...claims, permissions: ['tasks.read', 1] },
   ])('rejects malformed claims %#', async (payload) => {
     jwtService.verifyAsync.mockResolvedValue(payload);
 
