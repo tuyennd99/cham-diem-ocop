@@ -1,7 +1,7 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import {
   Frequency,
-  PeriodStatus,
+  SubtaskStatus,
   Prisma,
   ReportStatus,
   TaskDeadlineStatus,
@@ -11,9 +11,9 @@ import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RequestMeta } from '../types/auth';
 import { calculateTaskDeadlineStatus } from '../utils/task-deadline-status';
-import { PeriodDraft, TaskView, TaskWrite } from '../constants/task';
 import { ACTIONS_TASK } from '../constants/actions';
 import { ErrorCode } from '../types/error-code';
+import { TaskView, TaskWrite } from '../types/task';
 
 const taskInclude = {
   program: { select: { id: true, code: true, name: true } },
@@ -24,8 +24,8 @@ const taskInclude = {
       organization: { select: { id: true, code: true, name: true } },
     },
   },
-  reportingPeriods: {
-    orderBy: [{ periodStartAt: 'desc' as const }, { id: 'desc' as const }],
+  subtasks: {
+    orderBy: [{ startAt: 'desc' as const }, { id: 'desc' as const }],
     include: {
       workspaces: {
         select: {
@@ -39,7 +39,6 @@ const taskInclude = {
 
 type TaskPayload = Prisma.TaskGetPayload<{ include: typeof taskInclude }>;
 
-
 @Injectable()
 export class TasksRepository {
   constructor(private readonly prisma: PrismaService) { }
@@ -51,7 +50,6 @@ export class TasksRepository {
     globalScope: boolean;
   }) {
     const where = this.taskScope(input.organizationId, input.globalScope);
-    console.log("🚀 ~ TasksRepository ~ list ~ where:", where)
     const [rows, total] = await Promise.all([
       this.prisma.task.findMany({
         where,
@@ -165,8 +163,7 @@ export class TasksRepository {
                 now,
               )
               : null,
-          frequency: input.frequency,
-          periodicStartAt: input.periodicStartAt,
+          startAt: input.startAt,
           createdById: actorId,
           updatedById: actorId,
           collaborators: {
@@ -176,13 +173,13 @@ export class TasksRepository {
           },
           ...(input.type === TaskType.DOT_XUAT
             ? {
-              reportingPeriods: {
+              subtasks: {
                 create: {
-                  frequency: null,
-                  year: input.dueAt.getFullYear(),
-                  sequence: 1,
-                  periodStartAt: now,
+                  title: input.name,
+                  startAt: now,
                   dueAt: input.dueAt,
+                  createdById: actorId,
+                  createdByOrganizationId: input.assigningOrganizationId,
                 },
               },
             }
@@ -224,7 +221,7 @@ export class TasksRepository {
         (before.completedAt !== null ||
           before.closedAt !== null ||
           (await transaction.reportWorkspace.count({
-            where: { reportingPeriod: { taskId: id } },
+            where: { subtask: { taskId: id } },
           })) > 0)
       ) {
         throw new ConflictException(
@@ -250,7 +247,7 @@ export class TasksRepository {
         include: taskInclude,
       });
       if (row.type === TaskType.DOT_XUAT && input.dueAt) {
-        await transaction.reportingPeriod.updateMany({
+        await transaction.subtask.updateMany({
           where: { taskId: id },
           data: { dueAt: input.dueAt },
         });
@@ -332,9 +329,9 @@ export class TasksRepository {
     });
   }
 
-  countOpenPeriods(taskId: number) {
-    return this.prisma.reportingPeriod.count({
-      where: { taskId, status: PeriodStatus.OPEN },
+  countOpenSubtasks(taskId: number) {
+    return this.prisma.subtask.count({
+      where: { taskId, status: SubtaskStatus.OPEN },
     });
   }
 
@@ -350,8 +347,8 @@ export class TasksRepository {
         Prisma.sql`SELECT "id" FROM "tasks" WHERE "id" = ${id} FOR UPDATE`,
       );
       if (
-        (await transaction.reportingPeriod.count({
-          where: { taskId: id, status: PeriodStatus.OPEN },
+        (await transaction.subtask.count({
+          where: { taskId: id, status: SubtaskStatus.OPEN },
         })) > 0
       ) {
         return null;
@@ -439,29 +436,24 @@ export class TasksRepository {
     });
   }
 
-  listPeriodicTasksForGeneration() {
-    return this.prisma.task.findMany({
-      where: {
-        type: TaskType.DINH_KY,
-        deletedAt: null,
-        closedAt: null,
-        frequency: { not: null },
-        periodicStartAt: { not: null },
-      },
-      select: {
-        id: true,
-        code: true,
-        name: true,
-        frequency: true,
-        periodicStartAt: true,
-        leadOrganizationId: true,
-        collaborators: { select: { organizationId: true } },
-      },
+  listSubTasks(taskId: number) {
+    return this.prisma.subtask.findMany({
+      where: { taskId },
+      orderBy: [{ startAt: 'desc' }, { id: 'desc' }],
     });
   }
 
-  async createReportingPeriods(taskId: number, periods: PeriodDraft[]) {
-    if (periods.length === 0) return 0;
+  async createSubTask(
+    taskId: number,
+    data: {
+      title: string;
+      description?: string;
+      startAt: Date;
+      dueAt: Date;
+      createdById: number;
+      createdByOrganizationId: number;
+    },
+  ) {
     return this.prisma.$transaction(async (transaction) => {
       const rows = await transaction.$queryRaw<
         { closedAt: Date | null; deletedAt: Date | null }[]
@@ -473,30 +465,35 @@ export class TasksRepository {
           FOR UPDATE
         `,
       );
-      if (!rows[0] || rows[0].closedAt || rows[0].deletedAt) return 0;
-      const result = await transaction.reportingPeriod.createMany({
-        data: periods.map((period) => ({ taskId, ...period })),
-        skipDuplicates: true,
-      });
-      return result.count;
+      if (!rows[0] || rows[0].closedAt || rows[0].deletedAt) {
+        throw new ConflictException(
+          'Không thể tạo kỳ báo cáo cho nhiệm vụ đã đóng hoặc đã xóa',
+        );
+      }
+      try {
+        return await transaction.subtask.create({
+          data: { taskId, ...data, },
+        });
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2002'
+        ) {
+          throw new ConflictException('Nhiệm vụ con trùng tên đã tồn tại');
+        }
+        throw error;
+      }
     });
   }
 
-  listReportingPeriods(taskId: number) {
-    return this.prisma.reportingPeriod.findMany({
-      where: { taskId },
-      orderBy: [{ periodStartAt: 'desc' }, { id: 'desc' }],
-    });
-  }
-
-  findReportingPeriod(id: number) {
-    return this.prisma.reportingPeriod.findUnique({
+  findSubTask(id: number) {
+    return this.prisma.subtask.findUnique({
       where: { id },
       select: { id: true, taskId: true, status: true },
     });
   }
 
-  async cancelReportingPeriod(
+  async cancelSubTask(
     id: number,
     reason: string,
     canceledAt: Date,
@@ -505,36 +502,36 @@ export class TasksRepository {
   ) {
     return this.prisma.$transaction(async (transaction) => {
       await transaction.$queryRaw(
-        Prisma.sql`SELECT "id" FROM "reporting_periods" WHERE "id" = ${id} FOR UPDATE`,
+        Prisma.sql`SELECT "id" FROM "subtasks" WHERE "id" = ${id} FOR UPDATE`,
       );
-      const before = await transaction.reportingPeriod.findUnique({
+      const before = await transaction.subtask.findUnique({
         where: { id },
       });
-      const updated = await transaction.reportingPeriod.updateMany({
-        where: { id, status: PeriodStatus.OPEN },
+      const updated = await transaction.subtask.updateMany({
+        where: { id, status: SubtaskStatus.OPEN },
         data: {
-          status: PeriodStatus.CANCELED,
+          status: SubtaskStatus.CANCELED,
           canceledAt,
           cancelReason: reason,
         },
       });
       if (updated.count !== 1) return null;
-      const after = await transaction.reportingPeriod.findUniqueOrThrow({
+      const after = await transaction.subtask.findUniqueOrThrow({
         where: { id },
       });
       await transaction.auditLog.create({
         data: {
           actorId,
-          action: ACTIONS_TASK.REPORTING_PERIOD_CANCELED,
-          entityType: 'ReportingPeriod',
+          action: ACTIONS_TASK.REPORTING_SUBTASK_CANCELED,
+          entityType: 'Subtask',
           entityId: id,
           reason,
-          beforeData: before ? this.periodAudit(before) : undefined,
-          afterData: this.periodAudit(after),
+          beforeData: before ? this.subtaskAudit(before) : undefined,
+          afterData: this.subtaskAudit(after),
           ...this.auditMeta(meta),
         },
       });
-      return transaction.reportingPeriod.findUnique({ where: { id } });
+      return transaction.subtask.findUnique({ where: { id } });
     });
   }
 
@@ -574,8 +571,8 @@ export class TasksRepository {
       collaboratorOrganizationIds: row.collaborators.map(
         ({ organizationId }) => organizationId,
       ),
-      hasSubmittedReport: row.reportingPeriods.some((period) =>
-        period.workspaces.some(
+      hasSubmittedReport: row.subtasks.some((subtask) =>
+        subtask.workspaces.some(
           (workspace) =>
             workspace.status === ReportStatus.SUBMITTED &&
             (globalScope ||
@@ -585,8 +582,7 @@ export class TasksRepository {
       ),
       dueAt: row.dueAt,
       deadlineStatus: row.deadlineStatus,
-      frequency: row.frequency,
-      periodicStartAt: row.periodicStartAt,
+      startAt: row.startAt,
       closedAt: row.closedAt,
       closeReason: row.closeReason,
       completedAt: row.completedAt,
@@ -599,19 +595,17 @@ export class TasksRepository {
       collaboratorOrganizations: row.collaborators.map(
         ({ organization }) => organization,
       ),
-      reportingPeriods: row.reportingPeriods.map((period) => ({
-        id: period.id,
-        taskId: period.taskId,
-        frequency: period.frequency,
-        year: period.year,
-        sequence: period.sequence,
-        periodStartAt: period.periodStartAt,
-        dueAt: period.dueAt,
-        status: period.status,
-        completedAt: period.completedAt,
-        canceledAt: period.canceledAt,
-        cancelReason: period.cancelReason,
-        createdAt: period.createdAt,
+      subtasks: row.subtasks.map((subtask) => ({
+        id: subtask.id,
+        taskId: subtask.taskId,
+        startAt: subtask.startAt,
+        dueAt: subtask.dueAt,
+        status: subtask.status,
+        completedAt: subtask.completedAt,
+        canceledAt: subtask.canceledAt,
+        cancelReason: subtask.cancelReason,
+        createdAt: subtask.createdAt,
+
       })),
     };
   }
@@ -627,27 +621,26 @@ export class TasksRepository {
       collaboratorOrganizationIds: task.collaboratorOrganizationIds,
       dueAt: task.dueAt?.toISOString() ?? null,
       deadlineStatus: task.deadlineStatus,
-      frequency: task.frequency,
-      periodicStartAt: task.periodicStartAt?.toISOString() ?? null,
+      startAt: task.startAt?.toISOString() ?? null,
       closedAt: task.closedAt?.toISOString() ?? null,
       completedAt: task.completedAt?.toISOString() ?? null,
       deletedAt: task.deletedAt?.toISOString() ?? null,
     };
   }
 
-  private periodAudit(period: {
+  private subtaskAudit(subtask: {
     taskId: number;
-    status: PeriodStatus;
+    status: SubtaskStatus;
     dueAt: Date;
     canceledAt: Date | null;
     cancelReason: string | null;
   }) {
     return {
-      taskId: period.taskId,
-      status: period.status,
-      dueAt: period.dueAt.toISOString(),
-      canceledAt: period.canceledAt?.toISOString() ?? null,
-      cancelReason: period.cancelReason,
+      taskId: subtask.taskId,
+      status: subtask.status,
+      dueAt: subtask.dueAt.toISOString(),
+      canceledAt: subtask.canceledAt?.toISOString() ?? null,
+      cancelReason: subtask.cancelReason,
     };
   }
 

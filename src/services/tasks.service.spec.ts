@@ -45,7 +45,7 @@ const existingTask = {
   collaboratorOrganizationIds: [30],
   dueAt: null,
   frequency: 'MONTHLY' as const,
-  periodicStartAt: new Date('2026-07-15T00:00:00+07:00'),
+  startAt: new Date('2026-07-15T00:00:00+07:00'),
   closedAt: null,
 };
 
@@ -67,7 +67,7 @@ function repositoryMock() {
     create: jest.fn().mockResolvedValue(existingTask),
     update: jest.fn().mockResolvedValue(existingTask),
     softDelete: jest.fn().mockResolvedValue(existingTask),
-    countOpenPeriods: jest.fn().mockResolvedValue(0),
+    countOpenSubtasks: jest.fn().mockResolvedValue(0),
     close: jest
       .fn()
       .mockResolvedValue({ ...existingTask, closedAt: new Date() }),
@@ -329,7 +329,7 @@ describe('TasksService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('requires at least one collaborator different from the lead', async () => {
+  it('requires at least one collaborator', async () => {
     const repository = repositoryMock();
     const service = new TasksService(repository as unknown as TasksRepository);
     const common = {
@@ -345,12 +345,6 @@ describe('TasksService', () => {
     await expect(
       service.create(
         { ...common, collaboratorOrganizationIds: [] },
-        taskManager,
-      ),
-    ).rejects.toBeInstanceOf(BadRequestException);
-    await expect(
-      service.create(
-        { ...common, collaboratorOrganizationIds: [20] },
         taskManager,
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
@@ -377,7 +371,7 @@ describe('TasksService', () => {
           ...common,
           type: 'DINH_KY',
           frequency: 'MONTHLY',
-          periodicStartAt: '2026-07-14T00:00:00+07:00',
+          startAt: '2026-07-14T00:00:00+07:00',
           dueAt: '2026-08-01T00:00:00.000Z',
         },
         taskManager,
@@ -385,11 +379,11 @@ describe('TasksService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('closes only an open periodic task with no open periods', async () => {
+  it('closes only an open periodic task with no open subtasks', async () => {
     const repository = repositoryMock();
     const service = new TasksService(repository as unknown as TasksRepository);
 
-    repository.countOpenPeriods.mockResolvedValue(1);
+    repository.countOpenSubtasks.mockResolvedValue(1);
     await expect(
       service.close(existingTask.id, 'Kết thúc chương trình', taskManager),
     ).rejects.toBeInstanceOf(ConflictException);
@@ -433,7 +427,7 @@ describe('TasksService', () => {
       type: 'DOT_XUAT' as const,
       dueAt: new Date('2026-07-28T00:00:00.000Z'),
       frequency: null,
-      periodicStartAt: null,
+      startAt: null,
     };
     repository.findById.mockResolvedValue(adHocTask);
     repository.complete.mockResolvedValue({
@@ -494,7 +488,7 @@ describe('TasksService', () => {
       type: 'DOT_XUAT' as const,
       dueAt: new Date('2026-07-28T00:00:00.000Z'),
       frequency: null,
-      periodicStartAt: null,
+      startAt: null,
     };
 
     const cases: [string, (s: TasksService) => Promise<unknown>, unknown][] = [

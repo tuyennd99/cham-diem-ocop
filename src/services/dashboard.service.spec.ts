@@ -1,6 +1,6 @@
 import {
   Frequency,
-  PeriodStatus,
+  SubtaskStatus,
   ReportStatus,
   TaskType,
 } from '@prisma/client';
@@ -30,15 +30,15 @@ describe('DashboardService', () => {
     service = new DashboardService(repository as DashboardRepository);
   });
 
-  it('counts unique tasks separately from reporting periods', async () => {
+  it('counts unique tasks separately from reporting subtasks', async () => {
     repository.loadSummaryRows.mockResolvedValue([
       taskRow({
         id: 1,
         type: TaskType.DINH_KY,
-        periods: [
-          period(1, PeriodStatus.COMPLETED, '2026-07-01T00:00:00.000Z'),
-          period(2, PeriodStatus.OPEN, '2026-08-10T00:00:00.000Z'),
-          period(3, PeriodStatus.OPEN, '2026-07-25T00:00:00.000Z', [
+        subtasks: [
+          subtask(1, SubtaskStatus.COMPLETED, '2026-07-01T00:00:00.000Z'),
+          subtask(2, SubtaskStatus.OPEN, '2026-08-10T00:00:00.000Z'),
+          subtask(3, SubtaskStatus.OPEN, '2026-07-25T00:00:00.000Z', [
             ReportStatus.SUBMITTED,
           ]),
         ],
@@ -47,9 +47,9 @@ describe('DashboardService', () => {
         id: 2,
         type: TaskType.DOT_XUAT,
         completedAt: new Date('2026-07-20T00:00:00.000Z'),
-        periods: [
-          period(4, PeriodStatus.OPEN, '2026-07-20T00:00:00.000Z'),
-          period(5, PeriodStatus.OPEN, '2026-07-29T00:00:00.000Z'),
+        subtasks: [
+          subtask(4, SubtaskStatus.OPEN, '2026-07-20T00:00:00.000Z'),
+          subtask(5, SubtaskStatus.OPEN, '2026-07-29T00:00:00.000Z'),
         ],
       }),
     ]);
@@ -57,7 +57,7 @@ describe('DashboardService', () => {
     const result = await service.summary({}, principal, now);
 
     expect(result.totalTasks).toBe(2);
-    expect(result.periodCounts.total).toBe(5);
+    expect(result.subtaskCounts.total).toBe(5);
     expect(result.taskCounts.typeCounts).toEqual({
       DINH_KY: 1,
       DOT_XUAT: 1,
@@ -66,7 +66,7 @@ describe('DashboardService', () => {
       DANG_CAP_NHAT: 1,
       HOAN_THANH: 1,
     });
-    expect(result.periodCounts.statusCounts).toEqual({
+    expect(result.subtaskCounts.statusCounts).toEqual({
       HOAN_THANH: 1,
       DANG_CAP_NHAT: 1,
       QUA_HAN: 1,
@@ -79,23 +79,23 @@ describe('DashboardService', () => {
     repository.loadSummaryRows.mockResolvedValue([
       taskRow({
         id: 1,
-        periods: [
-          period(1, PeriodStatus.COMPLETED, '2026-07-01T00:00:00.000Z', [
+        subtasks: [
+          subtask(1, SubtaskStatus.COMPLETED, '2026-07-01T00:00:00.000Z', [
             ReportStatus.SUBMITTED,
           ]),
-          period(2, PeriodStatus.OPEN, '2026-07-01T00:00:00.000Z', [
+          subtask(2, SubtaskStatus.OPEN, '2026-07-01T00:00:00.000Z', [
             ReportStatus.SUBMITTED,
           ]),
-          period(3, PeriodStatus.OPEN, '2026-07-23T23:59:59.999Z'),
-          period(4, PeriodStatus.OPEN, '2026-07-29T00:00:00.000Z'),
-          period(5, PeriodStatus.OPEN, '2026-07-29T00:00:00.001Z'),
+          subtask(3, SubtaskStatus.OPEN, '2026-07-23T23:59:59.999Z'),
+          subtask(4, SubtaskStatus.OPEN, '2026-07-29T00:00:00.000Z'),
+          subtask(5, SubtaskStatus.OPEN, '2026-07-29T00:00:00.001Z'),
         ],
       }),
     ]);
 
     const result = await service.summary({}, principal, now);
 
-    expect(result.periodCounts.statusCounts).toEqual({
+    expect(result.subtaskCounts.statusCounts).toEqual({
       HOAN_THANH: 1,
       DANG_CAP_NHAT: 1,
       QUA_HAN: 1,
@@ -149,16 +149,16 @@ function taskRow(
     type: overrides.type ?? TaskType.DINH_KY,
     completedAt: overrides.completedAt ?? null,
     closedAt: overrides.closedAt ?? null,
-    periods: overrides.periods ?? [],
+    subtasks: overrides.subtasks ?? [],
   };
 }
 
-function period(
+function subtask(
   id: number,
-  status: PeriodStatus,
+  status: SubtaskStatus,
   dueAt: string,
   workspaceStatuses: ReportStatus[] = [],
-): DashboardTaskRow['periods'][number] {
+): DashboardTaskRow['subtasks'][number] {
   return {
     id,
     frequency: Frequency.MONTHLY,

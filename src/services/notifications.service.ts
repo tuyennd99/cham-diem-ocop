@@ -12,7 +12,7 @@ export class NotificationsService {
   constructor(
     private readonly repository: NotificationsRepository,
     private readonly gateway: NotificationsGateway,
-  ) {}
+  ) { }
 
   async list(
     recipientId: number,
@@ -78,8 +78,8 @@ export class NotificationsService {
       created += await this.createForOrganizations({
         organizationIds: target.organizationIds,
         eventKey: overdue
-          ? `REPORTING_PERIOD_OVERDUE:${target.periodId}`
-          : `REPORTING_PERIOD_DUE_SOON:${target.periodId}`,
+          ? `REPORTING_SUBTASK_OVERDUE:${target.subtaskId}`
+          : `REPORTING_SUBTASK_DUE_SOON:${target.subtaskId}`,
         type: overdue ? 'QUA_HAN' : 'SAP_DEN_HAN',
         title: overdue ? 'Nhiệm vụ đã quá hạn' : 'Nhiệm vụ sắp đến hạn',
         body: `${target.taskCode} - ${target.taskName}`,

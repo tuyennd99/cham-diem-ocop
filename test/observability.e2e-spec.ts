@@ -25,7 +25,7 @@ import type { AccessTokenPayload } from '../src/types/auth';
 
 @Injectable()
 class TestAdminGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+  constructor(private readonly reflector: Reflector) { }
 
   canActivate(context: ExecutionContext) {
     const adminOnly = this.reflector.getAllAndOverride<boolean>(
@@ -124,10 +124,10 @@ describe('Observability endpoints', () => {
       .expect(200)
       .expect(({ body }) => {
         const response = body as {
-          data: { totalTasks: number; periodCounts: { total: number } };
+          data: { totalTasks: number; subtaskCounts: { total: number } };
         };
         expect(response.data.totalTasks).toBe(0);
-        expect(response.data.periodCounts.total).toBe(0);
+        expect(response.data.subtaskCounts.total).toBe(0);
       });
 
     await request(server)

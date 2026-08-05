@@ -11,7 +11,7 @@ import {
 import { createReadStream } from 'node:fs';
 import { unlink } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
-import { PeriodStatus, ReportKind, ReportStatus } from '@prisma/client';
+import { SubtaskStatus, ReportKind, ReportStatus } from '@prisma/client';
 import {
   DownloadRecord,
   DraftFileContext,
@@ -159,10 +159,10 @@ export class FilesService {
       !principal.isAdmin &&
       (context.ownerOrganizationId !== principal.organizationId ||
         (context.kind === ReportKind.PROGRESS
-          ? !context.reportingPeriod.task.collaboratorOrganizationIds.includes(
+          ? !context.subtask.task.collaboratorOrganizationIds.includes(
             principal.organizationId,
           )
-          : context.reportingPeriod.task.leadOrganizationId !==
+          : context.subtask.task.leadOrganizationId !==
           principal.organizationId))
     ) {
       throw new ForbiddenException('Report belongs to another organization');
@@ -170,9 +170,9 @@ export class FilesService {
     if (
       (context.status !== ReportStatus.DRAFT &&
         context.status !== ReportStatus.REJECTED) ||
-      context.reportingPeriod.status !== PeriodStatus.OPEN ||
-      context.reportingPeriod.task.completedAt ||
-      context.reportingPeriod.task.deletedAt
+      context.subtask.status !== SubtaskStatus.OPEN ||
+      context.subtask.task.completedAt ||
+      context.subtask.task.deletedAt
     ) {
       throw new ConflictException('Report draft is locked');
     }
@@ -184,7 +184,7 @@ export class FilesService {
     principal: AccessTokenPayload,
   ) {
     // Mọi đơn vị tham gia nhiệm vụ đều tải được tệp báo cáo; admin bỏ qua.
-    if (canAccessTask(principal, context.reportingPeriod.task)) return;
+    if (canAccessTask(principal, context.subtask.task)) return;
     throw new ForbiddenException('File is outside your report scope');
   }
 

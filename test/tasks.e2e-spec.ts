@@ -9,10 +9,10 @@ import { Server } from 'node:http';
 import request from 'supertest';
 import { configureApp } from '../src/config/app';
 import {
-  ReportingPeriodsController,
+  SubTasksController,
   TasksController,
 } from '../src/controllers/tasks.controller';
-import { ReportingPeriodsService } from '../src/services/reporting-periods.service';
+import { SubTasksService } from '../src/services/subtask.service';
 import { ReportsService } from '../src/services/reports.service';
 import { TasksService } from '../src/services/tasks.service';
 
@@ -39,22 +39,22 @@ describe('Task endpoints', () => {
     remove: jest.fn().mockResolvedValue({ id: 1, deletedAt: new Date() }),
     close: jest.fn().mockResolvedValue({ id: 1, closedAt: new Date() }),
   };
-  const periodsService = {
+  const subtasksService = {
     list: jest.fn().mockResolvedValue([]),
     cancel: jest.fn().mockResolvedValue({ id: 2, status: 'CANCELED' }),
   };
   const reportsService = {
-    listPeriodWorkspaces: jest.fn().mockResolvedValue([]),
+    listSubtaskWorkspaces: jest.fn().mockResolvedValue([]),
   };
 
   beforeAll(async () => {
     process.env.JWT_SECRET = 'test-jwt-secret-at-least-32-characters';
     process.env.CSRF_SECRET = 'test-csrf-secret-at-least-32-characters';
     const moduleRef = await Test.createTestingModule({
-      controllers: [TasksController, ReportingPeriodsController],
+      controllers: [TasksController, SubTasksController],
       providers: [
         { provide: TasksService, useValue: tasksService },
-        { provide: ReportingPeriodsService, useValue: periodsService },
+        { provide: SubTasksService, useValue: subtasksService },
         { provide: ReportsService, useValue: reportsService },
         { provide: APP_GUARD, useClass: TestPrincipalGuard },
       ],
@@ -113,13 +113,13 @@ describe('Task endpoints', () => {
       .expect(201);
   });
 
-  it('maps close and period cancellation endpoints', async () => {
+  it('maps close and subtask cancellation endpoints', async () => {
     await request(server)
       .post('/api/v1/tasks/1/close')
       .send({ reason: 'Kết thúc chương trình' })
       .expect(201);
     await request(server)
-      .post('/api/v1/reporting-periods/2/cancel')
+      .post('/api/v1/reporting-subtasks/2/cancel')
       .send({ reason: 'Không còn yêu cầu báo cáo' })
       .expect(201);
 
@@ -129,7 +129,7 @@ describe('Task endpoints', () => {
       expect.objectContaining({ sub: 1 }),
       expect.objectContaining({ requestId: expect.any(String) as string }),
     );
-    expect(periodsService.cancel).toHaveBeenCalledWith(
+    expect(subtasksService.cancel).toHaveBeenCalledWith(
       2,
       'Không còn yêu cầu báo cáo',
       expect.objectContaining({ sub: 1 }),
@@ -137,12 +137,12 @@ describe('Task endpoints', () => {
     );
   });
 
-  it('lists submitted report workspaces for a reporting period', async () => {
+  it('lists submitted report workspaces for a reporting subtask', async () => {
     await request(server)
-      .get('/api/v1/reporting-periods/2/report-workspaces')
+      .get('/api/v1/reporting-subtasks/2/report-workspaces')
       .expect(200);
 
-    expect(reportsService.listPeriodWorkspaces).toHaveBeenCalledWith(
+    expect(reportsService.listSubtaskWorkspaces).toHaveBeenCalledWith(
       2,
       expect.objectContaining({ sub: 1 }),
     );

@@ -10,7 +10,7 @@ async function main() {
   const password = process.env.SEED_ADMIN_PASSWORD ?? DEFAULT_SEED_PASSWORD;
   const passwordHash = await hashSeedPassword(password);
 
-  const [technicalAdmin, standingOffice, sampleUnit] = await Promise.all([
+  const [technicalAdmin,] = await Promise.all([
     prisma.organization.upsert({
       where: { code: ADMIN_GROUP_CODE },
       update: {
@@ -25,23 +25,7 @@ async function main() {
         isExecutingUnit: false,
       },
     }),
-    prisma.organization.upsert({
-      where: { code: 'THUONG_TRUC' },
-      update: { name: 'Thường trực nghiệp vụ', isAssigningAuthority: true },
-      create: {
-        code: 'THUONG_TRUC',
-        name: 'Thường trực nghiệp vụ',
-        isAssigningAuthority: true,
-      },
-    }),
-    prisma.organization.upsert({
-      where: { code: 'DON_VI_MAU' },
-      update: { name: 'Đơn vị nghiệp vụ mẫu' },
-      create: { code: 'DON_VI_MAU', name: 'Đơn vị nghiệp vụ mẫu' },
-    }),
   ]);
-  void standingOffice;
-  void sampleUnit;
 
   await prisma.program.upsert({
     where: { code: 'NQ57' },

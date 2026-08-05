@@ -32,7 +32,7 @@ const downloadRecord = {
     kind: 'PROGRESS',
     status: 'DRAFT',
     ownerOrganizationId: 30,
-    reportingPeriod: {
+    subtask: {
       status: 'OPEN',
       task: {
         leadOrganizationId: 20,
@@ -50,7 +50,7 @@ function repositoryMock() {
       kind: 'PROGRESS',
       status: 'DRAFT',
       ownerOrganizationId: 30,
-      reportingPeriod: {
+      subtask: {
         status: 'OPEN',
         task: {
           leadOrganizationId: 20,

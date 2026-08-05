@@ -1,37 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import {
-  Frequency,
-  PeriodStatus,
   Prisma,
-  ReportStatus,
-  TaskType,
+  SubtaskStatus
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-
-export interface DashboardFilters {
-  taskCode?: string;
-  taskName?: string;
-  frequency?: Frequency;
-  year?: number;
-  sequence?: number;
-  programId?: number;
-  dueFrom?: string;
-  dueTo?: string;
-}
-
-export interface DashboardTaskRow {
-  id: number;
-  type: TaskType;
-  completedAt: Date | null;
-  closedAt: Date | null;
-  periods: {
-    id: number;
-    frequency: Frequency | null;
-    status: PeriodStatus;
-    dueAt: Date;
-    workspaceStatuses: ReportStatus[];
-  }[];
-}
+import { DashboardFilters, DashboardTaskRow } from '../types/dashboard';
 
 @Injectable()
 export class DashboardRepository {
@@ -42,11 +15,9 @@ export class DashboardRepository {
     organizationId: number;
     globalScope: boolean;
   }): Promise<DashboardTaskRow[]> {
-    const periodWhere = this.periodWhere(input.filters);
-    const hasPeriodFilter = [
-      input.filters.frequency,
+    const subtaskWhere = this.subtaskWhere(input.filters);
+    const hasSubtaskFilter = [
       input.filters.year,
-      input.filters.sequence,
       input.filters.dueFrom,
       input.filters.dueTo,
     ].some((value) => value !== undefined);
@@ -85,7 +56,7 @@ export class DashboardRepository {
               },
             ],
           }),
-        ...(hasPeriodFilter ? { reportingPeriods: { some: periodWhere } } : {}),
+        ...(hasSubtaskFilter ? { subtasks: { some: subtaskWhere } } : {}),
       },
       select: {
         id: true,
@@ -93,12 +64,12 @@ export class DashboardRepository {
         completedAt: true,
         closedAt: true,
         leadOrganizationId: true,
-        reportingPeriods: {
-          where: periodWhere,
+        subtasks: {
+          where: subtaskWhere,
           select: {
             id: true,
-            frequency: true,
             status: true,
+            startAt: true,
             dueAt: true,
             workspaces: {
               select: { status: true, ownerOrganizationId: true },
@@ -109,11 +80,11 @@ export class DashboardRepository {
       orderBy: { id: 'asc' },
     });
 
-    return rows.map(({ reportingPeriods, leadOrganizationId, ...task }) => ({
+    return rows.map(({ subtasks, leadOrganizationId, ...task }) => ({
       ...task,
-      periods: reportingPeriods.map(({ workspaces, ...period }) => ({
-        ...period,
-        workspaceStatuses: workspaces
+      subtasks: subtasks.map(({ workspaces, ...subtask }) => ({
+        ...subtask,
+        reportStatus: workspaces
           .filter(
             ({ ownerOrganizationId }) =>
               input.globalScope ||
@@ -125,22 +96,20 @@ export class DashboardRepository {
     }));
   }
 
-  private periodWhere(
+  private subtaskWhere(
     filters: DashboardFilters,
-  ): Prisma.ReportingPeriodWhereInput {
+  ): Prisma.SubtaskWhereInput {
+    // Subtask không còn cột `year`; lọc theo năm quy về khoảng dueAt.
+    const dueAt: Prisma.DateTimeFilter = {};
+    if (filters.year) {
+      dueAt.gte = new Date(Date.UTC(filters.year, 0, 1));
+      dueAt.lt = new Date(Date.UTC(filters.year + 1, 0, 1));
+    }
+    if (filters.dueFrom) dueAt.gte = new Date(filters.dueFrom);
+    if (filters.dueTo) dueAt.lte = new Date(filters.dueTo);
     return {
-      status: { not: PeriodStatus.CANCELED },
-      ...(filters.frequency ? { frequency: filters.frequency } : {}),
-      ...(filters.year ? { year: filters.year } : {}),
-      ...(filters.sequence ? { sequence: filters.sequence } : {}),
-      ...(filters.dueFrom || filters.dueTo
-        ? {
-          dueAt: {
-            ...(filters.dueFrom ? { gte: new Date(filters.dueFrom) } : {}),
-            ...(filters.dueTo ? { lte: new Date(filters.dueTo) } : {}),
-          },
-        }
-        : {}),
+      status: { not: SubtaskStatus.CANCELED },
+      ...(Object.keys(dueAt).length ? { dueAt } : {}),
     };
   }
 }

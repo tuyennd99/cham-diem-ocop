@@ -6,7 +6,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { NotificationType, PeriodStatus, ReportKind, ReportStatus } from '@prisma/client';
+import { NotificationType, SubtaskStatus, ReportKind, ReportStatus } from '@prisma/client';
 import { ReportHistoryQueryDto } from '../dtos/reports.dto';
 import {
   ReportWorkspaceView,
@@ -27,11 +27,11 @@ export class ReportsService {
   ) { }
 
   async openProgress(
-    reportingPeriodId: number,
+    reportingSubtaskId: number,
     principal: AccessTokenPayload,
     requestedOwnerOrganizationId?: number,
   ) {
-    const period = await this.requirePeriod(reportingPeriodId);
+    const subtask = await this.requireSubtask(reportingSubtaskId);
     // Đơn vị báo cáo tiến độ luôn là đơn vị của người dùng; admin phải chọn
     // rõ một đơn vị phối hợp được phân công của nhiệm vụ.
     const ownerOrganizationId = principal.isAdmin
@@ -39,22 +39,22 @@ export class ReportsService {
       : principal.organizationId;
     if (
       !ownerOrganizationId ||
-      !period.task.collaboratorOrganizationIds.includes(ownerOrganizationId)
+      !subtask.task.collaboratorOrganizationIds.includes(ownerOrganizationId)
     ) {
       throw new ForbiddenException({
         errorCode: ErrorCode.ONLY_AN_ASSIGNED_COLLABORATOR_MAY_REPORT,
         message: 'Chỉ đơn vị được phân công phối hợp mới được báo cáo',
       });
     }
-    this.assertPeriodEditable(period);
+    this.assertSubtaskEditable(subtask);
     const workspace = await this.repository.findOrCreateWorkspace(
-      reportingPeriodId,
+      reportingSubtaskId,
       ReportKind.PROGRESS,
       ownerOrganizationId,
     );
     if (!workspace) {
       throw new ConflictException({
-        errorCode: ErrorCode.REPORTING_PERIOD_OR_ASSIGNMENT_HAS_CHANGED,
+        errorCode: ErrorCode.REPORTING_SUBTASK_OR_ASSIGNMENT_HAS_CHANGED,
         message: 'Kỳ báo cáo hoặc phân công đã thay đổi',
       });
     }
@@ -62,14 +62,14 @@ export class ReportsService {
   }
 
   async openConsolidated(
-    reportingPeriodId: number,
+    reportingSubtaskId: number,
     principal: AccessTokenPayload,
   ) {
-    const period = await this.requirePeriod(reportingPeriodId);
+    const subtask = await this.requireSubtask(reportingSubtaskId);
     // Cả nhiệm vụ đột xuất lẫn định kỳ đều có kỳ báo cáo (đột xuất được cấp 1
     // kỳ khi tạo), nên lead lập báo cáo tổng hợp gửi cơ quan giao cho cả hai.
     if (
-      period.task.leadOrganizationId !== principal.organizationId &&
+      subtask.task.leadOrganizationId !== principal.organizationId &&
       !principal.isAdmin
     ) {
       throw new ForbiddenException({
@@ -77,16 +77,16 @@ export class ReportsService {
         message: 'Chỉ cơ quan chủ trì được lập báo cáo tổng hợp',
       });
     }
-    this.assertPeriodEditable(period);
+    this.assertSubtaskEditable(subtask);
     // Lead được lập báo cáo tổng hợp bất kể báo cáo phối hợp đã duyệt hết chưa.
     const workspace = await this.repository.findOrCreateWorkspace(
-      reportingPeriodId,
+      reportingSubtaskId,
       ReportKind.CONSOLIDATED,
-      period.task.leadOrganizationId,
+      subtask.task.leadOrganizationId,
     );
     if (!workspace) {
       throw new ConflictException({
-        errorCode: ErrorCode.REPORTING_PERIOD_OR_ASSIGNMENT_HAS_CHANGED,
+        errorCode: ErrorCode.REPORTING_SUBTASK_OR_ASSIGNMENT_HAS_CHANGED,
         message: 'Kỳ báo cáo hoặc phân công đã thay đổi',
       });
     }
@@ -103,15 +103,15 @@ export class ReportsService {
     return workspace;
   }
 
-  async listPeriodWorkspaces(
-    reportingPeriodId: number,
+  async listSubtaskWorkspaces(
+    reportingSubtaskId: number,
     principal: AccessTokenPayload,
   ) {
-    const period = await this.requirePeriod(reportingPeriodId);
-    if (!canAccessTask(principal, period.task)) {
+    const subtask = await this.requireSubtask(reportingSubtaskId);
+    if (!canAccessTask(principal, subtask.task)) {
       throw new ForbiddenException(ErrorCode.REPORT_IS_OUTSIDE_YOUR_SCOPE);
     }
-    return this.repository.listPeriodWorkspaces(reportingPeriodId);
+    return this.repository.listSubtaskWorkspaces(reportingSubtaskId);
   }
 
   async saveDraft(
@@ -151,16 +151,16 @@ export class ReportsService {
     if (!version) throw new ConflictException('Report draft is locked');
     const destination =
       kind === ReportKind.PROGRESS
-        ? workspace.reportingPeriod.task.leadOrganizationId
-        : workspace.reportingPeriod.task.assigningOrganizationId;
+        ? workspace.subtask.task.leadOrganizationId
+        : workspace.subtask.task.assigningOrganizationId;
     await this.safeNotify({
       organizationIds: [destination],
       eventKey: `REPORT_SUBMITTED:${version.id}`,
       type: NotificationType.GUI_BAO_CAO,
       title: 'Báo cáo mới chờ duyệt',
-      body: `${workspace.reportingPeriod.task.code} - ${workspace.reportingPeriod.task.name}`,
+      body: `${workspace.subtask.task.code} - ${workspace.subtask.task.name}`,
       entityType: 'Task',
-      entityId: workspace.reportingPeriod.task.id,
+      entityId: workspace.subtask.task.id,
     });
     return version;
   }
@@ -269,30 +269,30 @@ export class ReportsService {
     return workspace;
   }
 
-  private async requirePeriod(id: number) {
-    const period = await this.repository.findPeriodContext(id);
-    if (!period || period.task.deletedAt) {
-      throw new NotFoundException('Reporting period not found');
+  private async requireSubtask(id: number) {
+    const subtask = await this.repository.findSubtaskContext(id);
+    if (!subtask || subtask.task.deletedAt) {
+      throw new NotFoundException('Reporting subtask not found');
     }
-    return period;
+    return subtask;
   }
 
-  private assertPeriodEditable(
-    period: Awaited<ReturnType<ReportsService['requirePeriod']>>,
+  private assertSubtaskEditable(
+    subtask: Awaited<ReturnType<ReportsService['requireSubtask']>>,
   ) {
     if (
-      period.status !== PeriodStatus.OPEN ||
-      period.task.completedAt !== null
+      subtask.status !== SubtaskStatus.OPEN ||
+      subtask.task.completedAt !== null
     ) {
-      throw new ConflictException('Reporting period is not editable');
+      throw new ConflictException('Reporting subtask is not editable');
     }
   }
 
   private assertDraftEditable(workspace: ReportWorkspaceView) {
-    this.assertPeriodEditable({
-      id: workspace.reportingPeriod.id,
-      status: workspace.reportingPeriod.status,
-      task: workspace.reportingPeriod.task,
+    this.assertSubtaskEditable({
+      id: workspace.subtask.id,
+      status: workspace.subtask.status,
+      task: workspace.subtask.task,
       approvedProgressCount: 0,
     });
     if (
@@ -311,7 +311,7 @@ export class ReportsService {
     if (workspace.ownerOrganizationId !== principal.organizationId) {
       throw new ForbiddenException('Report belongs to another organization');
     }
-    const task = workspace.reportingPeriod.task;
+    const task = workspace.subtask.task;
     // Trách nhiệm theo nhiệm vụ: PROGRESS do đơn vị phối hợp (collaborator) nộp,
     // CONSOLIDATED do đơn vị chủ trì (lead) nộp. Không phải role tài khoản.
     const validResponsibility =
@@ -327,7 +327,7 @@ export class ReportsService {
     principal: AccessTokenPayload,
   ) {
     // Mọi đơn vị tham gia nhiệm vụ (giao/chủ trì/phối hợp) đều đọc được báo cáo.
-    if (canAccessTask(principal, workspace.reportingPeriod.task)) return;
+    if (canAccessTask(principal, workspace.subtask.task)) return;
     throw new ForbiddenException(ErrorCode.REPORT_IS_OUTSIDE_YOUR_SCOPE);
   }
 
@@ -338,7 +338,7 @@ export class ReportsService {
     // Duyệt theo trách nhiệm nhiệm vụ: chủ trì duyệt tiến độ, cơ quan giao duyệt
     // tổng hợp; admin bỏ qua cả hai.
     if (principal.isAdmin) return;
-    const task = workspace.reportingPeriod.task;
+    const task = workspace.subtask.task;
     const reviewerOrganizationId =
       workspace.kind === ReportKind.PROGRESS
         ? task.leadOrganizationId
@@ -350,10 +350,10 @@ export class ReportsService {
 
   private assertSubmitted(workspace: ReportWorkspaceView) {
     if (
-      workspace.reportingPeriod.status !== PeriodStatus.OPEN ||
-      workspace.reportingPeriod.task.deletedAt
+      workspace.subtask.status !== SubtaskStatus.OPEN ||
+      workspace.subtask.task.deletedAt
     ) {
-      throw new ConflictException(ErrorCode.REPORTING_PERIOD_IS_NOT_OPEN);
+      throw new ConflictException(ErrorCode.REPORTING_SUBTASK_IS_NOT_OPEN);
     }
     if (
       workspace.status !== ReportStatus.SUBMITTED ||
@@ -366,13 +366,13 @@ export class ReportsService {
   private assertApproved(workspace: ReportWorkspaceView) {
     // Trả lại tổng hợp: duyệt đã đóng kỳ (COMPLETED), nên chấp nhận kỳ COMPLETED
     // cho tổng hợp — repository sẽ mở lại. Progress vẫn yêu cầu kỳ OPEN.
-    const period = workspace.reportingPeriod;
-    const periodOk =
-      period.status === PeriodStatus.OPEN ||
+    const subtask = workspace.subtask;
+    const subtaskOk =
+      subtask.status === SubtaskStatus.OPEN ||
       (workspace.kind === ReportKind.CONSOLIDATED &&
-        period.status === PeriodStatus.COMPLETED);
-    if (!periodOk || period.task.deletedAt || period.task.completedAt) {
-      throw new ConflictException(ErrorCode.REPORTING_PERIOD_IS_NOT_OPEN);
+        subtask.status === SubtaskStatus.COMPLETED);
+    if (!subtaskOk || subtask.task.deletedAt || subtask.task.completedAt) {
+      throw new ConflictException(ErrorCode.REPORTING_SUBTASK_IS_NOT_OPEN);
     }
     if (
       workspace.status !== ReportStatus.APPROVED ||
@@ -395,10 +395,10 @@ export class ReportsService {
       type: approved ? 'DUYET_BAO_CAO' : 'TRA_BAO_CAO',
       title: approved ? 'Báo cáo đã được duyệt' : 'Báo cáo chưa đạt yêu cầu',
       body: reason
-        ? `${workspace.reportingPeriod.task.code} - ${reason}`
-        : `${workspace.reportingPeriod.task.code} - ${workspace.reportingPeriod.task.name}`,
+        ? `${workspace.subtask.task.code} - ${reason}`
+        : `${workspace.subtask.task.code} - ${workspace.subtask.task.name}`,
       entityType: 'Task',
-      entityId: workspace.reportingPeriod.task.id,
+      entityId: workspace.subtask.task.id,
     });
   }
 

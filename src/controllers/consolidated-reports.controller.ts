@@ -34,12 +34,12 @@ export class ConsolidatedReportsController {
     private readonly files: FilesService,
   ) { }
 
-  @Get('periods/:periodId')
+  @Get('subtasks/:subtaskId')
   open(
-    @Param('periodId', ParseIntPipe) periodId: number,
+    @Param('subtaskId', ParseIntPipe) subtaskId: number,
     @CurrentUser() principal: AccessTokenPayload,
   ) {
-    return this.reports.openConsolidated(periodId, principal);
+    return this.reports.openConsolidated(subtaskId, principal);
   }
 
   @Get(':id')

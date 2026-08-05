@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { uniq } from 'lodash';
-import { PeriodStatus, UserStatus } from '@prisma/client';
+import { SubtaskStatus, UserStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type {
   DeadlineNotificationTarget,
@@ -85,9 +85,9 @@ export class NotificationsRepository {
     now: Date,
     dueSoonThrough: Date,
   ): Promise<DeadlineNotificationTarget[]> {
-    const periods = await this.prisma.reportingPeriod.findMany({
+    const subtasks = await this.prisma.subtask.findMany({
       where: {
-        status: PeriodStatus.OPEN,
+        status: SubtaskStatus.OPEN,
         dueAt: { lte: dueSoonThrough },
         task: { deletedAt: null, closedAt: null },
       },
@@ -107,8 +107,8 @@ export class NotificationsRepository {
       orderBy: { id: 'asc' },
     });
     void now;
-    return periods.map(({ id, dueAt, task }) => ({
-      periodId: id,
+    return subtasks.map(({ id, dueAt, task }) => ({
+      subtaskId: id,
       taskId: task.id,
       taskCode: task.code,
       taskName: task.name,

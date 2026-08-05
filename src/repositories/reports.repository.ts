@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import {
   Frequency,
-  PeriodStatus,
+  SubtaskStatus,
   Prisma,
   ReportKind,
   ReportStatus,
@@ -10,10 +10,11 @@ import {
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RequestMeta } from '../types/auth';
+import { REPORT_STATUS } from '../constants/reports';
 
 const workspaceInclude = {
   ownerOrganization: { select: { id: true, code: true, name: true } },
-  reportingPeriod: {
+  subtask: {
     include: {
       task: {
         include: {
@@ -72,13 +73,10 @@ export interface ReportWorkspaceView {
   content: string | null;
   ownerOrganizationId: number;
   ownerOrganization: { id: number; code: string; name: string };
-  reportingPeriod: {
+  subtask: {
     id: number;
-    status: PeriodStatus;
-    frequency: Frequency | null;
-    year: number;
-    sequence: number;
-    periodStartAt: Date;
+    status: SubtaskStatus;
+    startAt: Date;
     dueAt: Date;
     task: {
       id: number;
@@ -111,9 +109,9 @@ export interface ReportWorkspaceView {
   updatedAt: Date;
 }
 
-export interface PeriodReportContext {
+export interface SubtaskReportContext {
   id: number;
-  status: PeriodStatus;
+  status: SubtaskStatus;
   task: {
     id: number;
     type: TaskType;
@@ -133,7 +131,7 @@ export interface HistoryFilters {
   taskName?: string;
   submittedFrom?: string;
   submittedTo?: string;
-  reportingPeriod?: Frequency;
+  subtask?: Frequency;
   dueAt?: string;
   programId?: number;
   organizationId: number;
@@ -174,7 +172,7 @@ const versionHistoryInclude = {
   workspace: {
     include: {
       ownerOrganization: { select: { id: true, code: true, name: true } },
-      reportingPeriod: {
+      subtask: {
         include: {
           task: {
             include: {
@@ -203,8 +201,8 @@ export class ReportsRepository {
     return row ? this.toWorkspace(row) : null;
   }
 
-  async findPeriodContext(id: number): Promise<PeriodReportContext | null> {
-    const row = await this.prisma.reportingPeriod.findUnique({
+  async findSubtaskContext(id: number): Promise<SubtaskReportContext | null> {
+    const row = await this.prisma.subtask.findUnique({
       where: { id },
       include: {
         task: {
@@ -242,12 +240,12 @@ export class ReportsRepository {
     };
   }
 
-  async listPeriodWorkspaces(
-    reportingPeriodId: number,
+  async listSubtaskWorkspaces(
+    subtaskId: number,
   ): Promise<ReportWorkspaceView[]> {
     const rows = await this.prisma.reportWorkspace.findMany({
       where: {
-        reportingPeriodId,
+        subtaskId,
         status: { not: ReportStatus.DRAFT },
       },
       include: workspaceInclude,
@@ -257,7 +255,7 @@ export class ReportsRepository {
   }
 
   async findOrCreateWorkspace(
-    reportingPeriodId: number,
+    subtaskId: number,
     kind: ReportKind,
     ownerOrganizationId: number,
   ) {
@@ -265,14 +263,14 @@ export class ReportsRepository {
       await transaction.$queryRaw(
         Prisma.sql`
           SELECT rp."id"
-          FROM "reporting_periods" rp
+          FROM "reporting_subtasks" rp
           JOIN "tasks" task ON task."id" = rp."taskId"
-          WHERE rp."id" = ${reportingPeriodId}
+          WHERE rp."id" = ${subtaskId}
           FOR UPDATE OF task, rp
         `,
       );
-      const period = await transaction.reportingPeriod.findUnique({
-        where: { id: reportingPeriodId },
+      const subtask = await transaction.subtask.findUnique({
+        where: { id: subtaskId },
         select: {
           status: true,
           task: {
@@ -288,16 +286,16 @@ export class ReportsRepository {
         },
       });
       if (
-        !period ||
-        period.status !== PeriodStatus.OPEN ||
-        period.task.deletedAt !== null ||
-        period.task.closedAt !== null ||
-        period.task.completedAt !== null
+        !subtask ||
+        subtask.status !== SubtaskStatus.OPEN ||
+        subtask.task.deletedAt !== null ||
+        subtask.task.closedAt !== null ||
+        subtask.task.completedAt !== null
       ) {
         return null;
       }
 
-      const collaboratorIds = period.task.collaborators.map(
+      const collaboratorIds = subtask.task.collaborators.map(
         ({ organizationId }) => organizationId,
       );
       // Lead lập báo cáo tổng hợp gửi cơ quan giao cho CẢ định kỳ lẫn đột xuất,
@@ -306,21 +304,21 @@ export class ReportsRepository {
         (kind === ReportKind.PROGRESS &&
           !collaboratorIds.includes(ownerOrganizationId)) ||
         (kind === ReportKind.CONSOLIDATED &&
-          period.task.leadOrganizationId !== ownerOrganizationId)
+          subtask.task.leadOrganizationId !== ownerOrganizationId)
       ) {
         return null;
       }
 
       const row = await transaction.reportWorkspace.upsert({
         where: {
-          reportingPeriodId_kind_ownerOrganizationId: {
-            reportingPeriodId,
+          subtaskId_kind_ownerOrganizationId: {
+            subtaskId,
             kind,
             ownerOrganizationId,
           },
         },
         update: {},
-        create: { reportingPeriodId, kind, ownerOrganizationId },
+        create: { subtaskId, kind, ownerOrganizationId },
         include: workspaceInclude,
       });
       return this.toWorkspace(row);
@@ -343,9 +341,9 @@ export class ReportsRepository {
         !before ||
         (before.status !== ReportStatus.DRAFT &&
           before.status !== ReportStatus.REJECTED) ||
-        before.reportingPeriod.status !== PeriodStatus.OPEN ||
-        before.reportingPeriod.task.deletedAt !== null ||
-        before.reportingPeriod.task.completedAt !== null
+        before.subtask.status !== SubtaskStatus.OPEN ||
+        before.subtask.task.deletedAt !== null ||
+        before.subtask.task.completedAt !== null
       ) {
         return null;
       }
@@ -392,7 +390,7 @@ export class ReportsRepository {
             take: 1,
             select: { versionNumber: true },
           },
-          reportingPeriod: {
+          subtask: {
             select: {
               status: true,
               task: {
@@ -410,9 +408,9 @@ export class ReportsRepository {
         !workspace ||
         (workspace.status !== ReportStatus.DRAFT &&
           workspace.status !== ReportStatus.REJECTED) ||
-        workspace.reportingPeriod.status !== PeriodStatus.OPEN ||
-        workspace.reportingPeriod.task.deletedAt !== null ||
-        workspace.reportingPeriod.task.completedAt !== null
+        workspace.subtask.status !== SubtaskStatus.OPEN ||
+        workspace.subtask.task.deletedAt !== null ||
+        workspace.subtask.task.completedAt !== null
       ) {
         return null;
       }
@@ -523,9 +521,9 @@ export class ReportsRepository {
         ...(filters.submittedTo ? { lte: new Date(filters.submittedTo) } : {}),
       },
       workspace: {
-        reportingPeriod: {
-          ...(filters.reportingPeriod
-            ? { frequency: filters.reportingPeriod }
+        subtask: {
+          ...(filters.subtask
+            ? { frequency: filters.subtask }
             : {}),
           ...(filters.dueAt ? { dueAt: new Date(filters.dueAt) } : {}),
           task: {
@@ -577,7 +575,7 @@ export class ReportsRepository {
       const workspace = await transaction.reportWorkspace.findUnique({
         where: { id: workspaceId },
         include: {
-          reportingPeriod: {
+          subtask: {
             include: {
               task: {
                 include: {
@@ -603,31 +601,31 @@ export class ReportsRepository {
         status === ReportStatus.REJECTED &&
         fromStatus === ReportStatus.APPROVED &&
         workspace?.kind === ReportKind.CONSOLIDATED;
-      const periodOk =
-        workspace?.reportingPeriod.status === PeriodStatus.OPEN ||
+      const subtaskOk =
+        workspace?.subtask.status === SubtaskStatus.OPEN ||
         (returningConsolidated &&
-          workspace?.reportingPeriod.status === PeriodStatus.COMPLETED);
+          workspace?.subtask.status === SubtaskStatus.COMPLETED);
       if (
         !workspace ||
         workspace.status !== fromStatus ||
         !latest ||
-        !periodOk ||
-        workspace.reportingPeriod.task.deletedAt !== null ||
-        workspace.reportingPeriod.task.completedAt !== null
+        !subtaskOk ||
+        workspace.subtask.task.deletedAt !== null ||
+        workspace.subtask.task.completedAt !== null
       ) {
         return null;
       }
       const reviewedAt = new Date();
       if (
         returningConsolidated &&
-        workspace.reportingPeriod.status === PeriodStatus.COMPLETED
+        workspace.subtask.status === SubtaskStatus.COMPLETED
       ) {
-        const reopened = await transaction.reportingPeriod.updateMany({
+        const reopened = await transaction.subtask.updateMany({
           where: {
-            id: workspace.reportingPeriodId,
-            status: PeriodStatus.COMPLETED,
+            id: workspace.subtaskId,
+            status: SubtaskStatus.COMPLETED,
           },
-          data: { status: PeriodStatus.OPEN, completedAt: null },
+          data: { status: SubtaskStatus.OPEN, completedAt: null },
         });
         if (reopened.count !== 1) return null;
       }
@@ -635,12 +633,12 @@ export class ReportsRepository {
         status === ReportStatus.APPROVED &&
         workspace.kind === ReportKind.CONSOLIDATED
       ) {
-        const completed = await transaction.reportingPeriod.updateMany({
+        const completed = await transaction.subtask.updateMany({
           where: {
-            id: workspace.reportingPeriodId,
-            status: PeriodStatus.OPEN,
+            id: workspace.subtaskId,
+            status: SubtaskStatus.OPEN,
           },
-          data: { status: PeriodStatus.COMPLETED, completedAt: reviewedAt },
+          data: { status: SubtaskStatus.COMPLETED, completedAt: reviewedAt },
         });
         if (completed.count !== 1) return null;
       }
@@ -710,7 +708,7 @@ export class ReportsRepository {
       Prisma.sql`
         SELECT rw."id"
         FROM "report_workspaces" rw
-        JOIN "reporting_periods" rp ON rp."id" = rw."reportingPeriodId"
+        JOIN "reporting_subtasks" rp ON rp."id" = rw."subtaskId"
         JOIN "tasks" task ON task."id" = rp."taskId"
         WHERE rw."id" = ${workspaceId}
         FOR UPDATE OF task, rp, rw
@@ -724,7 +722,7 @@ export class ReportsRepository {
       status: workspace.status,
       content: workspace.content,
       ownerOrganizationId: workspace.ownerOrganizationId,
-      reportingPeriodId: workspace.reportingPeriod.id,
+      subtaskId: workspace.subtask.id,
     };
   }
 
@@ -767,7 +765,7 @@ export class ReportsRepository {
   }
 
   private toWorkspace(row: WorkspacePayload): ReportWorkspaceView {
-    const { task } = row.reportingPeriod;
+    const { task } = row.subtask;
     return {
       id: row.id,
       kind: row.kind,
@@ -775,14 +773,11 @@ export class ReportsRepository {
       content: row.content,
       ownerOrganizationId: row.ownerOrganizationId,
       ownerOrganization: row.ownerOrganization,
-      reportingPeriod: {
-        id: row.reportingPeriod.id,
-        status: row.reportingPeriod.status,
-        frequency: row.reportingPeriod.frequency,
-        year: row.reportingPeriod.year,
-        sequence: row.reportingPeriod.sequence,
-        periodStartAt: row.reportingPeriod.periodStartAt,
-        dueAt: row.reportingPeriod.dueAt,
+      subtask: {
+        id: row.subtask.id,
+        status: row.subtask.status,
+        startAt: row.subtask.startAt,
+        dueAt: row.subtask.dueAt,
         task: {
           id: task.id,
           code: task.code,
@@ -840,7 +835,7 @@ export class ReportsRepository {
         id: row.workspace.id,
         kind: row.workspace.kind,
         ownerOrganization: row.workspace.ownerOrganization,
-        reportingPeriod: row.workspace.reportingPeriod,
+        subtask: row.workspace.subtask,
       },
     };
   }

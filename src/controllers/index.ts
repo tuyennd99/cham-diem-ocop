@@ -6,11 +6,9 @@ import { HealthController } from './health.controller';
 import { NotificationsController } from './notifications.controller';
 import { ProgressReportsController } from './progress-reports.controller';
 import { ReportHistoryController } from './report-history.controller';
+import { SubTasksController } from './subtask.controller';
 import { SystemController } from './system.controller';
-import {
-  ReportingPeriodsController,
-  TasksController,
-} from './tasks.controller';
+import { TasksController } from './tasks.controller';
 
 export const appControllers = [
   AuditLogsController,
@@ -22,6 +20,6 @@ export const appControllers = [
   ProgressReportsController,
   ReportHistoryController,
   SystemController,
-  ReportingPeriodsController,
+  SubTasksController,
   TasksController,
 ];

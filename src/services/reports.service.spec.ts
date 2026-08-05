@@ -38,7 +38,7 @@ const progressWorkspace = {
   kind: 'PROGRESS' as const,
   status: 'DRAFT' as const,
   ownerOrganizationId: 30,
-  reportingPeriod: {
+  subtask: {
     id: 7,
     status: 'OPEN' as const,
     task: {
@@ -55,7 +55,7 @@ const progressWorkspace = {
   latestVersion: null,
 };
 
-const periodContext = {
+const subtaskContext = {
   id: 7,
   status: 'OPEN' as const,
   task: {
@@ -73,7 +73,7 @@ const periodContext = {
 function repositoryMock() {
   return {
     findWorkspace: jest.fn().mockResolvedValue(progressWorkspace),
-    findPeriodContext: jest.fn().mockResolvedValue(periodContext),
+    findSubtaskContext: jest.fn().mockResolvedValue(subtaskContext),
     findOrCreateWorkspace: jest.fn().mockResolvedValue(progressWorkspace),
     saveDraft: jest.fn(),
     createVersionFromDraft: jest.fn().mockResolvedValue({
@@ -83,7 +83,7 @@ function repositoryMock() {
     }),
     approveLatest: jest.fn().mockResolvedValue({ status: 'APPROVED' }),
     rejectLatest: jest.fn().mockResolvedValue({ status: 'REJECTED' }),
-    listPeriodWorkspaces: jest
+    listSubtaskWorkspaces: jest
       .fn()
       .mockResolvedValue([
         progressWorkspace,
@@ -262,9 +262,9 @@ describe('ReportsService', () => {
 
     // Cả đột xuất lẫn định kỳ đều mở được, kể cả khi chưa duyệt báo cáo phối hợp.
     for (const type of ['DOT_XUAT', 'DINH_KY']) {
-      repository.findPeriodContext.mockResolvedValue({
-        ...periodContext,
-        task: { ...periodContext.task, type },
+      repository.findSubtaskContext.mockResolvedValue({
+        ...subtaskContext,
+        task: { ...subtaskContext.task, type },
       });
 
       await service.openConsolidated(7, lead);
@@ -347,10 +347,10 @@ describe('ReportsService', () => {
       repository as unknown as ReportsRepository,
     );
 
-    const rows = await service.listPeriodWorkspaces(7, lead);
+    const rows = await service.listSubtaskWorkspaces(7, lead);
 
     expect(rows).toHaveLength(2);
-    expect(repository.listPeriodWorkspaces).toHaveBeenCalledWith(7);
+    expect(repository.listSubtaskWorkspaces).toHaveBeenCalledWith(7);
   });
 
   it('lets an admin list report workspaces outside its organization but denies outsiders', async () => {
@@ -359,11 +359,11 @@ describe('ReportsService', () => {
       repository as unknown as ReportsRepository,
     );
 
-    await expect(service.listPeriodWorkspaces(7, admin)).resolves.toHaveLength(
+    await expect(service.listSubtaskWorkspaces(7, admin)).resolves.toHaveLength(
       2,
     );
     await expect(
-      service.listPeriodWorkspaces(7, { ...collaborator, organizationId: 99 }),
+      service.listSubtaskWorkspaces(7, { ...collaborator, organizationId: 99 }),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
@@ -403,7 +403,7 @@ describe('ReportsService', () => {
         eventKey: 'REPORT_SUBMITTED:101',
         type: 'GUI_BAO_CAO',
         entityType: 'Task',
-        entityId: progressWorkspace.reportingPeriod.task.id,
+        entityId: progressWorkspace.subtask.task.id,
       }),
     );
 
@@ -419,7 +419,7 @@ describe('ReportsService', () => {
         eventKey: 'REPORT_APPROVED:101',
         type: 'DUYET_BAO_CAO',
         entityType: 'Task',
-        entityId: progressWorkspace.reportingPeriod.task.id,
+        entityId: progressWorkspace.subtask.task.id,
       }),
     );
 
@@ -435,7 +435,7 @@ describe('ReportsService', () => {
         eventKey: 'REPORT_REJECTED:101',
         type: 'TRA_BAO_CAO',
         entityType: 'Task',
-        entityId: progressWorkspace.reportingPeriod.task.id,
+        entityId: progressWorkspace.subtask.task.id,
       }),
     );
   });

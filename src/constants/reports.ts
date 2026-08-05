@@ -1,0 +1,11 @@
+export const REPORT_STATUS = {
+  DRAFT: 'DRAFT',
+  SUBMITTED: 'SUBMITTED',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+} as const;
+
+export const REPORT_KIND = {
+  PROGRESS: 'PROGRESS',
+  CONSOLIDATED: 'CONSOLIDATED',
+} as const;

@@ -1,6 +1,6 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import {
-  PeriodStatus,
+  SubtaskStatus,
   Prisma,
   ReportKind,
   ReportStatus,
@@ -10,7 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RequestMeta } from '../types/auth';
 
 const fileContextInclude = {
-  reportingPeriod: {
+  subtask: {
     include: {
       task: {
         include: { collaborators: { select: { organizationId: true } } },
@@ -28,8 +28,8 @@ export interface DraftFileContext {
   kind: ReportKind;
   status: ReportStatus;
   ownerOrganizationId: number;
-  reportingPeriod: {
-    status: PeriodStatus;
+  subtask: {
+    status: SubtaskStatus;
     task: {
       leadOrganizationId: number;
       completedAt: Date | null;
@@ -294,14 +294,14 @@ export class FilesRepository {
       kind: row.kind,
       status: row.status,
       ownerOrganizationId: row.ownerOrganizationId,
-      reportingPeriod: {
-        status: row.reportingPeriod.status,
+      subtask: {
+        status: row.subtask.status,
         task: {
-          leadOrganizationId: row.reportingPeriod.task.leadOrganizationId,
-          completedAt: row.reportingPeriod.task.completedAt,
-          deletedAt: row.reportingPeriod.task.deletedAt,
+          leadOrganizationId: row.subtask.task.leadOrganizationId,
+          completedAt: row.subtask.task.completedAt,
+          deletedAt: row.subtask.task.deletedAt,
           collaboratorOrganizationIds:
-            row.reportingPeriod.task.collaborators.map(
+            row.subtask.task.collaborators.map(
               ({ organizationId }) => organizationId,
             ),
         },
@@ -329,7 +329,7 @@ export class FilesRepository {
       Prisma.sql`
         SELECT rw."id"
         FROM "report_workspaces" rw
-        JOIN "reporting_periods" rp ON rp."id" = rw."reportingPeriodId"
+        JOIN "reporting_subtasks" rp ON rp."id" = rw."reportingSubtaskId"
         JOIN "tasks" task ON task."id" = rp."taskId"
         WHERE rw."id" = ${workspaceId}
         FOR UPDATE OF task, rp, rw
@@ -341,9 +341,9 @@ export class FilesRepository {
     return (
       (context.status === ReportStatus.DRAFT ||
         context.status === ReportStatus.REJECTED) &&
-      context.reportingPeriod.status === PeriodStatus.OPEN &&
-      context.reportingPeriod.task.completedAt === null &&
-      context.reportingPeriod.task.deletedAt === null
+      context.subtask.status === SubtaskStatus.OPEN &&
+      context.subtask.task.completedAt === null &&
+      context.subtask.task.deletedAt === null
     );
   }
 }

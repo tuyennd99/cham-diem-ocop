@@ -1,4 +1,4 @@
-export interface ApiSuccess<T> {
+export type ApiSuccess<T> = {
   statusCode: number;
   data: T;
   meta?: {
@@ -10,7 +10,7 @@ export interface ApiSuccess<T> {
   message?: string;
 }
 
-export interface ApiError {
+export type ApiError = {
   statusCode: number;
   errorCode: string;
   message: string;

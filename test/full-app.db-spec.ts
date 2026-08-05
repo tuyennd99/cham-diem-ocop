@@ -250,15 +250,15 @@ describe('full application on PostgreSQL', () => {
       }),
     );
 
-    const periodsResponse = await request(server)
-      .get(`/api/v1/tasks/${taskId}/reporting-periods`)
+    const subtasksResponse = await request(server)
+      .get(`/api/v1/tasks/${taskId}/reporting-subtasks`)
       .set('Authorization', `Bearer ${collaboratorToken}`)
       .expect(200);
-    const periodId =
-      readBody<ApiBody<Array<{ id: number }>>>(periodsResponse).data[0].id;
+    const subtaskId =
+      readBody<ApiBody<Array<{ id: number }>>>(subtasksResponse).data[0].id;
 
     const opened = await request(server)
-      .get(`/api/v1/progress-reports/periods/${periodId}`)
+      .get(`/api/v1/progress-reports/subtasks/${subtaskId}`)
       .set('Authorization', `Bearer ${collaboratorToken}`)
       .expect(200);
     const workspaceId = readBody<ApiBody<{ id: number }>>(opened).data.id;
@@ -291,7 +291,7 @@ describe('full application on PostgreSQL', () => {
       .expect(201);
 
     const reviewQueue = await request(server)
-      .get(`/api/v1/reporting-periods/${periodId}/report-workspaces`)
+      .get(`/api/v1/reporting-subtasks/${subtaskId}/report-workspaces`)
       .set('Authorization', `Bearer ${leadToken}`)
       .expect(200);
     expect(

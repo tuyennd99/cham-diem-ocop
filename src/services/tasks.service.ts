@@ -8,7 +8,6 @@ import {
 } from '@nestjs/common';
 import { uniq } from 'lodash';
 import { TaskType } from '@prisma/client';
-import type { TaskView, TaskWrite } from '../constants/task';
 import { CreateTaskDto, TaskQueryDto, UpdateTaskDto } from '../dtos/tasks.dto';
 import { TasksRepository } from '../repositories/tasks.repository';
 import { AccessTokenPayload, RequestMeta } from '../types/auth';
@@ -16,6 +15,7 @@ import { NotificationsService } from './notifications.service';
 import { calculateTaskDeadlineStatus } from '../utils/task-deadline-status';
 import dayjs from 'dayjs';
 import { ErrorCode } from '../types/error-code';
+import { TaskView, TaskWrite } from '../types/task';
 
 @Injectable()
 export class TasksService {
@@ -128,11 +128,7 @@ export class TasksService {
         current.collaboratorOrganizationIds,
       dueAt:
         input.dueAt === undefined ? current.dueAt?.toISOString() : input.dueAt,
-      frequency: input.frequency ?? current.frequency ?? undefined,
-      periodicStartAt:
-        input.periodicStartAt === undefined
-          ? current.periodicStartAt?.toISOString()
-          : input.periodicStartAt,
+      startAt: input.startAt === undefined ? current.startAt?.toISOString() : input.startAt,
     });
     await this.validate(merged, id);
 
@@ -179,8 +175,8 @@ export class TasksService {
       throw new BadRequestException('Only periodic tasks can be closed');
     }
     if (task.closedAt) throw new ConflictException('Task is already closed');
-    if ((await this.repository.countOpenPeriods(id)) > 0) {
-      throw new ConflictException('Open reporting periods must be resolved');
+    if ((await this.repository.countOpenSubtasks(id)) > 0) {
+      throw new ConflictException('Open reporting subtasks must be resolved');
     }
     const closed = await this.repository.close(
       id,
@@ -260,9 +256,6 @@ export class TasksService {
     ) {
       throw new BadRequestException('Collaborators must be unique');
     }
-    if (input.collaboratorOrganizationIds.includes(input.leadOrganizationId)) {
-      throw new BadRequestException('Lead cannot also be a collaborator');
-    }
     this.validateTypeFields(input);
 
     const organizationIds = [
@@ -298,20 +291,17 @@ export class TasksService {
       if (!input.dueAt) {
         throw new BadRequestException('dueAt is required for ad-hoc tasks');
       }
-      if (input.frequency || input.periodicStartAt) {
+      if (input.startAt) {
         throw new BadRequestException(
           'Ad-hoc tasks cannot have periodic fields',
         );
       }
       return;
     }
-    if (!input.frequency || !input.periodicStartAt) {
+    if (!input.startAt || !input.dueAt) {
       throw new BadRequestException(
-        'frequency and periodicStartAt are required for periodic tasks',
+        'startAt and dueAt are required for periodic tasks',
       );
-    }
-    if (input.dueAt) {
-      throw new BadRequestException('Periodic tasks cannot have dueAt');
     }
   }
 
@@ -327,10 +317,7 @@ export class TasksService {
       leadOrganizationId: input.leadOrganizationId,
       collaboratorOrganizationIds: input.collaboratorOrganizationIds,
       dueAt: input.dueAt ? new Date(input.dueAt) : null,
-      frequency: input.frequency ?? null,
-      periodicStartAt: input.periodicStartAt
-        ? dayjs(input.periodicStartAt).startOf('day').toDate()
-        : null,
+      startAt: input.startAt ? dayjs(input.startAt).startOf('day').toDate() : null,
     };
   }
 

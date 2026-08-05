@@ -39,14 +39,14 @@ export class ProgressReportsController {
     private readonly files: FilesService,
   ) { }
 
-  @Get('periods/:periodId')
+  @Get('subtasks/:subtaskId')
   open(
-    @Param('periodId', ParseIntPipe) periodId: number,
+    @Param('subtaskId', ParseIntPipe) subtaskId: number,
     @Query() query: OpenProgressQueryDto,
     @CurrentUser() principal: AccessTokenPayload,
   ) {
     return this.reports.openProgress(
-      periodId,
+      subtaskId,
       principal,
       query.ownerOrganizationId,
     );

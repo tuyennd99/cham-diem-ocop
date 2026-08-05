@@ -1,13 +1,3 @@
-import {
-  Frequency,
-  PeriodStatus,
-  Prisma,
-  ReportStatus,
-  TaskDeadlineStatus,
-  TaskType,
-} from '@prisma/client';
-
-
 export const RESPONSIBILITY = {
   LEAD: 'LEAD',
   COLLABORATOR: 'COLLABORATOR',
@@ -16,68 +6,21 @@ export const RESPONSIBILITY = {
   ASSIGNEE: 'ASSIGNEE',
 } as const;
 
+export const TASK_STATUS = {
+  DANG_CAP_NHAT: 'DANG_CAP_NHAT',
+  SAP_DEN_HAN: 'SAP_DEN_HAN',
+  HOAN_THANH_DUNG_HAN: 'HOAN_THANH_DUNG_HAN',
+  HOAN_THANH_QUA_HAN: 'HOAN_THANH_QUA_HAN',
+  QUA_HAN: 'QUA_HAN',
+} as const;
 
-export type TaskView = {
-  id: number;
-  code: string;
-  name: string;
-  description: string | null;
-  expectedOutput: string | null;
-  type: TaskType;
-  programId: number;
-  assigningOrganizationId: number;
-  leadOrganizationId: number;
-  collaboratorOrganizationIds: number[];
-  hasSubmittedReport: boolean;
-  dueAt: Date | null;
-  deadlineStatus: TaskDeadlineStatus | null;
-  frequency: Frequency | null;
-  periodicStartAt: Date | null;
-  closedAt: Date | null;
-  closeReason: string | null;
-  completedAt: Date | null;
-  deletedAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-  program: { id: number; code: string; name: string };
-  assigningOrganization: { id: number; code: string; name: string };
-  leadOrganization: { id: number; code: string; name: string };
-  collaboratorOrganizations: { id: number; code: string; name: string }[];
-  reportingPeriods: {
-    id: number;
-    taskId: number;
-    frequency: Frequency | null;
-    year: number;
-    sequence: number;
-    periodStartAt: Date;
-    dueAt: Date;
-    status: PeriodStatus;
-    completedAt: Date | null;
-    canceledAt: Date | null;
-    cancelReason: string | null;
-    createdAt: Date;
-  }[];
-}
+export const TASK_DEADLINE_STATUS = {
+  DANG_THUC_HIEN: 'DANG_THUC_HIEN',
+  SAP_DEN_HAN: 'SAP_DEN_HAN',
+  HOAN_THANH_DUNG_HAN: 'HOAN_THANH_DUNG_HAN',
+  HOAN_THANH_QUA_HAN: 'HOAN_THANH_QUA_HAN',
+  QUA_HAN: 'QUA_HAN',
+} as const;
 
-export interface TaskWrite {
-  code: string;
-  name: string;
-  description?: string | null;
-  expectedOutput?: string | null;
-  type: TaskType;
-  programId: number;
-  assigningOrganizationId: number;
-  leadOrganizationId: number;
-  collaboratorOrganizationIds: number[];
-  dueAt: Date | null;
-  frequency: Frequency | null;
-  periodicStartAt: Date | null;
-}
-
-export interface PeriodDraft {
-  frequency: Frequency;
-  year: number;
-  sequence: number;
-  periodStartAt: Date;
-  dueAt: Date;
-}
+export type TaskStatus = (typeof TASK_STATUS)[keyof typeof TASK_STATUS];
+export type TaskDeadlineStatus = (typeof TASK_DEADLINE_STATUS)[keyof typeof TASK_DEADLINE_STATUS];

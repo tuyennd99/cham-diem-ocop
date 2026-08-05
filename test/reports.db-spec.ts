@@ -85,7 +85,7 @@ describe('PostgreSQL report invariants', () => {
   });
 
   it('does not complete an ad-hoc task when collaborator reports are approved', async () => {
-    const task = await createTaskWithPeriod(prisma, {
+    const task = await createTaskWithSubtask(prisma, {
       code: `concurrent-${suffix}`,
       actorId,
       programId,
@@ -98,7 +98,7 @@ describe('PostgreSQL report invariants', () => {
         prisma.reportWorkspace.create({
           data: {
             kind: ReportKind.PROGRESS,
-            reportingPeriodId: task.reportingPeriods[0].id,
+            reportingSubtaskId: task.subtasks[0].id,
             ownerOrganizationId: organizationId,
             status: ReportStatus.SUBMITTED,
             content: `Report ${index + 1}`,
@@ -130,7 +130,7 @@ describe('PostgreSQL report invariants', () => {
       prisma.task.findUniqueOrThrow({ where: { id: task.id } }),
       prisma.reportWorkspace.count({
         where: {
-          reportingPeriodId: task.reportingPeriods[0].id,
+          reportingSubtaskId: task.subtasks[0].id,
           status: ReportStatus.APPROVED,
         },
       }),
@@ -140,7 +140,7 @@ describe('PostgreSQL report invariants', () => {
   });
 
   it('keeps submitted versions immutable and rejects a late draft upload', async () => {
-    const task = await createTaskWithPeriod(prisma, {
+    const task = await createTaskWithSubtask(prisma, {
       code: `immutable-${suffix}`,
       actorId,
       programId,
@@ -151,7 +151,7 @@ describe('PostgreSQL report invariants', () => {
     const workspace = await prisma.reportWorkspace.create({
       data: {
         kind: ReportKind.PROGRESS,
-        reportingPeriodId: task.reportingPeriods[0].id,
+        reportingSubtaskId: task.subtasks[0].id,
         ownerOrganizationId: collaboratorOrganizationIds[0],
         content: 'Version one',
       },
@@ -254,20 +254,20 @@ function taskData(input: TaskFixture): Prisma.TaskCreateInput {
   };
 }
 
-function createTaskWithPeriod(prisma: PrismaClient, input: TaskFixture) {
+function createTaskWithSubtask(prisma: PrismaClient, input: TaskFixture) {
   const now = new Date();
   return prisma.task.create({
     data: {
       ...taskData(input),
-      reportingPeriods: {
+      subtasks: {
         create: {
           year: now.getUTCFullYear(),
           sequence: 1,
-          periodStartAt: now,
+          subtaskStartAt: now,
           dueAt: new Date(now.getTime() + 86_400_000),
         },
       },
     },
-    include: { reportingPeriods: true },
+    include: { subtasks: true },
   });
 }

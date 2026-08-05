@@ -75,7 +75,7 @@ describe('NotificationsService', () => {
     const now = new Date('2026-07-24T00:00:00.000Z');
     repository.findDeadlineTargets.mockResolvedValue([
       {
-        periodId: 10,
+        subtaskId: 10,
         taskId: 1,
         taskCode: 'NV-1',
         taskName: 'Sắp đến hạn',
@@ -83,7 +83,7 @@ describe('NotificationsService', () => {
         organizationIds: [2, 3, 3],
       },
       {
-        periodId: 11,
+        subtaskId: 11,
         taskId: 2,
         taskCode: 'NV-2',
         taskName: 'Quá hạn',
@@ -106,7 +106,7 @@ describe('NotificationsService', () => {
       1,
       expect.objectContaining({
         organizationIds: [2, 3],
-        eventKey: 'REPORTING_PERIOD_DUE_SOON:10',
+        eventKey: 'REPORTING_SUBTASK_DUE_SOON:10',
         type: 'SAP_DEN_HAN',
         entityType: 'Task',
         entityId: 1,
@@ -116,7 +116,7 @@ describe('NotificationsService', () => {
       2,
       expect.objectContaining({
         organizationIds: [4],
-        eventKey: 'REPORTING_PERIOD_OVERDUE:11',
+        eventKey: 'REPORTING_SUBTASK_OVERDUE:11',
         type: 'QUA_HAN',
         entityType: 'Task',
         entityId: 2,
