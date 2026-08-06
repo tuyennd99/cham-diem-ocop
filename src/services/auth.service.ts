@@ -129,10 +129,8 @@ export class AuthService {
 
   async logout(
     rawRefreshToken: string | undefined,
-    csrfToken: string,
     meta: RequestMeta,
   ) {
-    this.assertCsrfToken(csrfToken);
     if (!rawRefreshToken) return;
 
     const session = await this.repository.findSessionByHash(

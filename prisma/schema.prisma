@@ -19,13 +19,6 @@ enum TaskDeadlineStatus {
   QUA_HAN
 }
 
-enum Frequency {
-  MONTHLY
-  QUARTERLY
-  SEMI_ANNUAL
-  ANNUAL
-}
-
 enum ReportKind {
   PROGRESS
   CONSOLIDATED
@@ -146,7 +139,6 @@ model Task {
   leadOrganizationId      Int
   dueAt                   DateTime?           @db.Timestamptz(3)
   deadlineStatus          TaskDeadlineStatus?
-  frequency               Frequency?
   startAt                 DateTime?           @db.Timestamptz(3)
   closedAt                DateTime?           @db.Timestamptz(3)
   closedById              Int?
@@ -207,7 +199,7 @@ model Subtask {
   createdByOrganization   Organization      @relation("SubtaskCreatedByOrg", fields: [createdByOrganizationId], references: [id])
   workspaces              ReportWorkspace[]
 
-  @@unique([taskId])
+  @@unique([taskId, title])
   @@index([taskId, status])
   @@map("subtasks")
 }

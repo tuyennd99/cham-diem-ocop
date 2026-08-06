@@ -4,7 +4,7 @@ import {
   ReportKind,
   ReportStatus,
   TaskType,
-} from '../src/prisma/client';
+} from '@prisma/client';
 import { ConflictException } from '@nestjs/common';
 import { FilesRepository } from '../src/repositories/files.repository';
 import { ReportsRepository } from '../src/repositories/reports.repository';
@@ -98,7 +98,7 @@ describe('PostgreSQL report invariants', () => {
         prisma.reportWorkspace.create({
           data: {
             kind: ReportKind.PROGRESS,
-            reportingSubtaskId: task.subtasks[0].id,
+            subtaskId: task.subtasks[0].id,
             ownerOrganizationId: organizationId,
             status: ReportStatus.SUBMITTED,
             content: `Report ${index + 1}`,
@@ -130,7 +130,7 @@ describe('PostgreSQL report invariants', () => {
       prisma.task.findUniqueOrThrow({ where: { id: task.id } }),
       prisma.reportWorkspace.count({
         where: {
-          reportingSubtaskId: task.subtasks[0].id,
+          subtaskId: task.subtasks[0].id,
           status: ReportStatus.APPROVED,
         },
       }),
@@ -151,7 +151,7 @@ describe('PostgreSQL report invariants', () => {
     const workspace = await prisma.reportWorkspace.create({
       data: {
         kind: ReportKind.PROGRESS,
-        reportingSubtaskId: task.subtasks[0].id,
+        subtaskId: task.subtasks[0].id,
         ownerOrganizationId: collaboratorOrganizationIds[0],
         content: 'Version one',
       },
@@ -261,10 +261,11 @@ function createTaskWithSubtask(prisma: PrismaClient, input: TaskFixture) {
       ...taskData(input),
       subtasks: {
         create: {
-          year: now.getUTCFullYear(),
-          sequence: 1,
-          subtaskStartAt: now,
+          title: 'Kỳ báo cáo',
+          startAt: now,
           dueAt: new Date(now.getTime() + 86_400_000),
+          createdBy: { connect: { id: input.actorId } },
+          createdByOrganization: { connect: { id: input.leadOrganizationId } },
         },
       },
     },

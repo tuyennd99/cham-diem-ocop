@@ -19,6 +19,7 @@ import {
   TaskQueryDto,
   UpdateTaskDto,
 } from '../dtos/tasks.dto';
+import { CreateSubTaskDto } from '../dtos/subtasks.dto';
 import { SubTasksService } from '../services/subtask.service';
 import { ReportsService } from '../services/reports.service';
 import { TasksService } from '../services/tasks.service';
@@ -89,6 +90,25 @@ export class TasksController {
     @Req() request: Request,
   ) {
     return this.tasksService.remove(id, principal, requestMeta(request));
+  }
+
+  @Get(':id/subtasks')
+  listSubtasks(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() principal: AccessTokenPayload,
+  ) {
+    return this.SubTaskService.list(id, principal);
+  }
+
+  @Post(':id/subtasks')
+  @ResponseMessage('Tạo nhiệm vụ con thành công')
+  createSubtask(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: CreateSubTaskDto,
+    @CurrentUser() principal: AccessTokenPayload,
+    @Req() request: Request,
+  ) {
+    return this.SubTaskService.create(id, body, principal, requestMeta(request));
   }
 }
 

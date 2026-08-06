@@ -281,7 +281,6 @@ describe('AuthService', () => {
   });
 
   it('revokes only the matching refresh session on logout', async () => {
-    const csrfToken = service.createCsrfToken();
     repo.findSessionByHash.mockResolvedValue({
       id: 7,
       user: { ...user },
@@ -289,7 +288,7 @@ describe('AuthService', () => {
       revokedAt: null,
     });
 
-    await service.logout('raw-token', csrfToken, meta);
+    await service.logout('raw-token', meta);
 
     expect(repo.revokeSession).toHaveBeenCalledWith(
       7,

@@ -74,17 +74,14 @@ export class AuthController {
   @Public()
   @Post('logout')
   @HttpCode(200)
-  @UseGuards(CsrfGuard)
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @ResponseMessage('Đăng xuất thành công')
   async logout(
-    @Headers('x-csrf-token') csrfToken: string,
     @Req() request: Request & { cookies?: Record<string, unknown> },
     @Res({ passthrough: true }) response: Response,
   ) {
     await this.authService.logout(
       this.cookie(request, 'refresh_token'),
-      csrfToken,
       this.requestMeta(request),
     );
     this.clearAuthCookies(response);

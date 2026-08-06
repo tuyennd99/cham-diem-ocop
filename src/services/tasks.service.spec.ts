@@ -370,7 +370,6 @@ describe('TasksService', () => {
         {
           ...common,
           type: 'DINH_KY',
-          frequency: 'MONTHLY',
           startAt: '2026-07-14T00:00:00+07:00',
           dueAt: '2026-08-01T00:00:00.000Z',
         },

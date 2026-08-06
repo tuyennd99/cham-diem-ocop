@@ -27,7 +27,7 @@ describe('NotificationsService', () => {
     };
     gateway = { notifyOrganizations: jest.fn() };
     service = new NotificationsService(
-      repository as NotificationsRepository,
+      repository as unknown as NotificationsRepository,
       gateway as unknown as NotificationsGateway,
     );
   });

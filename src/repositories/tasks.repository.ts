@@ -1,6 +1,5 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import {
-  Frequency,
   SubtaskStatus,
   Prisma,
   ReportStatus,
@@ -46,10 +45,25 @@ export class TasksRepository {
   async list(input: {
     page: number;
     limit: number;
+    search?: string;
     organizationId: number;
     globalScope: boolean;
   }) {
-    const where = this.taskScope(input.organizationId, input.globalScope);
+    const where: Prisma.TaskWhereInput = {
+      ...this.taskScope(input.organizationId, input.globalScope),
+      ...(input.search
+        ? {
+            AND: [
+              {
+                OR: [
+                  { name: { contains: input.search, mode: 'insensitive' } },
+                  { code: { contains: input.search, mode: 'insensitive' } },
+                ],
+              },
+            ],
+          }
+        : {}),
+    };
     const [rows, total] = await Promise.all([
       this.prisma.task.findMany({
         where,
@@ -173,9 +187,10 @@ export class TasksRepository {
           },
           ...(input.type === TaskType.DOT_XUAT
             ? {
+              // DOT_XUAT: 1 nhiệm vụ con auto = đơn vị báo cáo tổng hợp cấp nhiệm vụ chính.
               subtasks: {
                 create: {
-                  title: input.name,
+                  title: 'Báo cáo tổng hợp',
                   startAt: now,
                   dueAt: input.dueAt,
                   createdById: actorId,
@@ -535,6 +550,77 @@ export class TasksRepository {
     });
   }
 
+  async deleteSubTask(id: number, actorId: number, meta: RequestMeta = {}) {
+    return this.prisma.$transaction(async (transaction) => {
+      await transaction.$queryRaw(
+        Prisma.sql`SELECT "id" FROM "subtasks" WHERE "id" = ${id} FOR UPDATE`,
+      );
+      // Chặn xóa khi đơn vị đã báo cáo (workspace không còn DRAFT).
+      const reported = await transaction.reportWorkspace.count({
+        where: { subtaskId: id, status: { not: ReportStatus.DRAFT } },
+      });
+      if (reported > 0) return null;
+      const before = await transaction.subtask.findUnique({ where: { id } });
+      if (!before) return null;
+      // Xóa cả workspace DRAFT còn sót (cascade theo FK subtaskId).
+      await transaction.subtask.delete({ where: { id } });
+      await transaction.auditLog.create({
+        data: {
+          actorId,
+          action: ACTIONS_TASK.REPORTING_SUBTASK_CANCELED,
+          entityType: 'Subtask',
+          entityId: id,
+          reason: 'Xóa nhiệm vụ con',
+          beforeData: this.subtaskAudit(before),
+          ...this.auditMeta(meta),
+        },
+      });
+      return before;
+    });
+  }
+
+  async updateSubTask(
+    id: number,
+    data: { title?: string; description?: string; startAt?: string; dueAt?: string },
+    actorId: number,
+    meta: RequestMeta = {},
+  ) {
+    try {
+      const before = await this.prisma.subtask.findUnique({ where: { id } });
+      const after = await this.prisma.subtask.update({
+        where: { id },
+        data: {
+          ...(data.title !== undefined ? { title: data.title } : {}),
+          ...(data.description !== undefined
+            ? { description: data.description || null }
+            : {}),
+          ...(data.startAt ? { startAt: new Date(data.startAt) } : {}),
+          ...(data.dueAt ? { dueAt: new Date(data.dueAt) } : {}),
+        },
+      });
+      await this.prisma.auditLog.create({
+        data: {
+          actorId,
+          action: ACTIONS_TASK.TASK_UPDATED,
+          entityType: 'Subtask',
+          entityId: id,
+          beforeData: before ? this.subtaskAudit(before) : undefined,
+          afterData: this.subtaskAudit(after),
+          ...this.auditMeta(meta),
+        },
+      });
+      return after;
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException('Nhiệm vụ con trùng tên đã tồn tại');
+      }
+      throw error;
+    }
+  }
+
   private taskScope(
     organizationId: number,
     globalScope: boolean,
@@ -598,14 +684,24 @@ export class TasksRepository {
       subtasks: row.subtasks.map((subtask) => ({
         id: subtask.id,
         taskId: subtask.taskId,
+        title: subtask.title,
+        description: subtask.description,
         startAt: subtask.startAt,
         dueAt: subtask.dueAt,
         status: subtask.status,
         completedAt: subtask.completedAt,
         canceledAt: subtask.canceledAt,
         cancelReason: subtask.cancelReason,
+        createdById: subtask.createdById,
+        createdByOrganizationId: subtask.createdByOrganizationId,
         createdAt: subtask.createdAt,
-
+        hasReports: subtask.workspaces.some(
+          (workspace) =>
+            workspace.status !== ReportStatus.DRAFT &&
+            (globalScope ||
+              row.leadOrganizationId === organizationId ||
+              workspace.ownerOrganizationId === organizationId),
+        ),
       })),
     };
   }

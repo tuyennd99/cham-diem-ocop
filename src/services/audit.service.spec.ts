@@ -10,7 +10,7 @@ describe('AuditService', () => {
       append: jest.fn(),
       list: jest.fn(),
     };
-    service = new AuditService(repository as AuditRepository);
+    service = new AuditService(repository as unknown as AuditRepository);
   });
 
   it('removes secrets recursively before appending immutable audit data', async () => {

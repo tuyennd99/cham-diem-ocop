@@ -1,6 +1,5 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
-import { Frequency } from '@prisma/client';
 
 const isoDate = z.iso.datetime({ offset: true, local: true });
 
@@ -25,7 +24,6 @@ export class ReportHistoryQueryDto extends createZodDto(
     taskName: z.string().max(500).optional(),
     submittedFrom: isoDate.optional(),
     submittedTo: isoDate.optional(),
-    subtask: z.enum(Frequency).optional(),
     dueAt: isoDate.optional(),
     programId: z.coerce.number().int().min(1).optional(),
   }),

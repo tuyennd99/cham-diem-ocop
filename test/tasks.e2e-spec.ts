@@ -8,10 +8,8 @@ import { Test } from '@nestjs/testing';
 import { Server } from 'node:http';
 import request from 'supertest';
 import { configureApp } from '../src/config/app';
-import {
-  SubTasksController,
-  TasksController,
-} from '../src/controllers/tasks.controller';
+import { TasksController } from '../src/controllers/tasks.controller';
+import { SubTasksController } from '../src/controllers/subtask.controller';
 import { SubTasksService } from '../src/services/subtask.service';
 import { ReportsService } from '../src/services/reports.service';
 import { TasksService } from '../src/services/tasks.service';
@@ -119,7 +117,7 @@ describe('Task endpoints', () => {
       .send({ reason: 'Kết thúc chương trình' })
       .expect(201);
     await request(server)
-      .post('/api/v1/reporting-subtasks/2/cancel')
+      .post('/api/v1/subtasks/2/cancel')
       .send({ reason: 'Không còn yêu cầu báo cáo' })
       .expect(201);
 
@@ -139,7 +137,7 @@ describe('Task endpoints', () => {
 
   it('lists submitted report workspaces for a reporting subtask', async () => {
     await request(server)
-      .get('/api/v1/reporting-subtasks/2/report-workspaces')
+      .get('/api/v1/subtasks/2/report-workspaces')
       .expect(200);
 
     expect(reportsService.listSubtaskWorkspaces).toHaveBeenCalledWith(

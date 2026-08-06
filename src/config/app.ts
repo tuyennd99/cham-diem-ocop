@@ -38,7 +38,9 @@ export function configureApp(app: INestApplication) {
   });
 
   app.setGlobalPrefix('api/v1');
-  app.use(helmet());
+  // cross-origin cho phép FE (khác origin) load ảnh chèn qua /inline-images;
+  // mặc định của helmet là same-origin sẽ chặn thẻ <img>.
+  app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   app.use(cookieParser());
   app.useGlobalPipes(new ZodValidationPipe());
   app.useGlobalFilters(new ApiExceptionFilter());

@@ -30,6 +30,7 @@ export class TasksService {
     const { data, total } = await this.repository.list({
       page: query.page,
       limit: query.limit,
+      search: query.search,
       organizationId: principal.organizationId,
       globalScope: principal.isAdmin === true,
     });
@@ -77,7 +78,6 @@ export class TasksService {
       await this.notifyAssignment(task);
       return task;
     } catch (error) {
-      console.log('🚀 ~ TasksService ~ create ~ error:', error);
       this.rethrowUniqueCode(error);
     }
   }
@@ -298,9 +298,13 @@ export class TasksService {
       }
       return;
     }
-    if (!input.startAt || !input.dueAt) {
+    // Nhiệm vụ định kỳ: cần ngày bắt đầu; hạn nộp nằm ở từng nhiệm vụ con, không ở cấp task.
+    if (!input.startAt) {
+      throw new BadRequestException('startAt is required for periodic tasks');
+    }
+    if (input.dueAt) {
       throw new BadRequestException(
-        'startAt and dueAt are required for periodic tasks',
+        'Periodic tasks set deadlines on subtasks, not on the task',
       );
     }
   }

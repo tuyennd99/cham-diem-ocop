@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import {
-  Frequency,
   SubtaskStatus,
   Prisma,
   ReportKind,
@@ -131,7 +130,6 @@ export interface HistoryFilters {
   taskName?: string;
   submittedFrom?: string;
   submittedTo?: string;
-  subtask?: Frequency;
   dueAt?: string;
   programId?: number;
   organizationId: number;
@@ -263,7 +261,7 @@ export class ReportsRepository {
       await transaction.$queryRaw(
         Prisma.sql`
           SELECT rp."id"
-          FROM "reporting_subtasks" rp
+          FROM "subtasks" rp
           JOIN "tasks" task ON task."id" = rp."taskId"
           WHERE rp."id" = ${subtaskId}
           FOR UPDATE OF task, rp
@@ -502,15 +500,15 @@ export class ReportsRepository {
   }
 
   async listHistory(filters: HistoryFilters) {
-    // Phạm vi lịch sử theo nhiệm vụ: mọi đơn vị tham gia (giao/chủ trì/phối hợp)
-    // đều thấy; admin (globalScope) không giới hạn.
-    const taskScope: Prisma.TaskWhereInput = filters.globalScope
+    // Phạm vi lịch sử: giao/chủ trì (và admin) thấy mọi báo cáo của nhiệm vụ;
+    // đơn vị phối hợp chỉ thấy báo cáo do chính mình nộp (ownerOrganizationId).
+    const workspaceScope: Prisma.ReportWorkspaceWhereInput = filters.globalScope
       ? {}
       : {
         OR: [
-          { assigningOrganizationId: filters.organizationId },
-          { leadOrganizationId: filters.organizationId },
-          { collaborators: { some: { organizationId: filters.organizationId } } },
+          { subtask: { task: { assigningOrganizationId: filters.organizationId } } },
+          { subtask: { task: { leadOrganizationId: filters.organizationId } } },
+          { ownerOrganizationId: filters.organizationId },
         ],
       };
     const where: Prisma.ReportVersionWhereInput = {
@@ -521,13 +519,10 @@ export class ReportsRepository {
         ...(filters.submittedTo ? { lte: new Date(filters.submittedTo) } : {}),
       },
       workspace: {
+        ...workspaceScope,
         subtask: {
-          ...(filters.subtask
-            ? { frequency: filters.subtask }
-            : {}),
           ...(filters.dueAt ? { dueAt: new Date(filters.dueAt) } : {}),
           task: {
-            ...taskScope,
             ...(filters.taskCode
               ? {
                 code: {
@@ -708,7 +703,7 @@ export class ReportsRepository {
       Prisma.sql`
         SELECT rw."id"
         FROM "report_workspaces" rw
-        JOIN "reporting_subtasks" rp ON rp."id" = rw."subtaskId"
+        JOIN "subtasks" rp ON rp."id" = rw."subtaskId"
         JOIN "tasks" task ON task."id" = rp."taskId"
         WHERE rw."id" = ${workspaceId}
         FOR UPDATE OF task, rp, rw

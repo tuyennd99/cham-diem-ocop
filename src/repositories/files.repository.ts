@@ -329,7 +329,7 @@ export class FilesRepository {
       Prisma.sql`
         SELECT rw."id"
         FROM "report_workspaces" rw
-        JOIN "reporting_subtasks" rp ON rp."id" = rw."reportingSubtaskId"
+        JOIN "subtasks" rp ON rp."id" = rw."subtaskId"
         JOIN "tasks" task ON task."id" = rp."taskId"
         WHERE rw."id" = ${workspaceId}
         FOR UPDATE OF task, rp, rw

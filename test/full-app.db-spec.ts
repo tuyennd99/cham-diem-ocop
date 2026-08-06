@@ -1,6 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { createPrismaAdapter, PrismaClient } from '../src/prisma/client';
+import { createPrismaAdapter } from '../src/prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { hashPassword } from '../prisma/seed/password';
 import { Server } from 'node:http';
 import { rm } from 'node:fs/promises';
@@ -58,32 +59,8 @@ describe('full application on PostgreSQL', () => {
 
     prisma = new PrismaClient({ adapter: createPrismaAdapter(testUrl) });
     await prisma.$connect();
-    const [staffGroup, unitGroup] = await Promise.all([
-      ensureGroup(prisma, 'THUONG_TRUC', [
-        'tasks.read',
-        'tasks.create',
-        'tasks.update',
-        'tasks.delete',
-        'tasks.assign',
-        'tasks.close',
-        'tasks.complete',
-        'users.manage',
-        'consolidated.review',
-        'report_history.read',
-        'dashboard.read',
-        'audit.read',
-      ]),
-      ensureGroup(prisma, 'DON_VI', [
-        'tasks.read',
-        'progress.edit',
-        'progress.submit',
-        'progress.review',
-        'consolidated.edit',
-        'consolidated.submit',
-        'report_history.read',
-        'dashboard.read',
-      ]),
-    ]);
+    // ponytail: RBAC đã gỡ (quyền không còn permission-group; admin = user id 1).
+    // E2E này chỉ dựng user theo org; coverage quyền cũ cần RBAC-removal follow-up.
     const [staffOrganization, leadOrganization, collaboratorOrganization] =
       await Promise.all([
         prisma.organization.create({
@@ -114,25 +91,12 @@ describe('full application on PostgreSQL', () => {
     collaboratorOrganizationId = collaboratorOrganization.id;
     const passwordHash = await hashPassword(password);
     await Promise.all([
-      createUser(
-        prisma,
-        staffUsername,
-        staffOrganization.id,
-        staffGroup.id,
-        passwordHash,
-      ),
-      createUser(
-        prisma,
-        leadUsername,
-        leadOrganization.id,
-        unitGroup.id,
-        passwordHash,
-      ),
+      createUser(prisma, staffUsername, staffOrganization.id, passwordHash),
+      createUser(prisma, leadUsername, leadOrganization.id, passwordHash),
       createUser(
         prisma,
         collaboratorUsername,
         collaboratorOrganization.id,
-        unitGroup.id,
         passwordHash,
       ),
     ]);
@@ -386,44 +350,10 @@ function readBody<T>(response: { body: unknown }): T {
   return response.body as T;
 }
 
-async function ensureGroup(
-  prisma: PrismaClient,
-  code: string,
-  permissionCodes: string[],
-) {
-  const group = await prisma.permissionGroup.upsert({
-    where: { code },
-    update: {},
-    create: { code, name: code },
-  });
-  for (const permissionCode of permissionCodes) {
-    const permission = await prisma.permission.upsert({
-      where: { code: permissionCode },
-      update: {},
-      create: { code: permissionCode, name: permissionCode },
-    });
-    await prisma.permissionGroupPermission.upsert({
-      where: {
-        permissionGroupId_permissionId: {
-          permissionGroupId: group.id,
-          permissionId: permission.id,
-        },
-      },
-      update: {},
-      create: {
-        permissionGroupId: group.id,
-        permissionId: permission.id,
-      },
-    });
-  }
-  return group;
-}
-
 function createUser(
   prisma: PrismaClient,
   username: string,
   organizationId: number,
-  permissionGroupId: number,
   passwordHash: string,
 ) {
   return prisma.user.create({
@@ -432,7 +362,6 @@ function createUser(
       fullName: username,
       passwordHash,
       organizationId,
-      permissionGroups: { create: { permissionGroupId } },
     },
   });
 }

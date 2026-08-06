@@ -1,13 +1,10 @@
 import {
-  Frequency,
   SubtaskStatus,
   ReportStatus,
   TaskType,
 } from '@prisma/client';
-import type {
-  DashboardRepository,
-  DashboardTaskRow,
-} from '../repositories/dashboard.repository';
+import type { DashboardRepository } from '../repositories/dashboard.repository';
+import type { DashboardTaskRow } from '../types/dashboard';
 import { DashboardService } from './dashboard.service';
 
 const principal = {
@@ -27,7 +24,7 @@ describe('DashboardService', () => {
     repository = {
       loadSummaryRows: jest.fn(),
     };
-    service = new DashboardService(repository as DashboardRepository);
+    service = new DashboardService(repository as unknown as DashboardRepository);
   });
 
   it('counts unique tasks separately from reporting subtasks', async () => {
@@ -109,9 +106,7 @@ describe('DashboardService', () => {
     const filters = {
       taskCode: 'NV-',
       taskName: 'Chuyển đổi số',
-      frequency: Frequency.QUARTERLY,
       year: 2026,
-      sequence: 3,
       programId: 4,
       dueFrom: '2026-07-01T00:00:00.000Z',
       dueTo: '2026-09-30T23:59:59.999Z',
@@ -157,13 +152,13 @@ function subtask(
   id: number,
   status: SubtaskStatus,
   dueAt: string,
-  workspaceStatuses: ReportStatus[] = [],
+  reportStatus: ReportStatus[] = [],
 ): DashboardTaskRow['subtasks'][number] {
   return {
     id,
-    frequency: Frequency.MONTHLY,
+    startAt: null,
     status,
     dueAt: new Date(dueAt),
-    workspaceStatuses,
+    reportStatus,
   };
 }

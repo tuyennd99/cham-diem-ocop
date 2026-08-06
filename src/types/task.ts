@@ -28,13 +28,18 @@ export type TaskView = {
   subtasks: {
     id: number;
     taskId: number;
+    title: string;
+    description: string | null;
     startAt: Date;
     dueAt: Date;
     status: SubtaskStatus;
     completedAt: Date | null;
     canceledAt: Date | null;
     cancelReason: string | null;
+    createdById: number;
+    createdByOrganizationId: number;
     createdAt: Date;
+    hasReports: boolean;
   }[];
 }
 

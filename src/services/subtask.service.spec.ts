@@ -19,7 +19,6 @@ function repositoryMock() {
       assigningOrganizationId: 10,
       leadOrganizationId: 20,
       collaboratorOrganizationIds: [30],
-      frequency: 'MONTHLY',
       closedAt: null,
       deletedAt: null,
       subtasks: [],
@@ -36,7 +35,7 @@ function repositoryMock() {
       .mockResolvedValue({ id: 5, status: 'CANCELED' }),
     createSubTask: jest
       .fn()
-      .mockResolvedValue({ id: 7, taskId: 1, year: 2026, sequence: 1 }),
+      .mockResolvedValue({ id: 7, taskId: 1, title: 'Kỳ tháng 8' }),
   };
 }
 
@@ -78,9 +77,8 @@ describe('SubTasksService', () => {
     expect(repository.findById).toHaveBeenCalledWith(1, 10, true);
   });
 
-  it('rejects reporting-subtask cancel from a related non-assigning organization', async () => {
+  it('lets the lead organization cancel a subtask', async () => {
     const repository = repositoryMock();
-    repository.findById.mockResolvedValue({ id: 1, assigningOrganizationId: 10 });
     const service = new SubTasksService(
       repository as unknown as TasksRepository,
       notificationsMock() as unknown as NotificationsService,
@@ -90,7 +88,23 @@ describe('SubTasksService', () => {
       service.cancel(5, 'Không còn áp dụng', {
         ...principal,
         isAdmin: false,
-        organizationId: 20,
+        organizationId: 20, // lead
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it('rejects subtask cancel from an unrelated organization', async () => {
+    const repository = repositoryMock();
+    const service = new SubTasksService(
+      repository as unknown as TasksRepository,
+      notificationsMock() as unknown as NotificationsService,
+    );
+
+    await expect(
+      service.cancel(5, 'Không còn áp dụng', {
+        ...principal,
+        isAdmin: false,
+        organizationId: 30, // collaborator, không được quản lý
       }),
     ).rejects.toMatchObject({ status: 403 });
   });
@@ -122,25 +136,6 @@ describe('SubTasksService', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('lets tasks.close cancel an in-scope reporting subtask', async () => {
-    const repository = repositoryMock();
-    repository.cancelSubTask.mockResolvedValue({
-      id: 9,
-      status: 'CANCELED',
-    });
-    const service = new SubTasksService(
-      repository as unknown as TasksRepository,
-      notificationsMock() as unknown as NotificationsService,
-    );
-
-    await expect(
-      service.cancel(9, 'Không còn áp dụng', {
-        ...principal,
-        isAdmin: false,
-      }),
-    ).resolves.toMatchObject({ id: 9, status: 'CANCELED' });
-  });
-
   it('runs only deadline notifications during daily generation', async () => {
     const repository = repositoryMock();
     const notifications = notificationsMock();
@@ -159,7 +154,7 @@ describe('SubTasksService', () => {
   });
 
   describe('create', () => {
-    it('creates a manual subtask and notifies reporters', async () => {
+    it('creates a manual subtask with title/creator and notifies reporters', async () => {
       const repository = repositoryMock();
       const notifications = notificationsMock();
       const service = new SubTasksService(
@@ -170,19 +165,25 @@ describe('SubTasksService', () => {
       await service.create(
         1,
         {
+          title: 'Rà soát dân cư tháng 8',
+          description: 'Mô tả',
           startAt: '2026-08-15T00:00:00+07:00',
           dueAt: '2026-09-14T23:59:59+07:00',
         },
         { ...principal, isAdmin: false },
       );
 
-      expect(repository.createSubTask).toHaveBeenCalledWith(1, {
-        frequency: 'MONTHLY',
-        year: 2026,
-        sequence: 1,
-        startAt: new Date('2026-08-15T00:00:00+07:00'),
-        dueAt: new Date('2026-09-14T23:59:59+07:00'),
-      });
+      expect(repository.createSubTask).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          title: 'Rà soát dân cư tháng 8',
+          description: 'Mô tả',
+          startAt: new Date('2026-08-15T00:00:00+07:00'),
+          dueAt: new Date('2026-09-14T23:59:59+07:00'),
+          createdById: 1,
+          createdByOrganizationId: 10,
+        }),
+      );
       expect(notifications.createForOrganizations).toHaveBeenCalledWith(
         expect.objectContaining({
           organizationIds: [20, 30],
@@ -191,7 +192,7 @@ describe('SubTasksService', () => {
       );
     });
 
-    it('rejects create from a non-assigning organization', async () => {
+    it('lets the lead organization create a subtask', async () => {
       const repository = repositoryMock();
       const service = new SubTasksService(
         repository as unknown as TasksRepository,
@@ -201,8 +202,33 @@ describe('SubTasksService', () => {
       await expect(
         service.create(
           1,
-          { startAt: '2026-08-15T00:00:00+07:00', dueAt: '2026-09-14T23:59:59+07:00' },
-          { ...principal, isAdmin: false, organizationId: 20 },
+          {
+            title: 'Kỳ tháng 8',
+            startAt: '2026-08-15T00:00:00+07:00',
+            dueAt: '2026-09-14T23:59:59+07:00',
+          },
+          { ...principal, isAdmin: false, organizationId: 20 }, // lead
+        ),
+      ).resolves.toBeDefined();
+      expect(repository.createSubTask).toHaveBeenCalled();
+    });
+
+    it('rejects create from an unrelated organization', async () => {
+      const repository = repositoryMock();
+      const service = new SubTasksService(
+        repository as unknown as TasksRepository,
+        notificationsMock() as unknown as NotificationsService,
+      );
+
+      await expect(
+        service.create(
+          1,
+          {
+            title: 'Kỳ tháng 8',
+            startAt: '2026-08-15T00:00:00+07:00',
+            dueAt: '2026-09-14T23:59:59+07:00',
+          },
+          { ...principal, isAdmin: false, organizationId: 30 }, // collaborator
         ),
       ).rejects.toMatchObject({ status: 403 });
       expect(repository.createSubTask).not.toHaveBeenCalled();
@@ -218,7 +244,11 @@ describe('SubTasksService', () => {
       await expect(
         service.create(
           1,
-          { startAt: '2026-09-14T00:00:00+07:00', dueAt: '2026-08-15T00:00:00+07:00' },
+          {
+            title: 'Kỳ tháng 8',
+            startAt: '2026-09-14T00:00:00+07:00',
+            dueAt: '2026-08-15T00:00:00+07:00',
+          },
           principal,
         ),
       ).rejects.toMatchObject({ status: 400 });
@@ -234,7 +264,6 @@ describe('SubTasksService', () => {
         assigningOrganizationId: 10,
         leadOrganizationId: 20,
         collaboratorOrganizationIds: [30],
-        frequency: 'MONTHLY',
         closedAt: new Date('2026-07-01T00:00:00+07:00'),
         deletedAt: null,
         subtasks: [],
@@ -247,42 +276,15 @@ describe('SubTasksService', () => {
       await expect(
         service.create(
           1,
-          { startAt: '2026-08-15T00:00:00+07:00', dueAt: '2026-09-14T23:59:59+07:00' },
+          {
+            title: 'Kỳ tháng 8',
+            startAt: '2026-08-15T00:00:00+07:00',
+            dueAt: '2026-09-14T23:59:59+07:00',
+          },
           principal,
         ),
       ).rejects.toMatchObject({ status: 409 });
       expect(repository.createSubTask).not.toHaveBeenCalled();
-    });
-
-    it('computes sequence from existing subtask count', async () => {
-      const repository = repositoryMock();
-      repository.findById.mockResolvedValue({
-        id: 1,
-        code: 'NV-001',
-        name: 'Nhiệm vụ',
-        assigningOrganizationId: 10,
-        leadOrganizationId: 20,
-        collaboratorOrganizationIds: [30],
-        frequency: 'MONTHLY',
-        closedAt: null,
-        deletedAt: null,
-        subtasks: [{ id: 1 }, { id: 2 }],
-      });
-      const service = new SubTasksService(
-        repository as unknown as TasksRepository,
-        notificationsMock() as unknown as NotificationsService,
-      );
-
-      await service.create(
-        1,
-        { startAt: '2026-08-15T00:00:00+07:00', dueAt: '2026-09-14T23:59:59+07:00' },
-        principal,
-      );
-
-      expect(repository.createSubTask).toHaveBeenCalledWith(
-        1,
-        expect.objectContaining({ sequence: 3 }),
-      );
     });
   });
 });

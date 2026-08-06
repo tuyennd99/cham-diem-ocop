@@ -164,6 +164,73 @@ export class SubTasksService
     return canceled;
   }
 
+  async remove(
+    subtaskId: number,
+    principal: AccessTokenPayload,
+    meta: RequestMeta = {},
+  ) {
+    const subtask = await this.repository.findSubTask(subtaskId);
+    if (!subtask) throw new NotFoundException('Reporting subtask not found');
+    const task = await this.repository.findById(
+      subtask.taskId,
+      principal.organizationId,
+      principal.isAdmin === true,
+    );
+    if (!task) throw new NotFoundException('Reporting subtask not found');
+    if (principal.isAdmin !== true && !canManageSubtasks(task, principal)) {
+      throw new ForbiddenException(
+        ErrorCode.TASK_CAN_ONLY_BE_ASSIGNED_BY_THE_CURRENT_ORGANIZATION,
+      );
+    }
+    const deleted = await this.repository.deleteSubTask(subtaskId, principal.sub, {
+      ...meta,
+      organizationId: principal.organizationId,
+    });
+    if (!deleted) {
+      throw new ConflictException(
+        'Nhiệm vụ con đã có báo cáo từ đơn vị, không thể xóa',
+      );
+    }
+    return deleted;
+  }
+
+  async update(
+    subtaskId: number,
+    input: { title?: string; description?: string; startAt?: string; dueAt?: string },
+    principal: AccessTokenPayload,
+    meta: RequestMeta = {},
+  ) {
+    const subtask = await this.repository.findSubTask(subtaskId);
+    if (!subtask) throw new NotFoundException('Reporting subtask not found');
+    const task = await this.repository.findById(
+      subtask.taskId,
+      principal.organizationId,
+      principal.isAdmin === true,
+    );
+    if (!task) throw new NotFoundException('Reporting subtask not found');
+    if (principal.isAdmin !== true && !canManageSubtasks(task, principal)) {
+      throw new ForbiddenException(
+        ErrorCode.TASK_CAN_ONLY_BE_ASSIGNED_BY_THE_CURRENT_ORGANIZATION,
+      );
+    }
+    if (task.closedAt || task.deletedAt) {
+      throw new ConflictException(
+        'Không thể sửa nhiệm vụ con của nhiệm vụ đã đóng hoặc đã xóa',
+      );
+    }
+    if (
+      input.startAt &&
+      input.dueAt &&
+      new Date(input.dueAt) <= new Date(input.startAt)
+    ) {
+      throw new BadRequestException('Hạn nộp phải sau ngày bắt đầu');
+    }
+    return this.repository.updateSubTask(subtaskId, input, principal.sub, {
+      ...meta,
+      organizationId: principal.organizationId,
+    });
+  }
+
   // Called daily by the scheduler integration registered in AppModule.
   async handleDailyGeneration(now = new Date()) {
     try {

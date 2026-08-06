@@ -3,6 +3,7 @@ import { AuthController } from './auth.controller';
 import { ConsolidatedReportsController } from './consolidated-reports.controller';
 import { DashboardController } from './dashboard.controller';
 import { HealthController } from './health.controller';
+import { ImagesController } from './images.controller';
 import { NotificationsController } from './notifications.controller';
 import { ProgressReportsController } from './progress-reports.controller';
 import { ReportHistoryController } from './report-history.controller';
@@ -16,6 +17,7 @@ export const appControllers = [
   ConsolidatedReportsController,
   DashboardController,
   HealthController,
+  ImagesController,
   NotificationsController,
   ProgressReportsController,
   ReportHistoryController,
