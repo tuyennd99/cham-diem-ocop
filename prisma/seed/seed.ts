@@ -3,6 +3,7 @@ import { createPrismaAdapter } from '../../src/prisma/client';
 import { DEFAULT_SEED_PASSWORD, hashSeedPassword } from './password';
 import { ADMIN_GROUP_CODE } from '../../src/constants/role';
 import { seedDefaultAdmin } from './admin';
+import donViData from './donvi.json';
 
 const prisma = new PrismaClient({ adapter: createPrismaAdapter() });
 
@@ -36,6 +37,16 @@ async function main() {
       description: 'Chương trình mẫu khởi tạo.',
     },
   });
+
+  for (const donVi of donViData) {
+    const code = donVi['Mã đơn vị'].trim();
+    const name = donVi['Tên đơn vị đầy đủ'].trim();
+    await prisma.organization.upsert({
+      where: { code },
+      update: { name },
+      create: { code, name },
+    });
+  }
 
   const admin = await seedDefaultAdmin(prisma, {
     passwordHash,
