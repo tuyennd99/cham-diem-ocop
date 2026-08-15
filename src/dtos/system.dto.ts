@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 const CODE_PATTERN = /^[A-Za-z0-9._-]+$/;
 const status = z.enum(['ACTIVE', 'INACTIVE']);
+const unique = (values: number[]) => new Set(values).size === values.length;
 
 const createUserSchema = z.strictObject({
   username: z.string().min(1).max(100).regex(CODE_PATTERN),
@@ -46,6 +47,12 @@ const createProgramSchema = z.strictObject({
   code: z.string().min(1).max(50).regex(CODE_PATTERN),
   name: z.string().min(1).max(255),
   description: z.string().max(5_000).optional(),
+  assigningOrganizationId: z.coerce.number().int().min(1),
+  leadOrganizationId: z.coerce.number().int().min(1),
+  collaboratorOrganizationIds: z
+    .array(z.number().int().min(1))
+    .refine(unique, { message: 'Giá trị trong mảng phải là duy nhất' })
+    .optional(),
   status: status.optional(),
 });
 

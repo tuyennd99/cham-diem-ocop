@@ -1,19 +1,18 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import {
-  SubtaskStatus,
-  Prisma,
-  ReportKind,
-  ReportStatus,
-} from '@prisma/client';
+import { Prisma, ReportKind, ReportStatus } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RequestMeta } from '../types/auth';
 
 const fileContextInclude = {
-  subtask: {
+  task: {
     include: {
-      task: {
-        include: { collaborators: { select: { organizationId: true } } },
+      program: {
+        select: {
+          assigningOrganizationId: true,
+          leadOrganizationId: true,
+          collaborators: { select: { organizationId: true } },
+        },
       },
     },
   },
@@ -28,14 +27,14 @@ export interface DraftFileContext {
   kind: ReportKind;
   status: ReportStatus;
   ownerOrganizationId: number;
-  subtask: {
-    status: SubtaskStatus;
-    task: {
-      leadOrganizationId: number;
-      completedAt: Date | null;
-      deletedAt: Date | null;
-      collaboratorOrganizationIds: number[];
-    };
+  ownerUserId: number | null;
+  task: {
+    assigningOrganizationId: number;
+    leadOrganizationId: number;
+    completedAt: Date | null;
+    closedAt: Date | null;
+    deletedAt: Date | null;
+    collaboratorOrganizationIds: number[];
   };
 }
 
@@ -58,7 +57,7 @@ export interface DownloadRecord {
 
 @Injectable()
 export class FilesRepository {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   async findDraftContext(
     workspaceId: number,
@@ -294,17 +293,16 @@ export class FilesRepository {
       kind: row.kind,
       status: row.status,
       ownerOrganizationId: row.ownerOrganizationId,
-      subtask: {
-        status: row.subtask.status,
-        task: {
-          leadOrganizationId: row.subtask.task.leadOrganizationId,
-          completedAt: row.subtask.task.completedAt,
-          deletedAt: row.subtask.task.deletedAt,
-          collaboratorOrganizationIds:
-            row.subtask.task.collaborators.map(
-              ({ organizationId }) => organizationId,
-            ),
-        },
+      ownerUserId: row.ownerUserId,
+      task: {
+        assigningOrganizationId: row.task.program.assigningOrganizationId,
+        leadOrganizationId: row.task.program.leadOrganizationId,
+        completedAt: row.task.completedAt,
+        closedAt: row.task.closedAt,
+        deletedAt: row.task.deletedAt,
+        collaboratorOrganizationIds: row.task.program.collaborators.map(
+          ({ organizationId }) => organizationId,
+        ),
       },
     };
   }
@@ -329,10 +327,9 @@ export class FilesRepository {
       Prisma.sql`
         SELECT rw."id"
         FROM "report_workspaces" rw
-        JOIN "subtasks" rp ON rp."id" = rw."subtaskId"
-        JOIN "tasks" task ON task."id" = rp."taskId"
+        JOIN "tasks" task ON task."id" = rw."taskId"
         WHERE rw."id" = ${workspaceId}
-        FOR UPDATE OF task, rp, rw
+        FOR UPDATE OF task, rw
       `,
     );
   }
@@ -341,9 +338,9 @@ export class FilesRepository {
     return (
       (context.status === ReportStatus.DRAFT ||
         context.status === ReportStatus.REJECTED) &&
-      context.subtask.status === SubtaskStatus.OPEN &&
-      context.subtask.task.completedAt === null &&
-      context.subtask.task.deletedAt === null
+      context.task.completedAt === null &&
+      context.task.closedAt === null &&
+      context.task.deletedAt === null
     );
   }
 }

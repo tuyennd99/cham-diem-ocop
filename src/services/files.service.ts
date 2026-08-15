@@ -11,7 +11,7 @@ import {
 import { createReadStream } from 'node:fs';
 import { unlink } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
-import { SubtaskStatus, ReportKind, ReportStatus } from '@prisma/client';
+import { ReportKind, ReportStatus } from '@prisma/client';
 import {
   DownloadRecord,
   DraftFileContext,
@@ -26,7 +26,6 @@ import {
   inspectDocument,
 } from '../utils/document-files';
 import { MAX_DRAFT_BYTES, storageRoot } from '../utils/private-storage';
-import { canAccessTask } from '../utils/task-access';
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -48,7 +47,6 @@ export class FilesService {
     principal: AccessTokenPayload,
     meta: RequestMeta = {},
   ) {
-    console.log("🚀 ~ FilesService ~ uploadDraftFile ~ file:", file)
     if (!file) {
       throw new UnsupportedMediaTypeException('A document file is required');
     }
@@ -157,22 +155,22 @@ export class FilesService {
     if (!context) throw new NotFoundException('Report workspace not found');
     if (
       !principal.isAdmin &&
-      (context.ownerOrganizationId !== principal.organizationId ||
-        (context.kind === ReportKind.PROGRESS
-          ? !context.subtask.task.collaboratorOrganizationIds.includes(
+      (context.kind === ReportKind.PROGRESS
+        ? context.ownerUserId !== principal.sub ||
+          !context.task.collaboratorOrganizationIds.includes(
             principal.organizationId,
           )
-          : context.subtask.task.leadOrganizationId !==
-          principal.organizationId))
+        : context.ownerOrganizationId !== principal.organizationId ||
+          context.task.leadOrganizationId !== principal.organizationId)
     ) {
       throw new ForbiddenException('Report belongs to another organization');
     }
     if (
       (context.status !== ReportStatus.DRAFT &&
         context.status !== ReportStatus.REJECTED) ||
-      context.subtask.status !== SubtaskStatus.OPEN ||
-      context.subtask.task.completedAt ||
-      context.subtask.task.deletedAt
+      context.task.completedAt ||
+      context.task.closedAt ||
+      context.task.deletedAt
     ) {
       throw new ConflictException('Report draft is locked');
     }
@@ -183,8 +181,14 @@ export class FilesService {
     context: DraftFileContext,
     principal: AccessTokenPayload,
   ) {
-    // Mọi đơn vị tham gia nhiệm vụ đều tải được tệp báo cáo; admin bỏ qua.
-    if (canAccessTask(principal, context.subtask.task)) return;
+    if (
+      principal.isAdmin ||
+      context.ownerUserId === principal.sub ||
+      context.task.assigningOrganizationId === principal.organizationId ||
+      context.task.leadOrganizationId === principal.organizationId
+    ) {
+      return;
+    }
     throw new ForbiddenException('File is outside your report scope');
   }
 

@@ -11,7 +11,6 @@ export interface NotificationWrite {
 }
 
 export interface DeadlineNotificationTarget {
-  subtaskId: number;
   taskId: number;
   taskCode: string;
   taskName: string;

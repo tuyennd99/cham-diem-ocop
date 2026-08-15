@@ -6,7 +6,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { NotificationType, SubtaskStatus, ReportKind, ReportStatus } from '@prisma/client';
+import { NotificationType, ReportKind, ReportStatus } from '@prisma/client';
 import { ReportHistoryQueryDto } from '../dtos/reports.dto';
 import {
   ReportWorkspaceView,
@@ -15,7 +15,6 @@ import {
 import { AccessTokenPayload, RequestMeta } from '../types/auth';
 import { NotificationsService } from './notifications.service';
 import { ErrorCode } from '../types/error-code';
-import { canAccessTask } from '../utils/task-access';
 
 @Injectable()
 export class ReportsService {
@@ -24,52 +23,52 @@ export class ReportsService {
   constructor(
     private readonly repository: ReportsRepository,
     private readonly notificationsService?: NotificationsService,
-  ) { }
+  ) {}
 
   async openProgress(
-    reportingSubtaskId: number,
+    taskId: number,
     principal: AccessTokenPayload,
-    requestedOwnerOrganizationId?: number,
+    requestedOwnerUserId?: number,
   ) {
-    const subtask = await this.requireSubtask(reportingSubtaskId);
-    // Đơn vị báo cáo tiến độ luôn là đơn vị của người dùng; admin phải chọn
-    // rõ một đơn vị phối hợp được phân công của nhiệm vụ.
-    const ownerOrganizationId = principal.isAdmin
-      ? requestedOwnerOrganizationId
-      : principal.organizationId;
+    const task = await this.requireTask(taskId);
+    const ownerUserId = principal.isAdmin
+      ? requestedOwnerUserId
+      : principal.sub;
+    if (!ownerUserId) {
+      throw new ForbiddenException({
+        errorCode: ErrorCode.ONLY_AN_ASSIGNED_COLLABORATOR_MAY_REPORT,
+        message: 'Cần chọn người báo cáo',
+      });
+    }
+    const owner = await this.repository.resolveUserOrg(ownerUserId);
     if (
-      !ownerOrganizationId ||
-      !subtask.task.collaboratorOrganizationIds.includes(ownerOrganizationId)
+      !owner ||
+      !task.collaboratorOrganizationIds.includes(owner.organizationId)
     ) {
       throw new ForbiddenException({
         errorCode: ErrorCode.ONLY_AN_ASSIGNED_COLLABORATOR_MAY_REPORT,
         message: 'Chỉ đơn vị được phân công phối hợp mới được báo cáo',
       });
     }
-    this.assertSubtaskEditable(subtask);
+    this.assertTaskEditable(task);
     const workspace = await this.repository.findOrCreateWorkspace(
-      reportingSubtaskId,
+      taskId,
       ReportKind.PROGRESS,
-      ownerOrganizationId,
+      { organizationId: owner.organizationId, userId: ownerUserId },
     );
     if (!workspace) {
       throw new ConflictException({
         errorCode: ErrorCode.REPORTING_SUBTASK_OR_ASSIGNMENT_HAS_CHANGED,
-        message: 'Kỳ báo cáo hoặc phân công đã thay đổi',
+        message: 'Nhiệm vụ hoặc phân công đã thay đổi',
       });
     }
     return workspace;
   }
 
-  async openConsolidated(
-    reportingSubtaskId: number,
-    principal: AccessTokenPayload,
-  ) {
-    const subtask = await this.requireSubtask(reportingSubtaskId);
-    // Cả nhiệm vụ đột xuất lẫn định kỳ đều có kỳ báo cáo (đột xuất được cấp 1
-    // kỳ khi tạo), nên lead lập báo cáo tổng hợp gửi cơ quan giao cho cả hai.
+  async openConsolidated(taskId: number, principal: AccessTokenPayload) {
+    const task = await this.requireTask(taskId);
     if (
-      subtask.task.leadOrganizationId !== principal.organizationId &&
+      task.leadOrganizationId !== principal.organizationId &&
       !principal.isAdmin
     ) {
       throw new ForbiddenException({
@@ -77,17 +76,16 @@ export class ReportsService {
         message: 'Chỉ cơ quan chủ trì được lập báo cáo tổng hợp',
       });
     }
-    this.assertSubtaskEditable(subtask);
-    // Lead được lập báo cáo tổng hợp bất kể báo cáo phối hợp đã duyệt hết chưa.
+    this.assertTaskEditable(task);
     const workspace = await this.repository.findOrCreateWorkspace(
-      reportingSubtaskId,
+      taskId,
       ReportKind.CONSOLIDATED,
-      subtask.task.leadOrganizationId,
+      { organizationId: task.leadOrganizationId, userId: null },
     );
     if (!workspace) {
       throw new ConflictException({
         errorCode: ErrorCode.REPORTING_SUBTASK_OR_ASSIGNMENT_HAS_CHANGED,
-        message: 'Kỳ báo cáo hoặc phân công đã thay đổi',
+        message: 'Nhiệm vụ hoặc phân công đã thay đổi',
       });
     }
     return workspace;
@@ -103,15 +101,15 @@ export class ReportsService {
     return workspace;
   }
 
-  async listSubtaskWorkspaces(
-    reportingSubtaskId: number,
-    principal: AccessTokenPayload,
-  ) {
-    const subtask = await this.requireSubtask(reportingSubtaskId);
-    if (!canAccessTask(principal, subtask.task)) {
+  async listTaskWorkspaces(taskId: number, principal: AccessTokenPayload) {
+    const task = await this.requireTask(taskId);
+    if (
+      !principal.isAdmin &&
+      task.leadOrganizationId !== principal.organizationId
+    ) {
       throw new ForbiddenException(ErrorCode.REPORT_IS_OUTSIDE_YOUR_SCOPE);
     }
-    return this.repository.listSubtaskWorkspaces(reportingSubtaskId);
+    return this.repository.listTaskWorkspaces(taskId);
   }
 
   async saveDraft(
@@ -151,16 +149,16 @@ export class ReportsService {
     if (!version) throw new ConflictException('Report draft is locked');
     const destination =
       kind === ReportKind.PROGRESS
-        ? workspace.subtask.task.leadOrganizationId
-        : workspace.subtask.task.assigningOrganizationId;
+        ? workspace.task.leadOrganizationId
+        : workspace.task.assigningOrganizationId;
     await this.safeNotify({
       organizationIds: [destination],
       eventKey: `REPORT_SUBMITTED:${version.id}`,
       type: NotificationType.GUI_BAO_CAO,
       title: 'Báo cáo mới chờ duyệt',
-      body: `${workspace.subtask.task.code} - ${workspace.subtask.task.name}`,
+      body: `${workspace.task.code} - ${workspace.task.name}`,
       entityType: 'Task',
-      entityId: workspace.subtask.task.id,
+      entityId: workspace.task.id,
     });
     return version;
   }
@@ -248,6 +246,7 @@ export class ReportsService {
       taskCode: query.taskCode?.trim() || undefined,
       taskName: query.taskName?.trim() || undefined,
       organizationId: principal.organizationId,
+      userId: principal.sub,
       globalScope: principal.isAdmin === true,
     });
     return {
@@ -269,32 +268,24 @@ export class ReportsService {
     return workspace;
   }
 
-  private async requireSubtask(id: number) {
-    const subtask = await this.repository.findSubtaskContext(id);
-    if (!subtask || subtask.task.deletedAt) {
-      throw new NotFoundException('Reporting subtask not found');
+  private async requireTask(id: number) {
+    const task = await this.repository.findTaskContext(id);
+    if (!task || task.deletedAt) {
+      throw new NotFoundException('Reporting task not found');
     }
-    return subtask;
+    return task;
   }
 
-  private assertSubtaskEditable(
-    subtask: Awaited<ReturnType<ReportsService['requireSubtask']>>,
+  private assertTaskEditable(
+    task: Awaited<ReturnType<ReportsService['requireTask']>>,
   ) {
-    if (
-      subtask.status !== SubtaskStatus.OPEN ||
-      subtask.task.completedAt !== null
-    ) {
-      throw new ConflictException('Reporting subtask is not editable');
+    if (task.closedAt || task.completedAt || task.deletedAt) {
+      throw new ConflictException('Reporting task is not editable');
     }
   }
 
   private assertDraftEditable(workspace: ReportWorkspaceView) {
-    this.assertSubtaskEditable({
-      id: workspace.subtask.id,
-      status: workspace.subtask.status,
-      task: workspace.subtask.task,
-      approvedProgressCount: 0,
-    });
+    this.assertTaskEditable(workspace.task);
     if (
       workspace.status !== ReportStatus.DRAFT &&
       workspace.status !== ReportStatus.REJECTED
@@ -308,16 +299,13 @@ export class ReportsService {
     principal: AccessTokenPayload,
   ) {
     if (principal.isAdmin) return;
-    if (workspace.ownerOrganizationId !== principal.organizationId) {
-      throw new ForbiddenException('Report belongs to another organization');
-    }
-    const task = workspace.subtask.task;
-    // Trách nhiệm theo nhiệm vụ: PROGRESS do đơn vị phối hợp (collaborator) nộp,
-    // CONSOLIDATED do đơn vị chủ trì (lead) nộp. Không phải role tài khoản.
+    const task = workspace.task;
     const validResponsibility =
       workspace.kind === ReportKind.PROGRESS
-        ? task.collaboratorOrganizationIds.includes(principal.organizationId)
-        : task.leadOrganizationId === principal.organizationId;
+        ? workspace.ownerUserId === principal.sub &&
+          task.collaboratorOrganizationIds.includes(principal.organizationId)
+        : workspace.ownerOrganizationId === principal.organizationId &&
+          task.leadOrganizationId === principal.organizationId;
     if (!validResponsibility)
       throw new ForbiddenException(ErrorCode.INVALID_TASK_RESPONSIBILITY);
   }
@@ -326,8 +314,15 @@ export class ReportsService {
     workspace: ReportWorkspaceView,
     principal: AccessTokenPayload,
   ) {
-    // Mọi đơn vị tham gia nhiệm vụ (giao/chủ trì/phối hợp) đều đọc được báo cáo.
-    if (canAccessTask(principal, workspace.subtask.task)) return;
+    if (principal.isAdmin) return;
+    const task = workspace.task;
+    if (
+      task.assigningOrganizationId === principal.organizationId ||
+      task.leadOrganizationId === principal.organizationId ||
+      workspace.ownerUserId === principal.sub
+    ) {
+      return;
+    }
     throw new ForbiddenException(ErrorCode.REPORT_IS_OUTSIDE_YOUR_SCOPE);
   }
 
@@ -338,7 +333,7 @@ export class ReportsService {
     // Duyệt theo trách nhiệm nhiệm vụ: chủ trì duyệt tiến độ, cơ quan giao duyệt
     // tổng hợp; admin bỏ qua cả hai.
     if (principal.isAdmin) return;
-    const task = workspace.subtask.task;
+    const task = workspace.task;
     const reviewerOrganizationId =
       workspace.kind === ReportKind.PROGRESS
         ? task.leadOrganizationId
@@ -350,8 +345,9 @@ export class ReportsService {
 
   private assertSubmitted(workspace: ReportWorkspaceView) {
     if (
-      workspace.subtask.status !== SubtaskStatus.OPEN ||
-      workspace.subtask.task.deletedAt
+      workspace.task.deletedAt ||
+      workspace.task.closedAt ||
+      workspace.task.completedAt
     ) {
       throw new ConflictException(ErrorCode.REPORTING_SUBTASK_IS_NOT_OPEN);
     }
@@ -364,14 +360,10 @@ export class ReportsService {
   }
 
   private assertApproved(workspace: ReportWorkspaceView) {
-    // Trả lại tổng hợp: duyệt đã đóng kỳ (COMPLETED), nên chấp nhận kỳ COMPLETED
-    // cho tổng hợp — repository sẽ mở lại. Progress vẫn yêu cầu kỳ OPEN.
-    const subtask = workspace.subtask;
-    const subtaskOk =
-      subtask.status === SubtaskStatus.OPEN ||
-      (workspace.kind === ReportKind.CONSOLIDATED &&
-        subtask.status === SubtaskStatus.COMPLETED);
-    if (!subtaskOk || subtask.task.deletedAt || subtask.task.completedAt) {
+    const task = workspace.task;
+    const taskEditable =
+      !task.completedAt || workspace.kind === ReportKind.CONSOLIDATED;
+    if (!taskEditable || task.deletedAt || task.closedAt) {
       throw new ConflictException(ErrorCode.REPORTING_SUBTASK_IS_NOT_OPEN);
     }
     if (
@@ -395,10 +387,10 @@ export class ReportsService {
       type: approved ? 'DUYET_BAO_CAO' : 'TRA_BAO_CAO',
       title: approved ? 'Báo cáo đã được duyệt' : 'Báo cáo chưa đạt yêu cầu',
       body: reason
-        ? `${workspace.subtask.task.code} - ${reason}`
-        : `${workspace.subtask.task.code} - ${workspace.subtask.task.name}`,
+        ? `${workspace.task.code} - ${reason}`
+        : `${workspace.task.code} - ${workspace.task.name}`,
       entityType: 'Task',
-      entityId: workspace.subtask.task.id,
+      entityId: workspace.task.id,
     });
   }
 

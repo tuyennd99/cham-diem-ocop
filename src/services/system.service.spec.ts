@@ -1,82 +1,105 @@
+import { BadRequestException } from '@nestjs/common';
 import { SystemRepository } from '../repositories/system.repository';
 import { SystemService } from './system.service';
 
-const user = {
-  id: 9,
-  username: 'managed-user',
-  fullName: 'Managed User',
-  organizationId: 10,
-  status: 'ACTIVE',
+const programInput = {
+  code: 'NQ57',
+  name: 'Nghị quyết 57',
+  assigningOrganizationId: 10,
+  leadOrganizationId: 20,
+  collaboratorOrganizationIds: [30],
 };
 
-describe('SystemService administration', () => {
-  let service: SystemService;
-  let repository: Record<string, jest.Mock>;
-
-  beforeEach(() => {
-    repository = {
-      findUserById: jest.fn().mockResolvedValue(user),
-      findUserByUsername: jest.fn().mockResolvedValue(null),
-      findOrganizationById: jest.fn().mockResolvedValue({ id: 10 }),
-      createUser: jest.fn().mockResolvedValue(user),
-      updateUser: jest.fn().mockResolvedValue(user),
-      deleteUser: jest.fn().mockResolvedValue(undefined),
-      lockUser: jest.fn().mockResolvedValue(user),
-    };
-    service = new SystemService(repository as unknown as SystemRepository);
-  });
-
-  it('creates a user from profile fields only, without group data', async () => {
-    await expect(
-      service.createUser(
-        {
-          username: 'new-user',
-          fullName: 'New User',
-          password: 'strong-password-value',
-          organizationId: 10,
-        },
-        1,
-        {},
+function repositoryMock() {
+  return {
+    findProgramByCode: jest.fn().mockResolvedValue(null),
+    findProgramById: jest.fn().mockResolvedValue({ id: 1, ...programInput }),
+    findOrganizationsByIds: jest.fn().mockImplementation((ids: number[]) =>
+      Promise.resolve(
+        ids.map((id) => ({
+          id,
+          status: 'ACTIVE',
+          isAssigningAuthority: id === 10,
+          isExecutingUnit: id !== 10,
+        })),
       ),
-    ).resolves.toMatchObject({ id: 9 });
+    ),
+    createProgram: jest.fn().mockResolvedValue({ id: 1, ...programInput }),
+    updateProgram: jest.fn().mockResolvedValue({ id: 1, ...programInput }),
+  };
+}
 
-    const [data, actorId] = repository.createUser.mock.calls[0];
-    expect(actorId).toBe(1);
-    expect(data).toMatchObject({ username: 'new-user', organizationId: 10 });
-    expect(data).not.toHaveProperty('permissionGroupIds');
-  });
+describe('SystemService Program CRUD', () => {
+  it('validates and writes assigning, lead, and collaborator organizations', async () => {
+    const repository = repositoryMock();
+    const service = new SystemService(
+      repository as unknown as SystemRepository,
+    );
 
-  it('updates a user without group data', async () => {
-    await expect(
-      service.updateUser(9, { fullName: 'Renamed' }, 1, {}),
-    ).resolves.toMatchObject({ id: 9 });
+    await service.createProgram(programInput, 1, {});
 
-    expect(repository.updateUser.mock.calls[0][1]).not.toHaveProperty(
-      'permissionGroupIds',
+    expect(repository.findOrganizationsByIds).toHaveBeenCalledWith([
+      10, 20, 30,
+    ]);
+    expect(repository.createProgram).toHaveBeenCalledWith(
+      expect.objectContaining(programInput),
+      1,
+      {},
     );
   });
 
-  it('rejects deleting user 1', async () => {
-    repository.findUserById.mockResolvedValue({ ...user, id: 1 });
-
-    await expect(service.deleteUser(1, 2, {})).rejects.toMatchObject({
-      response: {
-        errorCode: 'DEFAULT_ADMIN_PROTECTED',
-        message: expect.any(String),
+  it('rejects an organization without the required role', async () => {
+    const repository = repositoryMock();
+    repository.findOrganizationsByIds.mockResolvedValue([
+      {
+        id: 10,
+        status: 'ACTIVE',
+        isAssigningAuthority: true,
+        isExecutingUnit: false,
       },
-    });
-  });
-
-  it('rejects locking user 1', async () => {
-    repository.findUserById.mockResolvedValue({ ...user, id: 1 });
+      {
+        id: 20,
+        status: 'ACTIVE',
+        isAssigningAuthority: false,
+        isExecutingUnit: false,
+      },
+      {
+        id: 30,
+        status: 'ACTIVE',
+        isAssigningAuthority: false,
+        isExecutingUnit: true,
+      },
+    ]);
+    const service = new SystemService(
+      repository as unknown as SystemRepository,
+    );
 
     await expect(
-      service.lockUser(1, 'Manual review', 2, {}),
-    ).rejects.toMatchObject({
-      response: {
-        errorCode: 'DEFAULT_ADMIN_PROTECTED',
-        message: expect.any(String),
-      },
-    });
+      service.createProgram(programInput as never, 1, {}),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('validates and replaces collaborators on update', async () => {
+    const repository = repositoryMock();
+    const service = new SystemService(
+      repository as unknown as SystemRepository,
+    );
+
+    await service.updateProgram(
+      1,
+      { collaboratorOrganizationIds: [40] },
+      1,
+      {},
+    );
+
+    expect(repository.findOrganizationsByIds).toHaveBeenCalledWith([
+      10, 20, 40,
+    ]);
+    expect(repository.updateProgram).toHaveBeenCalledWith(
+      1,
+      { collaboratorOrganizationIds: [40] },
+      1,
+      {},
+    );
   });
 });

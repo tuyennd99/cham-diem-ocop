@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   ForbiddenException,
   PayloadTooLargeException,
   UnsupportedMediaTypeException,
@@ -32,32 +33,23 @@ const downloadRecord = {
     kind: 'PROGRESS',
     status: 'DRAFT',
     ownerOrganizationId: 30,
-    subtask: {
-      status: 'OPEN',
-      task: {
-        leadOrganizationId: 20,
-        completedAt: null,
-        collaboratorOrganizationIds: [30],
-      },
+    ownerUserId: 2,
+    task: {
+      assigningOrganizationId: 10,
+      leadOrganizationId: 20,
+      completedAt: null,
+      closedAt: null,
+      deletedAt: null,
+      collaboratorOrganizationIds: [30],
     },
   },
 };
 
+const draftContext = downloadRecord.context;
+
 function repositoryMock() {
   return {
-    findDraftContext: jest.fn().mockResolvedValue({
-      id: 11,
-      kind: 'PROGRESS',
-      status: 'DRAFT',
-      ownerOrganizationId: 30,
-      subtask: {
-        status: 'OPEN',
-        task: {
-          leadOrganizationId: 20,
-          collaboratorOrganizationIds: [30],
-        },
-      },
-    }),
+    findDraftContext: jest.fn().mockResolvedValue(draftContext),
     draftSize: jest.fn().mockResolvedValue(0),
     addDraftFile: jest.fn(),
     removeDraftFile: jest.fn(),
@@ -87,11 +79,11 @@ describe('FilesService', () => {
     );
   });
 
-  it('does not let a collaborator edit another organization draft', async () => {
+  it('does not let a collaborator edit another user draft', async () => {
     const repository = repositoryMock();
     repository.findDraftContext.mockResolvedValue({
       ...(await repository.findDraftContext()),
-      ownerOrganizationId: 40,
+      ownerUserId: 40,
     });
     const service = new FilesService(
       repository as unknown as FilesRepository,
@@ -101,6 +93,47 @@ describe('FilesService', () => {
     await expect(
       service.removeDraftFile(11, 99, unitUser),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('locks draft attachments when the task is closed', async () => {
+    const repository = repositoryMock();
+    repository.findDraftContext.mockResolvedValue({
+      ...draftContext,
+      task: {
+        ...draftContext.task,
+        closedAt: new Date('2026-08-12T00:00:00.000Z'),
+      },
+    });
+    const service = new FilesService(
+      repository as unknown as FilesRepository,
+      'E:\\private-storage',
+    );
+
+    await expect(
+      service.removeDraftFile(11, 99, unitUser),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('lets assigning and lead organizations read report files', async () => {
+    const repository = repositoryMock();
+    const service = new FilesService(
+      repository as unknown as FilesRepository,
+      'E:\\private-storage',
+    );
+    (createReadStream as jest.Mock).mockReturnValue({});
+
+    await expect(
+      service.downloadWorkspaceFile(11, 99, {
+        ...unitUser,
+        organizationId: 10,
+      }),
+    ).resolves.toEqual(expect.objectContaining({ originalName: 'report.pdf' }));
+    await expect(
+      service.downloadWorkspaceFile(11, 99, {
+        ...unitUser,
+        organizationId: 20,
+      }),
+    ).resolves.toEqual(expect.objectContaining({ originalName: 'report.pdf' }));
   });
 
   it('denies a private download to a non-participant organization', async () => {
@@ -113,6 +146,7 @@ describe('FilesService', () => {
     await expect(
       service.downloadWorkspaceFile(11, 99, {
         ...unitUser,
+        sub: 99,
         organizationId: 99,
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
@@ -124,7 +158,7 @@ describe('FilesService', () => {
       repository as unknown as FilesRepository,
       'E:\\private-storage',
     );
-    const outsider = { ...unitUser, organizationId: 99 };
+    const outsider = { ...unitUser, sub: 99, organizationId: 99 };
     (createReadStream as jest.Mock).mockReturnValue({});
 
     await expect(

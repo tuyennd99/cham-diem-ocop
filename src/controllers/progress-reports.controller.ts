@@ -37,19 +37,15 @@ export class ProgressReportsController {
   constructor(
     private readonly reports: ReportsService,
     private readonly files: FilesService,
-  ) { }
+  ) {}
 
-  @Get('subtasks/:subtaskId')
+  @Get('tasks/:taskId')
   open(
-    @Param('subtaskId', ParseIntPipe) subtaskId: number,
+    @Param('taskId', ParseIntPipe) taskId: number,
     @Query() query: OpenProgressQueryDto,
     @CurrentUser() principal: AccessTokenPayload,
   ) {
-    return this.reports.openProgress(
-      subtaskId,
-      principal,
-      query.ownerOrganizationId,
-    );
+    return this.reports.openProgress(taskId, principal, query.ownerUserId);
   }
 
   @Get(':id')

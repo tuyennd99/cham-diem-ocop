@@ -14,14 +14,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { ResponseMessage } from '../decorators/response-message.decorator';
-import {
-  CreateTaskDto,
-  TaskQueryDto,
-  UpdateTaskDto,
-} from '../dtos/tasks.dto';
-import { CreateSubTaskDto } from '../dtos/subtasks.dto';
-import { SubTasksService } from '../services/subtask.service';
-import { ReportsService } from '../services/reports.service';
+import { CreateTaskDto, TaskQueryDto, UpdateTaskDto } from '../dtos/tasks.dto';
 import { TasksService } from '../services/tasks.service';
 import type { AccessTokenPayload } from '../types/auth';
 import { requestMeta } from '../utils/request-meta';
@@ -30,10 +23,7 @@ import { requestMeta } from '../utils/request-meta';
 @ApiBearerAuth()
 @Controller('tasks')
 export class TasksController {
-  constructor(
-    private readonly tasksService: TasksService,
-    private readonly SubTaskService: SubTasksService,
-  ) { }
+  constructor(private readonly tasksService: TasksService) {}
 
   @Get()
   list(
@@ -44,7 +34,7 @@ export class TasksController {
   }
 
   @Post()
-  @ResponseMessage('Tạo nhiệm vụ thành công')
+  @ResponseMessage('Tạo nhiệm vụ con thành công')
   create(
     @Body() body: CreateTaskDto,
     @CurrentUser() principal: AccessTokenPayload,
@@ -53,14 +43,9 @@ export class TasksController {
     return this.tasksService.create(body, principal, requestMeta(request));
   }
 
-  @Get('lookups/organizations')
-  organizationLookups(@CurrentUser() principal: AccessTokenPayload) {
-    return this.tasksService.listOrganizationLookups(principal);
-  }
-
   @Get('lookups/programs')
-  programLookups(@CurrentUser() principal: AccessTokenPayload) {
-    return this.tasksService.listProgramLookups(principal);
+  programLookups() {
+    return this.tasksService.listProgramLookups();
   }
 
   @Get(':id')
@@ -72,7 +57,7 @@ export class TasksController {
   }
 
   @Patch(':id')
-  @ResponseMessage('Cập nhật nhiệm vụ thành công')
+  @ResponseMessage('Cập nhật nhiệm vụ con thành công')
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateTaskDto,
@@ -83,7 +68,7 @@ export class TasksController {
   }
 
   @Delete(':id')
-  @ResponseMessage('Xóa nhiệm vụ thành công')
+  @ResponseMessage('Xóa nhiệm vụ con thành công')
   remove(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() principal: AccessTokenPayload,
@@ -91,24 +76,4 @@ export class TasksController {
   ) {
     return this.tasksService.remove(id, principal, requestMeta(request));
   }
-
-  @Get(':id/subtasks')
-  listSubtasks(
-    @Param('id', ParseIntPipe) id: number,
-    @CurrentUser() principal: AccessTokenPayload,
-  ) {
-    return this.SubTaskService.list(id, principal);
-  }
-
-  @Post(':id/subtasks')
-  @ResponseMessage('Tạo nhiệm vụ con thành công')
-  createSubtask(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() body: CreateSubTaskDto,
-    @CurrentUser() principal: AccessTokenPayload,
-    @Req() request: Request,
-  ) {
-    return this.SubTaskService.create(id, body, principal, requestMeta(request));
-  }
 }
-

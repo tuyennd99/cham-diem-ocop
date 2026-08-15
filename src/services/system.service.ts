@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -236,12 +237,16 @@ export class SystemService {
     if (await this.repository.findProgramByCode(input.code.trim())) {
       throw this.conflict('Program code already exists');
     }
+    const data = {
+      ...input,
+      code: input.code.trim(),
+      name: input.name.trim(),
+      description: input.description?.trim() || undefined,
+      collaboratorOrganizationIds: input.collaboratorOrganizationIds ?? [],
+    };
+    await this.validateProgramOrganizations(data);
     return this.translate(() =>
-      this.repository.createProgram(
-        { ...input, code: input.code.trim(), name: input.name.trim() },
-        actorId,
-        meta,
-      ),
+      this.repository.createProgram(data, actorId, meta),
     );
   }
 
@@ -251,7 +256,7 @@ export class SystemService {
     actorId: number,
     meta: RequestMeta,
   ) {
-    await this.getProgram(id);
+    const current = await this.getProgram(id);
     if (input.code !== undefined) {
       const duplicate = await this.repository.findProgramByCode(
         input.code.trim(),
@@ -260,17 +265,31 @@ export class SystemService {
         throw this.conflict('Program code already exists');
       }
     }
+    const data = {
+      ...input,
+      ...(input.code === undefined ? {} : { code: input.code.trim() }),
+      ...(input.name === undefined ? {} : { name: input.name.trim() }),
+      ...(input.description === undefined
+        ? {}
+        : { description: input.description.trim() }),
+    };
+    if (
+      input.assigningOrganizationId !== undefined ||
+      input.leadOrganizationId !== undefined ||
+      input.collaboratorOrganizationIds !== undefined
+    ) {
+      await this.validateProgramOrganizations({
+        assigningOrganizationId:
+          input.assigningOrganizationId ?? current.assigningOrganizationId,
+        leadOrganizationId:
+          input.leadOrganizationId ?? current.leadOrganizationId,
+        collaboratorOrganizationIds:
+          input.collaboratorOrganizationIds ??
+          current.collaboratorOrganizationIds,
+      });
+    }
     return this.translate(() =>
-      this.repository.updateProgram(
-        id,
-        {
-          ...input,
-          ...(input.code === undefined ? {} : { code: input.code.trim() }),
-          ...(input.name === undefined ? {} : { name: input.name.trim() }),
-        },
-        actorId,
-        meta,
-      ),
+      this.repository.updateProgram(id, data, actorId, meta),
     );
   }
 
@@ -286,6 +305,45 @@ export class SystemService {
     const item = await this.repository.findOrganizationById(id);
     if (!item) throw this.notFound('Organization');
     return item;
+  }
+
+  private async validateProgramOrganizations(input: {
+    assigningOrganizationId: number;
+    leadOrganizationId: number;
+    collaboratorOrganizationIds: number[];
+  }) {
+    if (
+      new Set(input.collaboratorOrganizationIds).size !==
+      input.collaboratorOrganizationIds.length
+    ) {
+      throw new BadRequestException('Collaborators must be unique');
+    }
+    const ids = [
+      ...new Set([
+        input.assigningOrganizationId,
+        input.leadOrganizationId,
+        ...input.collaboratorOrganizationIds,
+      ]),
+    ];
+    const organizations = await this.repository.findOrganizationsByIds(ids);
+    const byId = new Map(
+      organizations.map((organization) => [organization.id, organization]),
+    );
+    if (
+      byId.size !== ids.length ||
+      byId.get(input.assigningOrganizationId)?.status !== 'ACTIVE' ||
+      !byId.get(input.assigningOrganizationId)?.isAssigningAuthority ||
+      byId.get(input.leadOrganizationId)?.status !== 'ACTIVE' ||
+      !byId.get(input.leadOrganizationId)?.isExecutingUnit ||
+      input.collaboratorOrganizationIds.some(
+        (id) =>
+          byId.get(id)?.status !== 'ACTIVE' || !byId.get(id)?.isExecutingUnit,
+      )
+    ) {
+      throw new BadRequestException(
+        'Program organizations must exist, be active, and have the required role',
+      );
+    }
   }
 
   private publicUser<T extends Record<string, unknown>>(user: T) {

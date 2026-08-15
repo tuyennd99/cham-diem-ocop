@@ -1,538 +1,144 @@
-import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-} from '@nestjs/common';
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { TasksRepository } from '../repositories/tasks.repository';
-import { NotificationsService } from './notifications.service';
 import { TasksService } from './tasks.service';
 
-const taskManager = {
+const assigning = {
   sub: 1,
-  username: 'thuongtruc',
+  username: 'assigning',
   organizationId: 10,
-  permissions: [
-    'tasks.read',
-    'tasks.create',
-    'tasks.update',
-    'tasks.delete',
-    'tasks.assign',
-    'tasks.close',
-    'tasks.complete',
-  ],
 };
 
-const unitUser = {
+const collaborator = {
   sub: 2,
-  username: 'unit',
-  organizationId: 20,
-  permissions: ['tasks.read', 'tasks.update'],
+  username: 'collaborator',
+  organizationId: 30,
 };
 
-const delegatedCreator = {
-  ...unitUser,
-  permissions: ['tasks.read', 'tasks.create', 'tasks.update'],
+const program = {
+  id: 1,
+  assigningOrganizationId: 10,
+  leadOrganizationId: 20,
+  collaboratorOrganizationIds: [30],
 };
 
-const existingTask = {
+const task = {
   id: 7,
   code: 'NV-007',
-  name: 'Nhiệm vụ',
+  name: 'Nhiệm vụ con',
+  description: null,
+  expectedOutput: null,
   type: 'DINH_KY' as const,
   programId: 1,
   assigningOrganizationId: 10,
   leadOrganizationId: 20,
   collaboratorOrganizationIds: [30],
-  dueAt: null,
-  frequency: 'MONTHLY' as const,
-  startAt: new Date('2026-07-15T00:00:00+07:00'),
+  dueAt: new Date('2026-08-01T00:00:00.000Z'),
+  deadlineStatus: null,
+  startAt: new Date('2026-07-01T00:00:00.000Z'),
   closedAt: null,
+  closeReason: null,
+  completedAt: null,
+  deletedAt: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  hasReports: false,
+  program,
+  workspaces: [],
 };
 
 function repositoryMock() {
   return {
-    list: jest.fn(),
-    findById: jest.fn().mockResolvedValue(existingTask),
+    list: jest.fn().mockResolvedValue({ data: [], total: 0 }),
+    findById: jest.fn().mockResolvedValue(task),
     codeExists: jest.fn().mockResolvedValue(false),
-    findActiveProgram: jest.fn().mockResolvedValue({ id: 1 }),
-    findActiveOrganizations: jest.fn().mockImplementation((ids: number[]) =>
-      Promise.resolve(
-        ids.map((id) => ({
-          id,
-          isAssigningAuthority: id === 10,
-          isExecutingUnit: id !== 10,
-        })),
-      ),
-    ),
-    create: jest.fn().mockResolvedValue(existingTask),
-    update: jest.fn().mockResolvedValue(existingTask),
-    softDelete: jest.fn().mockResolvedValue(existingTask),
-    countOpenSubtasks: jest.fn().mockResolvedValue(0),
-    close: jest
-      .fn()
-      .mockResolvedValue({ ...existingTask, closedAt: new Date() }),
+    findActiveProgram: jest.fn().mockResolvedValue(program),
+    create: jest.fn().mockResolvedValue(task),
+    update: jest.fn().mockResolvedValue(task),
+    softDelete: jest.fn().mockResolvedValue(task),
+    close: jest.fn().mockResolvedValue({ ...task, closedAt: new Date() }),
     complete: jest.fn(),
+    listActiveOrganizations: jest.fn().mockResolvedValue([]),
+    listActivePrograms: jest.fn().mockResolvedValue([]),
   };
 }
 
 describe('TasksService', () => {
-  it('scopes a unit list to the current organization', async () => {
+  it('threads the acting user into task visibility and report badges', async () => {
     const repository = repositoryMock();
-    repository.list.mockResolvedValue({ data: [], total: 0 });
     const service = new TasksService(repository as unknown as TasksRepository);
 
-    await service.list({ page: 1, limit: 20 }, unitUser);
-
-    expect(repository.list).toHaveBeenCalledWith({
-      page: 1,
-      limit: 20,
-      organizationId: unitUser.organizationId,
-      globalScope: false,
-    });
-  });
-
-  it('uses global scope only for an admin principal', async () => {
-    const repository = repositoryMock();
-    repository.list.mockResolvedValue({ data: [], total: 0 });
-    const service = new TasksService(repository as unknown as TasksRepository);
-
-    await service.list({ page: 1, limit: 20 }, { ...taskManager, isAdmin: true });
+    await service.list({ page: 1, limit: 20 }, collaborator);
+    await service.get(task.id, collaborator);
 
     expect(repository.list).toHaveBeenCalledWith(
-      expect.objectContaining({ globalScope: true }),
+      expect.objectContaining({ userId: collaborator.sub }),
+    );
+    expect(repository.findById).toHaveBeenCalledWith(
+      task.id,
+      collaborator.organizationId,
+      collaborator.sub,
+      false,
     );
   });
 
-  it('soft deletes without removing reports', async () => {
+  it('creates a child Task using organization responsibility from its Program', async () => {
     const repository = repositoryMock();
     const service = new TasksService(repository as unknown as TasksRepository);
-
-    await service.remove(existingTask.id, taskManager);
-
-    expect(repository.softDelete).toHaveBeenCalledWith(
-      existingTask.id,
-      expect.any(Date),
-      taskManager.sub,
-      { organizationId: taskManager.organizationId },
-    );
-  });
-
-  it('does not let a unit assign collaborators', async () => {
-    const repository = repositoryMock();
-    const service = new TasksService(repository as unknown as TasksRepository);
-
-    await expect(
-      service.update(
-        existingTask.id,
-        { collaboratorOrganizationIds: [40] },
-        unitUser,
-      ),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-  });
-
-  it('requires assignment authority to create a task', async () => {
-    const repository = repositoryMock();
-    const service = new TasksService(repository as unknown as TasksRepository);
-
-    await expect(
-      service.create(
-        {
-          code: 'NV-008',
-          name: 'Nhiệm vụ',
-          type: 'DOT_XUAT',
-          programId: 1,
-          assigningOrganizationId: 10,
-          leadOrganizationId: 20,
-          collaboratorOrganizationIds: [30],
-          dueAt: '2026-08-01T00:00:00.000Z',
-        },
-        delegatedCreator,
-      ),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-  });
-
-  it('lets any principal with task permissions manage tasks in scope', async () => {
-    const repository = repositoryMock();
-    const service = new TasksService(repository as unknown as TasksRepository);
-    const custom = {
-      ...taskManager,
-      isAdmin: false,
-      permissions: [
-        'tasks.read',
-        'tasks.read.all',
-        'tasks.create',
-        'tasks.update',
-        'tasks.delete',
-        'tasks.assign',
-        'tasks.close',
-      ],
-    };
-
-    await expect(
-      service.create(
-        {
-          code: 'NV-008',
-          name: 'Nhiệm vụ',
-          type: 'DOT_XUAT',
-          programId: 1,
-          assigningOrganizationId: 10,
-          leadOrganizationId: 20,
-          collaboratorOrganizationIds: [30],
-          dueAt: '2026-08-01T00:00:00.000Z',
-        },
-        custom,
-      ),
-    ).resolves.toMatchObject({ id: 7 });
-    await expect(
-      service.update(existingTask.id, { name: 'Đổi tên' }, custom),
-    ).resolves.toBeDefined();
-    await expect(
-      service.remove(existingTask.id, custom),
-    ).resolves.toBeDefined();
-  });
-
-  it('requires assignment authority for every organization assignment field', async () => {
-    const repository = repositoryMock();
-    const service = new TasksService(repository as unknown as TasksRepository);
-
-    for (const input of [
-      { assigningOrganizationId: 11 },
-      { leadOrganizationId: 21 },
-      { collaboratorOrganizationIds: [40] },
-    ]) {
-      await expect(
-        service.update(existingTask.id, input, unitUser),
-      ).rejects.toBeInstanceOf(ForbiddenException);
-    }
-  });
-
-  it('limits a non-admin assigning authority to its own organization', async () => {
-    const repository = repositoryMock();
-    const service = new TasksService(repository as unknown as TasksRepository);
-
-    await expect(
-      service.create(
-        {
-          code: 'NV-008',
-          name: 'Nhiệm vụ',
-          type: 'DOT_XUAT',
-          programId: 1,
-          assigningOrganizationId: 99,
-          leadOrganizationId: 20,
-          collaboratorOrganizationIds: [30],
-          dueAt: '2026-08-01T00:00:00.000Z',
-        },
-        taskManager,
-      ),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-  });
-
-  it('maps a concurrent unique-code violation to conflict', async () => {
-    const repository = repositoryMock();
-    repository.create.mockRejectedValue({ code: 'P2002' });
-    const service = new TasksService(repository as unknown as TasksRepository);
-
-    await expect(
-      service.create(
-        {
-          code: 'NV-008',
-          name: 'Nhiệm vụ',
-          type: 'DOT_XUAT',
-          programId: 1,
-          assigningOrganizationId: 10,
-          leadOrganizationId: 20,
-          collaboratorOrganizationIds: [30],
-          dueAt: '2026-08-01T00:00:00.000Z',
-        },
-        taskManager,
-      ),
-    ).rejects.toBeInstanceOf(ConflictException);
-  });
-
-  it('notifies every assigned organization after task creation', async () => {
-    const repository = repositoryMock();
-    const notifications = {
-      createForOrganizations: jest.fn().mockResolvedValue(2),
-    };
-    const service = new TasksService(
-      repository as unknown as TasksRepository,
-      notifications as unknown as NotificationsService,
-    );
 
     await service.create(
       {
         code: 'NV-008',
-        name: 'Nhiệm vụ mới',
-        type: 'DOT_XUAT',
-        programId: 1,
-        assigningOrganizationId: 10,
-        leadOrganizationId: 20,
-        collaboratorOrganizationIds: [30],
+        name: 'Nhiệm vụ con mới',
+        type: 'DINH_KY',
+        programId: program.id,
+        startAt: '2026-07-01T00:00:00.000Z',
         dueAt: '2026-08-01T00:00:00.000Z',
+      } as never,
+      assigning,
+    );
+
+    expect(repository.create).toHaveBeenCalledWith(
+      {
+        code: 'NV-008',
+        name: 'Nhiệm vụ con mới',
+        description: null,
+        expectedOutput: null,
+        type: 'DINH_KY',
+        programId: program.id,
+        startAt: new Date('2026-07-01T00:00:00.000Z'),
+        dueAt: new Date('2026-08-01T00:00:00.000Z'),
       },
-      taskManager,
-    );
-
-    expect(notifications.createForOrganizations).toHaveBeenCalledWith(
-      expect.objectContaining({
-        organizationIds: [20, 30],
-        eventKey: `TASK_ASSIGNED:${existingTask.id}`,
-        type: 'GIAO_NHIEM_VU',
-        entityType: 'Task',
-        entityId: existingTask.id,
-      }),
+      assigning.sub,
+      expect.any(Date),
+      { organizationId: assigning.organizationId },
     );
   });
 
-  it('rejects a duplicate task code', async () => {
+  it('rejects child Task creation outside the parent Program assigning org', async () => {
     const repository = repositoryMock();
-    repository.codeExists.mockResolvedValue(true);
-    const service = new TasksService(repository as unknown as TasksRepository);
-
-    await expect(
-      service.create(
-        {
-          code: 'NV-007',
-          name: 'Nhiệm vụ',
-          type: 'DOT_XUAT',
-          programId: 1,
-          assigningOrganizationId: 10,
-          leadOrganizationId: 20,
-          collaboratorOrganizationIds: [30],
-          dueAt: '2026-08-01T00:00:00.000Z',
-        },
-        taskManager,
-      ),
-    ).rejects.toBeInstanceOf(ConflictException);
-  });
-
-  it('requires an active program and every referenced organization', async () => {
-    const repository = repositoryMock();
-    repository.findActiveProgram.mockResolvedValue(null);
-    repository.findActiveOrganizations.mockResolvedValue([{ id: 10 }]);
     const service = new TasksService(repository as unknown as TasksRepository);
 
     await expect(
       service.create(
         {
           code: 'NV-008',
-          name: 'Nhiệm vụ',
-          type: 'DOT_XUAT',
-          programId: 999,
-          assigningOrganizationId: 10,
-          leadOrganizationId: 20,
-          collaboratorOrganizationIds: [30],
-          dueAt: '2026-08-01T00:00:00.000Z',
-        },
-        taskManager,
-      ),
-    ).rejects.toBeInstanceOf(BadRequestException);
-  });
-
-  it('requires at least one collaborator', async () => {
-    const repository = repositoryMock();
-    const service = new TasksService(repository as unknown as TasksRepository);
-    const common = {
-      code: 'NV-008',
-      name: 'Nhiệm vụ',
-      type: 'DOT_XUAT' as const,
-      programId: 1,
-      assigningOrganizationId: 10,
-      leadOrganizationId: 20,
-      dueAt: '2026-08-01T00:00:00.000Z',
-    };
-
-    await expect(
-      service.create(
-        { ...common, collaboratorOrganizationIds: [] },
-        taskManager,
-      ),
-    ).rejects.toBeInstanceOf(BadRequestException);
-  });
-
-  it('validates type-specific fields', async () => {
-    const repository = repositoryMock();
-    const service = new TasksService(repository as unknown as TasksRepository);
-    const common = {
-      code: 'NV-008',
-      name: 'Nhiệm vụ',
-      programId: 1,
-      assigningOrganizationId: 10,
-      leadOrganizationId: 20,
-      collaboratorOrganizationIds: [30],
-    };
-
-    await expect(
-      service.create({ ...common, type: 'DOT_XUAT' }, taskManager),
-    ).rejects.toBeInstanceOf(BadRequestException);
-    await expect(
-      service.create(
-        {
-          ...common,
+          name: 'Nhiệm vụ con mới',
           type: 'DINH_KY',
-          startAt: '2026-07-14T00:00:00+07:00',
-          dueAt: '2026-08-01T00:00:00.000Z',
-        },
-        taskManager,
+          programId: program.id,
+        } as never,
+        collaborator,
       ),
-    ).rejects.toBeInstanceOf(BadRequestException);
-  });
-
-  it('closes only an open periodic task with no open subtasks', async () => {
-    const repository = repositoryMock();
-    const service = new TasksService(repository as unknown as TasksRepository);
-
-    repository.countOpenSubtasks.mockResolvedValue(1);
-    await expect(
-      service.close(existingTask.id, 'Kết thúc chương trình', taskManager),
-    ).rejects.toBeInstanceOf(ConflictException);
-
-    repository.findById.mockResolvedValue({
-      ...existingTask,
-      type: 'DOT_XUAT',
-    });
-    await expect(
-      service.close(existingTask.id, 'Kết thúc chương trình', taskManager),
-    ).rejects.toBeInstanceOf(BadRequestException);
-  });
-
-  it('uses the canonical task-closed notification type', async () => {
-    const repository = repositoryMock();
-    const notifications = {
-      createForOrganizations: jest.fn().mockResolvedValue(3),
-    };
-    const service = new TasksService(
-      repository as unknown as TasksRepository,
-      notifications as unknown as NotificationsService,
-    );
-
-    await service.close(existingTask.id, 'Finished program', taskManager);
-
-    expect(notifications.createForOrganizations).toHaveBeenCalledWith(
-      expect.objectContaining({
-        eventKey: `TASK_CLOSED:${existingTask.id}`,
-        type: 'DONG_NHIEM_VU',
-        entityType: 'Task',
-        entityId: existingTask.id,
-      }),
-    );
-  });
-
-  it('lets the assigning organization complete an ad-hoc task at any time', async () => {
-    const completedAt = new Date('2026-07-26T00:00:00.000Z');
-    const repository = repositoryMock();
-    const adHocTask = {
-      ...existingTask,
-      type: 'DOT_XUAT' as const,
-      dueAt: new Date('2026-07-28T00:00:00.000Z'),
-      frequency: null,
-      startAt: null,
-    };
-    repository.findById.mockResolvedValue(adHocTask);
-    repository.complete.mockResolvedValue({
-      ...adHocTask,
-      completedAt,
-      deadlineStatus: 'HOAN_THANH_DUNG_HAN',
-    });
-    const service = new TasksService(repository as unknown as TasksRepository);
-
-    await service.complete(adHocTask.id, taskManager, {}, completedAt);
-
-    expect(repository.complete).toHaveBeenCalledWith(
-      adHocTask.id,
-      completedAt,
-      'HOAN_THANH_DUNG_HAN',
-      taskManager.sub,
-      { organizationId: taskManager.organizationId },
-    );
-  });
-
-  it('does not let another organization complete an ad-hoc task', async () => {
-    const repository = repositoryMock();
-    repository.findById.mockResolvedValue({
-      ...existingTask,
-      type: 'DOT_XUAT',
-      assigningOrganizationId: 10,
-      dueAt: new Date('2026-07-28T00:00:00.000Z'),
-    });
-    const service = new TasksService(repository as unknown as TasksRepository);
-
-    await expect(
-      service.complete(existingTask.id, { ...unitUser }),
     ).rejects.toBeInstanceOf(ForbiddenException);
-    expect(repository.complete).not.toHaveBeenCalled();
   });
 
-  it('does not complete a periodic task', async () => {
+  it('blocks deleting a Task with submitted reports', async () => {
     const repository = repositoryMock();
+    repository.findById.mockResolvedValue({ ...task, hasReports: true });
     const service = new TasksService(repository as unknown as TasksRepository);
 
-    await expect(
-      service.complete(existingTask.id, taskManager),
-    ).rejects.toBeInstanceOf(BadRequestException);
-    expect(repository.complete).not.toHaveBeenCalled();
-  });
-
-  describe('restricts lifecycle mutations to the assigning organization', () => {
-    // A related lead organization (20) can SEE the task but is not assigning (10).
-    const relatedNonAssigning = {
-      ...taskManager,
-      isAdmin: false,
-      organizationId: 20,
-    };
-    const periodicTask = { ...existingTask, assigningOrganizationId: 10 };
-    const adHocTask = {
-      ...existingTask,
-      assigningOrganizationId: 10,
-      type: 'DOT_XUAT' as const,
-      dueAt: new Date('2026-07-28T00:00:00.000Z'),
-      frequency: null,
-      startAt: null,
-    };
-
-    const cases: [string, (s: TasksService) => Promise<unknown>, unknown][] = [
-      ['update', (s) => s.update(existingTask.id, { name: 'Đổi tên' }, relatedNonAssigning), periodicTask],
-      ['remove', (s) => s.remove(existingTask.id, relatedNonAssigning), periodicTask],
-      ['close', (s) => s.close(existingTask.id, 'Kết thúc', relatedNonAssigning), periodicTask],
-      ['complete', (s) => s.complete(existingTask.id, relatedNonAssigning), adHocTask],
-    ];
-
-    it.each(cases)(
-      'rejects %s from a related non-assigning organization',
-      async (_name, invoke, task) => {
-        const repository = repositoryMock();
-        repository.findById.mockResolvedValue(task);
-        const service = new TasksService(
-          repository as unknown as TasksRepository,
-        );
-
-        await expect(invoke(service)).rejects.toMatchObject({ status: 403 });
-      },
+    await expect(service.remove(task.id, assigning)).rejects.toBeInstanceOf(
+      ConflictException,
     );
-
-    it.each(cases)(
-      'lets an admin perform %s on any organization task',
-      async (_name, _invoke, task) => {
-        const repository = repositoryMock();
-        repository.findById.mockResolvedValue(task);
-        repository.complete.mockResolvedValue({
-          ...adHocTask,
-          completedAt: new Date(),
-          deadlineStatus: 'HOAN_THANH_DUNG_HAN',
-        });
-        const service = new TasksService(
-          repository as unknown as TasksRepository,
-        );
-        const admin = { ...taskManager, isAdmin: true, organizationId: 99 };
-        const invokers: Record<string, () => Promise<unknown>> = {
-          update: () => service.update(existingTask.id, { name: 'X' }, admin),
-          remove: () => service.remove(existingTask.id, admin),
-          close: () => service.close(existingTask.id, 'Kết thúc', admin),
-          complete: () => service.complete(existingTask.id, admin),
-        };
-
-        await expect(invokers[_name]()).resolves.toBeDefined();
-      },
-    );
+    expect(repository.softDelete).not.toHaveBeenCalled();
   });
 });

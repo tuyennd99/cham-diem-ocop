@@ -6,7 +6,6 @@ import { HealthService } from './health.service';
 import { ImagesService } from './images.service';
 import { NotificationsGateway } from '../gateways/notifications.gateway';
 import { NotificationsService } from './notifications.service';
-import { SubTasksService } from './subtask.service';
 import { ReportsService } from './reports.service';
 import { SystemService } from './system.service';
 import { TasksService } from './tasks.service';
@@ -20,7 +19,6 @@ export const appServices = [
   ImagesService,
   NotificationsGateway,
   NotificationsService,
-  SubTasksService,
   ReportsService,
   SystemService,
   TasksService,

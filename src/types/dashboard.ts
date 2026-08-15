@@ -1,4 +1,4 @@
-import { ReportStatus, SubtaskStatus, TaskType } from "@prisma/client";
+import { ReportStatus, TaskType } from '@prisma/client';
 
 export type DashboardStatus =
   | 'HOAN_THANH'
@@ -20,13 +20,9 @@ export interface DashboardFilters {
 export interface DashboardTaskRow {
   id: number;
   type: TaskType;
+  startAt: Date | null;
+  dueAt: Date | null;
   completedAt: Date | null;
   closedAt: Date | null;
-  subtasks: {
-    id: number;
-    startAt: Date | null;
-    dueAt: Date;
-    status: SubtaskStatus;
-    reportStatus: ReportStatus[];
-  }[];
+  reportStatus: ReportStatus[];
 }

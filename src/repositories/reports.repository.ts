@@ -1,28 +1,27 @@
 import { Injectable } from '@nestjs/common';
 import {
-  SubtaskStatus,
   Prisma,
   ReportKind,
   ReportStatus,
   TaskType,
+  UserStatus,
 } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RequestMeta } from '../types/auth';
-import { REPORT_STATUS } from '../constants/reports';
+
+const taskInclude = {
+  program: {
+    include: {
+      collaborators: { select: { organizationId: true } },
+    },
+  },
+} satisfies Prisma.TaskInclude;
 
 const workspaceInclude = {
   ownerOrganization: { select: { id: true, code: true, name: true } },
-  subtask: {
-    include: {
-      task: {
-        include: {
-          collaborators: { select: { organizationId: true } },
-          program: { select: { id: true, code: true, name: true } },
-        },
-      },
-    },
-  },
+  ownerUser: { select: { id: true, username: true, fullName: true } },
+  task: { include: taskInclude },
   draftAttachments: {
     include: {
       storedFile: {
@@ -65,32 +64,33 @@ type WorkspacePayload = Prisma.ReportWorkspaceGetPayload<{
   include: typeof workspaceInclude;
 }>;
 
+export interface ReportTaskView {
+  id: number;
+  code: string;
+  name: string;
+  type: TaskType;
+  programId: number;
+  startAt: Date | null;
+  dueAt: Date | null;
+  closedAt: Date | null;
+  completedAt: Date | null;
+  deletedAt: Date | null;
+  assigningOrganizationId: number;
+  leadOrganizationId: number;
+  collaboratorOrganizationIds: number[];
+  program: { id: number; code: string; name: string };
+}
+
 export interface ReportWorkspaceView {
   id: number;
   kind: ReportKind;
   status: ReportStatus;
   content: string | null;
   ownerOrganizationId: number;
+  ownerUserId: number | null;
   ownerOrganization: { id: number; code: string; name: string };
-  subtask: {
-    id: number;
-    status: SubtaskStatus;
-    startAt: Date;
-    dueAt: Date;
-    task: {
-      id: number;
-      code: string;
-      name: string;
-      type: TaskType;
-      programId: number;
-      assigningOrganizationId: number;
-      leadOrganizationId: number;
-      completedAt: Date | null;
-      deletedAt: Date | null;
-      collaboratorOrganizationIds: number[];
-      program: { id: number; code: string; name: string };
-    };
-  };
+  ownerUser: { id: number; username: string; fullName: string } | null;
+  task: ReportTaskView;
   draftAttachments: unknown[];
   latestVersion: {
     id: number;
@@ -108,21 +108,6 @@ export interface ReportWorkspaceView {
   updatedAt: Date;
 }
 
-export interface SubtaskReportContext {
-  id: number;
-  status: SubtaskStatus;
-  task: {
-    id: number;
-    type: TaskType;
-    assigningOrganizationId: number;
-    leadOrganizationId: number;
-    completedAt: Date | null;
-    deletedAt: Date | null;
-    collaboratorOrganizationIds: number[];
-  };
-  approvedProgressCount: number;
-}
-
 export interface HistoryFilters {
   page: number;
   limit: number;
@@ -133,6 +118,7 @@ export interface HistoryFilters {
   dueAt?: string;
   programId?: number;
   organizationId: number;
+  userId: number;
   globalScope: boolean;
 }
 
@@ -170,15 +156,8 @@ const versionHistoryInclude = {
   workspace: {
     include: {
       ownerOrganization: { select: { id: true, code: true, name: true } },
-      subtask: {
-        include: {
-          task: {
-            include: {
-              program: { select: { id: true, code: true, name: true } },
-            },
-          },
-        },
-      },
+      ownerUser: { select: { id: true, username: true, fullName: true } },
+      task: { include: taskInclude },
     },
   },
 } satisfies Prisma.ReportVersionInclude;
@@ -189,7 +168,7 @@ type VersionHistoryPayload = Prisma.ReportVersionGetPayload<{
 
 @Injectable()
 export class ReportsRepository {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   async findWorkspace(id: number): Promise<ReportWorkspaceView | null> {
     const row = await this.prisma.reportWorkspace.findUnique({
@@ -199,127 +178,102 @@ export class ReportsRepository {
     return row ? this.toWorkspace(row) : null;
   }
 
-  async findSubtaskContext(id: number): Promise<SubtaskReportContext | null> {
-    const row = await this.prisma.subtask.findUnique({
+  async findTaskContext(id: number): Promise<ReportTaskView | null> {
+    const row = await this.prisma.task.findUnique({
       where: { id },
-      include: {
-        task: {
-          include: { collaborators: { select: { organizationId: true } } },
-        },
-        workspaces: {
-          where: {
-            kind: ReportKind.PROGRESS,
-            status: ReportStatus.APPROVED,
-          },
-          select: { id: true, ownerOrganizationId: true },
-        },
-      },
+      include: taskInclude,
     });
-    if (!row) return null;
-    return {
-      id: row.id,
-      status: row.status,
-      task: {
-        id: row.task.id,
-        type: row.task.type,
-        assigningOrganizationId: row.task.assigningOrganizationId,
-        leadOrganizationId: row.task.leadOrganizationId,
-        completedAt: row.task.completedAt,
-        deletedAt: row.task.deletedAt,
-        collaboratorOrganizationIds: row.task.collaborators.map(
-          ({ organizationId }) => organizationId,
-        ),
-      },
-      approvedProgressCount: row.workspaces.filter(({ ownerOrganizationId }) =>
-        row.task.collaborators.some(
-          ({ organizationId }) => organizationId === ownerOrganizationId,
-        ),
-      ).length,
-    };
+    return row ? this.toTask(row) : null;
   }
 
-  async listSubtaskWorkspaces(
-    subtaskId: number,
-  ): Promise<ReportWorkspaceView[]> {
-    const rows = await this.prisma.reportWorkspace.findMany({
+  resolveUserOrg(userId: number) {
+    return this.prisma.user.findFirst({
       where: {
-        subtaskId,
-        status: { not: ReportStatus.DRAFT },
+        id: userId,
+        status: UserStatus.ACTIVE,
+        deletedAt: null,
       },
+      select: { organizationId: true },
+    });
+  }
+
+  async listTaskWorkspaces(taskId: number): Promise<ReportWorkspaceView[]> {
+    const rows = await this.prisma.reportWorkspace.findMany({
+      where: { taskId, kind: ReportKind.PROGRESS },
       include: workspaceInclude,
-      orderBy: [{ kind: 'asc' }, { ownerOrganizationId: 'asc' }],
+      orderBy: [{ ownerUserId: 'asc' }],
     });
     return rows.map((row) => this.toWorkspace(row));
   }
 
   async findOrCreateWorkspace(
-    subtaskId: number,
+    taskId: number,
     kind: ReportKind,
-    ownerOrganizationId: number,
+    owner: { organizationId: number; userId: number | null },
   ) {
     return this.prisma.$transaction(async (transaction) => {
       await transaction.$queryRaw(
-        Prisma.sql`
-          SELECT rp."id"
-          FROM "subtasks" rp
-          JOIN "tasks" task ON task."id" = rp."taskId"
-          WHERE rp."id" = ${subtaskId}
-          FOR UPDATE OF task, rp
-        `,
+        Prisma.sql`SELECT id FROM "tasks" WHERE id = ${taskId} FOR UPDATE`,
       );
-      const subtask = await transaction.subtask.findUnique({
-        where: { id: subtaskId },
+      const task = await transaction.task.findUnique({
+        where: { id: taskId },
         select: {
-          status: true,
-          task: {
+          deletedAt: true,
+          closedAt: true,
+          completedAt: true,
+          program: {
             select: {
-              type: true,
-              deletedAt: true,
-              closedAt: true,
-              completedAt: true,
               leadOrganizationId: true,
               collaborators: { select: { organizationId: true } },
             },
           },
         },
       });
-      if (
-        !subtask ||
-        subtask.status !== SubtaskStatus.OPEN ||
-        subtask.task.deletedAt !== null ||
-        subtask.task.closedAt !== null ||
-        subtask.task.completedAt !== null
-      ) {
+      if (!task || task.deletedAt || task.closedAt || task.completedAt) {
         return null;
       }
-
-      const collaboratorIds = subtask.task.collaborators.map(
+      const ownerUser = owner.userId
+        ? await transaction.user.findFirst({
+            where: {
+              id: owner.userId,
+              status: UserStatus.ACTIVE,
+              deletedAt: null,
+            },
+            select: { organizationId: true },
+          })
+        : null;
+      const collaboratorIds = task.program.collaborators.map(
         ({ organizationId }) => organizationId,
       );
-      // Lead lập báo cáo tổng hợp gửi cơ quan giao cho CẢ định kỳ lẫn đột xuất,
-      // không chờ báo cáo phối hợp duyệt hết. Chỉ chốt owner phải là lead.
       if (
         (kind === ReportKind.PROGRESS &&
-          !collaboratorIds.includes(ownerOrganizationId)) ||
+          (!ownerUser ||
+            ownerUser.organizationId !== owner.organizationId ||
+            !collaboratorIds.includes(ownerUser.organizationId))) ||
         (kind === ReportKind.CONSOLIDATED &&
-          subtask.task.leadOrganizationId !== ownerOrganizationId)
+          (owner.userId !== null ||
+            task.program.leadOrganizationId !== owner.organizationId))
       ) {
         return null;
       }
-
-      const row = await transaction.reportWorkspace.upsert({
-        where: {
-          subtaskId_kind_ownerOrganizationId: {
-            subtaskId,
-            kind,
-            ownerOrganizationId,
-          },
-        },
-        update: {},
-        create: { subtaskId, kind, ownerOrganizationId },
+      const existing = await transaction.reportWorkspace.findFirst({
+        where:
+          kind === ReportKind.PROGRESS
+            ? { taskId, kind, ownerUserId: owner.userId }
+            : { taskId, kind },
         include: workspaceInclude,
       });
-      return this.toWorkspace(row);
+      if (existing) return this.toWorkspace(existing);
+      const created = await transaction.reportWorkspace.create({
+        data: {
+          taskId,
+          kind,
+          ownerOrganizationId: owner.organizationId,
+          ownerUserId: owner.userId,
+        },
+        include: workspaceInclude,
+      });
+      return this.toWorkspace(created);
     });
   }
 
@@ -339,9 +293,9 @@ export class ReportsRepository {
         !before ||
         (before.status !== ReportStatus.DRAFT &&
           before.status !== ReportStatus.REJECTED) ||
-        before.subtask.status !== SubtaskStatus.OPEN ||
-        before.subtask.task.deletedAt !== null ||
-        before.subtask.task.completedAt !== null
+        before.task.deletedAt ||
+        before.task.closedAt ||
+        before.task.completedAt
       ) {
         return null;
       }
@@ -388,16 +342,11 @@ export class ReportsRepository {
             take: 1,
             select: { versionNumber: true },
           },
-          subtask: {
+          task: {
             select: {
-              status: true,
-              task: {
-                select: {
-                  deletedAt: true,
-                  completedAt: true,
-                  collaborators: { select: { organizationId: true } },
-                },
-              },
+              deletedAt: true,
+              closedAt: true,
+              completedAt: true,
             },
           },
         },
@@ -406,14 +355,12 @@ export class ReportsRepository {
         !workspace ||
         (workspace.status !== ReportStatus.DRAFT &&
           workspace.status !== ReportStatus.REJECTED) ||
-        workspace.subtask.status !== SubtaskStatus.OPEN ||
-        workspace.subtask.task.deletedAt !== null ||
-        workspace.subtask.task.completedAt !== null
+        workspace.task.deletedAt ||
+        workspace.task.closedAt ||
+        workspace.task.completedAt
       ) {
         return null;
       }
-      // Lead được gửi báo cáo tổng hợp bất kể báo cáo phối hợp đã duyệt hết
-      // chưa — có thể duyệt phối hợp sau.
       const version = await transaction.reportVersion.create({
         data: {
           workspaceId,
@@ -451,11 +398,7 @@ export class ReportsRepository {
     });
   }
 
-  async approveLatest(
-    workspaceId: number,
-    actorId: number,
-    meta: RequestMeta = {},
-  ) {
+  approveLatest(workspaceId: number, actorId: number, meta: RequestMeta = {}) {
     return this.reviewLatest(
       workspaceId,
       actorId,
@@ -465,7 +408,7 @@ export class ReportsRepository {
     );
   }
 
-  async rejectLatest(
+  rejectLatest(
     workspaceId: number,
     actorId: number,
     reason: string,
@@ -480,10 +423,7 @@ export class ReportsRepository {
     );
   }
 
-  // Trả lại báo cáo ĐÃ DUYỆT: thao tác trên bản APPROVED thay vì SUBMITTED,
-  // đưa về REJECTED + khôi phục draft để đơn vị làm lại. Chỉ dùng cho PROGRESS
-  // (consolidated approve đã complete kỳ, không hỗ trợ trả lại ở đây).
-  async returnLatest(
+  returnLatest(
     workspaceId: number,
     actorId: number,
     reason: string,
@@ -500,17 +440,25 @@ export class ReportsRepository {
   }
 
   async listHistory(filters: HistoryFilters) {
-    // Phạm vi lịch sử: giao/chủ trì (và admin) thấy mọi báo cáo của nhiệm vụ;
-    // đơn vị phối hợp chỉ thấy báo cáo do chính mình nộp (ownerOrganizationId).
     const workspaceScope: Prisma.ReportWorkspaceWhereInput = filters.globalScope
       ? {}
       : {
-        OR: [
-          { subtask: { task: { assigningOrganizationId: filters.organizationId } } },
-          { subtask: { task: { leadOrganizationId: filters.organizationId } } },
-          { ownerOrganizationId: filters.organizationId },
-        ],
-      };
+          OR: [
+            {
+              task: {
+                program: {
+                  assigningOrganizationId: filters.organizationId,
+                },
+              },
+            },
+            {
+              task: {
+                program: { leadOrganizationId: filters.organizationId },
+              },
+            },
+            { ownerUserId: filters.userId },
+          ],
+        };
     const where: Prisma.ReportVersionWhereInput = {
       submittedAt: {
         ...(filters.submittedFrom
@@ -520,27 +468,25 @@ export class ReportsRepository {
       },
       workspace: {
         ...workspaceScope,
-        subtask: {
+        task: {
           ...(filters.dueAt ? { dueAt: new Date(filters.dueAt) } : {}),
-          task: {
-            ...(filters.taskCode
-              ? {
+          ...(filters.taskCode
+            ? {
                 code: {
                   contains: filters.taskCode,
                   mode: Prisma.QueryMode.insensitive,
                 },
               }
-              : {}),
-            ...(filters.taskName
-              ? {
+            : {}),
+          ...(filters.taskName
+            ? {
                 name: {
                   contains: filters.taskName,
                   mode: Prisma.QueryMode.insensitive,
                 },
               }
-              : {}),
-            ...(filters.programId ? { programId: filters.programId } : {}),
-          },
+            : {}),
+          ...(filters.programId ? { programId: filters.programId } : {}),
         },
       },
     };
@@ -570,13 +516,12 @@ export class ReportsRepository {
       const workspace = await transaction.reportWorkspace.findUnique({
         where: { id: workspaceId },
         include: {
-          subtask: {
-            include: {
-              task: {
-                include: {
-                  collaborators: { select: { organizationId: true } },
-                },
-              },
+          task: {
+            select: {
+              id: true,
+              deletedAt: true,
+              closedAt: true,
+              completedAt: true,
             },
           },
           versions: {
@@ -590,37 +535,25 @@ export class ReportsRepository {
         },
       });
       const latest = workspace?.versions[0];
-      // Trả lại tổng hợp đã duyệt: kỳ đang COMPLETED (do chính lần duyệt này
-      // đóng), nên chấp nhận và mở lại kỳ bên dưới. Thao tác khác vẫn cần OPEN.
       const returningConsolidated =
         status === ReportStatus.REJECTED &&
         fromStatus === ReportStatus.APPROVED &&
         workspace?.kind === ReportKind.CONSOLIDATED;
-      const subtaskOk =
-        workspace?.subtask.status === SubtaskStatus.OPEN ||
-        (returningConsolidated &&
-          workspace?.subtask.status === SubtaskStatus.COMPLETED);
       if (
         !workspace ||
         workspace.status !== fromStatus ||
         !latest ||
-        !subtaskOk ||
-        workspace.subtask.task.deletedAt !== null ||
-        workspace.subtask.task.completedAt !== null
+        workspace.task.deletedAt ||
+        workspace.task.closedAt ||
+        (workspace.task.completedAt && !returningConsolidated)
       ) {
         return null;
       }
       const reviewedAt = new Date();
-      if (
-        returningConsolidated &&
-        workspace.subtask.status === SubtaskStatus.COMPLETED
-      ) {
-        const reopened = await transaction.subtask.updateMany({
-          where: {
-            id: workspace.subtaskId,
-            status: SubtaskStatus.COMPLETED,
-          },
-          data: { status: SubtaskStatus.OPEN, completedAt: null },
+      if (returningConsolidated) {
+        const reopened = await transaction.task.updateMany({
+          where: { id: workspace.taskId, completedAt: { not: null } },
+          data: { completedAt: null, completedById: null },
         });
         if (reopened.count !== 1) return null;
       }
@@ -628,12 +561,14 @@ export class ReportsRepository {
         status === ReportStatus.APPROVED &&
         workspace.kind === ReportKind.CONSOLIDATED
       ) {
-        const completed = await transaction.subtask.updateMany({
+        const completed = await transaction.task.updateMany({
           where: {
-            id: workspace.subtaskId,
-            status: SubtaskStatus.OPEN,
+            id: workspace.taskId,
+            deletedAt: null,
+            closedAt: null,
+            completedAt: null,
           },
-          data: { status: SubtaskStatus.COMPLETED, completedAt: reviewedAt },
+          data: { completedAt: reviewedAt, completedById: actorId },
         });
         if (completed.count !== 1) return null;
       }
@@ -683,10 +618,7 @@ export class ReportsRepository {
           entityType: 'ReportVersion',
           entityId: latest.id,
           reason: rejectionReason,
-          beforeData: {
-            status: latest.status,
-            content: latest.content,
-          },
+          beforeData: { status: latest.status, content: latest.content },
           afterData: this.versionAudit(this.toVersion(version)),
           ...this.auditMeta(meta),
         },
@@ -703,10 +635,9 @@ export class ReportsRepository {
       Prisma.sql`
         SELECT rw."id"
         FROM "report_workspaces" rw
-        JOIN "subtasks" rp ON rp."id" = rw."subtaskId"
-        JOIN "tasks" task ON task."id" = rp."taskId"
+        JOIN "tasks" task ON task."id" = rw."taskId"
         WHERE rw."id" = ${workspaceId}
-        FOR UPDATE OF task, rp, rw
+        FOR UPDATE OF task, rw
       `,
     );
   }
@@ -717,7 +648,8 @@ export class ReportsRepository {
       status: workspace.status,
       content: workspace.content,
       ownerOrganizationId: workspace.ownerOrganizationId,
-      subtaskId: workspace.subtask.id,
+      ownerUserId: workspace.ownerUserId,
+      taskId: workspace.task.id,
     };
   }
 
@@ -759,54 +691,79 @@ export class ReportsRepository {
     };
   }
 
+  private toTask(row: {
+    id: number;
+    code: string;
+    name: string;
+    type: TaskType;
+    programId: number;
+    startAt: Date | null;
+    dueAt: Date | null;
+    closedAt: Date | null;
+    completedAt: Date | null;
+    deletedAt: Date | null;
+    program: {
+      id: number;
+      code: string;
+      name: string;
+      assigningOrganizationId: number;
+      leadOrganizationId: number;
+      collaborators: { organizationId: number }[];
+    };
+  }): ReportTaskView {
+    return {
+      id: row.id,
+      code: row.code,
+      name: row.name,
+      type: row.type,
+      programId: row.programId,
+      startAt: row.startAt,
+      dueAt: row.dueAt,
+      closedAt: row.closedAt,
+      completedAt: row.completedAt,
+      deletedAt: row.deletedAt,
+      assigningOrganizationId: row.program.assigningOrganizationId,
+      leadOrganizationId: row.program.leadOrganizationId,
+      collaboratorOrganizationIds: row.program.collaborators.map(
+        ({ organizationId }) => organizationId,
+      ),
+      program: {
+        id: row.program.id,
+        code: row.program.code,
+        name: row.program.name,
+      },
+    };
+  }
+
   private toWorkspace(row: WorkspacePayload): ReportWorkspaceView {
-    const { task } = row.subtask;
     return {
       id: row.id,
       kind: row.kind,
       status: row.status,
       content: row.content,
       ownerOrganizationId: row.ownerOrganizationId,
+      ownerUserId: row.ownerUserId,
       ownerOrganization: row.ownerOrganization,
-      subtask: {
-        id: row.subtask.id,
-        status: row.subtask.status,
-        startAt: row.subtask.startAt,
-        dueAt: row.subtask.dueAt,
-        task: {
-          id: task.id,
-          code: task.code,
-          name: task.name,
-          type: task.type,
-          programId: task.programId,
-          assigningOrganizationId: task.assigningOrganizationId,
-          leadOrganizationId: task.leadOrganizationId,
-          completedAt: task.completedAt,
-          deletedAt: task.deletedAt,
-          collaboratorOrganizationIds: task.collaborators.map(
-            ({ organizationId }) => organizationId,
-          ),
-          program: task.program,
-        },
-      },
+      ownerUser: row.ownerUser,
+      task: this.toTask(row.task),
       draftAttachments: row.draftAttachments.map(
         ({ storedFile }) => storedFile,
       ),
       latestVersion: row.versions[0]
         ? {
-          id: row.versions[0].id,
-          versionNumber: row.versions[0].versionNumber,
-          content: row.versions[0].content,
-          status: row.versions[0].status,
-          submittedBy: row.versions[0].submittedBy,
-          submittedAt: row.versions[0].submittedAt,
-          reviewedBy: row.versions[0].reviewedBy,
-          reviewedAt: row.versions[0].reviewedAt,
-          rejectionReason: row.versions[0].rejectionReason,
-          files: row.versions[0].attachments.map(
-            ({ storedFile }) => storedFile,
-          ),
-        }
+            id: row.versions[0].id,
+            versionNumber: row.versions[0].versionNumber,
+            content: row.versions[0].content,
+            status: row.versions[0].status,
+            submittedBy: row.versions[0].submittedBy,
+            submittedAt: row.versions[0].submittedAt,
+            reviewedBy: row.versions[0].reviewedBy,
+            reviewedAt: row.versions[0].reviewedAt,
+            rejectionReason: row.versions[0].rejectionReason,
+            files: row.versions[0].attachments.map(
+              ({ storedFile }) => storedFile,
+            ),
+          }
         : null,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
@@ -830,7 +787,8 @@ export class ReportsRepository {
         id: row.workspace.id,
         kind: row.workspace.kind,
         ownerOrganization: row.workspace.ownerOrganization,
-        subtask: row.workspace.subtask,
+        ownerUser: row.workspace.ownerUser,
+        task: this.toTask(row.workspace.task),
       },
     };
   }

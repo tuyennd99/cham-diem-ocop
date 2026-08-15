@@ -88,7 +88,7 @@ describe('Report endpoints', () => {
   });
 
   it('maps progress draft, submit, approve, reject, and draft file removal', async () => {
-    await request(server).get('/api/v1/progress-reports/subtasks/7').expect(200);
+    await request(server).get('/api/v1/progress-reports/tasks/7').expect(200);
     await request(server)
       .patch('/api/v1/progress-reports/11')
       .send({ content: 'Tiến độ' })
@@ -127,9 +127,7 @@ describe('Report endpoints', () => {
   });
 
   it('maps consolidated workspace and submit flow', async () => {
-    await request(server)
-      .get('/api/v1/consolidated-reports/subtasks/7')
-      .expect(200);
+    await request(server).get('/api/v1/consolidated-reports/tasks/7').expect(200);
     await request(server)
       .post('/api/v1/consolidated-reports/12/submit')
       .expect(201);
@@ -178,7 +176,6 @@ describe('Report endpoints', () => {
       .get('/api/v1/report-history')
       .query({
         taskCode: 'NV-01',
-        subtask: 'MONTHLY',
         submittedFrom: '2026-01-01T00:00:00.000Z',
         programId: 3,
       })
@@ -187,7 +184,6 @@ describe('Report endpoints', () => {
     expect(reports.history).toHaveBeenCalledWith(
       expect.objectContaining({
         taskCode: 'NV-01',
-        subtask: 'MONTHLY',
         programId: 3,
       }),
       expect.objectContaining({ sub: 2 }),

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { uniq } from 'lodash';
-import { SubtaskStatus, UserStatus } from '@prisma/client';
+import { UserStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type {
   DeadlineNotificationTarget,
@@ -9,7 +9,7 @@ import type {
 
 @Injectable()
 export class NotificationsRepository {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   async list(input: {
     recipientId: number;
@@ -85,20 +85,21 @@ export class NotificationsRepository {
     now: Date,
     dueSoonThrough: Date,
   ): Promise<DeadlineNotificationTarget[]> {
-    const subtasks = await this.prisma.subtask.findMany({
+    const tasks = await this.prisma.task.findMany({
       where: {
-        status: SubtaskStatus.OPEN,
         dueAt: { lte: dueSoonThrough },
-        task: { deletedAt: null, closedAt: null },
+        deletedAt: null,
+        closedAt: null,
+        completedAt: null,
       },
       select: {
         id: true,
+        code: true,
+        name: true,
         dueAt: true,
-        task: {
+        program: {
           select: {
-            id: true,
-            code: true,
-            name: true,
+            assigningOrganizationId: true,
             leadOrganizationId: true,
             collaborators: { select: { organizationId: true } },
           },
@@ -107,15 +108,15 @@ export class NotificationsRepository {
       orderBy: { id: 'asc' },
     });
     void now;
-    return subtasks.map(({ id, dueAt, task }) => ({
-      subtaskId: id,
-      taskId: task.id,
-      taskCode: task.code,
-      taskName: task.name,
+    return tasks.map(({ id, code, name, dueAt, program }) => ({
+      taskId: id,
+      taskCode: code,
+      taskName: name,
       dueAt,
       organizationIds: [
-        task.leadOrganizationId,
-        ...task.collaborators.map(({ organizationId }) => organizationId),
+        program.assigningOrganizationId,
+        program.leadOrganizationId,
+        ...program.collaborators.map(({ organizationId }) => organizationId),
       ],
     }));
   }

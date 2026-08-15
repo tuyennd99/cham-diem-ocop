@@ -1,52 +1,51 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import {
-  SubtaskStatus,
   Prisma,
   ReportStatus,
   TaskDeadlineStatus,
   TaskType,
 } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
+import { ACTIONS_TASK } from '../constants/actions';
 import { PrismaService } from '../prisma/prisma.service';
 import { RequestMeta } from '../types/auth';
-import { calculateTaskDeadlineStatus } from '../utils/task-deadline-status';
-import { ACTIONS_TASK } from '../constants/actions';
 import { ErrorCode } from '../types/error-code';
-import { TaskView, TaskWrite } from '../types/task';
+import { ProgramResponsibility, TaskView, TaskWrite } from '../types/task';
+import { calculateTaskDeadlineStatus } from '../utils/task-deadline-status';
+
+const organizationSelect = { id: true, code: true, name: true } as const;
+
+const programResponsibilityInclude = {
+  assigningOrganization: { select: organizationSelect },
+  leadOrganization: { select: organizationSelect },
+  collaborators: {
+    include: { organization: { select: organizationSelect } },
+  },
+} satisfies Prisma.ProgramInclude;
 
 const taskInclude = {
-  program: { select: { id: true, code: true, name: true } },
-  assigningOrganization: { select: { id: true, code: true, name: true } },
-  leadOrganization: { select: { id: true, code: true, name: true } },
-  collaborators: {
-    include: {
-      organization: { select: { id: true, code: true, name: true } },
-    },
-  },
-  subtasks: {
-    orderBy: [{ startAt: 'desc' as const }, { id: 'desc' as const }],
-    include: {
-      workspaces: {
-        select: {
-          status: true,
-          ownerOrganizationId: true,
-        },
-      },
-    },
+  program: { include: programResponsibilityInclude },
+  workspaces: {
+    orderBy: { id: 'asc' as const },
+    include: { versions: { select: { status: true } } },
   },
 } satisfies Prisma.TaskInclude;
 
 type TaskPayload = Prisma.TaskGetPayload<{ include: typeof taskInclude }>;
+type ProgramPayload = Prisma.ProgramGetPayload<{
+  include: typeof programResponsibilityInclude;
+}>;
 
 @Injectable()
 export class TasksRepository {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   async list(input: {
     page: number;
     limit: number;
     search?: string;
     organizationId: number;
+    userId: number;
     globalScope: boolean;
   }) {
     const where: Prisma.TaskWhereInput = {
@@ -76,7 +75,7 @@ export class TasksRepository {
     ]);
     return {
       data: rows.map((row) =>
-        this.toTask(row, input.organizationId, input.globalScope),
+        this.toTask(row, input.organizationId, input.userId, input.globalScope),
       ),
       total,
     };
@@ -85,16 +84,14 @@ export class TasksRepository {
   async findById(
     id: number,
     organizationId: number,
+    userId: number,
     globalScope: boolean,
   ): Promise<TaskView | null> {
     const row = await this.prisma.task.findFirst({
-      where: {
-        id,
-        ...this.taskScope(organizationId, globalScope),
-      },
+      where: { id, ...this.taskScope(organizationId, globalScope) },
       include: taskInclude,
     });
-    return row ? this.toTask(row, organizationId, globalScope) : null;
+    return row ? this.toTask(row, organizationId, userId, globalScope) : null;
   }
 
   async codeExists(code: string, excludeId?: number) {
@@ -105,51 +102,21 @@ export class TasksRepository {
     );
   }
 
-  findActiveProgram(id: number) {
-    return this.prisma.program.findFirst({
+  async findActiveProgram(id: number): Promise<ProgramResponsibility | null> {
+    const row = await this.prisma.program.findFirst({
       where: { id, status: 'ACTIVE' },
-      select: { id: true },
+      include: programResponsibilityInclude,
     });
+    return row ? this.toProgram(row) : null;
   }
 
-  findActiveOrganizations(ids: number[]) {
-    return this.prisma.organization.findMany({
-      where: { id: { in: ids }, status: 'ACTIVE' },
-      select: {
-        id: true,
-        isAssigningAuthority: true,
-        isExecutingUnit: true,
-      },
-    });
-  }
-
-  listActiveOrganizations() {
-    return this.prisma.organization.findMany({
+  async listActivePrograms() {
+    const rows = await this.prisma.program.findMany({
       where: { status: 'ACTIVE' },
-      select: {
-        id: true,
-        code: true,
-        name: true,
-        isAssigningAuthority: true,
-        isExecutingUnit: true,
-        status: true,
-      },
+      include: programResponsibilityInclude,
       orderBy: { name: 'asc' },
     });
-  }
-
-  listActivePrograms() {
-    return this.prisma.program.findMany({
-      where: { status: 'ACTIVE' },
-      select: {
-        id: true,
-        code: true,
-        name: true,
-        description: true,
-        status: true,
-      },
-      orderBy: { name: 'asc' },
-    });
+    return rows.map((row) => this.toProgram(row));
   }
 
   async create(
@@ -161,44 +128,16 @@ export class TasksRepository {
     return this.prisma.$transaction(async (transaction) => {
       const row = await transaction.task.create({
         data: {
-          code: input.code,
-          name: input.name,
-          description: input.description,
-          expectedOutput: input.expectedOutput,
-          type: input.type,
-          programId: input.programId,
-          assigningOrganizationId: input.assigningOrganizationId,
-          leadOrganizationId: input.leadOrganizationId,
-          dueAt: input.dueAt,
+          ...input,
           deadlineStatus:
-            input.type === TaskType.DOT_XUAT
+            input.type === TaskType.DOT_XUAT && input.dueAt
               ? calculateTaskDeadlineStatus(
-                { dueAt: input.dueAt, completedAt: null },
-                now,
-              )
+                  { dueAt: input.dueAt, completedAt: null },
+                  now,
+                )
               : null,
-          startAt: input.startAt,
           createdById: actorId,
           updatedById: actorId,
-          collaborators: {
-            create: input.collaboratorOrganizationIds.map((organizationId) => ({
-              organizationId,
-            })),
-          },
-          ...(input.type === TaskType.DOT_XUAT
-            ? {
-              // DOT_XUAT: 1 nhiệm vụ con auto = đơn vị báo cáo tổng hợp cấp nhiệm vụ chính.
-              subtasks: {
-                create: {
-                  title: 'Báo cáo tổng hợp',
-                  startAt: now,
-                  dueAt: input.dueAt,
-                  createdById: actorId,
-                  createdByOrganizationId: input.assigningOrganizationId,
-                },
-              },
-            }
-            : {}),
         },
         include: taskInclude,
       });
@@ -230,49 +169,37 @@ export class TasksRepository {
         where: { id },
         include: taskInclude,
       });
-      const changesAssignment = this.changesAssignment(before, input);
       if (
-        changesAssignment &&
-        (before.completedAt !== null ||
-          before.closedAt !== null ||
-          (await transaction.reportWorkspace.count({
-            where: { subtask: { taskId: id } },
-          })) > 0)
+        input.programId !== undefined &&
+        input.programId !== before.programId &&
+        (before.closedAt !== null ||
+          before.completedAt !== null ||
+          before.workspaces.length > 0)
       ) {
         throw new ConflictException(
           ErrorCode.TASK_ASSIGNMENT_CANNOT_BE_CHANGED,
         );
       }
-      if (input.collaboratorOrganizationIds) {
-        await transaction.taskCollaborator.deleteMany({
-          where: { taskId: id },
-        });
-        await transaction.taskCollaborator.createMany({
-          data: input.collaboratorOrganizationIds.map((organizationId) => ({
-            taskId: id,
-            organizationId,
-          })),
-        });
-      }
-      const taskData = { ...input };
-      delete taskData.collaboratorOrganizationIds;
+      const deadlineStatus =
+        (input.type ?? before.type) === TaskType.DOT_XUAT &&
+        (input.dueAt ?? before.dueAt)
+          ? calculateTaskDeadlineStatus(
+              {
+                dueAt: input.dueAt ?? before.dueAt,
+                completedAt: before.completedAt,
+              },
+              new Date(),
+            )
+          : null;
       const row = await transaction.task.update({
         where: { id },
-        data: { ...taskData, updatedById: actorId },
+        data: { ...input, deadlineStatus, updatedById: actorId },
         include: taskInclude,
       });
-      if (row.type === TaskType.DOT_XUAT && input.dueAt) {
-        await transaction.subtask.updateMany({
-          where: { taskId: id },
-          data: { dueAt: input.dueAt },
-        });
-      }
       await transaction.auditLog.create({
         data: {
           actorId,
-          action: changesAssignment
-            ? ACTIONS_TASK.TASK_ASSIGNMENT_UPDATED
-            : ACTIONS_TASK.TASK_UPDATED,
+          action: ACTIONS_TASK.TASK_UPDATED,
           entityType: 'Task',
           entityId: id,
           beforeData: this.taskAudit(this.toTask(before)),
@@ -284,42 +211,23 @@ export class TasksRepository {
     });
   }
 
-  private changesAssignment(
-    before: TaskPayload,
-    input: Partial<TaskWrite>,
-  ): boolean {
-    if (
-      (input.assigningOrganizationId !== undefined &&
-        input.assigningOrganizationId !== before.assigningOrganizationId) ||
-      (input.leadOrganizationId !== undefined &&
-        input.leadOrganizationId !== before.leadOrganizationId)
-    ) {
-      return true;
-    }
-    if (input.collaboratorOrganizationIds === undefined) return false;
-
-    const current = before.collaborators
-      .map(({ organizationId }) => organizationId)
-      .sort((left, right) => left - right);
-    const next = [...input.collaboratorOrganizationIds].sort(
-      (left, right) => left - right,
-    );
-    return (
-      current.length !== next.length ||
-      current.some((organizationId, index) => organizationId !== next[index])
-    );
-  }
-
   async softDelete(
     id: number,
     deletedAt: Date,
     actorId: number,
     meta: RequestMeta = {},
-  ) {
+  ): Promise<TaskView | null> {
     return this.prisma.$transaction(async (transaction) => {
       await transaction.$queryRaw(
         Prisma.sql`SELECT "id" FROM "tasks" WHERE "id" = ${id} FOR UPDATE`,
       );
+      const reported = await transaction.reportVersion.count({
+        where: {
+          workspace: { taskId: id },
+          status: { not: ReportStatus.DRAFT },
+        },
+      });
+      if (reported > 0) return null;
       const before = await transaction.task.findUniqueOrThrow({
         where: { id },
         include: taskInclude,
@@ -344,12 +252,6 @@ export class TasksRepository {
     });
   }
 
-  countOpenSubtasks(taskId: number) {
-    return this.prisma.subtask.count({
-      where: { taskId, status: SubtaskStatus.OPEN },
-    });
-  }
-
   async close(
     id: number,
     reason: string,
@@ -361,13 +263,6 @@ export class TasksRepository {
       await transaction.$queryRaw(
         Prisma.sql`SELECT "id" FROM "tasks" WHERE "id" = ${id} FOR UPDATE`,
       );
-      if (
-        (await transaction.subtask.count({
-          where: { taskId: id, status: SubtaskStatus.OPEN },
-        })) > 0
-      ) {
-        return null;
-      }
       const before = await transaction.task.findUniqueOrThrow({
         where: { id },
         include: taskInclude,
@@ -439,7 +334,7 @@ export class TasksRepository {
       await transaction.auditLog.create({
         data: {
           actorId,
-          action: 'TASK_COMPLETED',
+          action: ACTIONS_TASK.TASK_COMPLETED,
           entityType: 'Task',
           entityId: id,
           beforeData: this.taskAudit(this.toTask(before)),
@@ -451,176 +346,6 @@ export class TasksRepository {
     });
   }
 
-  listSubTasks(taskId: number) {
-    return this.prisma.subtask.findMany({
-      where: { taskId },
-      orderBy: [{ startAt: 'desc' }, { id: 'desc' }],
-    });
-  }
-
-  async createSubTask(
-    taskId: number,
-    data: {
-      title: string;
-      description?: string;
-      startAt: Date;
-      dueAt: Date;
-      createdById: number;
-      createdByOrganizationId: number;
-    },
-  ) {
-    return this.prisma.$transaction(async (transaction) => {
-      const rows = await transaction.$queryRaw<
-        { closedAt: Date | null; deletedAt: Date | null }[]
-      >(
-        Prisma.sql`
-          SELECT "closedAt", "deletedAt"
-          FROM "tasks"
-          WHERE "id" = ${taskId}
-          FOR UPDATE
-        `,
-      );
-      if (!rows[0] || rows[0].closedAt || rows[0].deletedAt) {
-        throw new ConflictException(
-          'Không thể tạo kỳ báo cáo cho nhiệm vụ đã đóng hoặc đã xóa',
-        );
-      }
-      try {
-        return await transaction.subtask.create({
-          data: { taskId, ...data, },
-        });
-      } catch (error) {
-        if (
-          error instanceof Prisma.PrismaClientKnownRequestError &&
-          error.code === 'P2002'
-        ) {
-          throw new ConflictException('Nhiệm vụ con trùng tên đã tồn tại');
-        }
-        throw error;
-      }
-    });
-  }
-
-  findSubTask(id: number) {
-    return this.prisma.subtask.findUnique({
-      where: { id },
-      select: { id: true, taskId: true, status: true },
-    });
-  }
-
-  async cancelSubTask(
-    id: number,
-    reason: string,
-    canceledAt: Date,
-    actorId: number,
-    meta: RequestMeta = {},
-  ) {
-    return this.prisma.$transaction(async (transaction) => {
-      await transaction.$queryRaw(
-        Prisma.sql`SELECT "id" FROM "subtasks" WHERE "id" = ${id} FOR UPDATE`,
-      );
-      const before = await transaction.subtask.findUnique({
-        where: { id },
-      });
-      const updated = await transaction.subtask.updateMany({
-        where: { id, status: SubtaskStatus.OPEN },
-        data: {
-          status: SubtaskStatus.CANCELED,
-          canceledAt,
-          cancelReason: reason,
-        },
-      });
-      if (updated.count !== 1) return null;
-      const after = await transaction.subtask.findUniqueOrThrow({
-        where: { id },
-      });
-      await transaction.auditLog.create({
-        data: {
-          actorId,
-          action: ACTIONS_TASK.REPORTING_SUBTASK_CANCELED,
-          entityType: 'Subtask',
-          entityId: id,
-          reason,
-          beforeData: before ? this.subtaskAudit(before) : undefined,
-          afterData: this.subtaskAudit(after),
-          ...this.auditMeta(meta),
-        },
-      });
-      return transaction.subtask.findUnique({ where: { id } });
-    });
-  }
-
-  async deleteSubTask(id: number, actorId: number, meta: RequestMeta = {}) {
-    return this.prisma.$transaction(async (transaction) => {
-      await transaction.$queryRaw(
-        Prisma.sql`SELECT "id" FROM "subtasks" WHERE "id" = ${id} FOR UPDATE`,
-      );
-      // Chặn xóa khi đơn vị đã báo cáo (workspace không còn DRAFT).
-      const reported = await transaction.reportWorkspace.count({
-        where: { subtaskId: id, status: { not: ReportStatus.DRAFT } },
-      });
-      if (reported > 0) return null;
-      const before = await transaction.subtask.findUnique({ where: { id } });
-      if (!before) return null;
-      // Xóa cả workspace DRAFT còn sót (cascade theo FK subtaskId).
-      await transaction.subtask.delete({ where: { id } });
-      await transaction.auditLog.create({
-        data: {
-          actorId,
-          action: ACTIONS_TASK.REPORTING_SUBTASK_CANCELED,
-          entityType: 'Subtask',
-          entityId: id,
-          reason: 'Xóa nhiệm vụ con',
-          beforeData: this.subtaskAudit(before),
-          ...this.auditMeta(meta),
-        },
-      });
-      return before;
-    });
-  }
-
-  async updateSubTask(
-    id: number,
-    data: { title?: string; description?: string; startAt?: string; dueAt?: string },
-    actorId: number,
-    meta: RequestMeta = {},
-  ) {
-    try {
-      const before = await this.prisma.subtask.findUnique({ where: { id } });
-      const after = await this.prisma.subtask.update({
-        where: { id },
-        data: {
-          ...(data.title !== undefined ? { title: data.title } : {}),
-          ...(data.description !== undefined
-            ? { description: data.description || null }
-            : {}),
-          ...(data.startAt ? { startAt: new Date(data.startAt) } : {}),
-          ...(data.dueAt ? { dueAt: new Date(data.dueAt) } : {}),
-        },
-      });
-      await this.prisma.auditLog.create({
-        data: {
-          actorId,
-          action: ACTIONS_TASK.TASK_UPDATED,
-          entityType: 'Subtask',
-          entityId: id,
-          beforeData: before ? this.subtaskAudit(before) : undefined,
-          afterData: this.subtaskAudit(after),
-          ...this.auditMeta(meta),
-        },
-      });
-      return after;
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
-      ) {
-        throw new ConflictException('Nhiệm vụ con trùng tên đã tồn tại');
-      }
-      throw error;
-    }
-  }
-
   private taskScope(
     organizationId: number,
     globalScope: boolean,
@@ -630,20 +355,55 @@ export class TasksRepository {
       ...(globalScope
         ? {}
         : {
-          OR: [
-            { assigningOrganizationId: organizationId },
-            { leadOrganizationId: organizationId },
-            { collaborators: { some: { organizationId } } },
-          ],
-        }),
+            program: {
+              OR: [
+                { assigningOrganizationId: organizationId },
+                { leadOrganizationId: organizationId },
+                { collaborators: { some: { organizationId } } },
+              ],
+            },
+          }),
+    };
+  }
+
+  private toProgram(row: ProgramPayload): ProgramResponsibility {
+    return {
+      id: row.id,
+      code: row.code,
+      name: row.name,
+      description: row.description,
+      status: row.status,
+      assigningOrganizationId: row.assigningOrganizationId,
+      leadOrganizationId: row.leadOrganizationId,
+      collaboratorOrganizationIds: row.collaborators.map(
+        ({ organizationId }) => organizationId,
+      ),
+      assigningOrganization: row.assigningOrganization,
+      leadOrganization: row.leadOrganization,
+      collaboratorOrganizations: row.collaborators.map(
+        ({ organization }) => organization,
+      ),
     };
   }
 
   private toTask(
     row: TaskPayload,
     organizationId?: number,
+    userId?: number,
     globalScope = true,
   ): TaskView {
+    const canSeeAllReports =
+      globalScope ||
+      row.program.assigningOrganizationId === organizationId ||
+      row.program.leadOrganizationId === organizationId;
+    const visibleWorkspaces = row.workspaces.filter(
+      (workspace) => canSeeAllReports || workspace.ownerUserId === userId,
+    );
+    const hasReports = visibleWorkspaces.some((workspace) =>
+      workspace.versions.some(
+        (version) => version.status !== ReportStatus.DRAFT,
+      ),
+    );
     return {
       id: row.id,
       code: row.code,
@@ -652,20 +412,7 @@ export class TasksRepository {
       expectedOutput: row.expectedOutput,
       type: row.type,
       programId: row.programId,
-      assigningOrganizationId: row.assigningOrganizationId,
-      leadOrganizationId: row.leadOrganizationId,
-      collaboratorOrganizationIds: row.collaborators.map(
-        ({ organizationId }) => organizationId,
-      ),
-      hasSubmittedReport: row.subtasks.some((subtask) =>
-        subtask.workspaces.some(
-          (workspace) =>
-            workspace.status === ReportStatus.SUBMITTED &&
-            (globalScope ||
-              row.leadOrganizationId === organizationId ||
-              workspace.ownerOrganizationId === organizationId),
-        ),
-      ),
+      hasReports,
       dueAt: row.dueAt,
       deadlineStatus: row.deadlineStatus,
       startAt: row.startAt,
@@ -675,33 +422,13 @@ export class TasksRepository {
       deletedAt: row.deletedAt,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
-      program: row.program,
-      assigningOrganization: row.assigningOrganization,
-      leadOrganization: row.leadOrganization,
-      collaboratorOrganizations: row.collaborators.map(
-        ({ organization }) => organization,
-      ),
-      subtasks: row.subtasks.map((subtask) => ({
-        id: subtask.id,
-        taskId: subtask.taskId,
-        title: subtask.title,
-        description: subtask.description,
-        startAt: subtask.startAt,
-        dueAt: subtask.dueAt,
-        status: subtask.status,
-        completedAt: subtask.completedAt,
-        canceledAt: subtask.canceledAt,
-        cancelReason: subtask.cancelReason,
-        createdById: subtask.createdById,
-        createdByOrganizationId: subtask.createdByOrganizationId,
-        createdAt: subtask.createdAt,
-        hasReports: subtask.workspaces.some(
-          (workspace) =>
-            workspace.status !== ReportStatus.DRAFT &&
-            (globalScope ||
-              row.leadOrganizationId === organizationId ||
-              workspace.ownerOrganizationId === organizationId),
-        ),
+      program: this.toProgram(row.program),
+      workspaces: visibleWorkspaces.map((workspace) => ({
+        id: workspace.id,
+        kind: workspace.kind,
+        ownerOrganizationId: workspace.ownerOrganizationId,
+        ownerUserId: workspace.ownerUserId,
+        status: workspace.status,
       })),
     };
   }
@@ -712,31 +439,12 @@ export class TasksRepository {
       name: task.name,
       type: task.type,
       programId: task.programId,
-      assigningOrganizationId: task.assigningOrganizationId,
-      leadOrganizationId: task.leadOrganizationId,
-      collaboratorOrganizationIds: task.collaboratorOrganizationIds,
       dueAt: task.dueAt?.toISOString() ?? null,
       deadlineStatus: task.deadlineStatus,
       startAt: task.startAt?.toISOString() ?? null,
       closedAt: task.closedAt?.toISOString() ?? null,
       completedAt: task.completedAt?.toISOString() ?? null,
       deletedAt: task.deletedAt?.toISOString() ?? null,
-    };
-  }
-
-  private subtaskAudit(subtask: {
-    taskId: number;
-    status: SubtaskStatus;
-    dueAt: Date;
-    canceledAt: Date | null;
-    cancelReason: string | null;
-  }) {
-    return {
-      taskId: subtask.taskId,
-      status: subtask.status,
-      dueAt: subtask.dueAt.toISOString(),
-      canceledAt: subtask.canceledAt?.toISOString() ?? null,
-      cancelReason: subtask.cancelReason,
     };
   }
 

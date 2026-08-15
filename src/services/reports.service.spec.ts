@@ -7,75 +7,77 @@ const collaborator = {
   sub: 2,
   username: 'collaborator',
   organizationId: 30,
-  permissions: [],
 };
 
-const lead = {
-  sub: 3,
-  username: 'lead',
-  organizationId: 20,
-  permissions: [],
+const secondCollaborator = {
+  sub: 5,
+  username: 'second-collaborator',
+  organizationId: 30,
 };
 
-// Cơ quan giao (assigning) duyệt báo cáo tổng hợp.
-const assigning = {
-  sub: 4,
-  username: 'assigning',
-  organizationId: 10,
-  permissions: [],
-};
-
+const lead = { sub: 3, username: 'lead', organizationId: 20 };
+const assigning = { sub: 4, username: 'assigning', organizationId: 10 };
 const admin = {
   sub: 1,
   username: 'admin',
   organizationId: 99,
-  permissions: [],
   isAdmin: true,
+};
+
+const taskContext = {
+  id: 7,
+  code: 'NV-007',
+  name: 'Nhiệm vụ con',
+  type: 'DINH_KY' as const,
+  programId: 5,
+  startAt: new Date('2026-01-01T00:00:00.000Z'),
+  dueAt: new Date('2026-12-31T00:00:00.000Z'),
+  closedAt: null,
+  completedAt: null,
+  deletedAt: null,
+  assigningOrganizationId: 10,
+  leadOrganizationId: 20,
+  collaboratorOrganizationIds: [30, 40],
+  program: { id: 5, code: 'CT-005', name: 'Nhiệm vụ lớn' },
 };
 
 const progressWorkspace = {
   id: 11,
   kind: 'PROGRESS' as const,
   status: 'DRAFT' as const,
+  content: null,
   ownerOrganizationId: 30,
-  subtask: {
-    id: 7,
-    status: 'OPEN' as const,
-    task: {
-      id: 5,
-      code: 'NV-005',
-      name: 'Nhiệm vụ',
-      type: 'DOT_XUAT' as const,
-      assigningOrganizationId: 10,
-      leadOrganizationId: 20,
-      completedAt: null,
-      collaboratorOrganizationIds: [30, 40],
-    },
+  ownerUserId: collaborator.sub,
+  ownerOrganization: { id: 30, code: 'DV30', name: 'Đơn vị 30' },
+  ownerUser: {
+    id: collaborator.sub,
+    username: collaborator.username,
+    fullName: 'User 2',
   },
+  task: taskContext,
+  draftAttachments: [],
   latestVersion: null,
-};
-
-const subtaskContext = {
-  id: 7,
-  status: 'OPEN' as const,
-  task: {
-    id: 5,
-    type: 'DINH_KY' as const,
-    assigningOrganizationId: 10,
-    leadOrganizationId: 20,
-    completedAt: null,
-    deletedAt: null,
-    collaboratorOrganizationIds: [30, 40],
-  },
-  approvedProgressCount: 0,
+  createdAt: new Date(),
+  updatedAt: new Date(),
 };
 
 function repositoryMock() {
   return {
     findWorkspace: jest.fn().mockResolvedValue(progressWorkspace),
-    findSubtaskContext: jest.fn().mockResolvedValue(subtaskContext),
+    findTaskContext: jest.fn().mockResolvedValue(taskContext),
+    resolveUserOrg: jest
+      .fn()
+      .mockImplementation((userId: number) =>
+        Promise.resolve(
+          userId === collaborator.sub || userId === secondCollaborator.sub
+            ? { organizationId: 30 }
+            : userId === 40
+              ? { organizationId: 40 }
+              : null,
+        ),
+      ),
     findOrCreateWorkspace: jest.fn().mockResolvedValue(progressWorkspace),
-    saveDraft: jest.fn(),
+    saveDraft: jest.fn().mockResolvedValue(progressWorkspace),
     createVersionFromDraft: jest.fn().mockResolvedValue({
       id: 101,
       versionNumber: 1,
@@ -83,13 +85,21 @@ function repositoryMock() {
     }),
     approveLatest: jest.fn().mockResolvedValue({ status: 'APPROVED' }),
     rejectLatest: jest.fn().mockResolvedValue({ status: 'REJECTED' }),
-    listSubtaskWorkspaces: jest
+    returnLatest: jest.fn().mockResolvedValue({ status: 'REJECTED' }),
+    listTaskWorkspaces: jest
       .fn()
       .mockResolvedValue([
         progressWorkspace,
-        { ...progressWorkspace, id: 12, ownerOrganizationId: 40 },
+        { ...progressWorkspace, id: 12, ownerUserId: secondCollaborator.sub },
       ]),
     listHistory: jest.fn().mockResolvedValue({ data: [], total: 0 }),
+  };
+}
+
+function serviceWith(repository = repositoryMock()) {
+  return {
+    repository,
+    service: new ReportsService(repository as unknown as ReportsRepository),
   };
 }
 
@@ -99,279 +109,156 @@ function submittedConsolidated() {
     kind: 'CONSOLIDATED' as const,
     status: 'SUBMITTED' as const,
     ownerOrganizationId: 20,
+    ownerUserId: null,
+    ownerUser: null,
     latestVersion: { id: 201, status: 'SUBMITTED' },
   };
 }
 
 describe('ReportsService', () => {
-  it('creates a new immutable version for each submission', async () => {
-    const repository = repositoryMock();
-    const service = new ReportsService(
-      repository as unknown as ReportsRepository,
-    );
-
-    await service.submit(progressWorkspace.id, 'PROGRESS', collaborator);
-
-    expect(repository.createVersionFromDraft).toHaveBeenCalledWith(
-      progressWorkspace.id,
-      collaborator.sub,
-      { organizationId: collaborator.organizationId },
-    );
-  });
-
-  it('lets a collaborator author a progress report for its own organization', async () => {
-    const repository = repositoryMock();
-    const service = new ReportsService(
-      repository as unknown as ReportsRepository,
-    );
+  it('opens one progress workspace for each collaborator user', async () => {
+    const { service, repository } = serviceWith();
 
     await service.openProgress(7, collaborator);
+    await service.openProgress(7, secondCollaborator);
 
-    expect(repository.findOrCreateWorkspace).toHaveBeenCalledWith(
+    expect(repository.findOrCreateWorkspace).toHaveBeenNthCalledWith(
+      1,
       7,
       'PROGRESS',
-      collaborator.organizationId,
+      { organizationId: 30, userId: collaborator.sub },
+    );
+    expect(repository.findOrCreateWorkspace).toHaveBeenNthCalledWith(
+      2,
+      7,
+      'PROGRESS',
+      { organizationId: 30, userId: secondCollaborator.sub },
     );
   });
 
-  it('ignores a requested owner for a normal collaborator', async () => {
-    const repository = repositoryMock();
-    const service = new ReportsService(
-      repository as unknown as ReportsRepository,
-    );
+  it('ignores requested progress owner for non-admin users', async () => {
+    const { service, repository } = serviceWith();
 
-    await service.openProgress(7, collaborator, 40);
+    await service.openProgress(7, collaborator, secondCollaborator.sub);
 
+    expect(repository.resolveUserOrg).toHaveBeenCalledWith(collaborator.sub);
+  });
+
+  it('lets admin select an active collaborator user and requires a selection', async () => {
+    const { service, repository } = serviceWith();
+
+    await service.openProgress(7, admin, secondCollaborator.sub);
     expect(repository.findOrCreateWorkspace).toHaveBeenCalledWith(
       7,
       'PROGRESS',
-      collaborator.organizationId,
+      { organizationId: 30, userId: secondCollaborator.sub },
     );
-  });
-
-  it('lets an admin author a progress report for a selected collaborator', async () => {
-    const repository = repositoryMock();
-    const service = new ReportsService(
-      repository as unknown as ReportsRepository,
-    );
-
-    await service.openProgress(7, admin, 40);
-
-    expect(repository.findOrCreateWorkspace).toHaveBeenCalledWith(
-      7,
-      'PROGRESS',
-      40,
-    );
-  });
-
-  it('rejects an admin progress owner that is not a collaborator or missing', async () => {
-    const repository = repositoryMock();
-    const service = new ReportsService(
-      repository as unknown as ReportsRepository,
-    );
-
     await expect(service.openProgress(7, admin)).rejects.toBeInstanceOf(
       ForbiddenException,
     );
+  });
+
+  it('rejects an inactive, deleted, or unassigned progress owner', async () => {
+    const { service } = serviceWith();
+
     await expect(service.openProgress(7, admin, 99)).rejects.toBeInstanceOf(
       ForbiddenException,
     );
   });
 
-  it('denies report read to a non-participant organization', async () => {
-    const repository = repositoryMock();
-    const service = new ReportsService(
-      repository as unknown as ReportsRepository,
-    );
+  it('opens the single consolidated workspace for lead or admin', async () => {
+    const { service, repository } = serviceWith();
 
-    await expect(
-      service.get(progressWorkspace.id, 'PROGRESS', {
-        ...collaborator,
-        organizationId: 99,
-      }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-  });
-
-  it('lets any task participant read a report but not save another org draft', async () => {
-    const repository = repositoryMock();
-    const service = new ReportsService(
-      repository as unknown as ReportsRepository,
-    );
-
-    // Đơn vị phối hợp khác (org 40) đọc được báo cáo của org 30 (cùng nhiệm vụ)...
-    await expect(
-      service.get(progressWorkspace.id, 'PROGRESS', {
-        ...collaborator,
-        organizationId: 40,
-      }),
-    ).resolves.toBe(progressWorkspace);
-    // ...nhưng không được sửa bản nháp không thuộc đơn vị mình.
-    await expect(
-      service.saveDraft(progressWorkspace.id, 'PROGRESS', 'x', {
-        ...collaborator,
-        organizationId: 40,
-      }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-  });
-
-  it('only lets the lead organization review progress and requires a rejection reason', async () => {
-    const repository = repositoryMock();
-    repository.findWorkspace.mockResolvedValue({
-      ...progressWorkspace,
-      status: 'SUBMITTED',
-      latestVersion: { id: 101, status: 'SUBMITTED' },
-    });
-    const service = new ReportsService(
-      repository as unknown as ReportsRepository,
-    );
-
-    await expect(
-      service.approve(progressWorkspace.id, 'PROGRESS', {
-        ...lead,
-        organizationId: 99,
-      }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-    await expect(
-      service.reject(progressWorkspace.id, 'PROGRESS', '   ', lead),
-    ).rejects.toBeInstanceOf(BadRequestException);
-    await service.reject(
-      progressWorkspace.id,
-      'PROGRESS',
-      'Thiếu tài liệu',
-      lead,
-    );
-
-    expect(repository.rejectLatest).toHaveBeenCalledWith(
-      progressWorkspace.id,
-      lead.sub,
-      'Thiếu tài liệu',
-      { organizationId: lead.organizationId },
-    );
-  });
-
-  it('opens a consolidated workspace for both ad-hoc and periodic tasks without requiring approved progress', async () => {
-    const repository = repositoryMock();
-    const service = new ReportsService(
-      repository as unknown as ReportsRepository,
-    );
-    repository.findOrCreateWorkspace.mockResolvedValue({
-      ...progressWorkspace,
-      kind: 'CONSOLIDATED',
-      ownerOrganizationId: 20,
-    });
-
-    // Cả đột xuất lẫn định kỳ đều mở được, kể cả khi chưa duyệt báo cáo phối hợp.
-    for (const type of ['DOT_XUAT', 'DINH_KY']) {
-      repository.findSubtaskContext.mockResolvedValue({
-        ...subtaskContext,
-        task: { ...subtaskContext.task, type },
-      });
-
-      await service.openConsolidated(7, lead);
-    }
+    await service.openConsolidated(7, lead);
+    await service.openConsolidated(7, admin);
 
     expect(repository.findOrCreateWorkspace).toHaveBeenCalledWith(
       7,
       'CONSOLIDATED',
-      lead.organizationId,
+      { organizationId: lead.organizationId, userId: null },
     );
-    expect(repository.findOrCreateWorkspace).toHaveBeenCalledTimes(2);
+    await expect(
+      service.openConsolidated(7, collaborator),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('lets the assigning organization review consolidated reports but not the lead', async () => {
-    const repository = repositoryMock();
-    repository.findWorkspace.mockResolvedValue(submittedConsolidated());
-    const service = new ReportsService(
-      repository as unknown as ReportsRepository,
-    );
+  it('lets collaborators read and edit only their own progress workspace', async () => {
+    const { service } = serviceWith();
 
     await expect(
-      service.approve(12, 'CONSOLIDATED', lead),
+      service.get(progressWorkspace.id, 'PROGRESS', collaborator),
+    ).resolves.toBe(progressWorkspace);
+    await expect(
+      service.get(progressWorkspace.id, 'PROGRESS', secondCollaborator),
     ).rejects.toBeInstanceOf(ForbiddenException);
-
-    await service.approve(12, 'CONSOLIDATED', assigning);
-    expect(repository.approveLatest).toHaveBeenCalledWith(12, assigning.sub, {
-      organizationId: assigning.organizationId,
-    });
+    await expect(
+      service.saveDraft(
+        progressWorkspace.id,
+        'PROGRESS',
+        'x',
+        secondCollaborator,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('lets an admin review consolidated reports regardless of organization', async () => {
-    const repository = repositoryMock();
-    repository.findWorkspace.mockResolvedValue(submittedConsolidated());
-    const service = new ReportsService(
-      repository as unknown as ReportsRepository,
-    );
+  it('lets assigning, lead, and admin read every workspace', async () => {
+    const { service } = serviceWith();
 
-    await service.approve(12, 'CONSOLIDATED', admin);
-    expect(repository.approveLatest).toHaveBeenCalledWith(12, admin.sub, {
-      organizationId: admin.organizationId,
-    });
+    await expect(service.get(11, 'PROGRESS', assigning)).resolves.toBe(
+      progressWorkspace,
+    );
+    await expect(service.get(11, 'PROGRESS', lead)).resolves.toBe(
+      progressWorkspace,
+    );
+    await expect(service.get(11, 'PROGRESS', admin)).resolves.toBe(
+      progressWorkspace,
+    );
   });
 
-  it('passes history filters with participant-only scope', async () => {
-    const repository = repositoryMock();
-    const service = new ReportsService(
-      repository as unknown as ReportsRepository,
-    );
+  it('lists all task progress workspaces only for lead or admin', async () => {
+    const { service, repository } = serviceWith();
+
+    await expect(service.listTaskWorkspaces(7, lead)).resolves.toHaveLength(2);
+    await expect(service.listTaskWorkspaces(7, admin)).resolves.toHaveLength(2);
+    await expect(
+      service.listTaskWorkspaces(7, assigning),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(
+      service.listTaskWorkspaces(7, collaborator),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(repository.listTaskWorkspaces).toHaveBeenCalledWith(7);
+  });
+
+  it('passes user scope into report history', async () => {
+    const { service, repository } = serviceWith();
 
     await service.history(
-      { page: 1, limit: 20, taskCode: 'NV-01' },
+      { page: 1, limit: 20, taskCode: ' NV-01 ' },
       collaborator,
     );
 
     expect(repository.listHistory).toHaveBeenCalledWith(
       expect.objectContaining({
         taskCode: 'NV-01',
+        userId: collaborator.sub,
         organizationId: collaborator.organizationId,
         globalScope: false,
       }),
     );
   });
 
-  it('uses admin for global report history scope', async () => {
-    const repository = repositoryMock();
-    const service = new ReportsService(
-      repository as unknown as ReportsRepository,
-    );
+  it('uses global history scope for admin', async () => {
+    const { service, repository } = serviceWith();
 
     await service.history({ page: 1, limit: 20 }, admin);
 
     expect(repository.listHistory).toHaveBeenCalledWith(
-      expect.objectContaining({ globalScope: true }),
+      expect.objectContaining({ userId: admin.sub, globalScope: true }),
     );
-  });
-
-  it('lists every submitted collaborator workspace for the lead organization', async () => {
-    const repository = repositoryMock();
-    const service = new ReportsService(
-      repository as unknown as ReportsRepository,
-    );
-
-    const rows = await service.listSubtaskWorkspaces(7, lead);
-
-    expect(rows).toHaveLength(2);
-    expect(repository.listSubtaskWorkspaces).toHaveBeenCalledWith(7);
-  });
-
-  it('lets an admin list report workspaces outside its organization but denies outsiders', async () => {
-    const repository = repositoryMock();
-    const service = new ReportsService(
-      repository as unknown as ReportsRepository,
-    );
-
-    await expect(service.listSubtaskWorkspaces(7, admin)).resolves.toHaveLength(
-      2,
-    );
-    await expect(
-      service.listSubtaskWorkspaces(7, { ...collaborator, organizationId: 99 }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('rejects an inverted submitted history range', async () => {
-    const repository = repositoryMock();
-    const service = new ReportsService(
-      repository as unknown as ReportsRepository,
-    );
+    const { service } = serviceWith();
 
     await expect(
       service.history(
@@ -386,7 +273,7 @@ describe('ReportsService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('uses canonical report types and navigable task targets', async () => {
+  it('keeps immutable submission and review notifications task-based', async () => {
     const repository = repositoryMock();
     const notifications = {
       createForOrganizations: jest.fn().mockResolvedValue(1),
@@ -397,13 +284,16 @@ describe('ReportsService', () => {
     );
 
     await service.submit(progressWorkspace.id, 'PROGRESS', collaborator);
+    expect(repository.createVersionFromDraft).toHaveBeenCalledWith(
+      progressWorkspace.id,
+      collaborator.sub,
+      { organizationId: collaborator.organizationId },
+    );
     expect(notifications.createForOrganizations).toHaveBeenLastCalledWith(
       expect.objectContaining({
         organizationIds: [lead.organizationId],
-        eventKey: 'REPORT_SUBMITTED:101',
-        type: 'GUI_BAO_CAO',
         entityType: 'Task',
-        entityId: progressWorkspace.subtask.task.id,
+        entityId: taskContext.id,
       }),
     );
 
@@ -416,27 +306,25 @@ describe('ReportsService', () => {
     expect(notifications.createForOrganizations).toHaveBeenLastCalledWith(
       expect.objectContaining({
         organizationIds: [collaborator.organizationId],
-        eventKey: 'REPORT_APPROVED:101',
-        type: 'DUYET_BAO_CAO',
         entityType: 'Task',
-        entityId: progressWorkspace.subtask.task.id,
+        entityId: taskContext.id,
       }),
+    );
+  });
+
+  it('only lets assigning organization review consolidated reports', async () => {
+    const repository = repositoryMock();
+    repository.findWorkspace.mockResolvedValue(submittedConsolidated());
+    const service = new ReportsService(
+      repository as unknown as ReportsRepository,
     );
 
-    await service.reject(
-      progressWorkspace.id,
-      'PROGRESS',
-      'Missing attachment',
-      lead,
-    );
-    expect(notifications.createForOrganizations).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        organizationIds: [collaborator.organizationId],
-        eventKey: 'REPORT_REJECTED:101',
-        type: 'TRA_BAO_CAO',
-        entityType: 'Task',
-        entityId: progressWorkspace.subtask.task.id,
-      }),
-    );
+    await expect(
+      service.approve(12, 'CONSOLIDATED', lead),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    await service.approve(12, 'CONSOLIDATED', assigning);
+    expect(repository.approveLatest).toHaveBeenCalledWith(12, assigning.sub, {
+      organizationId: assigning.organizationId,
+    });
   });
 });

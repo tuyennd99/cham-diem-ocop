@@ -5,16 +5,16 @@ const isoDate = z.iso.datetime({ offset: true, local: true });
 
 export class SaveReportDraftDto extends createZodDto(
   z.strictObject({ content: z.string() }),
-) { }
+) {}
 
 export class RejectReportDto extends createZodDto(
   z.strictObject({ reason: z.string().min(1).max(1000) }),
-) { }
+) {}
 
 const openProgressQuery = z.strictObject({
-  ownerOrganizationId: z.coerce.number().int().optional(),
+  ownerUserId: z.coerce.number().int().optional(),
 });
-export class OpenProgressQueryDto extends createZodDto(openProgressQuery) { }
+export class OpenProgressQueryDto extends createZodDto(openProgressQuery) {}
 
 export class ReportHistoryQueryDto extends createZodDto(
   z.strictObject({
@@ -27,4 +27,4 @@ export class ReportHistoryQueryDto extends createZodDto(
     dueAt: isoDate.optional(),
     programId: z.coerce.number().int().min(1).optional(),
   }),
-) { }
+) {}

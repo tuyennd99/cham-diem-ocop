@@ -104,6 +104,11 @@ describe('full application on PostgreSQL', () => {
       data: {
         code: `full-e2e-${suffix}`,
         name: `Full E2E ${suffix}`,
+        assigningOrganizationId: staffOrganizationId,
+        leadOrganizationId,
+        collaborators: {
+          create: { organizationId: collaboratorOrganizationId },
+        },
       },
     });
     programId = program.id;
@@ -170,9 +175,6 @@ describe('full application on PostgreSQL', () => {
       expectedOutput: 'Báo cáo PDF',
       type: 'DOT_XUAT',
       programId,
-      assigningOrganizationId: staffOrganizationId,
-      leadOrganizationId,
-      collaboratorOrganizationIds: [collaboratorOrganizationId],
       dueAt,
     };
     await request(server)
@@ -190,51 +192,15 @@ describe('full application on PostgreSQL', () => {
       ApiBody<{
         id: number;
         code: string;
-        collaboratorOrganizationIds: number[];
       }>
     >(taskResponse).data;
-    expect(task.collaboratorOrganizationIds).toEqual([
-      collaboratorOrganizationId,
-    ]);
     const taskId = task.id;
 
-    const persistedTask = await request(server)
-      .get(`/api/v1/tasks/${taskId}`)
-      .set('Authorization', `Bearer ${staffToken}`)
-      .expect(200);
-    expect(
-      readBody<
-        ApiBody<{
-          collaboratorOrganizationIds: number[];
-        }>
-      >(persistedTask).data,
-    ).toEqual(
-      expect.objectContaining({
-        collaboratorOrganizationIds: [collaboratorOrganizationId],
-      }),
-    );
-
-    const subtasksResponse = await request(server)
-      .get(`/api/v1/tasks/${taskId}/reporting-subtasks`)
-      .set('Authorization', `Bearer ${collaboratorToken}`)
-      .expect(200);
-    const subtaskId =
-      readBody<ApiBody<Array<{ id: number }>>>(subtasksResponse).data[0].id;
-
     const opened = await request(server)
-      .get(`/api/v1/progress-reports/subtasks/${subtaskId}`)
+      .get(`/api/v1/progress-reports/tasks/${taskId}`)
       .set('Authorization', `Bearer ${collaboratorToken}`)
       .expect(200);
     const workspaceId = readBody<ApiBody<{ id: number }>>(opened).data.id;
-
-    await request(server)
-      .patch(`/api/v1/tasks/${taskId}`)
-      .set('Authorization', `Bearer ${staffToken}`)
-      .send({
-        leadOrganizationId: collaboratorOrganizationId,
-        collaboratorOrganizationIds: [leadOrganizationId],
-      })
-      .expect(409);
 
     await request(server)
       .patch(`/api/v1/progress-reports/${workspaceId}`)
@@ -255,7 +221,7 @@ describe('full application on PostgreSQL', () => {
       .expect(201);
 
     const reviewQueue = await request(server)
-      .get(`/api/v1/reporting-subtasks/${subtaskId}/report-workspaces`)
+      .get(`/api/v1/tasks/${taskId}/report-workspaces`)
       .set('Authorization', `Bearer ${leadToken}`)
       .expect(200);
     expect(
@@ -266,8 +232,23 @@ describe('full application on PostgreSQL', () => {
       .set('Authorization', `Bearer ${leadToken}`)
       .expect(201);
 
+    const consolidated = await request(server)
+      .get(`/api/v1/consolidated-reports/tasks/${taskId}`)
+      .set('Authorization', `Bearer ${leadToken}`)
+      .expect(200);
+    const consolidatedId =
+      readBody<ApiBody<{ id: number }>>(consolidated).data.id;
     await request(server)
-      .post(`/api/v1/tasks/${taskId}/complete`)
+      .patch(`/api/v1/consolidated-reports/${consolidatedId}`)
+      .set('Authorization', `Bearer ${leadToken}`)
+      .send({ content: 'Báo cáo tổng hợp' })
+      .expect(200);
+    await request(server)
+      .post(`/api/v1/consolidated-reports/${consolidatedId}/submit`)
+      .set('Authorization', `Bearer ${leadToken}`)
+      .expect(201);
+    await request(server)
+      .post(`/api/v1/consolidated-reports/${consolidatedId}/approve`)
       .set('Authorization', `Bearer ${staffToken}`)
       .expect(201);
 

@@ -32,6 +32,7 @@ describe('PostgreSQL report invariants', () => {
   let assigningOrganizationId: number;
   let leadOrganizationId: number;
   let collaboratorOrganizationIds: number[];
+  let collaboratorUserIds: number[];
   let programId: number;
 
   beforeAll(async () => {
@@ -75,9 +76,29 @@ describe('PostgreSQL report invariants', () => {
       data: {
         code: `program-${suffix}`,
         name: `Program ${suffix}`,
+        assigningOrganizationId,
+        leadOrganizationId,
+        collaborators: {
+          create: collaboratorOrganizationIds.map((organizationId) => ({
+            organizationId,
+          })),
+        },
       },
     });
     programId = program.id;
+    collaboratorUserIds = await Promise.all(
+      collaboratorOrganizationIds.map(async (organizationId, index) => {
+        const user = await prisma.user.create({
+          data: {
+            username: `collaborator-${index}-${suffix}`,
+            fullName: `Collaborator ${index + 1}`,
+            passwordHash: 'not-used-in-database-tests',
+            organizationId,
+          },
+        });
+        return user.id;
+      }),
+    );
   });
 
   afterAll(async () => {
@@ -85,7 +106,7 @@ describe('PostgreSQL report invariants', () => {
   });
 
   it('does not complete an ad-hoc task when collaborator reports are approved', async () => {
-    const task = await createTaskWithSubtask(prisma, {
+    const task = await createTask(prisma, {
       code: `concurrent-${suffix}`,
       actorId,
       programId,
@@ -98,8 +119,9 @@ describe('PostgreSQL report invariants', () => {
         prisma.reportWorkspace.create({
           data: {
             kind: ReportKind.PROGRESS,
-            subtaskId: task.subtasks[0].id,
+            taskId: task.id,
             ownerOrganizationId: organizationId,
+            ownerUserId: collaboratorUserIds[index],
             status: ReportStatus.SUBMITTED,
             content: `Report ${index + 1}`,
             versions: {
@@ -130,7 +152,7 @@ describe('PostgreSQL report invariants', () => {
       prisma.task.findUniqueOrThrow({ where: { id: task.id } }),
       prisma.reportWorkspace.count({
         where: {
-          subtaskId: task.subtasks[0].id,
+          taskId: task.id,
           status: ReportStatus.APPROVED,
         },
       }),
@@ -140,7 +162,7 @@ describe('PostgreSQL report invariants', () => {
   });
 
   it('keeps submitted versions immutable and rejects a late draft upload', async () => {
-    const task = await createTaskWithSubtask(prisma, {
+    const task = await createTask(prisma, {
       code: `immutable-${suffix}`,
       actorId,
       programId,
@@ -151,8 +173,9 @@ describe('PostgreSQL report invariants', () => {
     const workspace = await prisma.reportWorkspace.create({
       data: {
         kind: ReportKind.PROGRESS,
-        subtaskId: task.subtasks[0].id,
+        taskId: task.id,
         ownerOrganizationId: collaboratorOrganizationIds[0],
+        ownerUserId: collaboratorUserIds[0],
         content: 'Version one',
       },
     });
@@ -240,35 +263,13 @@ function taskData(input: TaskFixture): Prisma.TaskCreateInput {
     type: TaskType.DOT_XUAT,
     dueAt: new Date(Date.now() + 86_400_000),
     program: { connect: { id: input.programId } },
-    assigningOrganization: {
-      connect: { id: input.assigningOrganizationId },
-    },
-    leadOrganization: { connect: { id: input.leadOrganizationId } },
     createdBy: { connect: { id: input.actorId } },
     updatedBy: { connect: { id: input.actorId } },
-    collaborators: {
-      create: input.collaboratorOrganizationIds.map((organizationId) => ({
-        organization: { connect: { id: organizationId } },
-      })),
-    },
   };
 }
 
-function createTaskWithSubtask(prisma: PrismaClient, input: TaskFixture) {
-  const now = new Date();
+function createTask(prisma: PrismaClient, input: TaskFixture) {
   return prisma.task.create({
-    data: {
-      ...taskData(input),
-      subtasks: {
-        create: {
-          title: 'Kỳ báo cáo',
-          startAt: now,
-          dueAt: new Date(now.getTime() + 86_400_000),
-          createdBy: { connect: { id: input.actorId } },
-          createdByOrganization: { connect: { id: input.leadOrganizationId } },
-        },
-      },
-    },
-    include: { subtasks: true },
+    data: taskData(input),
   });
 }

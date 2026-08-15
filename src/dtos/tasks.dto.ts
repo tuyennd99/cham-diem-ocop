@@ -2,8 +2,6 @@ import { TaskType } from '@prisma/client';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
-const unique = (a: number[]) => new Set(a).size === a.length;
-const uniqueMsg = { message: 'Giá trị trong mảng phải là duy nhất' };
 const isoDate = z.iso.datetime({ offset: true, local: true });
 
 const createTaskSchema = z.strictObject({
@@ -13,19 +11,12 @@ const createTaskSchema = z.strictObject({
   expectedOutput: z.string().optional(),
   type: z.enum(TaskType),
   programId: z.coerce.number().int().min(1),
-  assigningOrganizationId: z.coerce.number().int().min(1),
-  leadOrganizationId: z.coerce.number().int().min(1),
-  collaboratorOrganizationIds: z
-    .array(z.number().int().min(1))
-    .min(1)
-    .refine(unique, uniqueMsg),
   dueAt: isoDate.optional(),
   startAt: isoDate.optional(),
 });
 
-export class CreateTaskDto extends createZodDto(createTaskSchema) { }
-
-export class UpdateTaskDto extends createZodDto(createTaskSchema.partial()) { }
+export class CreateTaskDto extends createZodDto(createTaskSchema) {}
+export class UpdateTaskDto extends createZodDto(createTaskSchema.partial()) {}
 
 export class TaskQueryDto extends createZodDto(
   z.strictObject({
@@ -33,9 +24,8 @@ export class TaskQueryDto extends createZodDto(
     limit: z.coerce.number().int().min(1).max(100).default(20),
     search: z.string().trim().max(200).optional(),
   }),
-) { }
+) {}
 
 export class CloseTaskDto extends createZodDto(
   z.strictObject({ reason: z.string().min(1).max(1000) }),
-) { }
-
+) {}

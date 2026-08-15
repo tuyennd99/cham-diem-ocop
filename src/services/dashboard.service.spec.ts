@@ -1,8 +1,4 @@
-import {
-  SubtaskStatus,
-  ReportStatus,
-  TaskType,
-} from '@prisma/client';
+import { ReportStatus, TaskType } from '@prisma/client';
 import type { DashboardRepository } from '../repositories/dashboard.repository';
 import type { DashboardTaskRow } from '../types/dashboard';
 import { DashboardService } from './dashboard.service';
@@ -24,37 +20,31 @@ describe('DashboardService', () => {
     repository = {
       loadSummaryRows: jest.fn(),
     };
-    service = new DashboardService(repository as unknown as DashboardRepository);
+    service = new DashboardService(
+      repository as unknown as DashboardRepository,
+    );
   });
 
-  it('counts unique tasks separately from reporting subtasks', async () => {
+  it('counts task rows directly while preserving the response contract', async () => {
     repository.loadSummaryRows.mockResolvedValue([
       taskRow({
         id: 1,
         type: TaskType.DINH_KY,
-        subtasks: [
-          subtask(1, SubtaskStatus.COMPLETED, '2026-07-01T00:00:00.000Z'),
-          subtask(2, SubtaskStatus.OPEN, '2026-08-10T00:00:00.000Z'),
-          subtask(3, SubtaskStatus.OPEN, '2026-07-25T00:00:00.000Z', [
-            ReportStatus.SUBMITTED,
-          ]),
-        ],
+        dueAt: new Date('2026-07-25T00:00:00.000Z'),
+        reportStatus: [ReportStatus.SUBMITTED],
       }),
       taskRow({
         id: 2,
         type: TaskType.DOT_XUAT,
         completedAt: new Date('2026-07-20T00:00:00.000Z'),
-        subtasks: [
-          subtask(4, SubtaskStatus.OPEN, '2026-07-20T00:00:00.000Z'),
-          subtask(5, SubtaskStatus.OPEN, '2026-07-29T00:00:00.000Z'),
-        ],
+        dueAt: new Date('2026-07-20T00:00:00.000Z'),
       }),
     ]);
 
     const result = await service.summary({}, principal, now);
 
     expect(result.totalTasks).toBe(2);
-    expect(result.subtaskCounts.total).toBe(5);
+    expect(result.subtaskCounts.total).toBe(2);
     expect(result.taskCounts.typeCounts).toEqual({
       DINH_KY: 1,
       DOT_XUAT: 1,
@@ -66,9 +56,9 @@ describe('DashboardService', () => {
     expect(result.subtaskCounts.statusCounts).toEqual({
       HOAN_THANH: 1,
       DANG_CAP_NHAT: 1,
-      QUA_HAN: 1,
-      SAP_DEN_HAN: 1,
-      CHUA_HOAN_THANH: 1,
+      QUA_HAN: 0,
+      SAP_DEN_HAN: 0,
+      CHUA_HOAN_THANH: 0,
     });
   });
 
@@ -76,18 +66,17 @@ describe('DashboardService', () => {
     repository.loadSummaryRows.mockResolvedValue([
       taskRow({
         id: 1,
-        subtasks: [
-          subtask(1, SubtaskStatus.COMPLETED, '2026-07-01T00:00:00.000Z', [
-            ReportStatus.SUBMITTED,
-          ]),
-          subtask(2, SubtaskStatus.OPEN, '2026-07-01T00:00:00.000Z', [
-            ReportStatus.SUBMITTED,
-          ]),
-          subtask(3, SubtaskStatus.OPEN, '2026-07-23T23:59:59.999Z'),
-          subtask(4, SubtaskStatus.OPEN, '2026-07-29T00:00:00.000Z'),
-          subtask(5, SubtaskStatus.OPEN, '2026-07-29T00:00:00.001Z'),
-        ],
+        completedAt: new Date(),
+        dueAt: new Date('2026-07-01'),
       }),
+      taskRow({
+        id: 2,
+        reportStatus: [ReportStatus.SUBMITTED],
+        dueAt: new Date('2026-07-01'),
+      }),
+      taskRow({ id: 3, dueAt: new Date('2026-07-23T23:59:59.999Z') }),
+      taskRow({ id: 4, dueAt: new Date('2026-07-29T00:00:00.000Z') }),
+      taskRow({ id: 5, dueAt: new Date('2026-07-29T00:00:00.001Z') }),
     ]);
 
     const result = await service.summary({}, principal, now);
@@ -117,6 +106,7 @@ describe('DashboardService', () => {
     expect(repository.loadSummaryRows).toHaveBeenCalledWith({
       filters,
       organizationId: 20,
+      userId: 7,
       globalScope: false,
     });
   });
@@ -126,12 +116,12 @@ describe('DashboardService', () => {
 
     await service.summary({}, { ...principal, isAdmin: false }, now);
     expect(repository.loadSummaryRows).toHaveBeenLastCalledWith(
-      expect.objectContaining({ globalScope: false }),
+      expect.objectContaining({ globalScope: false, userId: 7 }),
     );
 
     await service.summary({}, { ...principal, isAdmin: true }, now);
     expect(repository.loadSummaryRows).toHaveBeenLastCalledWith(
-      expect.objectContaining({ globalScope: true }),
+      expect.objectContaining({ globalScope: true, userId: 7 }),
     );
   });
 });
@@ -144,21 +134,8 @@ function taskRow(
     type: overrides.type ?? TaskType.DINH_KY,
     completedAt: overrides.completedAt ?? null,
     closedAt: overrides.closedAt ?? null,
-    subtasks: overrides.subtasks ?? [],
-  };
-}
-
-function subtask(
-  id: number,
-  status: SubtaskStatus,
-  dueAt: string,
-  reportStatus: ReportStatus[] = [],
-): DashboardTaskRow['subtasks'][number] {
-  return {
-    id,
-    startAt: null,
-    status,
-    dueAt: new Date(dueAt),
-    reportStatus,
+    startAt: overrides.startAt ?? null,
+    dueAt: overrides.dueAt ?? null,
+    reportStatus: overrides.reportStatus ?? [],
   };
 }

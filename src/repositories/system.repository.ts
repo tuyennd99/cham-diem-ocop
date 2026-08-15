@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { EntityStatus, Prisma, UserStatus } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -17,6 +17,29 @@ const userPublicSelect = {
   updatedAt: true,
   organization: { select: { id: true, code: true, name: true } },
 } satisfies Prisma.UserSelect;
+
+const organizationSummary = { id: true, code: true, name: true } as const;
+const programInclude = {
+  assigningOrganization: { select: organizationSummary },
+  leadOrganization: { select: organizationSummary },
+  collaborators: {
+    include: { organization: { select: organizationSummary } },
+    orderBy: { organizationId: 'asc' as const },
+  },
+  tasks: {
+    where: { deletedAt: null },
+    orderBy: [{ createdAt: 'desc' as const }, { id: 'desc' as const }],
+    include: {
+      workspaces: {
+        include: { versions: { select: { status: true } } },
+      },
+    },
+  },
+} satisfies Prisma.ProgramInclude;
+
+type ProgramPayload = Prisma.ProgramGetPayload<{
+  include: typeof programInclude;
+}>;
 
 interface CreateUserData {
   username: string;
@@ -49,12 +72,15 @@ interface ProgramData {
   code?: string;
   name?: string;
   description?: string;
+  assigningOrganizationId?: number;
+  leadOrganizationId?: number;
+  collaboratorOrganizationIds?: number[];
   status?: EntityStatus;
 }
 
 @Injectable()
 export class SystemRepository {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   listUsers() {
     return this.prisma.user.findMany({
@@ -259,6 +285,18 @@ export class SystemRepository {
     return this.prisma.organization.findUnique({ where: { code } });
   }
 
+  findOrganizationsByIds(ids: number[]) {
+    return this.prisma.organization.findMany({
+      where: { id: { in: ids } },
+      select: {
+        id: true,
+        status: true,
+        isAssigningAuthority: true,
+        isExecutingUnit: true,
+      },
+    });
+  }
+
   createOrganization(
     data: Required<Pick<OrganizationData, 'code' | 'name'>> & OrganizationData,
     actorId: number,
@@ -300,12 +338,20 @@ export class SystemRepository {
     );
   }
 
-  listPrograms() {
-    return this.prisma.program.findMany({ orderBy: { code: 'asc' } });
+  async listPrograms() {
+    const rows = await this.prisma.program.findMany({
+      include: programInclude,
+      orderBy: { code: 'asc' },
+    });
+    return rows.map((row) => this.toProgram(row));
   }
 
-  findProgramById(id: number) {
-    return this.prisma.program.findUnique({ where: { id } });
+  async findProgramById(id: number) {
+    const row = await this.prisma.program.findUnique({
+      where: { id },
+      include: programInclude,
+    });
+    return row ? this.toProgram(row) : null;
   }
 
   findProgramByCode(code: string) {
@@ -313,16 +359,36 @@ export class SystemRepository {
   }
 
   createProgram(
-    data: Required<Pick<ProgramData, 'code' | 'name'>> & ProgramData,
+    data: Required<
+      Pick<
+        ProgramData,
+        'code' | 'name' | 'assigningOrganizationId' | 'leadOrganizationId'
+      >
+    > &
+      ProgramData,
     actorId: number,
     meta: RequestMeta,
   ) {
+    const { collaboratorOrganizationIds = [], ...program } = data;
     return this.createAudited(
       'Program',
       'SYSTEM_PROGRAM_CREATED',
       actorId,
       meta,
-      (transaction) => transaction.program.create({ data }),
+      async (transaction) => {
+        const row = await transaction.program.create({
+          data: {
+            ...program,
+            collaborators: {
+              create: collaboratorOrganizationIds.map((organizationId) => ({
+                organizationId,
+              })),
+            },
+          },
+          include: programInclude,
+        });
+        return this.toProgram(row);
+      },
     );
   }
 
@@ -338,7 +404,67 @@ export class SystemRepository {
       id,
       actorId,
       meta,
-      (transaction) => transaction.program.update({ where: { id }, data }),
+      async (transaction) => {
+        await transaction.$queryRaw(
+          Prisma.sql`SELECT "id" FROM "programs" WHERE "id" = ${id} FOR UPDATE`,
+        );
+        const before = await transaction.program.findUniqueOrThrow({
+          where: { id },
+          select: {
+            assigningOrganizationId: true,
+            leadOrganizationId: true,
+            collaborators: { select: { organizationId: true } },
+          },
+        });
+        const assignmentChanged =
+          (data.assigningOrganizationId !== undefined &&
+            data.assigningOrganizationId !== before.assigningOrganizationId) ||
+          (data.leadOrganizationId !== undefined &&
+            data.leadOrganizationId !== before.leadOrganizationId) ||
+          (data.collaboratorOrganizationIds !== undefined &&
+            !this.sameIds(
+              data.collaboratorOrganizationIds,
+              before.collaborators.map(({ organizationId }) => organizationId),
+            ));
+        if (
+          assignmentChanged &&
+          (await transaction.task.count({
+            where: {
+              programId: id,
+              OR: [
+                { closedAt: { not: null } },
+                { completedAt: { not: null } },
+                { workspaces: { some: {} } },
+              ],
+            },
+          })) > 0
+        ) {
+          throw new ConflictException(
+            'Program assignment cannot be changed after reporting starts',
+          );
+        }
+        if (data.collaboratorOrganizationIds !== undefined) {
+          await transaction.programCollaborator.deleteMany({
+            where: { programId: id },
+          });
+          if (data.collaboratorOrganizationIds.length > 0) {
+            await transaction.programCollaborator.createMany({
+              data: data.collaboratorOrganizationIds.map((organizationId) => ({
+                programId: id,
+                organizationId,
+              })),
+            });
+          }
+        }
+        const program = { ...data };
+        delete program.collaboratorOrganizationIds;
+        const row = await transaction.program.update({
+          where: { id },
+          data: program,
+          include: programInclude,
+        });
+        return this.toProgram(row);
+      },
     );
   }
 
@@ -459,6 +585,47 @@ export class SystemRepository {
       phone: user.phone,
       organizationId: user.organizationId,
     };
+  }
+
+  private toProgram(row: ProgramPayload) {
+    return {
+      id: row.id,
+      code: row.code,
+      name: row.name,
+      description: row.description,
+      status: row.status,
+      assigningOrganizationId: row.assigningOrganizationId,
+      leadOrganizationId: row.leadOrganizationId,
+      collaboratorOrganizationIds: row.collaborators.map(
+        ({ organizationId }) => organizationId,
+      ),
+      assigningOrganization: row.assigningOrganization,
+      leadOrganization: row.leadOrganization,
+      collaboratorOrganizations: row.collaborators.map(
+        ({ organization }) => organization,
+      ),
+      tasks: row.tasks.map(({ workspaces, ...task }) => ({
+        ...task,
+        hasReports: workspaces.some((workspace) =>
+          workspace.versions.some((version) => version.status !== 'DRAFT'),
+        ),
+        workspaces: workspaces.map((workspace) => ({
+          id: workspace.id,
+          kind: workspace.kind,
+          ownerOrganizationId: workspace.ownerOrganizationId,
+          ownerUserId: workspace.ownerUserId,
+          status: workspace.status,
+        })),
+      })),
+    };
+  }
+
+  private sameIds(left: number[], right: number[]) {
+    const a = [...left].sort((x, y) => x - y);
+    const b = [...right].sort((x, y) => x - y);
+    return (
+      a.length === b.length && a.every((value, index) => value === b[index])
+    );
   }
 
   private auditMeta(meta: RequestMeta) {

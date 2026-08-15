@@ -8,20 +8,15 @@ import { Test } from '@nestjs/testing';
 import { Server } from 'node:http';
 import request from 'supertest';
 import { configureApp } from '../src/config/app';
-import { TasksController } from '../src/controllers/tasks.controller';
 import { SubTasksController } from '../src/controllers/subtask.controller';
-import { SubTasksService } from '../src/services/subtask.service';
+import { TasksController } from '../src/controllers/tasks.controller';
 import { ReportsService } from '../src/services/reports.service';
 import { TasksService } from '../src/services/tasks.service';
 
 class TestPrincipalGuard implements CanActivate {
   canActivate(context: ExecutionContext) {
-    const request = context.switchToHttp().getRequest<{ user?: unknown }>();
-    request.user = {
-      sub: 1,
-      username: 'thuongtruc',
-      organizationId: 10,
-    };
+    const req = context.switchToHttp().getRequest<{ user?: unknown }>();
+    req.user = { sub: 1, username: 'thuongtruc', organizationId: 10 };
     return true;
   }
 }
@@ -35,14 +30,9 @@ describe('Task endpoints', () => {
     create: jest.fn().mockResolvedValue({ id: 1, code: 'NV-001' }),
     update: jest.fn().mockResolvedValue({ id: 1, code: 'NV-001' }),
     remove: jest.fn().mockResolvedValue({ id: 1, deletedAt: new Date() }),
-    close: jest.fn().mockResolvedValue({ id: 1, closedAt: new Date() }),
-  };
-  const subtasksService = {
-    list: jest.fn().mockResolvedValue([]),
-    cancel: jest.fn().mockResolvedValue({ id: 2, status: 'CANCELED' }),
   };
   const reportsService = {
-    listSubtaskWorkspaces: jest.fn().mockResolvedValue([]),
+    listTaskWorkspaces: jest.fn().mockResolvedValue([]),
   };
 
   beforeAll(async () => {
@@ -52,7 +42,6 @@ describe('Task endpoints', () => {
       controllers: [TasksController, SubTasksController],
       providers: [
         { provide: TasksService, useValue: tasksService },
-        { provide: SubTasksService, useValue: subtasksService },
         { provide: ReportsService, useValue: reportsService },
         { provide: APP_GUARD, useClass: TestPrincipalGuard },
       ],
@@ -63,13 +52,8 @@ describe('Task endpoints', () => {
     server = app.getHttpServer() as Server;
   });
 
-  afterAll(async () => {
-    await app.close();
-  });
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
+  afterAll(async () => app.close());
+  beforeEach(() => jest.clearAllMocks());
 
   it('lists tasks with the authenticated principal', async () => {
     await request(server).get('/api/v1/tasks').expect(200);
@@ -79,28 +63,12 @@ describe('Task endpoints', () => {
     );
   });
 
-  it('rejects an empty collaborator list at the HTTP boundary', async () => {
+  it('rejects Program organization fields on child Task writes', async () => {
     await request(server)
       .post('/api/v1/tasks')
       .send({
         code: 'NV-001',
-        name: 'Nhiệm vụ',
-        type: 'DOT_XUAT',
-        programId: 1,
-        assigningOrganizationId: 10,
-        leadOrganizationId: 20,
-        collaboratorOrganizationIds: [],
-        dueAt: '2026-08-01T00:00:00.000Z',
-      })
-      .expect(400);
-  });
-
-  it('allows task creation with tasks.create and tasks.assign', async () => {
-    await request(server)
-      .post('/api/v1/tasks')
-      .send({
-        code: 'NV-001',
-        name: 'Nhiệm vụ',
+        name: 'Nhiệm vụ con',
         type: 'DOT_XUAT',
         programId: 1,
         assigningOrganizationId: 10,
@@ -108,39 +76,25 @@ describe('Task endpoints', () => {
         collaboratorOrganizationIds: [30],
         dueAt: '2026-08-01T00:00:00.000Z',
       })
+      .expect(400);
+  });
+
+  it('allows child Task creation without organization fields', async () => {
+    await request(server)
+      .post('/api/v1/tasks')
+      .send({
+        code: 'NV-001',
+        name: 'Nhiệm vụ con',
+        type: 'DOT_XUAT',
+        programId: 1,
+        dueAt: '2026-08-01T00:00:00.000Z',
+      })
       .expect(201);
   });
 
-  it('maps close and subtask cancellation endpoints', async () => {
-    await request(server)
-      .post('/api/v1/tasks/1/close')
-      .send({ reason: 'Kết thúc chương trình' })
-      .expect(201);
-    await request(server)
-      .post('/api/v1/subtasks/2/cancel')
-      .send({ reason: 'Không còn yêu cầu báo cáo' })
-      .expect(201);
-
-    expect(tasksService.close).toHaveBeenCalledWith(
-      1,
-      'Kết thúc chương trình',
-      expect.objectContaining({ sub: 1 }),
-      expect.objectContaining({ requestId: expect.any(String) as string }),
-    );
-    expect(subtasksService.cancel).toHaveBeenCalledWith(
-      2,
-      'Không còn yêu cầu báo cáo',
-      expect.objectContaining({ sub: 1 }),
-      expect.objectContaining({ requestId: expect.any(String) as string }),
-    );
-  });
-
-  it('lists submitted report workspaces for a reporting subtask', async () => {
-    await request(server)
-      .get('/api/v1/subtasks/2/report-workspaces')
-      .expect(200);
-
-    expect(reportsService.listSubtaskWorkspaces).toHaveBeenCalledWith(
+  it('lists report workspaces for a child Task', async () => {
+    await request(server).get('/api/v1/tasks/2/report-workspaces').expect(200);
+    expect(reportsService.listTaskWorkspaces).toHaveBeenCalledWith(
       2,
       expect.objectContaining({ sub: 1 }),
     );

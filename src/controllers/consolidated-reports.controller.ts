@@ -32,14 +32,14 @@ export class ConsolidatedReportsController {
   constructor(
     private readonly reports: ReportsService,
     private readonly files: FilesService,
-  ) { }
+  ) {}
 
-  @Get('subtasks/:subtaskId')
+  @Get('tasks/:taskId')
   open(
-    @Param('subtaskId', ParseIntPipe) subtaskId: number,
+    @Param('taskId', ParseIntPipe) taskId: number,
     @CurrentUser() principal: AccessTokenPayload,
   ) {
-    return this.reports.openConsolidated(subtaskId, principal);
+    return this.reports.openConsolidated(taskId, principal);
   }
 
   @Get(':id')

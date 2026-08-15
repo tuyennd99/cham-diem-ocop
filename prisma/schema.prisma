@@ -36,12 +36,6 @@ enum UserStatus {
   LOCKED
 }
 
-enum SubtaskStatus {
-  OPEN
-  COMPLETED
-  CANCELED
-}
-
 enum NotificationType {
   GIAO_NHIEM_VU
   DONG_NHIEM_VU
@@ -59,51 +53,50 @@ enum EntityStatus {
 }
 
 model Organization {
-  id                   Int                @id @default(autoincrement())
-  code                 String             @unique @db.VarChar(50)
-  name                 String             @db.VarChar(255)
-  isAssigningAuthority Boolean            @default(false)
-  isExecutingUnit      Boolean            @default(true)
-  status               EntityStatus       @default(ACTIVE)
-  createdAt            DateTime           @default(now()) @db.Timestamptz(3)
-  updatedAt            DateTime           @updatedAt @db.Timestamptz(3)
-  users                User[]
-  assignedTasks        Task[]             @relation("AssigningOrganization")
-  leadTasks            Task[]             @relation("LeadOrganization")
-  collaboratorTasks    TaskCollaborator[]
-  reportWorkspaces     ReportWorkspace[]
-  createdSubtasks      Subtask[]          @relation("SubtaskCreatedByOrg")
-  auditLogs            AuditLog[]
+  id                    Int                   @id @default(autoincrement())
+  code                  String                @unique @db.VarChar(50)
+  name                  String                @db.VarChar(255)
+  isAssigningAuthority  Boolean               @default(false)
+  isExecutingUnit       Boolean               @default(true)
+  status                EntityStatus          @default(ACTIVE)
+  createdAt             DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime              @updatedAt @db.Timestamptz(3)
+  users                 User[]
+  assigningPrograms     Program[]             @relation("ProgramAssigningOrganization")
+  leadPrograms          Program[]             @relation("ProgramLeadOrganization")
+  programCollaborations ProgramCollaborator[]
+  reportWorkspaces      ReportWorkspace[]
+  auditLogs             AuditLog[]
 
   @@map("organizations")
 }
 
 model User {
-  id                         Int              @id @default(autoincrement())
-  username                   String           @unique @db.VarChar(100)
-  fullName                   String           @db.VarChar(255)
-  position                   String?          @db.VarChar(255)
-  rank                       String?          @db.VarChar(255)
-  phone                      String?          @db.VarChar(30)
-  passwordHash               String           @db.VarChar(255)
+  id                         Int               @id @default(autoincrement())
+  username                   String            @unique @db.VarChar(100)
+  fullName                   String            @db.VarChar(255)
+  position                   String?           @db.VarChar(255)
+  rank                       String?           @db.VarChar(255)
+  phone                      String?           @db.VarChar(30)
+  passwordHash               String            @db.VarChar(255)
   organizationId             Int
-  status                     UserStatus       @default(ACTIVE)
-  lockedAt                   DateTime?        @db.Timestamptz(3)
-  lockedUntil                DateTime?        @db.Timestamptz(3)
-  lockReason                 String?          @db.VarChar(500)
-  failedLoginCount           Int              @default(0)
-  failedLoginWindowStartedAt DateTime?        @db.Timestamptz(3)
-  deletedAt                  DateTime?        @db.Timestamptz(3)
-  createdAt                  DateTime         @default(now()) @db.Timestamptz(3)
-  updatedAt                  DateTime         @updatedAt @db.Timestamptz(3)
-  organization               Organization     @relation(fields: [organizationId], references: [id])
-  createdTasks               Task[]           @relation("TaskCreatedBy")
-  updatedTasks               Task[]           @relation("TaskUpdatedBy")
-  closedTasks                Task[]           @relation("TaskClosedBy")
-  completedTasks             Task[]           @relation("TaskCompletedBy")
-  submittedVersions          ReportVersion[]  @relation("ReportVersionSubmittedBy")
-  reviewedVersions           ReportVersion[]  @relation("ReportVersionReviewedBy")
-  createdSubtasks            Subtask[]        @relation("SubtaskCreatedBy")
+  status                     UserStatus        @default(ACTIVE)
+  lockedAt                   DateTime?         @db.Timestamptz(3)
+  lockedUntil                DateTime?         @db.Timestamptz(3)
+  lockReason                 String?           @db.VarChar(500)
+  failedLoginCount           Int               @default(0)
+  failedLoginWindowStartedAt DateTime?         @db.Timestamptz(3)
+  deletedAt                  DateTime?         @db.Timestamptz(3)
+  createdAt                  DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime          @updatedAt @db.Timestamptz(3)
+  organization               Organization      @relation(fields: [organizationId], references: [id])
+  createdTasks               Task[]            @relation("TaskCreatedBy")
+  updatedTasks               Task[]            @relation("TaskUpdatedBy")
+  closedTasks                Task[]            @relation("TaskClosedBy")
+  completedTasks             Task[]            @relation("TaskCompletedBy")
+  submittedVersions          ReportVersion[]   @relation("ReportVersionSubmittedBy")
+  reviewedVersions           ReportVersion[]   @relation("ReportVersionReviewedBy")
+  ownedReportWorkspaces      ReportWorkspace[] @relation("ReportWorkspaceOwnerUser")
   uploadedFiles              StoredFile[]
   notifications              Notification[]
   auditLogs                  AuditLog[]
@@ -115,113 +108,89 @@ model User {
 }
 
 model Program {
-  id          Int          @id @default(autoincrement())
-  code        String       @unique @db.VarChar(50)
-  name        String       @db.VarChar(255)
-  description String?
-  status      EntityStatus @default(ACTIVE)
-  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
-  tasks       Task[]
+  id                      Int                   @id @default(autoincrement())
+  code                    String                @unique @db.VarChar(50)
+  name                    String                @db.VarChar(255)
+  description             String?
+  assigningOrganizationId Int
+  leadOrganizationId      Int
+  status                  EntityStatus          @default(ACTIVE)
+  createdAt               DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime              @updatedAt @db.Timestamptz(3)
+  assigningOrganization   Organization          @relation("ProgramAssigningOrganization", fields: [assigningOrganizationId], references: [id])
+  leadOrganization        Organization          @relation("ProgramLeadOrganization", fields: [leadOrganizationId], references: [id])
+  collaborators           ProgramCollaborator[]
+  tasks                   Task[]
 
+  @@index([assigningOrganizationId])
+  @@index([leadOrganizationId])
   @@map("programs")
 }
 
 model Task {
-  id                      Int                 @id @default(autoincrement())
-  code                    String              @unique @db.VarChar(100)
-  name                    String              @db.VarChar(500)
-  description             String?
-  expectedOutput          String?
-  type                    TaskType
-  programId               Int
-  assigningOrganizationId Int
-  leadOrganizationId      Int
-  dueAt                   DateTime?           @db.Timestamptz(3)
-  deadlineStatus          TaskDeadlineStatus?
-  startAt                 DateTime?           @db.Timestamptz(3)
-  closedAt                DateTime?           @db.Timestamptz(3)
-  closedById              Int?
-  closeReason             String?
-  completedAt             DateTime?           @db.Timestamptz(3)
-  completedById           Int?
-  deletedAt               DateTime?           @db.Timestamptz(3)
-  createdById             Int
-  updatedById             Int
-  createdAt               DateTime            @default(now()) @db.Timestamptz(3)
-  updatedAt               DateTime            @updatedAt @db.Timestamptz(3)
-  program                 Program             @relation(fields: [programId], references: [id])
-  assigningOrganization   Organization        @relation("AssigningOrganization", fields: [assigningOrganizationId], references: [id])
-  leadOrganization        Organization        @relation("LeadOrganization", fields: [leadOrganizationId], references: [id])
-  createdBy               User                @relation("TaskCreatedBy", fields: [createdById], references: [id])
-  updatedBy               User                @relation("TaskUpdatedBy", fields: [updatedById], references: [id])
-  closedBy                User?               @relation("TaskClosedBy", fields: [closedById], references: [id])
-  completedBy             User?               @relation("TaskCompletedBy", fields: [completedById], references: [id])
-  collaborators           TaskCollaborator[]
-  subtasks                Subtask[]
-  consolidatedWorkspaces  ReportWorkspace[]   @relation("TaskConsolidatedWorkspace")
+  id             Int                 @id @default(autoincrement())
+  code           String              @unique @db.VarChar(100)
+  name           String              @db.VarChar(500)
+  description    String?
+  expectedOutput String?
+  type           TaskType
+  programId      Int
+  dueAt          DateTime?           @db.Timestamptz(3)
+  deadlineStatus TaskDeadlineStatus?
+  startAt        DateTime?           @db.Timestamptz(3)
+  closedAt       DateTime?           @db.Timestamptz(3)
+  closedById     Int?
+  closeReason    String?
+  completedAt    DateTime?           @db.Timestamptz(3)
+  completedById  Int?
+  deletedAt      DateTime?           @db.Timestamptz(3)
+  createdById    Int
+  updatedById    Int
+  createdAt      DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime            @updatedAt @db.Timestamptz(3)
+  program        Program             @relation(fields: [programId], references: [id])
+  createdBy      User                @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  updatedBy      User                @relation("TaskUpdatedBy", fields: [updatedById], references: [id])
+  closedBy       User?               @relation("TaskClosedBy", fields: [closedById], references: [id])
+  completedBy    User?               @relation("TaskCompletedBy", fields: [completedById], references: [id])
+  workspaces     ReportWorkspace[]   @relation("TaskWorkspace")
 
   @@index([programId])
-  @@index([leadOrganizationId])
   @@index([type, deadlineStatus])
   @@index([deletedAt])
   @@map("tasks")
 }
 
-model TaskCollaborator {
+model ProgramCollaborator {
   id             Int          @id @default(autoincrement())
-  taskId         Int
+  programId      Int
   organizationId Int
   createdAt      DateTime     @default(now()) @db.Timestamptz(3)
-  task           Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  program        Program      @relation(fields: [programId], references: [id], onDelete: Cascade)
   organization   Organization @relation(fields: [organizationId], references: [id])
 
-  @@unique([taskId, organizationId])
-  @@map("task_collaborators")
-}
-
-model Subtask {
-  id                      Int               @id @default(autoincrement())
-  taskId                  Int
-  title                   String            @db.VarChar(500)
-  description             String?
-  startAt                 DateTime          @db.Timestamptz(3)
-  dueAt                   DateTime          @db.Timestamptz(3)
-  status                  SubtaskStatus     @default(OPEN)
-  completedAt             DateTime?         @db.Timestamptz(3)
-  canceledAt              DateTime?         @db.Timestamptz(3)
-  cancelReason            String?
-  createdById             Int
-  createdByOrganizationId Int
-  createdAt               DateTime          @default(now()) @db.Timestamptz(3)
-  task                    Task              @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  createdBy               User              @relation("SubtaskCreatedBy", fields: [createdById], references: [id])
-  createdByOrganization   Organization      @relation("SubtaskCreatedByOrg", fields: [createdByOrganizationId], references: [id])
-  workspaces              ReportWorkspace[]
-
-  @@unique([taskId, title])
-  @@index([taskId, status])
-  @@map("subtasks")
+  @@unique([programId, organizationId])
+  @@map("program_collaborators")
 }
 
 model ReportWorkspace {
   id                  Int               @id @default(autoincrement())
   kind                ReportKind
-  subtaskId           Int?
-  taskId              Int?
+  taskId              Int
   ownerOrganizationId Int
+  ownerUserId         Int?
   status              ReportStatus      @default(DRAFT)
   content             String?
   createdAt           DateTime          @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime          @updatedAt @db.Timestamptz(3)
-  subtask             Subtask?          @relation(fields: [subtaskId], references: [id], onDelete: Cascade)
-  task                Task?             @relation("TaskConsolidatedWorkspace", fields: [taskId], references: [id])
+  task                Task              @relation("TaskWorkspace", fields: [taskId], references: [id], onDelete: Cascade)
   ownerOrganization   Organization      @relation(fields: [ownerOrganizationId], references: [id])
+  ownerUser           User?             @relation("ReportWorkspaceOwnerUser", fields: [ownerUserId], references: [id])
   versions            ReportVersion[]
   draftAttachments    DraftAttachment[]
 
-  @@unique([subtaskId, kind, ownerOrganizationId])
-  @@unique([taskId, kind, ownerOrganizationId])
+  @@index([taskId, kind])
+  @@index([ownerUserId])
   @@map("report_workspaces")
 }
 
