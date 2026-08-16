@@ -52,6 +52,10 @@ export class TasksService {
     return this.repository.listActivePrograms();
   }
 
+  listOrganizationLookups() {
+    return this.repository.listOrganizationLookups();
+  }
+
   async create(
     input: CreateTaskDto,
     principal: AccessTokenPayload,

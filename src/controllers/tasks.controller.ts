@@ -48,6 +48,11 @@ export class TasksController {
     return this.tasksService.listProgramLookups();
   }
 
+  @Get('lookups/organizations')
+  organizationLookups() {
+    return this.tasksService.listOrganizationLookups();
+  }
+
   @Get(':id')
   get(
     @Param('id', ParseIntPipe) id: number,

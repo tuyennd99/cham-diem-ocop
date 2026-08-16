@@ -119,6 +119,20 @@ export class TasksRepository {
     return rows.map((row) => this.toProgram(row));
   }
 
+  listOrganizationLookups() {
+    return this.prisma.organization.findMany({
+      where: { status: 'ACTIVE' },
+      // Form nhiệm vụ lọc theo vai trò nên lookup phải trả cả hai cờ.
+      select: {
+        ...organizationSelect,
+        isAssigningAuthority: true,
+        isExecutingUnit: true,
+        status: true,
+      },
+      orderBy: { code: 'asc' },
+    });
+  }
+
   async create(
     input: TaskWrite,
     actorId: number,
