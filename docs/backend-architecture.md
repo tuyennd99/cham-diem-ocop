@@ -213,10 +213,13 @@ flowchart LR
     DB[("PostgreSQL")]
     FILES[("Private file storage")]
     JOB["Scheduler / Cron job"]
+    WS["NotificationsGateway (Socket.IO)"]
 
     FE -->|HTTPS + JSON| API
     API --> GUARD --> CTRL --> SVC --> REPO --> PRISMA --> DB
     SVC --> FILES
+    SVC --> WS
+    WS -->|"notification:new"| FE
     JOB --> SVC
 ```
 
@@ -276,6 +279,7 @@ be/
 │   ├── decorators/            # @CurrentUser, @AdminOnly, @Public, @ResponseMessage
 │   ├── dtos/                  # Kiểm tra request đầu vào
 │   ├── filters/               # Chuẩn hóa lỗi API
+│   ├── gateways/              # Socket.IO gateway đẩy thông báo realtime
 │   ├── guards/                # JWT, account, CSRF, rate limit
 │   ├── interceptors/          # Chuẩn hóa response thành envelope
 │   ├── jobs/                  # Cron cập nhật deadlineStatus
@@ -524,8 +528,10 @@ hệ thống; đơn vị thường chỉ xem nhiệm vụ liên quan.
 | `POST` | `/notifications/:id/read` | Đánh dấu một thông báo đã đọc. | Đúng người nhận |
 | `POST` | `/notifications/read-all` | Đánh dấu toàn bộ thông báo đã đọc. | Đăng nhập |
 
-Thông báo lưu trong database để Frontend chủ động tải. Backend không có WebSocket
-hoặc Server-Sent Events.
+Backend đẩy sự kiện realtime qua Socket.IO (`src/gateways/notifications.gateway.ts`):
+sau khi ghi thông báo vào PostgreSQL, gateway emit `notification:new` tới room
+`org:{id}` của các đơn vị liên quan. Payload không mang dữ liệu, nên client vẫn
+gọi REST để lấy nội dung thông báo.
 
 ### 8.10 Audit logs
 
@@ -602,7 +608,9 @@ toàn bộ bằng `DISABLE_SCHEDULER=true`.
 5. Mã nhiệm vụ có unique constraint nhưng service so sánh đúng chuỗi đã nhập;
    chưa tự chuyển uppercase và chưa kiểm tra khác biệt hoa/thường.
 6. Xóa nhiệm vụ và người dùng là xóa mềm bằng `deletedAt`.
-7. Thông báo là dữ liệu PostgreSQL để Frontend polling; chưa có push realtime.
+7. Thông báo được lưu trong PostgreSQL **và** đẩy realtime qua Socket.IO
+   (`NotificationsGateway`) tới room `org:{id}`; payload chỉ là tín hiệu
+   (không mang nội dung), nên client vẫn refetch qua REST khi nhận được.
 8. Dashboard dùng bộ trạng thái tổng hợp riêng, khác với `Task.deadlineStatus`
    năm trạng thái của nhiệm vụ đột xuất.
 9. Endpoint readiness chưa xác nhận PostgreSQL đang sẵn sàng.
