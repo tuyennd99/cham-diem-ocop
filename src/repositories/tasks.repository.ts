@@ -25,6 +25,11 @@ const programResponsibilityInclude = {
 
 const taskInclude = {
   program: { include: programResponsibilityInclude },
+  assigningOrganization: { select: organizationSelect },
+  leadOrganization: { select: organizationSelect },
+  collaborators: {
+    include: { organization: { select: organizationSelect } },
+  },
   workspaces: {
     orderBy: { id: 'asc' as const },
     include: { versions: { select: { status: true } } },
@@ -133,6 +138,18 @@ export class TasksRepository {
     });
   }
 
+  findOrganizationsByIds(ids: number[]) {
+    return this.prisma.organization.findMany({
+      where: { id: { in: ids } },
+      select: {
+        id: true,
+        status: true,
+        isAssigningAuthority: true,
+        isExecutingUnit: true,
+      },
+    });
+  }
+
   async create(
     input: TaskWrite,
     actorId: number,
@@ -140,9 +157,15 @@ export class TasksRepository {
     meta: RequestMeta = {},
   ) {
     return this.prisma.$transaction(async (transaction) => {
+      const { collaboratorOrganizationIds, ...scalars } = input;
       const row = await transaction.task.create({
         data: {
-          ...input,
+          ...scalars,
+          collaborators: {
+            create: collaboratorOrganizationIds.map((organizationId) => ({
+              organizationId,
+            })),
+          },
           deadlineStatus:
             input.type === TaskType.DOT_XUAT && input.dueAt
               ? calculateTaskDeadlineStatus(
@@ -183,9 +206,21 @@ export class TasksRepository {
         where: { id },
         include: taskInclude,
       });
+      const assignmentChanged =
+        (input.programId !== undefined &&
+          input.programId !== before.programId) ||
+        (input.assigningOrganizationId !== undefined &&
+          input.assigningOrganizationId !== before.assigningOrganizationId) ||
+        (input.leadOrganizationId !== undefined &&
+          input.leadOrganizationId !== before.leadOrganizationId) ||
+        (input.collaboratorOrganizationIds !== undefined &&
+          [...input.collaboratorOrganizationIds].sort().join(',') !==
+            before.collaborators
+              .map(({ organizationId }) => organizationId)
+              .sort()
+              .join(','));
       if (
-        input.programId !== undefined &&
-        input.programId !== before.programId &&
+        assignmentChanged &&
         (before.closedAt !== null ||
           before.completedAt !== null ||
           before.workspaces.length > 0)
@@ -205,9 +240,19 @@ export class TasksRepository {
               new Date(),
             )
           : null;
+      const { collaboratorOrganizationIds, ...scalars } = input;
+      if (collaboratorOrganizationIds !== undefined) {
+        await transaction.taskCollaborator.deleteMany({ where: { taskId: id } });
+        await transaction.taskCollaborator.createMany({
+          data: collaboratorOrganizationIds.map((organizationId) => ({
+            taskId: id,
+            organizationId,
+          })),
+        });
+      }
       const row = await transaction.task.update({
         where: { id },
-        data: { ...input, deadlineStatus, updatedById: actorId },
+        data: { ...scalars, deadlineStatus, updatedById: actorId },
         include: taskInclude,
       });
       await transaction.auditLog.create({
@@ -408,8 +453,8 @@ export class TasksRepository {
   ): TaskView {
     const canSeeAllReports =
       globalScope ||
-      row.program.assigningOrganizationId === organizationId ||
-      row.program.leadOrganizationId === organizationId;
+      row.assigningOrganizationId === organizationId ||
+      row.leadOrganizationId === organizationId;
     const visibleWorkspaces = row.workspaces.filter(
       (workspace) => canSeeAllReports || workspace.ownerUserId === userId,
     );
@@ -426,6 +471,16 @@ export class TasksRepository {
       expectedOutput: row.expectedOutput,
       type: row.type,
       programId: row.programId,
+      assigningOrganizationId: row.assigningOrganizationId,
+      leadOrganizationId: row.leadOrganizationId,
+      collaboratorOrganizationIds: row.collaborators.map(
+        ({ organizationId }) => organizationId,
+      ),
+      assigningOrganization: row.assigningOrganization,
+      leadOrganization: row.leadOrganization,
+      collaboratorOrganizations: row.collaborators.map(
+        ({ organization }) => organization,
+      ),
       hasReports,
       dueAt: row.dueAt,
       deadlineStatus: row.deadlineStatus,

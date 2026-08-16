@@ -14,6 +14,19 @@ const row = {
   expectedOutput: null,
   type: 'DINH_KY',
   programId: 1,
+  assigningOrganizationId: 10,
+  leadOrganizationId: 20,
+  assigningOrganization: organization(10),
+  leadOrganization: organization(20),
+  collaborators: [
+    {
+      id: 1,
+      taskId: 7,
+      organizationId: 30,
+      createdAt: new Date(),
+      organization: organization(30),
+    },
+  ],
   dueAt: null,
   deadlineStatus: null,
   startAt: null,
@@ -114,5 +127,22 @@ describe('TasksRepository report visibility', () => {
 
     expect(result.data[0]?.workspaces).toHaveLength(2);
     expect(result.data[0]?.hasReports).toBe(true);
+  });
+
+  it('maps task collaborators to collaboratorOrganizationIds', async () => {
+    const result = await repository().list({
+      page: 1,
+      limit: 20,
+      organizationId: 20,
+      userId: 9,
+      globalScope: false,
+    });
+
+    expect(result.data[0]?.assigningOrganizationId).toBe(10);
+    expect(result.data[0]?.leadOrganizationId).toBe(20);
+    expect(result.data[0]?.collaboratorOrganizationIds).toEqual([30]);
+    expect(result.data[0]?.collaboratorOrganizations).toEqual([
+      organization(30),
+    ]);
   });
 });

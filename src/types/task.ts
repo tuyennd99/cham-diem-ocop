@@ -30,6 +30,12 @@ export type TaskView = {
   expectedOutput: string | null;
   type: TaskType;
   programId: number;
+  assigningOrganizationId: number;
+  leadOrganizationId: number;
+  collaboratorOrganizationIds: number[];
+  assigningOrganization?: OrganizationSummary;
+  leadOrganization?: OrganizationSummary;
+  collaboratorOrganizations?: OrganizationSummary[];
   hasReports: boolean;
   dueAt: Date | null;
   deadlineStatus: TaskDeadlineStatus | null;
@@ -57,6 +63,9 @@ export type TaskWrite = {
   expectedOutput?: string | null;
   type: TaskType;
   programId: number;
+  assigningOrganizationId: number;
+  leadOrganizationId: number;
+  collaboratorOrganizationIds: number[];
   dueAt: Date | null;
   startAt: Date | null;
 };
