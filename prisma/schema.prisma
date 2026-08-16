@@ -65,6 +65,9 @@ model Organization {
   assigningPrograms     Program[]             @relation("ProgramAssigningOrganization")
   leadPrograms          Program[]             @relation("ProgramLeadOrganization")
   programCollaborations ProgramCollaborator[]
+  assigningTasks        Task[]                @relation("TaskAssigningOrganization")
+  leadTasks             Task[]                @relation("TaskLeadOrganization")
+  taskCollaborations    TaskCollaborator[]
   reportWorkspaces      ReportWorkspace[]
   auditLogs             AuditLog[]
 
@@ -128,36 +131,43 @@ model Program {
 }
 
 model Task {
-  id             Int                 @id @default(autoincrement())
-  code           String              @unique @db.VarChar(100)
-  name           String              @db.VarChar(500)
-  description    String?
-  expectedOutput String?
-  type           TaskType
-  programId      Int
-  dueAt          DateTime?           @db.Timestamptz(3)
-  deadlineStatus TaskDeadlineStatus?
-  startAt        DateTime?           @db.Timestamptz(3)
-  closedAt       DateTime?           @db.Timestamptz(3)
-  closedById     Int?
-  closeReason    String?
-  completedAt    DateTime?           @db.Timestamptz(3)
-  completedById  Int?
-  deletedAt      DateTime?           @db.Timestamptz(3)
-  createdById    Int
-  updatedById    Int
-  createdAt      DateTime            @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime            @updatedAt @db.Timestamptz(3)
-  program        Program             @relation(fields: [programId], references: [id])
-  createdBy      User                @relation("TaskCreatedBy", fields: [createdById], references: [id])
-  updatedBy      User                @relation("TaskUpdatedBy", fields: [updatedById], references: [id])
-  closedBy       User?               @relation("TaskClosedBy", fields: [closedById], references: [id])
-  completedBy    User?               @relation("TaskCompletedBy", fields: [completedById], references: [id])
-  workspaces     ReportWorkspace[]   @relation("TaskWorkspace")
+  id                      Int                 @id @default(autoincrement())
+  code                    String              @unique @db.VarChar(100)
+  name                    String              @db.VarChar(500)
+  description             String?
+  expectedOutput          String?
+  type                    TaskType
+  programId               Int
+  assigningOrganizationId Int
+  leadOrganizationId      Int
+  dueAt                   DateTime?           @db.Timestamptz(3)
+  deadlineStatus          TaskDeadlineStatus?
+  startAt                 DateTime?           @db.Timestamptz(3)
+  closedAt                DateTime?           @db.Timestamptz(3)
+  closedById              Int?
+  closeReason             String?
+  completedAt             DateTime?           @db.Timestamptz(3)
+  completedById           Int?
+  deletedAt               DateTime?           @db.Timestamptz(3)
+  createdById             Int
+  updatedById             Int
+  createdAt               DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime            @updatedAt @db.Timestamptz(3)
+  program                 Program             @relation(fields: [programId], references: [id])
+  assigningOrganization   Organization        @relation("TaskAssigningOrganization", fields: [assigningOrganizationId], references: [id])
+  leadOrganization        Organization        @relation("TaskLeadOrganization", fields: [leadOrganizationId], references: [id])
+  collaborators           TaskCollaborator[]
+  createdBy               User                @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  updatedBy               User                @relation("TaskUpdatedBy", fields: [updatedById], references: [id])
+  closedBy                User?               @relation("TaskClosedBy", fields: [closedById], references: [id])
+  completedBy             User?               @relation("TaskCompletedBy", fields: [completedById], references: [id])
+  workspaces              ReportWorkspace[]   @relation("TaskWorkspace")
 
   @@index([programId])
   @@index([type, deadlineStatus])
   @@index([deletedAt])
+  @@index([assigningOrganizationId])
+  @@index([leadOrganizationId])
   @@map("tasks")
 }
 
@@ -171,6 +181,18 @@ model ProgramCollaborator {
 
   @@unique([programId, organizationId])
   @@map("program_collaborators")
+}
+
+model TaskCollaborator {
+  id             Int          @id @default(autoincrement())
+  taskId         Int
+  organizationId Int
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  task           Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([taskId, organizationId])
+  @@map("task_collaborators")
 }
 
 model ReportWorkspace {

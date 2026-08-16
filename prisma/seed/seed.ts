@@ -86,13 +86,15 @@ async function main() {
     },
   });
 
-  await Promise.all([
+  const tasks = await Promise.all([
     prisma.task.upsert({
       where: { code: 'NQ57-01' },
       update: {
         name: 'Nhiệm vụ mẫu 1',
         programId: program.id,
         updatedById: admin.id,
+        assigningOrganizationId: assigningOrganization.id,
+        leadOrganizationId: leadOrganization.id,
       },
       create: {
         code: 'NQ57-01',
@@ -101,6 +103,8 @@ async function main() {
         programId: program.id,
         createdById: admin.id,
         updatedById: admin.id,
+        assigningOrganizationId: assigningOrganization.id,
+        leadOrganizationId: leadOrganization.id,
       },
     }),
     prisma.task.upsert({
@@ -109,6 +113,8 @@ async function main() {
         name: 'Nhiệm vụ mẫu 2',
         programId: program.id,
         updatedById: admin.id,
+        assigningOrganizationId: assigningOrganization.id,
+        leadOrganizationId: leadOrganization.id,
       },
       create: {
         code: 'NQ57-02',
@@ -117,9 +123,29 @@ async function main() {
         programId: program.id,
         createdById: admin.id,
         updatedById: admin.id,
+        assigningOrganizationId: assigningOrganization.id,
+        leadOrganizationId: leadOrganization.id,
       },
     }),
   ]);
+
+  await Promise.all(
+    tasks.map((task) =>
+      prisma.taskCollaborator.upsert({
+        where: {
+          taskId_organizationId: {
+            taskId: task.id,
+            organizationId: collaboratorOrganization.id,
+          },
+        },
+        update: {},
+        create: {
+          taskId: task.id,
+          organizationId: collaboratorOrganization.id,
+        },
+      }),
+    ),
+  );
 }
 
 main()
