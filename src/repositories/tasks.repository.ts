@@ -414,13 +414,11 @@ export class TasksRepository {
       ...(globalScope
         ? {}
         : {
-            program: {
-              OR: [
-                { assigningOrganizationId: organizationId },
-                { leadOrganizationId: organizationId },
-                { collaborators: { some: { organizationId } } },
-              ],
-            },
+            OR: [
+              { assigningOrganizationId: organizationId },
+              { leadOrganizationId: organizationId },
+              { collaborators: { some: { organizationId } } },
+            ],
           }),
     };
   }
