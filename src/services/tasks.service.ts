@@ -137,7 +137,13 @@ export class TasksService {
         ...meta,
         organizationId: principal.organizationId,
       });
-      if (input.programId !== undefined) await this.notifyAssignment(task);
+      if (
+        input.programId !== undefined ||
+        input.leadOrganizationId !== undefined ||
+        input.collaboratorOrganizationIds !== undefined
+      ) {
+        await this.notifyAssignment(task);
+      }
       return task;
     } catch (error) {
       this.rethrowUniqueCode(error);

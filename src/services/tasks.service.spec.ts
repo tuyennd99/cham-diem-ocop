@@ -1,6 +1,7 @@
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { TasksRepository } from '../repositories/tasks.repository';
 import { TasksService } from './tasks.service';
+import { NotificationsService } from './notifications.service';
 
 const assigning = {
   sub: 1,
@@ -191,6 +192,30 @@ describe('TasksService', () => {
         { sub: 1, username: 'admin', organizationId: 10, isAdmin: true } as never,
       ),
     ).resolves.toBeDefined();
+  });
+
+  it('notifies new recipients when only leadOrganizationId changes on update', async () => {
+    const repository = repositoryMock();
+    repository.findOrganizationsByIds = jest.fn().mockResolvedValue([
+      { id: 10, status: 'ACTIVE', isAssigningAuthority: true, isExecutingUnit: false },
+      { id: 30, status: 'ACTIVE', isAssigningAuthority: false, isExecutingUnit: true },
+      { id: 99, status: 'ACTIVE', isAssigningAuthority: false, isExecutingUnit: true },
+    ]);
+    const notificationsService = {
+      createForOrganizations: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = new TasksService(
+      repository as unknown as TasksRepository,
+      notificationsService as unknown as NotificationsService,
+    );
+
+    await service.update(
+      task.id,
+      { leadOrganizationId: 99 } as never,
+      assigning,
+    );
+
+    expect(notificationsService.createForOrganizations).toHaveBeenCalled();
   });
 
   it('blocks deleting a Task with submitted reports', async () => {
