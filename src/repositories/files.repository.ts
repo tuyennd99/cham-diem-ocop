@@ -7,13 +7,7 @@ import { RequestMeta } from '../types/auth';
 const fileContextInclude = {
   task: {
     include: {
-      program: {
-        select: {
-          assigningOrganizationId: true,
-          leadOrganizationId: true,
-          collaborators: { select: { organizationId: true } },
-        },
-      },
+      collaborators: { select: { organizationId: true } },
     },
   },
 } satisfies Prisma.ReportWorkspaceInclude;
@@ -295,12 +289,12 @@ export class FilesRepository {
       ownerOrganizationId: row.ownerOrganizationId,
       ownerUserId: row.ownerUserId,
       task: {
-        assigningOrganizationId: row.task.program.assigningOrganizationId,
-        leadOrganizationId: row.task.program.leadOrganizationId,
+        assigningOrganizationId: row.task.assigningOrganizationId,
+        leadOrganizationId: row.task.leadOrganizationId,
         completedAt: row.task.completedAt,
         closedAt: row.task.closedAt,
         deletedAt: row.task.deletedAt,
-        collaboratorOrganizationIds: row.task.program.collaborators.map(
+        collaboratorOrganizationIds: row.task.collaborators.map(
           ({ organizationId }) => organizationId,
         ),
       },

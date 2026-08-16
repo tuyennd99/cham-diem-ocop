@@ -97,27 +97,33 @@ export class NotificationsRepository {
         code: true,
         name: true,
         dueAt: true,
-        program: {
-          select: {
-            assigningOrganizationId: true,
-            leadOrganizationId: true,
-            collaborators: { select: { organizationId: true } },
-          },
-        },
+        assigningOrganizationId: true,
+        leadOrganizationId: true,
+        collaborators: { select: { organizationId: true } },
       },
       orderBy: { id: 'asc' },
     });
     void now;
-    return tasks.map(({ id, code, name, dueAt, program }) => ({
-      taskId: id,
-      taskCode: code,
-      taskName: name,
-      dueAt,
-      organizationIds: [
-        program.assigningOrganizationId,
-        program.leadOrganizationId,
-        ...program.collaborators.map(({ organizationId }) => organizationId),
-      ],
-    }));
+    return tasks.map(
+      ({
+        id,
+        code,
+        name,
+        dueAt,
+        assigningOrganizationId,
+        leadOrganizationId,
+        collaborators,
+      }) => ({
+        taskId: id,
+        taskCode: code,
+        taskName: name,
+        dueAt,
+        organizationIds: [
+          assigningOrganizationId,
+          leadOrganizationId,
+          ...collaborators.map(({ organizationId }) => organizationId),
+        ],
+      }),
+    );
   }
 }

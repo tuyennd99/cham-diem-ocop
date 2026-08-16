@@ -11,11 +11,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RequestMeta } from '../types/auth';
 
 const taskInclude = {
-  program: {
-    include: {
-      collaborators: { select: { organizationId: true } },
-    },
-  },
+  program: { select: { id: true, code: true, name: true } },
+  collaborators: { select: { organizationId: true } },
 } satisfies Prisma.TaskInclude;
 
 const workspaceInclude = {
@@ -221,12 +218,8 @@ export class ReportsRepository {
           deletedAt: true,
           closedAt: true,
           completedAt: true,
-          program: {
-            select: {
-              leadOrganizationId: true,
-              collaborators: { select: { organizationId: true } },
-            },
-          },
+          leadOrganizationId: true,
+          collaborators: { select: { organizationId: true } },
         },
       });
       if (!task || task.deletedAt || task.closedAt || task.completedAt) {
@@ -242,7 +235,7 @@ export class ReportsRepository {
             select: { organizationId: true },
           })
         : null;
-      const collaboratorIds = task.program.collaborators.map(
+      const collaboratorIds = task.collaborators.map(
         ({ organizationId }) => organizationId,
       );
       if (
@@ -252,7 +245,7 @@ export class ReportsRepository {
             !collaboratorIds.includes(ownerUser.organizationId))) ||
         (kind === ReportKind.CONSOLIDATED &&
           (owner.userId !== null ||
-            task.program.leadOrganizationId !== owner.organizationId))
+            task.leadOrganizationId !== owner.organizationId))
       ) {
         return null;
       }
@@ -444,18 +437,8 @@ export class ReportsRepository {
       ? {}
       : {
           OR: [
-            {
-              task: {
-                program: {
-                  assigningOrganizationId: filters.organizationId,
-                },
-              },
-            },
-            {
-              task: {
-                program: { leadOrganizationId: filters.organizationId },
-              },
-            },
+            { task: { assigningOrganizationId: filters.organizationId } },
+            { task: { leadOrganizationId: filters.organizationId } },
             { ownerUserId: filters.userId },
           ],
         };
@@ -702,14 +685,10 @@ export class ReportsRepository {
     closedAt: Date | null;
     completedAt: Date | null;
     deletedAt: Date | null;
-    program: {
-      id: number;
-      code: string;
-      name: string;
-      assigningOrganizationId: number;
-      leadOrganizationId: number;
-      collaborators: { organizationId: number }[];
-    };
+    assigningOrganizationId: number;
+    leadOrganizationId: number;
+    collaborators: { organizationId: number }[];
+    program: { id: number; code: string; name: string };
   }): ReportTaskView {
     return {
       id: row.id,
@@ -722,9 +701,9 @@ export class ReportsRepository {
       closedAt: row.closedAt,
       completedAt: row.completedAt,
       deletedAt: row.deletedAt,
-      assigningOrganizationId: row.program.assigningOrganizationId,
-      leadOrganizationId: row.program.leadOrganizationId,
-      collaboratorOrganizationIds: row.program.collaborators.map(
+      assigningOrganizationId: row.assigningOrganizationId,
+      leadOrganizationId: row.leadOrganizationId,
+      collaboratorOrganizationIds: row.collaborators.map(
         ({ organizationId }) => organizationId,
       ),
       program: {

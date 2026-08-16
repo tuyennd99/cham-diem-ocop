@@ -40,17 +40,11 @@ export class DashboardRepository {
           ? {}
           : {
               OR: [
+                { assigningOrganizationId: input.organizationId },
+                { leadOrganizationId: input.organizationId },
                 {
-                  program: {
-                    assigningOrganizationId: input.organizationId,
-                  },
-                },
-                { program: { leadOrganizationId: input.organizationId } },
-                {
-                  program: {
-                    collaborators: {
-                      some: { organizationId: input.organizationId },
-                    },
+                  collaborators: {
+                    some: { organizationId: input.organizationId },
                   },
                 },
               ],
@@ -64,12 +58,8 @@ export class DashboardRepository {
         dueAt: true,
         completedAt: true,
         closedAt: true,
-        program: {
-          select: {
-            assigningOrganizationId: true,
-            leadOrganizationId: true,
-          },
-        },
+        assigningOrganizationId: true,
+        leadOrganizationId: true,
         workspaces: {
           select: { status: true, ownerUserId: true },
         },
@@ -77,18 +67,20 @@ export class DashboardRepository {
       orderBy: { id: 'asc' },
     });
 
-    return rows.map(({ workspaces, program, ...task }) => ({
-      ...task,
-      reportStatus: workspaces
-        .filter(
-          ({ ownerUserId }) =>
-            input.globalScope ||
-            program.assigningOrganizationId === input.organizationId ||
-            program.leadOrganizationId === input.organizationId ||
-            ownerUserId === input.userId,
-        )
-        .map(({ status }) => status),
-    }));
+    return rows.map(
+      ({ workspaces, assigningOrganizationId, leadOrganizationId, ...task }) => ({
+        ...task,
+        reportStatus: workspaces
+          .filter(
+            ({ ownerUserId }) =>
+              input.globalScope ||
+              assigningOrganizationId === input.organizationId ||
+              leadOrganizationId === input.organizationId ||
+              ownerUserId === input.userId,
+          )
+          .map(({ status }) => status),
+      }),
+    );
   }
 
   private dueAtFilter(
