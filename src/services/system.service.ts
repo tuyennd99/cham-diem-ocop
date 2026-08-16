@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -16,6 +15,7 @@ import {
 } from '../dtos/system.dto';
 import { SystemRepository } from '../repositories/system.repository';
 import { RequestMeta } from '../types/auth';
+import { assertOrganizationRoles } from '../utils/organization-roles';
 
 @Injectable()
 export class SystemService {
@@ -312,12 +312,6 @@ export class SystemService {
     leadOrganizationId: number;
     collaboratorOrganizationIds: number[];
   }) {
-    if (
-      new Set(input.collaboratorOrganizationIds).size !==
-      input.collaboratorOrganizationIds.length
-    ) {
-      throw new BadRequestException('Collaborators must be unique');
-    }
     const ids = [
       ...new Set([
         input.assigningOrganizationId,
@@ -326,24 +320,7 @@ export class SystemService {
       ]),
     ];
     const organizations = await this.repository.findOrganizationsByIds(ids);
-    const byId = new Map(
-      organizations.map((organization) => [organization.id, organization]),
-    );
-    if (
-      byId.size !== ids.length ||
-      byId.get(input.assigningOrganizationId)?.status !== 'ACTIVE' ||
-      !byId.get(input.assigningOrganizationId)?.isAssigningAuthority ||
-      byId.get(input.leadOrganizationId)?.status !== 'ACTIVE' ||
-      !byId.get(input.leadOrganizationId)?.isExecutingUnit ||
-      input.collaboratorOrganizationIds.some(
-        (id) =>
-          byId.get(id)?.status !== 'ACTIVE' || !byId.get(id)?.isExecutingUnit,
-      )
-    ) {
-      throw new BadRequestException(
-        'Program organizations must exist, be active, and have the required role',
-      );
-    }
+    assertOrganizationRoles(organizations, input, 'Program');
   }
 
   private publicUser<T extends Record<string, unknown>>(user: T) {
