@@ -4,8 +4,23 @@ import { DEFAULT_SEED_PASSWORD, hashSeedPassword } from './password';
 import { ADMIN_GROUP_CODE } from '../../src/constants/role';
 import { seedDefaultAdmin } from './admin';
 import donViData from './donvi.json';
+import organizationRoleSnapshot from './organizations.json';
 
 const prisma = new PrismaClient({ adapter: createPrismaAdapter() });
+
+// organizations.json is a snapshot of the live role configuration (which org is
+// the assigning authority, which are executing units), keyed by code. It must
+// be re-exported if roles change in the running system, or re-running the seed
+// would revert them to this snapshot.
+const roleFlagsByCode = new Map(
+  organizationRoleSnapshot.map((organization) => [
+    organization.code.trim(),
+    {
+      isAssigningAuthority: organization.isAssigningAuthority,
+      isExecutingUnit: organization.isExecutingUnit,
+    },
+  ]),
+);
 
 async function main() {
   const password = process.env.SEED_ADMIN_PASSWORD ?? DEFAULT_SEED_PASSWORD;
@@ -29,10 +44,14 @@ async function main() {
     donViData.map((donVi) => {
       const code = donVi['Mã đơn vị'].trim();
       const name = donVi['Tên đơn vị đầy đủ'].trim();
+      const flags = roleFlagsByCode.get(code) ?? {
+        isAssigningAuthority: false,
+        isExecutingUnit: true,
+      };
       return prisma.organization.upsert({
         where: { code },
-        update: { name },
-        create: { code, name },
+        update: { name, ...flags },
+        create: { code, name, ...flags },
       });
     }),
   );
@@ -42,12 +61,9 @@ async function main() {
   });
   const assigningOrganization = organizations.find(
     (organization) => organization.isAssigningAuthority,
-  ) ?? organizations[0];
-  if (!assigningOrganization.isAssigningAuthority) {
-    await prisma.organization.update({
-      where: { id: assigningOrganization.id },
-      data: { isAssigningAuthority: true },
-    });
+  );
+  if (!assigningOrganization) {
+    throw new Error('Seed data has no organization with isAssigningAuthority');
   }
   const leadOrganization = organizations.find(
     (organization) => organization.isExecutingUnit,
