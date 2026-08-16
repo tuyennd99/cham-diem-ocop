@@ -263,6 +263,8 @@ function taskData(input: TaskFixture): Prisma.TaskCreateInput {
     type: TaskType.DOT_XUAT,
     dueAt: new Date(Date.now() + 86_400_000),
     program: { connect: { id: input.programId } },
+    assigningOrganization: { connect: { id: input.assigningOrganizationId } },
+    leadOrganization: { connect: { id: input.leadOrganizationId } },
     createdBy: { connect: { id: input.actorId } },
     updatedBy: { connect: { id: input.actorId } },
   };

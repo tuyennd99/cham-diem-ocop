@@ -52,6 +52,11 @@ function repositoryMock() {
     findById: jest.fn().mockResolvedValue(task),
     codeExists: jest.fn().mockResolvedValue(false),
     findActiveProgram: jest.fn().mockResolvedValue(program),
+    findOrganizationsByIds: jest.fn().mockResolvedValue([
+      { id: 10, status: 'ACTIVE', isAssigningAuthority: true, isExecutingUnit: false },
+      { id: 20, status: 'ACTIVE', isAssigningAuthority: false, isExecutingUnit: true },
+      { id: 30, status: 'ACTIVE', isAssigningAuthority: false, isExecutingUnit: true },
+    ]),
     create: jest.fn().mockResolvedValue(task),
     update: jest.fn().mockResolvedValue(task),
     softDelete: jest.fn().mockResolvedValue(task),
@@ -81,7 +86,7 @@ describe('TasksService', () => {
     );
   });
 
-  it('creates a child Task using organization responsibility from its Program', async () => {
+  it('creates a Task using its own organization assignment', async () => {
     const repository = repositoryMock();
     const service = new TasksService(repository as unknown as TasksRepository);
 
@@ -91,6 +96,9 @@ describe('TasksService', () => {
         name: 'Nhiệm vụ con mới',
         type: 'DINH_KY',
         programId: program.id,
+        assigningOrganizationId: 10,
+        leadOrganizationId: 20,
+        collaboratorOrganizationIds: [30],
         startAt: '2026-07-01T00:00:00.000Z',
         dueAt: '2026-08-01T00:00:00.000Z',
       } as never,
@@ -105,6 +113,9 @@ describe('TasksService', () => {
         expectedOutput: null,
         type: 'DINH_KY',
         programId: program.id,
+        assigningOrganizationId: 10,
+        leadOrganizationId: 20,
+        collaboratorOrganizationIds: [30],
         startAt: new Date('2026-07-01T00:00:00.000Z'),
         dueAt: new Date('2026-08-01T00:00:00.000Z'),
       },
@@ -114,7 +125,7 @@ describe('TasksService', () => {
     );
   });
 
-  it('rejects child Task creation outside the parent Program assigning org', async () => {
+  it('rejects Task creation outside the caller organization', async () => {
     const repository = repositoryMock();
     const service = new TasksService(repository as unknown as TasksRepository);
 
@@ -125,10 +136,61 @@ describe('TasksService', () => {
           name: 'Nhiệm vụ con mới',
           type: 'DINH_KY',
           programId: program.id,
+          assigningOrganizationId: 10,
+          leadOrganizationId: 20,
+          collaboratorOrganizationIds: [30],
         } as never,
         collaborator,
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('rejects creating a task for another organization', async () => {
+    const repository = repositoryMock();
+    const service = new TasksService(repository as unknown as TasksRepository);
+    repository.findOrganizationsByIds = jest.fn().mockResolvedValue([
+      { id: 999, status: 'ACTIVE', isAssigningAuthority: true, isExecutingUnit: true },
+      { id: 2, status: 'ACTIVE', isAssigningAuthority: false, isExecutingUnit: true },
+      { id: 3, status: 'ACTIVE', isAssigningAuthority: false, isExecutingUnit: true },
+    ]);
+    await expect(
+      service.create(
+        {
+          code: 'NV-1',
+          name: 'Nhiệm vụ',
+          type: 'DOT_XUAT',
+          programId: 1,
+          assigningOrganizationId: 999,
+          leadOrganizationId: 2,
+          collaboratorOrganizationIds: [3],
+        } as never,
+        { sub: 5, username: 'u', organizationId: 10 } as never,
+      ),
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('lets an admin assign on behalf of any organization', async () => {
+    const repository = repositoryMock();
+    const service = new TasksService(repository as unknown as TasksRepository);
+    repository.findOrganizationsByIds = jest.fn().mockResolvedValue([
+      { id: 999, status: 'ACTIVE', isAssigningAuthority: true, isExecutingUnit: true },
+      { id: 2, status: 'ACTIVE', isAssigningAuthority: false, isExecutingUnit: true },
+      { id: 3, status: 'ACTIVE', isAssigningAuthority: false, isExecutingUnit: true },
+    ]);
+    await expect(
+      service.create(
+        {
+          code: 'NV-2',
+          name: 'Nhiệm vụ',
+          type: 'DOT_XUAT',
+          programId: 1,
+          assigningOrganizationId: 999,
+          leadOrganizationId: 2,
+          collaboratorOrganizationIds: [3],
+        } as never,
+        { sub: 1, username: 'admin', organizationId: 10, isAdmin: true } as never,
+      ),
+    ).resolves.toBeDefined();
   });
 
   it('blocks deleting a Task with submitted reports', async () => {

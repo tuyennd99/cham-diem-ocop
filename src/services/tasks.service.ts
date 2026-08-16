@@ -12,6 +12,7 @@ import { TasksRepository } from '../repositories/tasks.repository';
 import { AccessTokenPayload, RequestMeta } from '../types/auth';
 import { ErrorCode } from '../types/error-code';
 import { ProgramResponsibility, TaskView, TaskWrite } from '../types/task';
+import { assertOrganizationRoles } from '../utils/organization-roles';
 import { calculateTaskDeadlineStatus } from '../utils/task-deadline-status';
 import { NotificationsService } from './notifications.service';
 
@@ -63,9 +64,9 @@ export class TasksService {
   ) {
     try {
       const normalized = this.normalize(input);
-      const program = await this.validate(normalized);
+      await this.validate(normalized);
       this.assertAssigningOrganization(
-        program.assigningOrganizationId,
+        normalized.assigningOrganizationId,
         principal,
       );
       const task = await this.repository.create(
@@ -89,7 +90,7 @@ export class TasksService {
   ) {
     const current = await this.requireTask(id, principal);
     this.assertAssigningOrganization(
-      current.program.assigningOrganizationId,
+      current.assigningOrganizationId,
       principal,
     );
     if (input.type && input.type !== current.type) {
@@ -109,6 +110,13 @@ export class TasksService {
           : input.expectedOutput,
       type: current.type,
       programId: input.programId ?? current.programId,
+      assigningOrganizationId:
+        input.assigningOrganizationId ?? current.assigningOrganizationId,
+      leadOrganizationId:
+        input.leadOrganizationId ?? current.leadOrganizationId,
+      collaboratorOrganizationIds:
+        input.collaboratorOrganizationIds ??
+        current.collaboratorOrganizationIds,
       dueAt:
         input.dueAt === undefined ? current.dueAt?.toISOString() : input.dueAt,
       startAt:
@@ -116,11 +124,7 @@ export class TasksService {
           ? current.startAt?.toISOString()
           : input.startAt,
     });
-    const program = await this.validate(merged, id);
-    this.assertAssigningOrganization(
-      program.assigningOrganizationId,
-      principal,
-    );
+    await this.validate(merged, id);
 
     const changed: Partial<TaskWrite> = {};
     for (const key of Object.keys(input) as (keyof UpdateTaskDto)[]) {
@@ -147,7 +151,7 @@ export class TasksService {
   ) {
     const task = await this.requireTask(id, principal);
     this.assertAssigningOrganization(
-      task.program.assigningOrganizationId,
+      task.assigningOrganizationId,
       principal,
     );
     if (task.hasReports) {
@@ -177,7 +181,7 @@ export class TasksService {
   ) {
     const task = await this.requireTask(id, principal);
     this.assertAssigningOrganization(
-      task.program.assigningOrganizationId,
+      task.assigningOrganizationId,
       principal,
     );
     if (task.type !== TaskType.DINH_KY) {
@@ -194,9 +198,9 @@ export class TasksService {
     if (!closed) throw new ConflictException('Task could not be closed');
     await this.safeNotify({
       organizationIds: [
-        closed.program.assigningOrganizationId,
-        closed.program.leadOrganizationId,
-        ...closed.program.collaboratorOrganizationIds,
+        closed.assigningOrganizationId,
+        closed.leadOrganizationId,
+        ...closed.collaboratorOrganizationIds,
       ],
       eventKey: `TASK_CLOSED:${closed.id}`,
       type: 'DONG_NHIEM_VU',
@@ -216,7 +220,7 @@ export class TasksService {
   ) {
     const task = await this.requireTask(id, principal);
     this.assertAssigningOrganization(
-      task.program.assigningOrganizationId,
+      task.assigningOrganizationId,
       principal,
     );
     if (task.type !== TaskType.DOT_XUAT || !task.dueAt) {
@@ -264,6 +268,15 @@ export class TasksService {
     ]);
     if (duplicate) throw new ConflictException('Task code already exists');
     if (!program) throw new BadRequestException('Program is not active');
+    const ids = [
+      ...new Set([
+        input.assigningOrganizationId,
+        input.leadOrganizationId,
+        ...input.collaboratorOrganizationIds,
+      ]),
+    ];
+    const organizations = await this.repository.findOrganizationsByIds(ids);
+    assertOrganizationRoles(organizations, input, 'Task');
     if (input.startAt && input.dueAt && input.startAt > input.dueAt) {
       throw new BadRequestException('startAt must not be after dueAt');
     }
@@ -278,6 +291,9 @@ export class TasksService {
       expectedOutput: input.expectedOutput?.trim() || null,
       type: input.type,
       programId: input.programId,
+      assigningOrganizationId: input.assigningOrganizationId,
+      leadOrganizationId: input.leadOrganizationId,
+      collaboratorOrganizationIds: input.collaboratorOrganizationIds,
       dueAt: input.dueAt ? new Date(input.dueAt) : null,
       startAt: input.startAt ? new Date(input.startAt) : null,
     };
@@ -318,8 +334,8 @@ export class TasksService {
   private async notifyAssignment(task: TaskView) {
     await this.safeNotify({
       organizationIds: [
-        task.program.leadOrganizationId,
-        ...task.program.collaboratorOrganizationIds,
+        task.leadOrganizationId,
+        ...task.collaboratorOrganizationIds,
       ],
       eventKey: `TASK_ASSIGNED:${task.id}`,
       type: 'GIAO_NHIEM_VU',

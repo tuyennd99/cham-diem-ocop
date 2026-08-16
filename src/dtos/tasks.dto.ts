@@ -11,6 +11,9 @@ const createTaskSchema = z.strictObject({
   expectedOutput: z.string().optional(),
   type: z.enum(TaskType),
   programId: z.coerce.number().int().min(1),
+  assigningOrganizationId: z.coerce.number().int().min(1),
+  leadOrganizationId: z.coerce.number().int().min(1),
+  collaboratorOrganizationIds: z.array(z.coerce.number().int().min(1)).min(1),
   dueAt: isoDate.optional(),
   startAt: isoDate.optional(),
 });
