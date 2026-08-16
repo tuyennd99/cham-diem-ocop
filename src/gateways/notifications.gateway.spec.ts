@@ -115,6 +115,9 @@ describe('NotificationsGateway', () => {
     await gateway.handleConnection(client);
 
     expect(next).toHaveBeenCalledWith();
+    // authRepository is cast to the AuthRepository type, so eslint can't see
+    // that findUserById is a jest.fn() with no `this` dependency to lose.
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(authRepository.findUserById).toHaveBeenCalledWith(5);
     expect(join).toHaveBeenCalledWith('org:12');
   });

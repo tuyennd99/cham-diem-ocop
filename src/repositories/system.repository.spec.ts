@@ -49,6 +49,9 @@ describe('SystemRepository user writes', () => {
     );
 
     expect(result).toBe(targetUser);
+    // jest.fn() without generics types .mock.calls as any[][]; the `as` cast
+    // below recovers the shape we actually need.
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const createArg = transaction.user.create.mock.calls[0][0] as {
       data: Record<string, unknown>;
     };

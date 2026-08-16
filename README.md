@@ -19,9 +19,8 @@ pnpm prisma db seed
 pnpm start:dev
 ```
 
-Prisma 7 tạo client vào `src/generated/prisma` (thư mục này không commit).
-Chạy lại `pnpm prisma generate` sau khi cài dependency hoặc đổi schema.
-Seed chỉ chạy khi gọi rõ `pnpm prisma db seed`.
+Chạy lại `pnpm prisma generate` sau khi cài dependency hoặc đổi schema; client
+được import từ `@prisma/client`. Seed chỉ chạy khi gọi rõ `pnpm prisma db seed`.
 
 Backend mặc định chạy tại `http://localhost:3030/api/v1`. Frontend nhánh `dev`
 chạy cổng `3000`.
@@ -30,6 +29,11 @@ chạy cổng `3000`.
 superuser trong production. Sau lần đăng nhập đầu tiên, đổi ngay mật khẩu tài
 khoản seed `admin` (mật khẩu mặc định `123456`; nên đổi ngay). Có thể ghi đè
 bằng `SEED_ADMIN_PASSWORD`.
+
+Tài khoản `admin` bắt buộc là `user.id = 1`; seed sẽ báo lỗi nếu id 1 thuộc về
+tài khoản khác. Quyền admin trong ứng dụng được xác định bằng đúng điều kiện
+`user.id === 1` (`src/guards/account.guard.ts`), không có cơ chế cấp quyền admin
+cho tài khoản thứ hai.
 
 ## Kiểm thử
 

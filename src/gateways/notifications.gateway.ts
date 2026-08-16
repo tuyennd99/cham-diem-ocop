@@ -39,6 +39,10 @@ export class NotificationsGateway
   ) {}
 
   afterInit(server: Server) {
+    // socket.io's middleware type expects a void return, but this handler
+    // intentionally returns its inner promise so tests can await full
+    // completion of the async auth flow before asserting on `next`.
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
     server.use((client, next) => {
       return (async () => {
         try {
@@ -56,7 +60,7 @@ export class NotificationsGateway
             audience: 'congan-web',
           });
           if (!Number.isInteger(payload.sub)) throw new Error('missing sub');
-          const user = await this.authRepository.findUserById(payload.sub!);
+          const user = await this.authRepository.findUserById(payload.sub);
           if (!user || user.status !== UserStatus.ACTIVE)
             throw new Error('inactive account');
           (client.data as NotificationSocketData).organizationId =

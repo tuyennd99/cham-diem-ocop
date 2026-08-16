@@ -138,10 +138,15 @@ describe('AuthService', () => {
       meta,
     );
     expect(jwtService.signAsync).toHaveBeenCalledWith(
+      // expect.anything() is typed `any` in @types/jest, which trips
+      // no-unsafe-assignment for this object literal property.
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       expect.not.objectContaining({ permissions: expect.anything() }),
       expect.any(Object),
     );
+
     expect(result.user).toEqual(
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       expect.not.objectContaining({ permissions: expect.anything() }),
     );
   });

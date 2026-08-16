@@ -182,7 +182,13 @@ describe('TasksRepository task scope', () => {
       globalScope: false,
     });
 
-    const where = findMany.mock.calls[0][0].where;
+    // jest.fn() without generics types .mock.calls as any[][]; the `as` cast
+    // below recovers the shape we actually need.
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const where = findMany.mock.calls[0][0].where as {
+      program?: unknown;
+      OR?: unknown;
+    };
     expect(where.program).toBeUndefined();
     expect(where.OR).toEqual([
       { assigningOrganizationId: 31 },
