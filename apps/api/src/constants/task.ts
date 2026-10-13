@@ -1,0 +1,26 @@
+export const RESPONSIBILITY = {
+  LEAD: 'LEAD',
+  COLLABORATOR: 'COLLABORATOR',
+  ADMIN: 'ADMIN',
+  VIEWER: 'VIEWER',
+  ASSIGNEE: 'ASSIGNEE',
+} as const;
+
+export const TASK_STATUS = {
+  DANG_CAP_NHAT: 'DANG_CAP_NHAT',
+  SAP_DEN_HAN: 'SAP_DEN_HAN',
+  HOAN_THANH_DUNG_HAN: 'HOAN_THANH_DUNG_HAN',
+  HOAN_THANH_QUA_HAN: 'HOAN_THANH_QUA_HAN',
+  QUA_HAN: 'QUA_HAN',
+} as const;
+
+export const TASK_DEADLINE_STATUS = {
+  DANG_THUC_HIEN: 'DANG_THUC_HIEN',
+  SAP_DEN_HAN: 'SAP_DEN_HAN',
+  HOAN_THANH_DUNG_HAN: 'HOAN_THANH_DUNG_HAN',
+  HOAN_THANH_QUA_HAN: 'HOAN_THANH_QUA_HAN',
+  QUA_HAN: 'QUA_HAN',
+} as const;
+
+export type TaskStatus = (typeof TASK_STATUS)[keyof typeof TASK_STATUS];
+export type TaskDeadlineStatus = (typeof TASK_DEADLINE_STATUS)[keyof typeof TASK_DEADLINE_STATUS];

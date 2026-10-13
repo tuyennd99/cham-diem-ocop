@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Tra cứu hồ sơ sản phẩm OCOP, trạng thái xử lý và kết quả xếp hạng trong danh sách mẫu.">
+  <title>OCOP Đánh Giá — Tra cứu hồ sơ</title>
+  <link rel="stylesheet" href="../../colors_and_type.css">
+  <link rel="stylesheet" href="app.css">
+  <style>
+    /* Embedded review layer; the full responsive rules also live in app.css. */
+    body { min-width: 320px; margin: 0; background: var(--bg); color: var(--fg); font: var(--fs-body)/1.6 var(--font-body); }
+    .container { width: min(var(--container), calc(100% - var(--gutter) * 2)); margin-inline: auto; }
+    .site-header { position: sticky; z-index: 10; top: 0; border-bottom: 1px solid var(--border); background: var(--bg); }
+    .header-inner { min-height: 78px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 20px; }
+    .primary-nav { display: flex; justify-content: center; gap: 20px; }
+    .section { padding-block: 56px; }
+    .hero-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr); gap: 56px; align-items: center; }
+    h1, h2 { font-family: var(--font-display); }
+    .button { min-height: 44px; border-radius: var(--radius); }
+    .button-primary { background: var(--accent); color: var(--surface); }
+    .button-secondary { border: 1px solid var(--border); background: var(--surface); color: var(--fg); }
+    .lookup-controls { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 16px; }
+    .field input, .field select { min-height: 46px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--fg); }
+    .category-filters { display: flex; flex-wrap: wrap; gap: 8px; }
+    .filter-button { min-height: 44px; border-radius: 999px; }
+    .record-list { display: grid; gap: 12px; }
+    .record-row { display: grid; grid-template-columns: 160px minmax(0, 1fr) 168px; gap: 20px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+    .record-media img { width: 100%; height: auto; object-fit: contain; }
+    .record-facts { font-family: var(--font-mono); font-size: var(--fs-meta); }
+    .badge { display: inline-flex; border-radius: 999px; padding: 4px 9px; }
+    .rating-block { color: var(--gold-text); }
+    dialog { max-width: min(760px, calc(100vw - 32px)); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-dialog); }
+    :focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+    @media (max-width: 720px) { .container { width: calc(100% - 32px); } .hero-grid, .lookup-controls { grid-template-columns: 1fr; } .primary-nav { display: none; } .record-row { grid-template-columns: 92px minmax(0, 1fr); } }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#content" data-od-id="skip-link">Bỏ qua điều hướng</a>
+  <header class="site-header" data-od-id="site-header">
+    <div class="container header-inner" id="headerInner">
+      <a class="brand" href="#home" aria-label="OCOP Đánh Giá — Trang chủ" data-od-id="brand-link">
+        <span class="brand-mark" aria-hidden="true">★</span>
+        <span class="brand-copy"><strong>OCOP Đánh Giá</strong><span>Đăng ký · Chấm điểm · Xếp hạng</span></span>
+      </a>
+      <button class="menu-toggle" id="menuToggle" type="button" aria-expanded="false" aria-controls="primaryNav" aria-label="Mở điều hướng" data-od-id="mobile-menu-toggle"><span aria-hidden="true">☰</span></button>
+      <nav class="primary-nav" id="primaryNav" aria-label="Điều hướng chính" data-od-id="primary-navigation">
+        <a href="#home" data-od-id="nav-home">Trang chủ</a><a href="#lookup" data-od-id="nav-lookup">Tra cứu</a><a href="#workflow" data-od-id="nav-workflow">Quy trình</a><a href="#criteria" data-od-id="nav-criteria">Tiêu chí</a>
+      </nav>
+      <a class="header-login" href="#account-demo" data-account-mode="login" data-od-id="login-link">Đăng nhập</a>
+    </div>
+  </header>
+
+  <main id="content">
+    <section class="hero section" id="home" aria-labelledby="heroTitle" data-od-id="hero-section">
+      <div class="container hero-grid">
+        <div>
+          <p class="eyebrow">ĐĂNG KÝ · CHẤM ĐIỂM · XẾP HẠNG</p>
+          <h1 id="heroTitle" data-od-id="hero-heading">Theo dõi hồ sơ OCOP trong một nơi</h1>
+          <p class="lead">Tra cứu thông tin sản phẩm, trạng thái xử lý và kết quả xếp hạng qua một danh sách hồ sơ thống nhất.</p>
+          <div class="hero-actions"><a class="button button-primary" href="#account-demo" data-account-mode="register" data-od-id="register-cta">Đăng ký sản phẩm</a><a class="text-link" href="#lookup" data-od-id="lookup-link">Tra cứu hồ sơ <span aria-hidden="true">→</span></a></div>
+          <p class="sample-note">Các hồ sơ trên trang là dữ liệu minh họa, không phải hồ sơ thật.</p>
+        </div>
+        <aside class="hero-aside" aria-label="Thông tin về dữ liệu hiển thị" data-od-id="lookup-explainer">
+          <p class="eyebrow">THÔNG TIN TRA CỨU</p><h2 data-od-id="lookup-explainer-heading">Mỗi hồ sơ có một trạng thái chung</h2>
+          <p>Tiến độ và số sao được hiển thị từ cùng một bản ghi. Hồ sơ chưa có kết quả sẽ không hiện hạng sao.</p>
+          <a class="text-link" href="#criteria" data-od-id="criteria-explainer-link">Xem nhóm tiêu chí và ngưỡng sao <span aria-hidden="true">→</span></a>
+        </aside>
+      </div>
+    </section>
+
+    <section class="lookup-section section" id="lookup" aria-labelledby="lookupTitle" data-od-id="lookup-section">
+      <div class="container">
+        <div class="section-heading">
+          <div><p class="eyebrow">TRA CỨU CÔNG KHAI · DỮ LIỆU MẪU</p><h2 id="lookupTitle" data-od-id="lookup-heading">Danh sách hồ sơ OCOP</h2></div>
+          <p class="section-intro">Tìm theo tên sản phẩm, mã hồ sơ, đơn vị hoặc địa phương. Mỗi kết quả gồm nhóm, trạng thái và hạng sao nếu đã có.</p>
+        </div>
+        <div class="lookup-controls" data-od-id="lookup-controls">
+          <div class="field"><label for="recordSearch">Tìm hồ sơ</label><input id="recordSearch" type="search" autocomplete="off" aria-controls="recordList" placeholder="Tên, mã hồ sơ, đơn vị hoặc địa phương" data-od-id="record-search"></div>
+          <div class="field"><label for="recordStatus">Trạng thái</label><select id="recordStatus" aria-controls="recordList" data-od-id="record-status"><option value="all">Tất cả trạng thái</option><option value="ranked">Đã xếp hạng</option><option value="evaluating">Đang đánh giá</option><option value="received">Đã tiếp nhận</option></select></div>
+        </div>
+        <div class="category-filters" id="recordFilters" role="group" aria-label="Lọc theo nhóm sản phẩm" data-od-id="category-filters"></div>
+        <p class="result-count" id="resultCount" aria-live="polite" data-od-id="result-count"></p>
+        <div class="record-list" id="recordList" aria-label="Kết quả tra cứu" data-od-id="record-list"></div>
+        <nav class="pagination" id="pagination" aria-label="Phân trang hồ sơ" data-od-id="pagination"></nav>
+        <details class="image-sources" data-od-id="image-credits"><summary data-od-id="image-credits-toggle">Nguồn ảnh sản phẩm</summary><ul>
+          <li><a href="https://sinifoods.com/mat-ong-rung-u-minh" target="_blank" rel="noopener noreferrer" data-od-id="credit-honey">Mật ong rừng U Minh · Sinifood</a></li>
+          <li><a href="https://trmartpq.kiotvietweb.vn/c/2501-gia-vi/p/phu-ha-nuoc-mam-phu-quoc-40-dam-510ml-fish-sauce-ea7f6c" target="_blank" rel="noopener noreferrer" data-od-id="credit-fish-sauce">Nước mắm Phú Quốc · TR Mart</a></li>
+          <li><a href="https://sugitea.com/bach-tra-shan-tuyet-co-thu" target="_blank" rel="noopener noreferrer" data-od-id="credit-tea">Trà Shan Tuyết Suối Giàng · SugiTea</a></li>
+          <li><a href="https://dori.com.vn/products/toi-den-co-don-ly-son-dori-hu-thuy-tinh-100g-toi-den-mot-tep-ly-son" target="_blank" rel="noopener noreferrer" data-od-id="credit-black-garlic">Tỏi đen Lý Sơn · Dori</a></li>
+          <li><a href="https://dacsanviet98.com/products/ruou-sim-phu-quoc-14-do" target="_blank" rel="noopener noreferrer" data-od-id="credit-sim-wine">Rượu sim Phú Quốc · Bảy Gáo</a></li>
+          <li><a href="https://ocopstore.com/cao-che-vang-co-dac-mai-thi-thuy-hop-100gr" target="_blank" rel="noopener noreferrer" data-od-id="credit-cao-che-vang">Cao chè vằng · OCOP Store</a></li>
+        </ul></details>
+      </div>
+    </section>
+
+    <section class="section workflow-section" id="workflow" aria-labelledby="workflowTitle" data-od-id="workflow-section">
+      <div class="container">
+        <div class="section-heading section-heading-narrow"><div><p class="eyebrow">QUY TRÌNH TRÊN HỆ THỐNG</p><h2 id="workflowTitle" data-od-id="workflow-heading">Từ hồ sơ đến kết quả xếp hạng</h2></div><p class="section-intro">Ba bước mô tả luồng xử lý trong phần mềm, không phải các cấp hành chính hay những vòng đánh giá riêng.</p></div>
+        <div class="steps-grid">
+          <article class="step-item" data-od-id="workflow-step-submit"><span class="step-number">01</span><h3 data-od-id="workflow-submit-heading">Gửi hồ sơ</h3><p>Chủ thể đăng ký gửi thông tin sản phẩm và tài liệu tự đánh giá lên hệ thống.</p></article>
+          <article class="step-item" data-od-id="workflow-step-review"><span class="step-number">02</span><h3 data-od-id="workflow-review-heading">Phân công giám khảo</h3><p>Hệ thống phân công giám khảo. Mỗi người chấm theo bộ tiêu chí và nộp phiếu đánh giá.</p></article>
+          <article class="step-item" data-od-id="workflow-step-result"><span class="step-number">03</span><h3 data-od-id="workflow-result-heading">Tổng hợp và xếp sao</h3><p>Khi đã nhận đủ phiếu, hệ thống tính điểm trung bình và đối chiếu ngưỡng để xác định hạng sao.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section criteria-section" id="criteria" aria-labelledby="criteriaTitle" data-od-id="criteria-section">
+      <div class="container">
+        <div class="section-heading section-heading-narrow"><div><p class="eyebrow">THANG ĐIỂM · QUYẾT ĐỊNH 26/2026/QĐ-TTg</p><h2 id="criteriaTitle" data-od-id="criteria-heading">Ba nhóm tiêu chí, tối đa 100 điểm</h2></div><p class="section-intro">Giám khảo chấm theo các tiêu chí và tiểu mục áp dụng cho nhóm sản phẩm. Điểm cuối được tổng hợp từ các phiếu hợp lệ.</p></div>
+        <div class="criteria-grid">
+          <article class="criteria-item" data-od-id="criteria-community"><p class="eyebrow">NHÓM A</p><h3 data-od-id="criteria-community-heading">Sản phẩm và sức mạnh cộng đồng</h3><strong class="criteria-score">40 <span>điểm</span></strong><ul><li>Tổ chức sản xuất</li><li>Phát triển sản phẩm</li><li>Sức mạnh cộng đồng</li></ul></article>
+          <article class="criteria-item" data-od-id="criteria-marketing"><p class="eyebrow">NHÓM B</p><h3 data-od-id="criteria-marketing-heading">Khả năng tiếp thị</h3><strong class="criteria-score">25 <span>điểm</span></strong><ul><li>Tiếp thị</li><li>Câu chuyện sản phẩm</li></ul></article>
+          <article class="criteria-item" data-od-id="criteria-quality"><p class="eyebrow">NHÓM C</p><h3 data-od-id="criteria-quality-heading">Chất lượng sản phẩm</h3><strong class="criteria-score">35 <span>điểm</span></strong><ul><li>Cảm quan, dinh dưỡng và tính độc đáo</li><li>Công bố và bảo đảm chất lượng</li><li>Hướng dẫn sử dụng và cơ hội thị trường</li></ul></article>
+        </div>
+        <h3 class="bands-title" data-od-id="rating-bands-heading">Ngưỡng xếp hạng theo tổng điểm</h3>
+        <div class="star-bands" aria-label="Ngưỡng tổng điểm theo hạng sao OCOP"><div><strong>5 sao</strong><span>90–100 điểm</span></div><div><strong>4 sao</strong><span>70 đến dưới 90</span></div><div><strong>3 sao</strong><span>50 đến dưới 70</span></div><div><strong>2 sao</strong><span>30 đến dưới 50</span></div><div><strong>1 sao</strong><span>Dưới 30 điểm</span></div></div>
+        <p class="score-note">Điểm thành phần cụ thể phụ thuộc nhóm và phân nhóm sản phẩm trong phụ lục của Quyết định.</p>
+      </div>
+    </section>
+    <section class="section account-section" id="account-demo" aria-labelledby="accountTitle" data-od-id="account-demo-section">
+      <div class="container account-layout">
+        <div><p class="eyebrow">TÀI KHOẢN · BẢN MẪU</p><h2 id="accountTitle" data-od-id="account-heading">Bắt đầu hồ sơ sản phẩm</h2><p class="section-intro">Đăng nhập hoặc tạo tài khoản mẫu để xem luồng gửi hồ sơ. Thông tin không được gửi hoặc lưu.</p></div>
+        <div class="account-panel" data-od-id="account-panel">
+          <div class="account-tabs" role="group" aria-label="Chọn luồng tài khoản">
+            <button class="account-tab selected" id="registerTab" type="button" aria-pressed="true" aria-controls="registerForm" data-account-tab="register" data-od-id="register-tab">Đăng ký</button>
+            <button class="account-tab" id="loginTab" type="button" aria-pressed="false" aria-controls="loginForm" data-account-tab="login" data-od-id="login-tab">Đăng nhập</button>
+          </div>
+          <div id="authPanels" data-od-id="account-forms">
+            <form class="demo-form" id="registerForm" data-auth-form="register" aria-labelledby="registerTab" data-od-id="register-form">
+              <label>Tên chủ thể<input name="name" type="text" autocomplete="organization" required data-od-id="register-name"></label>
+              <label>Email<input name="email" type="email" autocomplete="email" required data-od-id="register-email"></label>
+              <label>Mật khẩu<input name="password" type="password" autocomplete="new-password" required data-od-id="register-password"></label>
+              <button class="button button-primary" type="submit" data-od-id="register-submit">Tạo tài khoản mẫu</button>
+            </form>
+            <form class="demo-form" id="loginForm" data-auth-form="login" aria-labelledby="loginTab" data-od-id="login-form" hidden>
+              <label>Email<input name="email" type="email" autocomplete="email" required data-od-id="login-email"></label>
+              <label>Mật khẩu<input name="password" type="password" autocomplete="current-password" required data-od-id="login-password"></label>
+              <button class="button button-primary" type="submit" data-od-id="login-submit">Đăng nhập mô phỏng</button>
+            </form>
+          </div>
+          <p class="account-status" id="accountStatus" role="status" aria-live="polite" hidden></p>
+          <div class="application-panel" id="applicationPanel" hidden data-od-id="application-panel">
+            <h3 data-od-id="application-heading">Tạo hồ sơ sản phẩm</h3><p class="form-note">Điền thông tin minh họa. Form không gửi dữ liệu tới máy chủ.</p>
+            <form class="demo-form" id="applicationForm" data-od-id="application-form">
+              <label>Tên sản phẩm<input id="productName" name="product" type="text" required data-od-id="product-name"></label>
+              <label>Nhóm sản phẩm<select name="category" required data-od-id="product-category"><option value="">Chọn nhóm</option><option>Thực phẩm</option><option>Đồ uống</option><option>Thảo dược</option></select></label>
+              <label>Địa phương<input name="origin" type="text" required data-od-id="product-origin"></label>
+              <label>Mô tả<textarea name="description" rows="3" data-od-id="product-description"></textarea></label>
+              <button class="button button-primary" type="submit" data-od-id="application-submit">Lưu bản mẫu</button>
+            </form>
+            <p class="account-status" id="applicationStatus" role="status" aria-live="polite" hidden></p>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="closing-section" data-od-id="closing-cta"><div class="container closing-inner"><div><p class="eyebrow">TRA CỨU HỒ SƠ OCOP</p><h2 data-od-id="closing-heading">Trạng thái và kết quả trong cùng một danh sách</h2></div><a class="button button-primary" href="#account-demo" data-account-mode="register" data-od-id="closing-register-cta">Đăng ký sản phẩm</a></div></section>
+  </main>
+  <footer class="site-footer" data-od-id="site-footer">
+    <div class="container footer-grid"><div class="footer-brand"><strong data-od-id="footer-brand">OCOP Đánh Giá</strong><p>Hệ thống đăng ký, chấm điểm và xếp hạng sản phẩm OCOP.</p></div><div><h2 data-od-id="footer-nav-heading">Điều hướng</h2><a href="#lookup" data-od-id="footer-lookup-link">Tra cứu hồ sơ</a><a href="#workflow" data-od-id="footer-workflow-link">Quy trình</a><a href="#criteria" data-od-id="footer-criteria-link">Tiêu chí đánh giá</a></div><div><h2 data-od-id="footer-account-heading">Tài khoản mẫu</h2><p>Luồng tài khoản chỉ minh họa; dữ liệu không gửi hoặc lưu.</p><a href="#account-demo" data-account-mode="login" data-od-id="footer-account-link">Đăng nhập mô phỏng</a></div></div>
+    <div class="container footer-bottom"><span>© OCOP Đánh Giá</span><span>Ảnh tham khảo được lưu cục bộ; nguồn được ghi tại danh sách hồ sơ.</span></div>
+  </footer>
+
+  <dialog class="record-dialog" id="recordDialog" aria-labelledby="dialogTitle" data-od-id="record-detail-dialog">
+    <div class="dialog-inner"><div class="dialog-heading"><div><p class="eyebrow">CHI TIẾT HỒ SƠ · DỮ LIỆU MẪU</p><h2 id="dialogTitle" data-od-id="dialog-heading">Chi tiết hồ sơ</h2></div><button class="icon-button" id="dialogClose" type="button" aria-label="Đóng chi tiết hồ sơ" data-od-id="dialog-close">×</button></div>
+      <div class="detail-layout"><div class="detail-media" id="dialogMedia" data-od-id="detail-product-image"></div><div><p class="detail-note" id="dialogDescription"></p><dl class="detail-facts" id="dialogFacts"></dl></div></div>
+      <p class="dialog-disclaimer">Bản mẫu chỉ hiển thị dữ liệu công khai minh họa; không chứa hồ sơ thật hoặc thông tin cá nhân.</p><button class="button button-primary" id="dialogDone" type="button" data-od-id="dialog-done">Đóng chi tiết</button>
+    </div>
+  </dialog>
+  
+  <script type="module" src="app.js"></script>
+</body>
+</html>

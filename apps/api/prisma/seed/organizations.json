@@ -1,0 +1,626 @@
+[
+  {
+    "id": 1,
+    "code": "ADMIN",
+    "name": "Quản trị kỹ thuật",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": false,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 2,
+    "code": "H14.1",
+    "name": "Văn phòng UBND tỉnh Cao Bằng",
+    "isAssigningAuthority": true,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 3,
+    "code": "H14.17",
+    "name": "Sở Công Thương",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 4,
+    "code": "H14.19",
+    "name": "Sở Khoa học và Công nghệ",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 5,
+    "code": "H14.20",
+    "name": "Sở Nông nghiệp và Môi trường",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 6,
+    "code": "H14.7",
+    "name": "Ban Quản lý Dự án đầu tư và xây dựng tỉnh Cao Bằng",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 7,
+    "code": "H14.13",
+    "name": "Sở Tư pháp",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 8,
+    "code": "H14.2",
+    "name": "Sở Dân tộc và Tôn giáo",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 9,
+    "code": "H14.14",
+    "name": "Sở Văn hóa, Thể thao và Du lịch",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 10,
+    "code": "H14.4",
+    "name": "Ban Quản lý Khu kinh tế tỉnh Cao Bằng",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 11,
+    "code": "H14.11",
+    "name": "Sở Xây dựng",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 12,
+    "code": "H14.6",
+    "name": "Quỹ phát triển đất tỉnh Cao Bằng",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 13,
+    "code": "H14.3",
+    "name": "Thanh tra tỉnh",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 14,
+    "code": "H14.12",
+    "name": "Sở Tài chính",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 15,
+    "code": "H14.21",
+    "name": "Sở Y tế",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 16,
+    "code": "H14.22",
+    "name": "Sở Giáo dục và Đào tạo",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 17,
+    "code": "H14.24",
+    "name": "Sở Ngoại vụ",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 18,
+    "code": "H14.23",
+    "name": "Sở Nội vụ",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 19,
+    "code": "H14.40",
+    "name": "Công ty TNHH một thành viên cấp nước",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 20,
+    "code": "H14.66",
+    "name": "Viettel chi nhánh Cao Bằng",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 21,
+    "code": "H14.08",
+    "name": "Ban Quản lý dự án Đầu tư xây dựng các Công trình giao thông",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 22,
+    "code": "H14.70",
+    "name": "Liên Minh hợp tác xã tỉnh Cao Bằng",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 23,
+    "code": "H14.100",
+    "name": "UBND phường Thục Phán",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 24,
+    "code": "H14.101",
+    "name": "UBND phường Nùng Trí Cao",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 25,
+    "code": "H14.102",
+    "name": "UBND phường Tân Giang",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 26,
+    "code": "H14.103",
+    "name": "UBND xã Quảng Lâm",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 27,
+    "code": "H14.105",
+    "name": "UBND xã Lý Bôn",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 28,
+    "code": "H14.104",
+    "name": "UBND xã Nam Quang",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 29,
+    "code": "H14.106",
+    "name": "UBND xã Bảo Lâm",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 30,
+    "code": "H14.107",
+    "name": "UBND xã Yên Thổ",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 31,
+    "code": "H14.108",
+    "name": "UBND xã  Sơn Lộ",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 32,
+    "code": "H14.109",
+    "name": "UBND xã Hưng Đạo",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 33,
+    "code": "H14.110",
+    "name": "UBND xã Bảo Lạc",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 34,
+    "code": "H14.111",
+    "name": "UBND xã Cốc Pàng",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 35,
+    "code": "H14.112",
+    "name": "UBND xã Cô Ba",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 36,
+    "code": "H14.113",
+    "name": "UBND xã Khánh Xuân",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 37,
+    "code": "H14.115",
+    "name": "UBND xã Huy Giáp",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 38,
+    "code": "H14.114",
+    "name": "UBND xã Xuân Trường",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 39,
+    "code": "H14.116",
+    "name": "UBND xã Ca Thành",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 40,
+    "code": "H14.117",
+    "name": "UBND xã Phan Thanh",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 41,
+    "code": "H14.118",
+    "name": "UBND xã Thành Công",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 42,
+    "code": "H14.119",
+    "name": "UBND xã Tam Kim",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 43,
+    "code": "H14.120",
+    "name": "UBND xã Nguyên Bình",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 44,
+    "code": "H14.121",
+    "name": "UBND xã Tĩnh Túc",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 45,
+    "code": "H14.122",
+    "name": "UBND xã Minh Tâm",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 46,
+    "code": "H14.123",
+    "name": "UBND xã Thanh Long",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 47,
+    "code": "H14.125",
+    "name": "UBND xã Thông Nông",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 48,
+    "code": "H14.124",
+    "name": "UBND xã Cần Yên",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 49,
+    "code": "H14.126",
+    "name": "UBND xã Trường Hà",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 50,
+    "code": "H14.127",
+    "name": "UBND xã Hà Quảng",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 51,
+    "code": "H14.128",
+    "name": "UBND xã Lũng Nặm",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 52,
+    "code": "H14.129",
+    "name": "UBND xã Tổng Cọt",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 53,
+    "code": "H14.130",
+    "name": "UBND xã Nam Tuấn",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 54,
+    "code": "H14.131",
+    "name": "UBND xã Hòa An",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 55,
+    "code": "H14.132",
+    "name": "UBND xã Bạch Đằng",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 56,
+    "code": "H14.133",
+    "name": "UBND xã Nguyễn Huệ",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 57,
+    "code": "H14.135",
+    "name": "UBND xã Canh Tân",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 58,
+    "code": "H14.134",
+    "name": "UBND xã Minh Khai",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 59,
+    "code": "H14.136",
+    "name": "UBND xã Kim Đồng",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 60,
+    "code": "H14.137",
+    "name": "UBND xã Thạch An",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 61,
+    "code": "H14.138",
+    "name": "UBND xã Đông Khê",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 62,
+    "code": "H14.139",
+    "name": "UBND xã Đức Long",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 63,
+    "code": "H14.140",
+    "name": "UBND xã Phục Hòa",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 64,
+    "code": "H14.141",
+    "name": "UBND xã Bế Văn Đàn",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 65,
+    "code": "H14.142",
+    "name": "UBND xã Độc Lập",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 66,
+    "code": "H14.145",
+    "name": "UBND xã Quang Hán",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 67,
+    "code": "H14.143",
+    "name": "UBND xã Quảng Uyên",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 68,
+    "code": "H14.144",
+    "name": "UBND xã Hạnh Phúc",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 69,
+    "code": "H14.146",
+    "name": "UBND xã Trà Lĩnh",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 70,
+    "code": "H14.147",
+    "name": "UBND xã Quang Trung",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 71,
+    "code": "H14.148",
+    "name": "UBND xã Đoài Dương",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 72,
+    "code": "H14.149",
+    "name": "UBND xã Trùng Khánh",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 73,
+    "code": "H14.150",
+    "name": "UBND xã Đàm Thủy",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 74,
+    "code": "H14.151",
+    "name": "UBND xã Đình Phong",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 75,
+    "code": "H14.152",
+    "name": "UBND xã Lý Quốc",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 76,
+    "code": "H14.154",
+    "name": "UBND xã Vinh Quý",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 77,
+    "code": "H14.153",
+    "name": "UBND xã Hạ Lang",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  },
+  {
+    "id": 78,
+    "code": "H14.155",
+    "name": "UBND xã Quang Long",
+    "isAssigningAuthority": false,
+    "isExecutingUnit": true,
+    "status": "ACTIVE"
+  }
+]

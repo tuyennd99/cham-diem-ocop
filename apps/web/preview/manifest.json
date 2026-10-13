@@ -1,0 +1,15 @@
+{
+  "title": "OCOP Đánh Giá Design System Previews",
+  "entry": "preview/index.html",
+  "previews": [
+    { "path": "preview/index.html", "id": "review-hub", "purpose": "Open the overview of source-derived color, type, spacing, components, product photography, and applied UI.", "evidence": ["colors_and_type.css", "ui_kits/app/index.html"] },
+    { "path": "preview/colors-primary.html", "id": "colors-primary", "purpose": "Review source palette values and semantic status colors.", "evidence": ["src/styles.css", "ocop-danh-gia-landing.html", "colors_and_type.css"] },
+    { "path": "preview/typography-specimens.html", "id": "typography-specimens", "purpose": "Compare Vietnamese display, body, and metadata typography.", "evidence": ["index.html", "colors_and_type.css"] },
+    { "path": "preview/spacing-tokens.html", "id": "spacing-tokens", "purpose": "Review the spacing scale, content width, and responsive gutters.", "evidence": ["src/styles.css", "ocop-danh-gia-landing.html", "colors_and_type.css"] },
+    { "path": "preview/radius-shadows.html", "id": "radius-shadows", "purpose": "Inspect control, panel, and dialog shapes and elevation.", "evidence": ["src/styles.css", "colors_and_type.css"] },
+    { "path": "preview/components-buttons.html", "id": "components-buttons", "purpose": "Review button, search, select, category filter, hover, and focus states.", "evidence": ["src/styles.css", "src/DossierFilters.jsx", "ui_kits/app/index.html"] },
+    { "path": "preview/components-record-row.html", "id": "components-record-row", "purpose": "Inspect a representative dossier row and its unrated-state rule.", "evidence": ["src/App.jsx", "src/data.js", "assets/images/mat-ong-u-minh.jpg"] },
+    { "path": "preview/brand-assets.html", "id": "brand-assets", "purpose": "Verify preserved local product photography, source roles, and intrinsic ratios.", "evidence": ["assets/images/", "context/provenance.md"] },
+    { "path": "preview/applied-ui.html", "id": "applied-ui", "purpose": "Exercise the composed lookup app, dossier dialog, and demonstration submission flow.", "evidence": ["ui_kits/app/", "src/useDossierFilters.js", "src/App.jsx"] }
+  ]
+}

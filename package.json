@@ -1,0 +1,11 @@
+{
+  "name": "ocop-monorepo",
+  "private": true,
+  "packageManager": "pnpm@11.17.0",
+  "engines": { "node": ">=24.7 <25" },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @ocop/web --filter @ocop/api dev",
+    "build": "pnpm --filter @ocop/web --filter @ocop/api build",
+    "typecheck": "pnpm --filter @ocop/web --filter @ocop/api typecheck"
+  }
+}
