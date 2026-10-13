@@ -86,6 +86,14 @@ export function privateUploadOptions(): MulterOptions {
   };
 }
 
+export function productUploadOptions(): MulterOptions {
+  return {
+    defParamCharset: 'utf8',
+    limits: { fileSize: MAX_IMAGE_BYTES, files: 1 },
+    storage: new PrivateStorage(),
+  };
+}
+
 // Ảnh chèn trong editor: thư mục con công khai riêng, tên = uuidv7 + đuôi gốc.
 class InlineImageStorage {
   _handleFile(

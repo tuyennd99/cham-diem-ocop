@@ -3,6 +3,7 @@ import { AuthRepository } from './auth.repository';
 import { DashboardRepository } from './dashboard.repository';
 import { FilesRepository } from './files.repository';
 import { NotificationsRepository } from './notifications.repository';
+import { ProductsRepository } from './products.repository';
 import { ReportsRepository } from './reports.repository';
 import { SystemRepository } from './system.repository';
 import { TasksRepository } from './tasks.repository';
@@ -13,6 +14,7 @@ export const appRepositories = [
   DashboardRepository,
   FilesRepository,
   NotificationsRepository,
+  ProductsRepository,
   ReportsRepository,
   SystemRepository,
   TasksRepository,
