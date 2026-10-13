@@ -4,7 +4,9 @@ import { getSession } from "../auth";
 
 export function PublicLayout() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const signedIn = Boolean(getSession());
+  const session = getSession();
+  const signedIn = Boolean(session);
+  const workPath = session?.user.role === "ADMIN" ? "/admin/products" : session?.user.role === "JUDGE" ? "/judge" : "/my/products/new";
 
   return (
     <>
@@ -26,11 +28,11 @@ export function PublicLayout() {
             <Link to="/products" onClick={() => setMenuOpen(false)}>Tra cứu</Link>
             <Link to="/" hash="workflow" onClick={() => setMenuOpen(false)}>Quy trình</Link>
             <Link to="/" hash="criteria" onClick={() => setMenuOpen(false)}>Tiêu chí đánh giá</Link>
-            <Link className="mobile-login" to="/login" onClick={() => setMenuOpen(false)}>Đăng nhập</Link>
+            <Link className="mobile-login" to={signedIn ? workPath : "/login"} onClick={() => setMenuOpen(false)}>{signedIn ? "Khu vực làm việc" : "Đăng nhập"}</Link>
           </nav>
           <div className="header-actions">
-            <Link className="header-login" to="/login">Đăng nhập</Link>
-            <Link className="button button-primary header-cta" to={signedIn ? "/my/products/new" : "/register"}>Đăng ký sản phẩm</Link>
+            <Link className="header-login" to={signedIn ? workPath : "/login"}>{signedIn ? session?.user.fullName : "Đăng nhập"}</Link>
+            <Link className="button button-primary header-cta" to={signedIn ? workPath : "/register"}>{signedIn ? "Khu vực làm việc" : "Đăng ký sản phẩm"}</Link>
           </div>
         </div>
       </header>
@@ -39,9 +41,9 @@ export function PublicLayout() {
         <div className="container footer-grid">
           <div className="footer-brand"><strong>OCOP Đánh Giá</strong><p>Hệ thống đăng ký, chấm điểm và xếp hạng sản phẩm OCOP.</p></div>
           <div><h2>Điều hướng</h2><Link to="/products">Tra cứu hồ sơ</Link><Link to="/" hash="workflow">Quy trình</Link><Link to="/" hash="criteria">Tiêu chí đánh giá</Link></div>
-          <div><h2>Căn cứ tham khảo</h2><a href="https://vanban.chinhphu.vn/?docid=218267&amp;orggroupid=3&amp;pageid=27160" target="_blank" rel="noreferrer">Quyết định 26/2026/QĐ-TTg</a><p>Dữ liệu hiển thị trên trang là minh họa, không gửi hoặc lưu hồ sơ thật.</p></div>
+          <div><h2>Căn cứ tham khảo</h2><a href="https://xaydungchinhsach.chinhphu.vn/quyet-dinh-so-26-2026-qd-ttg-bo-tieu-chi-va-quy-trinh-danh-gia-phan-hang-san-pham-ocop-119260529164111182.htm" target="_blank" rel="noreferrer">Quyết định 26/2026/QĐ-TTg</a><p>Hồ sơ công khai chỉ hiển thị thông tin được phép công bố.</p></div>
         </div>
-        <div className="container footer-bottom"><span>© OCOP Đánh Giá</span><span>Ảnh tham khảo được lưu cục bộ; nguồn được ghi tại danh sách hồ sơ.</span></div>
+        <div className="container footer-bottom"><span>© OCOP Đánh Giá</span><span>Thông tin hồ sơ được tải từ hệ thống.</span></div>
       </footer>
     </>
   );

@@ -1,6 +1,5 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { JudgeScoring } from "../JudgeScoring";
-import { RoutePlaceholder } from "../components/RoutePlaceholder";
+import { createFileRoute } from "@tanstack/react-router";
+import { JudgeEvaluationPage } from "../pages/JudgePages";
 import { requireRole } from "../route-guards";
 
 export const Route = createFileRoute("/_app/judge/products/$id")({
@@ -10,8 +9,5 @@ export const Route = createFileRoute("/_app/judge/products/$id")({
 
 function JudgeProductPage() {
   const { id } = Route.useParams();
-  const navigate = useNavigate();
-  return id === "HS-26-0012"
-    ? <JudgeScoring onHome={() => void navigate({ to: "/" })} />
-    : <RoutePlaceholder title="Phiếu chấm" />;
+  return <JudgeEvaluationPage productId={id} />;
 }

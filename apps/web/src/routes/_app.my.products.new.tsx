@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { RoutePlaceholder } from "../components/RoutePlaceholder";
+import { ProductEditorPage } from "../pages/RegistrantPages";
+import { requireRole } from "../route-guards";
 
 export const Route = createFileRoute("/_app/my/products/new")({
-  component: () => <RoutePlaceholder title="Tạo hồ sơ sản phẩm" />,
+  beforeLoad: requireRole("REGISTRANT"),
+  component: () => <ProductEditorPage />,
 });

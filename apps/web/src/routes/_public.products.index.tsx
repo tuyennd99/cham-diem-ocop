@@ -1,4 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import App from "../App";
+import { PublicCatalogPage } from "../pages/PublicPages";
 
-export const Route = createFileRoute("/_public/products/")({ component: App });
+export const Route = createFileRoute("/_public/products/")({ component: PublicCatalogPage });
