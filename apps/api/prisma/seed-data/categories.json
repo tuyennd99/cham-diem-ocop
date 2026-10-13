@@ -1,8 +1,8 @@
 {
   "sourceEdition": "Quyết định 26/2026/QĐ-TTg ngày 22/05/2026, Phụ lục I và II",
   "sourceUrl": "https://xaydungchinhsach.chinhphu.vn/quyet-dinh-so-26-2026-qd-ttg-bo-tieu-chi-va-quy-trinh-danh-gia-phan-hang-san-pham-ocop-119260529164111182.htm",
-  "transcriptionUrl": "https://lawplayer.com/vn/act/vn-congbao-469637",
-  "notes": "Tên bộ sản phẩm đối chiếu Phụ lục II và nhóm đối chiếu Phụ lục I. PDF chính thức là nguồn có thẩm quyền nhưng là bản quét dung lượng lớn; bản phiên âm lập chỉ mục không giữ được các ô điểm trong bảng. Chỉ danh mục nhóm được đưa vào seed; chưa có bộ tiêu chí/điểm để seed an toàn.",
+  "transcriptionUrl": "https://thuvienphapluat.vn/van-ban/thuong-mai/quyet-dinh-26-2026-qd-ttg-bo-tieu-chi-danh-gia-phan-hang-san-pham-moi-xa-mot-san-pham-707078.aspx",
+  "notes": "Tên bộ sản phẩm đối chiếu Phụ lục II và nhóm đối chiếu Phụ lục I. PDF chính thức trên Chinhphu.vn là nguồn có thẩm quyền; bản phiên âm Thư Viện Pháp Luật được dùng để trích văn bản và các số điểm nằm cuối dòng lựa chọn. Dấu sao trong nhãn là ngưỡng tối thiểu xếp hạng, không phải điểm.",
   "categories": [
     { "id": "fresh-produce", "groupCode": "FOOD", "groupName": "Sản phẩm thực phẩm", "name": "Rau, củ, quả, hạt tươi", "criteriaSetKey": "fresh-produce" },
     { "id": "fresh-animal-products", "groupCode": "FOOD", "groupName": "Sản phẩm thực phẩm", "name": "Thịt, thủy sản, trứng, sữa tươi", "criteriaSetKey": "fresh-animal-products" },
