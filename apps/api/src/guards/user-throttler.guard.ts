@@ -5,7 +5,7 @@ import { ThrottlerGuard } from '@nestjs/throttler';
 export class UserThrottlerGuard extends ThrottlerGuard {
   protected getTracker(request: Record<string, unknown>): Promise<string> {
     const userId = (request.user as { sub?: unknown } | undefined)?.sub;
-    if (typeof userId === 'number' && Number.isInteger(userId)) {
+    if (typeof userId === 'string' && userId.length > 0) {
       return Promise.resolve(`user:${userId}`);
     }
     return Promise.resolve(

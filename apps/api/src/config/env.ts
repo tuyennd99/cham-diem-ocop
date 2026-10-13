@@ -16,13 +16,28 @@ export function env(values: NodeJS.ProcessEnv) {
   const allowedOrigins = (values.CORS_ORIGINS ?? defaultOrigin)
     .split(',')
     .map((origin) => origin.trim())
-    .filter(Boolean)
+    .filter(Boolean);
+  const smtpPort = Number(values.SMTP_PORT ?? 587);
+  const smtpHost = values.SMTP_HOST?.trim();
+  const smtpUser = values.SMTP_USER?.trim();
+  const smtpPassword = values.SMTP_PASSWORD;
+  const smtpFrom = values.SMTP_FROM?.trim();
+  if (!smtpHost || !smtpUser || !smtpPassword || !smtpFrom) {
+    throw new Error('SMTP_HOST, SMTP_USER, SMTP_PASSWORD, and SMTP_FROM are required');
+  }
+  if (!Number.isInteger(smtpPort) || smtpPort < 1 || smtpPort > 65535) {
+    throw new Error('SMTP_PORT must be a valid port number');
+  }
 
   return {
     port: Number.isInteger(port) && port > 0 ? port : 3030,
     jwtSecret: requireSecret('JWT_SECRET', values.JWT_SECRET),
-    csrfSecret: requireSecret('CSRF_SECRET', values.CSRF_SECRET),
     trustProxyHops,
     allowedOrigins,
+    smtpHost,
+    smtpPort,
+    smtpUser,
+    smtpPassword,
+    smtpFrom,
   };
 }

@@ -1,309 +1,163 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import {
-  createHash,
-  createHmac,
-  randomBytes,
-  timingSafeEqual,
-} from 'node:crypto';
-import { hashPassword, verifyPassword } from '../../prisma/seed/password';
-import {
-  ACCESS_TOKEN_SECONDS,
-  REFRESH_LIFETIME_MS,
-  DUMMY_PASSWORD_HASH,
-} from '../constants/auth';
+import { OtpPurpose, Role } from '@prisma/client';
+import bcrypt from 'bcryptjs';
+import { randomBytes } from 'node:crypto';
 import { env } from '../config/env';
-import { UserStatus } from '@prisma/client';
 import { AuthRepository } from '../repositories/auth.repository';
-import {
-  AccessTokenPayload,
-  AuthResult,
-  AuthUser,
-  RequestMeta,
-} from '../types/auth';
+import { MailService } from './mail.service';
+import { OtpService } from './otp.service';
+import type { AccessTokenPayload, PublicUser } from '../types/auth';
+
+const PASSWORD_ROUNDS = 12;
+const DUMMY_BCRYPT_HASH = bcrypt.hashSync(randomBytes(32).toString('hex'), PASSWORD_ROUNDS);
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly repository: AuthRepository,
     private readonly jwtService: JwtService,
-  ) { }
+    private readonly otpService: OtpService,
+    private readonly mailService: MailService,
+  ) {}
 
-  async login(
-    username: string,
-    password: string,
-    meta: RequestMeta,
-  ): Promise<AuthResult> {
-    const now = new Date();
-    const user = await this.repository.findUserByUsername(username.trim());
+  async register(input: {
+    email: string;
+    password: string;
+    fullName: string;
+    phone?: string;
+  }) {
+    const email = this.normalizeEmail(input.email);
+    this.assertPassword(input.password);
+    let user;
+    try {
+      user = await this.repository.createRegistrant({
+        email,
+        password: await bcrypt.hash(input.password, PASSWORD_ROUNDS),
+        fullName: input.fullName.trim(),
+        phone: input.phone?.trim() || null,
+      });
+    } catch (error) {
+      if (this.isUniqueConstraint(error)) throw new ConflictException('Email is already registered');
+      throw error;
+    }
+
+    const code = await this.otpService.issue(email, OtpPurpose.REGISTER, user.id);
+    try {
+      await this.mailService.sendOtp(email, code, 'REGISTER');
+    } catch {
+      throw new InternalServerErrorException('Could not send verification email');
+    }
+    return { message: 'Verification code sent' };
+  }
+
+  async verifyOtp(email: string, code: string) {
+    await this.otpService.verify(this.normalizeEmail(email), OtpPurpose.REGISTER, code);
+    return { message: 'Account verified' };
+  }
+
+  async login(rawEmail: string, password: string) {
+    const email = this.normalizeEmail(rawEmail);
+    const user = await this.repository.findUserByEmail(email);
     if (!user) {
-      await verifyPassword(DUMMY_PASSWORD_HASH, password);
-      await this.repository.recordUnknownLoginFailure(username.trim(), meta);
-      throw this.unauthorized();
+      await bcrypt.compare(password, DUMMY_BCRYPT_HASH);
+      throw new UnauthorizedException('Invalid email or password');
     }
-
-    await this.ensureAccountAvailable(user, now, meta);
-    if (!(await verifyPassword(user.passwordHash, password))) {
-      await this.handleFailedLogin(user, meta);
+    if (!(await bcrypt.compare(password, user.password))) {
+      throw new UnauthorizedException('Invalid email or password');
     }
-
-    const refreshExpiresAt = new Date(now.getTime() + REFRESH_LIFETIME_MS);
-    const refreshToken = randomBytes(32).toString('base64url');
-    const completed = await this.repository.completeLogin(
-      user.id,
-      user.passwordHash,
-      this.hashRefreshToken(refreshToken),
-      refreshExpiresAt,
-      now,
-      meta,
-    );
-    if (!completed) throw this.unauthorized();
-    return this.buildAuthResult(user, refreshToken, refreshExpiresAt);
+    if (!user.verified || !user.isActive) throw new UnauthorizedException('Account is unavailable');
+    return this.issueToken({
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+    }, this.publicUser(user));
   }
 
-  async refresh(
-    rawRefreshToken: string,
-    csrfToken: string,
-    meta: RequestMeta,
-  ): Promise<AuthResult> {
-    this.assertCsrfToken(csrfToken);
-    const now = new Date();
-    const session = await this.repository.findSessionByHash(
-      this.hashRefreshToken(rawRefreshToken),
-    );
-    if (!session) throw this.unauthorized('Invalid refresh token');
-
-    if (session.revokedAt) {
-      await this.repository.revokeAllSessions(
-        session.user.id,
-        now,
-        'REFRESH_TOKEN_REUSE',
-        meta,
-      );
-      throw this.unauthorized('Invalid refresh token');
+  async forgotPassword(rawEmail: string) {
+    const email = this.normalizeEmail(rawEmail);
+    const user = await this.repository.findUserByEmail(email);
+    if (user?.verified && user.isActive) {
+      try {
+        const code = await this.otpService.issue(email, OtpPurpose.RESET_PASSWORD, user.id);
+        await this.mailService.sendOtp(email, code, 'RESET_PASSWORD');
+      } catch {
+        this.logger.error('Password reset email could not be sent');
+      }
     }
-    if (session.expiresAt <= now) {
-      await this.repository.revokeSession(
-        session.id,
-        session.user.id,
-        now,
-        'REFRESH_EXPIRED',
-        meta,
-      );
-      throw this.unauthorized('Refresh token expired');
-    }
-    if (
-      session.user.status !== UserStatus.ACTIVE ||
-      session.user.deletedAt != null
-    ) {
-      await this.repository.revokeAllSessions(
-        session.user.id,
-        now,
-        'ACCOUNT_UNAVAILABLE',
-        meta,
-      );
-      throw this.locked();
-    }
-
-    const refreshToken = randomBytes(32).toString('base64url');
-    const rotated = await this.repository.rotateSession(
-      session.id,
-      session.user.id,
-      this.hashRefreshToken(refreshToken),
-      session.expiresAt,
-      now,
-      meta,
-    );
-    if (!rotated) {
-      await this.repository.revokeAllSessions(
-        session.user.id,
-        now,
-        'REFRESH_TOKEN_REUSE',
-        meta,
-      );
-      throw this.unauthorized('Invalid refresh token');
-    }
-
-    return this.buildAuthResult(session.user, refreshToken, session.expiresAt);
+    return { message: 'If the account exists, a reset code has been sent' };
   }
 
-  async logout(
-    rawRefreshToken: string | undefined,
-    meta: RequestMeta,
-  ) {
-    if (!rawRefreshToken) return;
-
-    const session = await this.repository.findSessionByHash(
-      this.hashRefreshToken(rawRefreshToken),
+  async resetPassword(rawEmail: string, code: string, newPassword: string) {
+    this.assertPassword(newPassword);
+    await this.otpService.verify(
+      this.normalizeEmail(rawEmail),
+      OtpPurpose.RESET_PASSWORD,
+      code,
+      await bcrypt.hash(newPassword, PASSWORD_ROUNDS),
     );
-    if (session) {
-      await this.repository.revokeSession(
-        session.id,
-        session.user.id,
-        new Date(),
-        'LOGOUT',
-        meta,
-      );
-    }
+    return { message: 'Password reset' };
   }
 
-  async profile(userId: number) {
+  async me(userId: string): Promise<PublicUser> {
     const user = await this.repository.findUserById(userId);
-    if (!user || user.status !== UserStatus.ACTIVE) throw this.unauthorized();
+    if (!user?.verified || !user.isActive) throw new UnauthorizedException('Authentication required');
     return this.publicUser(user);
   }
 
-  async changePassword(
-    userId: number,
-    currentPassword: string,
-    newPassword: string,
-    meta: RequestMeta,
-  ) {
-    const user = await this.repository.findUserById(userId);
-    if (!user || user.status !== UserStatus.ACTIVE) throw this.unauthorized();
-    if (!(await verifyPassword(user.passwordHash, currentPassword))) {
-      throw this.unauthorized('Current password is incorrect');
-    }
-
-    const changed = await this.repository.changePassword(
-      user.id,
-      user.passwordHash,
-      await hashPassword(newPassword),
-      new Date(),
-      meta,
-    );
-    if (changed === false) throw this.unauthorized();
-  }
-
-  createCsrfToken() {
-    const value = randomBytes(32).toString('base64url');
-    return `${value}.${this.signCsrf(value)}`;
-  }
-
-  assertCsrfToken(token: string) {
-    const separator = token.lastIndexOf('.');
-    if (separator < 1) throw this.csrfError();
-    const value = token.slice(0, separator);
-    const signature = token.slice(separator + 1);
-    const expected = this.signCsrf(value);
-    const actualBuffer = Buffer.from(signature);
-    const expectedBuffer = Buffer.from(expected);
-    if (
-      actualBuffer.length !== expectedBuffer.length ||
-      !timingSafeEqual(actualBuffer, expectedBuffer)
-    ) {
-      throw this.csrfError();
-    }
-  }
-
-  private async ensureAccountAvailable(
-    user: AuthUser,
-    now: Date,
-    meta: RequestMeta,
-  ) {
-    if (user.status !== UserStatus.LOCKED) return;
-    if (!user.lockedUntil || user.lockedUntil > now) throw this.locked();
-
-    await this.repository.unlockAutomatically(
-      user.id,
-      user.lockedUntil,
-      now,
-      meta,
-    );
-    user.status = UserStatus.ACTIVE;
-    user.lockedUntil = null;
-    user.failedLoginCount = 0;
-    user.failedLoginWindowStartedAt = null;
-  }
-
-  private async handleFailedLogin(user: AuthUser, meta: RequestMeta) {
-    const now = new Date();
-    const { locked } = await this.repository.registerFailedLogin(
-      user.id,
-      now,
-      meta,
-    );
-    if (locked) throw this.locked();
-    throw this.unauthorized();
-  }
-
-  private async buildAuthResult(
-    user: AuthUser,
-    refreshToken: string,
-    refreshExpiresAt: Date,
-  ): Promise<AuthResult> {
-    const payload: AccessTokenPayload = {
-      sub: user.id,
-      username: user.username,
-      organizationId: user.organizationId,
-      isAdmin: Boolean(user.isAdmin),
-    };
+  private async issueToken(payload: AccessTokenPayload, user: PublicUser) {
+    const expiresIn = 7 * 24 * 60 * 60;
     return {
       accessToken: await this.jwtService.signAsync(payload, {
-        secret: this.jwtSecret(),
+        secret: env(process.env).jwtSecret,
         algorithm: 'HS256',
-        issuer: 'congan-api',
-        audience: 'congan-web',
-        expiresIn: ACCESS_TOKEN_SECONDS,
+        issuer: 'ocop-api',
+        audience: 'ocop-web',
+        expiresIn,
       }),
-      expiresIn: ACCESS_TOKEN_SECONDS,
-      refreshToken,
-      refreshExpiresAt,
-      csrfToken: this.createCsrfToken(),
-      user: this.publicUser(user),
+      expiresIn,
+      user,
     };
   }
 
-  private publicUser(user: AuthUser) {
+  private publicUser(user: {
+    id: string;
+    email: string;
+    fullName: string;
+    phone: string | null;
+    role: Role;
+    verified: boolean;
+  }): PublicUser {
     return {
       id: user.id,
-      username: user.username,
+      email: user.email,
       fullName: user.fullName,
-      position: user.position,
-      rank: user.rank,
       phone: user.phone,
-      organizationId: user.organizationId,
-      organization: user.organization,
-      isAdmin: Boolean(user.isAdmin),
+      role: user.role,
+      verified: user.verified,
     };
   }
 
-  private hashRefreshToken(token: string) {
-    return createHash('sha256').update(token).digest('hex');
+  private normalizeEmail(email: string) {
+    return email.trim().toLowerCase();
   }
 
-  private signCsrf(value: string) {
-    return createHmac('sha256', this.csrfSecret())
-      .update(value)
-      .digest('base64url');
+  private assertPassword(password: string) {
+    if (Buffer.byteLength(password, 'utf8') > 72) {
+      throw new BadRequestException('Password must be at most 72 UTF-8 bytes');
+    }
   }
 
-  private csrfSecret() {
-    return env(process.env).csrfSecret;
-  }
-
-  private jwtSecret() {
-    return env(process.env).jwtSecret;
-  }
-
-  private unauthorized(message = 'Invalid username or password') {
-    return new HttpException(
-      { errorCode: 'INVALID_CREDENTIALS', message },
-      HttpStatus.UNAUTHORIZED,
-    );
-  }
-
-  private locked() {
-    return new HttpException(
-      { errorCode: 'ACCOUNT_LOCKED', message: 'Account is locked' },
-      423,
-    );
-  }
-
-  private csrfError() {
-    return new HttpException(
-      { errorCode: 'CSRF_INVALID', message: 'Invalid CSRF token' },
-      HttpStatus.FORBIDDEN,
-    );
+  private isUniqueConstraint(error: unknown): boolean {
+    return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
   }
 }

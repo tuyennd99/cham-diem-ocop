@@ -1,470 +1,94 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, UserStatus } from '@prisma/client';
-import { randomUUID } from 'node:crypto';
+import { OtpPurpose, Prisma, Role } from '@prisma/client';
+import type { User } from '@prisma/client';
+import { timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import { AuthUser, RefreshSession, RequestMeta } from '../types/auth';
-
-const authUserInclude = {
-  organization: { select: { id: true, code: true, name: true } },
-} satisfies Prisma.UserInclude;
-
-type AuthUserPayload = Prisma.UserGetPayload<{
-  include: typeof authUserInclude;
-}>;
+import type { PublicUser } from '../types/auth';
 
 @Injectable()
 export class AuthRepository {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
-  async findUserByUsername(username: string): Promise<AuthUser | null> {
-    const user = await this.prisma.user.findFirst({
-      where: { username, deletedAt: null },
-      include: authUserInclude,
-    });
-    return user ? this.toAuthUser(user) : null;
+  findUserByEmail(email: string) {
+    return this.prisma.user.findUnique({ where: { email } });
   }
 
-  async findUserById(id: number): Promise<AuthUser | null> {
-    const user = await this.prisma.user.findFirst({
-      where: { id, deletedAt: null },
-      include: authUserInclude,
-    });
-    return user ? this.toAuthUser(user) : null;
-  }
-
-  async recordUnknownLoginFailure(username: string, meta: RequestMeta) {
-    await this.prisma.auditLog.create({
-      data: {
-        action: 'AUTH_LOGIN_FAILED',
-        entityType: 'User',
-        reason: 'UNKNOWN_USERNAME',
-        afterData: { username },
-        ...this.auditMeta(meta),
-      },
+  findUserById(id: string): Promise<(PublicUser & { isActive: boolean }) | null> {
+    return this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true, email: true, fullName: true, phone: true, role: true, verified: true, isActive: true },
     });
   }
 
-  async registerFailedLogin(userId: number, now: Date, meta: RequestMeta) {
-    return this.prisma.$transaction(async (transaction) => {
-      const rows = await transaction.$queryRaw<
-        {
-          failedLoginCount: number;
-          failedLoginWindowStartedAt: Date | null;
-          status: UserStatus;
-          lockedUntil: Date | null;
-        }[]
-      >(
-        Prisma.sql`
-          SELECT "failedLoginCount", "failedLoginWindowStartedAt",
-                 "status", "lockedUntil"
-          FROM "users"
-          WHERE "id" = ${userId}
-          FOR UPDATE
-        `,
-      );
-      const current = rows[0];
-      if (!current) throw new Error('User not found');
-      const failedAudit = {
-        data: {
-          actorId: userId,
-          action: 'AUTH_LOGIN_FAILED',
-          entityType: 'User',
-          entityId: userId,
-          reason: 'INVALID_CREDENTIALS',
-          ...this.auditMeta(meta),
-        },
-      } satisfies Prisma.AuditLogCreateArgs;
-      if (current.status === UserStatus.LOCKED) {
-        await transaction.auditLog.create(failedAudit);
-        return { locked: true, lockedUntil: current.lockedUntil };
-      }
-
-      const insideWindow =
-        current.failedLoginWindowStartedAt != null &&
-        now.getTime() - current.failedLoginWindowStartedAt.getTime() <= 60_000;
-      const failedLoginCount = insideWindow ? current.failedLoginCount + 1 : 1;
-      const windowStartedAt = insideWindow
-        ? current.failedLoginWindowStartedAt
-        : now;
-      const locked = failedLoginCount >= 5;
-      const lockedUntil = locked ? new Date(now.getTime() + 5 * 60_000) : null;
-
-      await transaction.user.update({
-        where: { id: userId },
-        data: {
-          status: locked ? UserStatus.LOCKED : UserStatus.ACTIVE,
-          failedLoginCount,
-          failedLoginWindowStartedAt: windowStartedAt,
-          ...(locked
-            ? {
-              lockedAt: now,
-              lockedUntil,
-              lockReason: 'FIVE_FAILED_LOGINS',
-            }
-            : {}),
-        },
-      });
-      await transaction.auditLog.create(failedAudit);
-
-      if (locked) {
-        await transaction.refreshSession.updateMany({
-          where: { userId, revokedAt: null },
-          data: { revokedAt: now },
-        });
-        await transaction.auditLog.create({
-          data: {
-            actorId: userId,
-            action: 'AUTH_ACCOUNT_LOCKED',
-            entityType: 'User',
-            entityId: userId,
-            reason: 'FIVE_FAILED_LOGINS',
-            ...this.auditMeta(meta),
-          },
-        });
-        await transaction.auditLog.create({
-          data: {
-            actorId: userId,
-            action: 'AUTH_SESSION_REVOKED',
-            entityType: 'RefreshSession',
-            reason: 'ACCOUNT_LOCKED',
-            ...this.auditMeta(meta),
-          },
-        });
-      }
-
-      return { locked, lockedUntil };
+  createRegistrant(data: Pick<User, 'email' | 'password' | 'fullName' | 'phone'>) {
+    return this.prisma.user.create({
+      data: { ...data, role: Role.REGISTRANT, verified: false },
     });
   }
 
-  async unlockAutomatically(
-    userId: number,
-    expectedLockedUntil: Date,
-    now: Date,
-    meta: RequestMeta,
-  ) {
-    return this.prisma.$transaction(async (transaction) => {
-      const rows = await transaction.$queryRaw<
-        { id: number; status: UserStatus; lockedUntil: Date | null }[]
-      >(
-        Prisma.sql`
-          SELECT "id", "status", "lockedUntil"
-          FROM "users"
-          WHERE "id" = ${userId}
-          FOR UPDATE
-        `,
-      );
-      const current = rows[0];
-      if (
-        !current ||
-        current.status !== UserStatus.LOCKED ||
-        !current.lockedUntil ||
-        current.lockedUntil.getTime() !== expectedLockedUntil.getTime() ||
-        current.lockedUntil > now
-      ) {
-        return false;
-      }
-
-      await transaction.user.update({
-        where: { id: userId },
-        data: {
-          status: UserStatus.ACTIVE,
-          lockedAt: null,
-          lockedUntil: null,
-          lockReason: null,
-          failedLoginCount: 0,
-          failedLoginWindowStartedAt: null,
-        },
-      });
-      await transaction.auditLog.create({
-        data: {
-          actorId: userId,
-          action: 'AUTH_ACCOUNT_UNLOCKED',
-          entityType: 'User',
-          entityId: userId,
-          reason: 'AUTOMATIC_TIMEOUT',
-          ...this.auditMeta(meta),
-        },
-      });
-      return true;
-    });
-  }
-
-  async completeLogin(
-    userId: number,
-    expectedPasswordHash: string,
-    tokenHash: string,
-    expiresAt: Date,
-    now: Date,
-    meta: RequestMeta,
-  ) {
-    return this.prisma.$transaction(async (transaction) => {
-      const rows = await transaction.$queryRaw<
-        {
-          id: number;
-          passwordHash: string;
-          status: UserStatus;
-          deletedAt: Date | null;
-        }[]
-      >(
-        Prisma.sql`
-          SELECT "id", "passwordHash", "status", "deletedAt"
-          FROM "users"
-          WHERE "id" = ${userId}
-          FOR UPDATE
-        `,
-      );
-      const current = rows[0];
-      if (
-        !current ||
-        current.passwordHash !== expectedPasswordHash ||
-        current.status !== UserStatus.ACTIVE ||
-        current.deletedAt != null
-      ) {
-        return false;
-      }
-
-      await transaction.user.update({
-        where: { id: userId },
-        data: {
-          failedLoginCount: 0,
-          failedLoginWindowStartedAt: null,
-        },
-      });
-      await transaction.refreshSession.create({
-        data: { userId, tokenHash, expiresAt },
-      });
-      await transaction.auditLog.create({
-        data: {
-          actorId: userId,
-          action: 'AUTH_LOGIN_SUCCEEDED',
-          entityType: 'User',
-          entityId: userId,
-          afterData: { loggedInAt: now.toISOString() },
-          ...this.auditMeta(meta),
-        },
-      });
-      return true;
-    });
-  }
-
-  async findSessionByHash(tokenHash: string): Promise<RefreshSession | null> {
-    const session = await this.prisma.refreshSession.findUnique({
-      where: { tokenHash },
-      include: { user: { include: authUserInclude } },
-    });
-    return session
-      ? {
-        id: session.id,
-        expiresAt: session.expiresAt,
-        revokedAt: session.revokedAt,
-        user: this.toAuthUser(session.user),
-      }
-      : null;
-  }
-
-  async rotateSession(
-    sessionId: number,
-    userId: number,
-    tokenHash: string,
-    expiresAt: Date,
-    now: Date,
-    meta: RequestMeta,
-  ) {
-    return this.prisma.$transaction(async (transaction) => {
-      const users = await transaction.$queryRaw<
-        { id: number; status?: UserStatus; deletedAt?: Date | null }[]
-      >(
-        Prisma.sql`
-          SELECT "id", "status", "deletedAt"
-          FROM "users"
-          WHERE "id" = ${userId}
-          FOR UPDATE
-        `,
-      );
-      if (
-        !users[0] ||
-        (users[0].status !== undefined &&
-          users[0].status !== UserStatus.ACTIVE) ||
-        users[0].deletedAt != null
-      ) {
-        return false;
-      }
-
-      const revoked = await transaction.refreshSession.updateMany({
-        where: {
-          id: sessionId,
-          userId,
-          revokedAt: null,
-          expiresAt: { gt: now },
-        },
-        data: { revokedAt: now },
-      });
-      if (revoked.count !== 1) return false;
-
-      await transaction.refreshSession.create({
-        data: { userId, tokenHash, expiresAt },
-      });
-      await transaction.auditLog.create({
-        data: {
-          actorId: userId,
-          action: 'AUTH_SESSION_REVOKED',
-          entityType: 'RefreshSession',
-          entityId: sessionId,
-          reason: 'ROTATED',
-          ...this.auditMeta(meta),
-        },
-      });
-      return true;
-    });
-  }
-
-  async revokeSession(
-    sessionId: number,
-    userId: number,
-    now: Date,
-    reason: string,
-    meta: RequestMeta,
-  ) {
+  async saveOtp(email: string, purpose: OtpPurpose, codeHash: string, userId?: string) {
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 5 * 60_000);
     await this.prisma.$transaction(async (tx) => {
-      await tx.refreshSession.updateMany({
-        where: { id: sessionId, revokedAt: null },
-        data: { revokedAt: now },
+      await tx.otpCode.updateMany({
+        where: { email, purpose, usedAt: null },
+        data: { usedAt: now },
       });
-      await tx.auditLog.create({
-        data: {
-          actorId: userId,
-          action: 'AUTH_SESSION_REVOKED',
-          entityType: 'RefreshSession',
-          entityId: sessionId,
-          reason,
-          ...this.auditMeta(meta),
-        },
+      await tx.otpCode.create({
+        data: { email, purpose, code: codeHash, expiresAt, userId },
       });
     });
   }
 
-  async revokeAllSessions(
-    userId: number,
-    now: Date,
-    reason: string,
-    meta: RequestMeta,
+  async consumeOtp(
+    email: string,
+    purpose: OtpPurpose,
+    codeHash: string,
+    newPasswordHash?: string,
   ) {
-    await this.prisma.$transaction(async (transaction) => {
-      await transaction.$queryRaw(
-        Prisma.sql`
-          SELECT "id"
-          FROM "users"
-          WHERE "id" = ${userId}
-          FOR UPDATE
-        `,
-      );
-      await transaction.refreshSession.updateMany({
-        where: { userId, revokedAt: null },
-        data: { revokedAt: now },
-      });
-      await transaction.auditLog.create({
-        data: {
-          actorId: userId,
-          action: 'AUTH_SESSION_REVOKED',
-          entityType: 'RefreshSession',
-          reason,
-          ...this.auditMeta(meta),
-        },
-      });
-    });
-  }
+    return this.prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<
+        { id: string; code: string; attempts: number; expiresAt: Date; usedAt: Date | null }[]
+      >(Prisma.sql`
+        SELECT "id", "code", "attempts", "expiresAt", "usedAt"
+        FROM "otp_codes"
+        WHERE "email" = ${email} AND "purpose" = ${purpose}::"OtpPurpose"
+        ORDER BY "createdAt" DESC
+        LIMIT 1 FOR UPDATE
+      `);
+      const otp = rows[0];
+      const now = new Date();
+      if (!otp || otp.usedAt || otp.expiresAt <= now || otp.attempts >= 5) return false;
 
-  async changePassword(
-    userId: number,
-    expectedPasswordHash: string,
-    newPasswordHash: string,
-    now: Date,
-    meta: RequestMeta,
-  ) {
-    return this.prisma.$transaction(async (transaction) => {
-      const rows = await transaction.$queryRaw<
-        {
-          id: number;
-          passwordHash: string;
-          status: UserStatus;
-          deletedAt: Date | null;
-        }[]
-      >(
-        Prisma.sql`
-          SELECT "id", "passwordHash", "status", "deletedAt"
-          FROM "users"
-          WHERE "id" = ${userId}
-          FOR UPDATE
-        `,
-      );
-      const current = rows[0];
-      if (
-        !current ||
-        current.passwordHash !== expectedPasswordHash ||
-        current.status !== UserStatus.ACTIVE ||
-        current.deletedAt != null
-      ) {
+      if (!this.equal(otp.code, codeHash)) {
+        const attempts = otp.attempts + 1;
+        await tx.otpCode.update({
+          where: { id: otp.id },
+          data: { attempts, ...(attempts >= 5 ? { usedAt: now } : {}) },
+        });
         return false;
       }
 
-      await transaction.user.update({
-        where: { id: userId },
-        data: { passwordHash: newPasswordHash },
+      await tx.otpCode.update({ where: { id: otp.id }, data: { usedAt: now } });
+      if (purpose === OtpPurpose.REGISTER) {
+        const result = await tx.user.updateMany({
+          where: { email, role: Role.REGISTRANT, verified: false },
+          data: { verified: true },
+        });
+        return result.count === 1;
+      }
+      if (!newPasswordHash) return false;
+      const result = await tx.user.updateMany({
+        where: { email, verified: true, isActive: true },
+        data: { password: newPasswordHash },
       });
-      await transaction.refreshSession.updateMany({
-        where: { userId, revokedAt: null },
-        data: { revokedAt: now },
-      });
-      await transaction.auditLog.create({
-        data: {
-          actorId: userId,
-          action: 'AUTH_PASSWORD_CHANGED',
-          entityType: 'User',
-          entityId: userId,
-          ...this.auditMeta(meta),
-        },
-      });
-      await transaction.auditLog.create({
-        data: {
-          actorId: userId,
-          action: 'AUTH_SESSION_REVOKED',
-          entityType: 'RefreshSession',
-          reason: 'PASSWORD_CHANGED',
-          ...this.auditMeta(meta),
-        },
-      });
-      return true;
+      return result.count === 1;
     });
   }
 
-  private toAuthUser(user: AuthUserPayload): AuthUser {
-    return {
-      id: user.id,
-      username: user.username,
-      fullName: user.fullName,
-      position: user.position,
-      rank: user.rank,
-      phone: user.phone,
-      passwordHash: user.passwordHash,
-      organizationId: user.organizationId,
-      organization: user.organization,
-      isAdmin: user.id === 1,
-      status: user.status,
-      lockedUntil: user.lockedUntil,
-      failedLoginCount: user.failedLoginCount,
-      failedLoginWindowStartedAt: user.failedLoginWindowStartedAt,
-      deletedAt: user.deletedAt,
-    };
-  }
-
-  private auditMeta(meta: RequestMeta) {
-    return {
-      ipAddress: meta.ipAddress,
-      userAgent: meta.userAgent,
-      requestId:
-        meta.requestId && /^[A-Za-z0-9._-]{1,100}$/.test(meta.requestId)
-          ? meta.requestId
-          : randomUUID(),
-    };
+  private equal(left: string, right: string) {
+    const a = Buffer.from(left);
+    const b = Buffer.from(right);
+    return a.length === b.length && timingSafeEqual(a, b);
   }
 }

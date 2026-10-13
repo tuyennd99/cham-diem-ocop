@@ -1,11 +1,10 @@
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { ApiExceptionFilter } from '../filters/api-exception.filter';
 import { ApiResponseInterceptor } from '../interceptors/api-response.interceptor';
 import { env } from './env';
-import { cleanupOpenApiDoc, ZodValidationPipe } from 'nestjs-zod';
+import { cleanupOpenApiDoc } from 'nestjs-zod';
 
 export function configureApp(app: INestApplication) {
   const { allowedOrigins, trustProxyHops } = env(process.env);
@@ -36,7 +35,6 @@ export function configureApp(app: INestApplication) {
       'Accept',
       'Origin',
       'X-Requested-With',
-      'X-CSRF-Token',
     ],
   });
 
@@ -44,8 +42,7 @@ export function configureApp(app: INestApplication) {
   // cross-origin cho phép FE (khác origin) load ảnh chèn qua /inline-images;
   // mặc định của helmet là same-origin sẽ chặn thẻ <img>.
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-  app.use(cookieParser());
-  app.useGlobalPipes(new ZodValidationPipe());
+  app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }));
   app.useGlobalFilters(new ApiExceptionFilter());
   app.useGlobalInterceptors(new ApiResponseInterceptor());
 
@@ -62,14 +59,6 @@ export function configureApp(app: INestApplication) {
         bearerFormat: 'JWT',
       },
       'access-token',
-    )
-    .addBearerAuth(
-      {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-      },
-      'refresh-token',
     )
     .build();
 
