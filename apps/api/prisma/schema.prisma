@@ -6,321 +6,219 @@ datasource db {
   provider = "postgresql"
 }
 
-enum TaskType {
-  DOT_XUAT
-  DINH_KY
+enum Role {
+  REGISTRANT
+  JUDGE
+  ADMIN
 }
 
-enum TaskDeadlineStatus {
-  DANG_THUC_HIEN
-  SAP_DEN_HAN
-  HOAN_THANH_DUNG_HAN
-  HOAN_THANH_QUA_HAN
-  QUA_HAN
+enum OtpPurpose {
+  REGISTER
+  RESET_PASSWORD
 }
 
-enum ReportKind {
-  PROGRESS
-  CONSOLIDATED
-}
-
-enum ReportStatus {
+enum ProductStatus {
   DRAFT
   SUBMITTED
-  REJECTED
-  APPROVED
+  SCORING
+  COMPLETED
 }
 
-enum UserStatus {
-  ACTIVE
-  LOCKED
+enum AttachmentType {
+  IMAGE
+  EVIDENCE
 }
 
-enum NotificationType {
-  GIAO_NHIEM_VU
-  DONG_NHIEM_VU
-  GUI_BAO_CAO
-  DUYET_BAO_CAO
-  TRA_BAO_CAO
-  MO_KY_BAO_CAO
-  QUA_HAN
-  SAP_DEN_HAN
-}
-
-enum EntityStatus {
-  ACTIVE
-  INACTIVE
-}
-
-model Organization {
-  id                    Int                   @id @default(autoincrement())
-  code                  String                @unique @db.VarChar(50)
-  name                  String                @db.VarChar(255)
-  isAssigningAuthority  Boolean               @default(false)
-  isExecutingUnit       Boolean               @default(true)
-  status                EntityStatus          @default(ACTIVE)
-  createdAt             DateTime              @default(now()) @db.Timestamptz(3)
-  updatedAt             DateTime              @updatedAt @db.Timestamptz(3)
-  users                 User[]
-  assigningPrograms     Program[]             @relation("ProgramAssigningOrganization")
-  leadPrograms          Program[]             @relation("ProgramLeadOrganization")
-  programCollaborations ProgramCollaborator[]
-  assigningTasks        Task[]                @relation("TaskAssigningOrganization")
-  leadTasks             Task[]                @relation("TaskLeadOrganization")
-  taskCollaborations    TaskCollaborator[]
-  reportWorkspaces      ReportWorkspace[]
-  auditLogs             AuditLog[]
-
-  @@map("organizations")
+enum EvaluationStatus {
+  IN_PROGRESS
+  SUBMITTED
 }
 
 model User {
-  id                         Int               @id @default(autoincrement())
-  username                   String            @unique @db.VarChar(100)
-  fullName                   String            @db.VarChar(255)
-  position                   String?           @db.VarChar(255)
-  rank                       String?           @db.VarChar(255)
-  phone                      String?           @db.VarChar(30)
-  passwordHash               String            @db.VarChar(255)
-  organizationId             Int
-  status                     UserStatus        @default(ACTIVE)
-  lockedAt                   DateTime?         @db.Timestamptz(3)
-  lockedUntil                DateTime?         @db.Timestamptz(3)
-  lockReason                 String?           @db.VarChar(500)
-  failedLoginCount           Int               @default(0)
-  failedLoginWindowStartedAt DateTime?         @db.Timestamptz(3)
-  deletedAt                  DateTime?         @db.Timestamptz(3)
-  createdAt                  DateTime          @default(now()) @db.Timestamptz(3)
-  updatedAt                  DateTime          @updatedAt @db.Timestamptz(3)
-  organization               Organization      @relation(fields: [organizationId], references: [id])
-  createdTasks               Task[]            @relation("TaskCreatedBy")
-  updatedTasks               Task[]            @relation("TaskUpdatedBy")
-  closedTasks                Task[]            @relation("TaskClosedBy")
-  completedTasks             Task[]            @relation("TaskCompletedBy")
-  submittedVersions          ReportVersion[]   @relation("ReportVersionSubmittedBy")
-  reviewedVersions           ReportVersion[]   @relation("ReportVersionReviewedBy")
-  ownedReportWorkspaces      ReportWorkspace[] @relation("ReportWorkspaceOwnerUser")
-  uploadedFiles              StoredFile[]
-  notifications              Notification[]
-  auditLogs                  AuditLog[]
-  refreshSessions            RefreshSession[]
+  id           String            @id @default(cuid())
+  email        String            @unique @db.VarChar(320)
+  password     String            @db.VarChar(255)
+  fullName     String            @db.VarChar(255)
+  phone        String?           @db.VarChar(30)
+  role         Role              @default(REGISTRANT)
+  verified     Boolean           @default(false)
+  createdAt    DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime          @updatedAt @db.Timestamptz(3)
+  products     Product[]
+  assignments  JudgeAssignment[]
+  evaluations  Evaluation[]
+  otpCodes     OtpCode[]
 
-  @@index([organizationId])
-  @@index([status])
+  @@index([role])
   @@map("users")
 }
 
-model Program {
-  id                      Int                   @id @default(autoincrement())
-  code                    String                @unique @db.VarChar(50)
-  name                    String                @db.VarChar(255)
-  description             String?
-  assigningOrganizationId Int
-  leadOrganizationId      Int
-  status                  EntityStatus          @default(ACTIVE)
-  createdAt               DateTime              @default(now()) @db.Timestamptz(3)
-  updatedAt               DateTime              @updatedAt @db.Timestamptz(3)
-  assigningOrganization   Organization          @relation("ProgramAssigningOrganization", fields: [assigningOrganizationId], references: [id])
-  leadOrganization        Organization          @relation("ProgramLeadOrganization", fields: [leadOrganizationId], references: [id])
-  collaborators           ProgramCollaborator[]
-  tasks                   Task[]
+model OtpCode {
+  id        String     @id @default(cuid())
+  email     String     @db.VarChar(320)
+  code      String     @db.VarChar(255)
+  purpose   OtpPurpose
+  expiresAt DateTime   @db.Timestamptz(3)
+  usedAt    DateTime?  @db.Timestamptz(3)
+  attempts  Int        @default(0)
+  createdAt DateTime   @default(now()) @db.Timestamptz(3)
+  userId    String?
+  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([assigningOrganizationId])
-  @@index([leadOrganizationId])
-  @@map("programs")
+  @@index([email, purpose, expiresAt])
+  @@index([userId])
+  @@map("otp_codes")
 }
 
-model Task {
-  id                      Int                 @id @default(autoincrement())
-  code                    String              @unique @db.VarChar(100)
-  name                    String              @db.VarChar(500)
-  description             String?
-  expectedOutput          String?
-  type                    TaskType
-  programId               Int
-  assigningOrganizationId Int
-  leadOrganizationId      Int
-  dueAt                   DateTime?           @db.Timestamptz(3)
-  deadlineStatus          TaskDeadlineStatus?
-  startAt                 DateTime?           @db.Timestamptz(3)
-  closedAt                DateTime?           @db.Timestamptz(3)
-  closedById              Int?
-  closeReason             String?
-  completedAt             DateTime?           @db.Timestamptz(3)
-  completedById           Int?
-  deletedAt               DateTime?           @db.Timestamptz(3)
-  createdById             Int
-  updatedById             Int
-  createdAt               DateTime            @default(now()) @db.Timestamptz(3)
-  updatedAt               DateTime            @updatedAt @db.Timestamptz(3)
-  program                 Program             @relation(fields: [programId], references: [id])
-  assigningOrganization   Organization        @relation("TaskAssigningOrganization", fields: [assigningOrganizationId], references: [id])
-  leadOrganization        Organization        @relation("TaskLeadOrganization", fields: [leadOrganizationId], references: [id])
-  collaborators           TaskCollaborator[]
-  createdBy               User                @relation("TaskCreatedBy", fields: [createdById], references: [id])
-  updatedBy               User                @relation("TaskUpdatedBy", fields: [updatedById], references: [id])
-  closedBy                User?               @relation("TaskClosedBy", fields: [closedById], references: [id])
-  completedBy             User?               @relation("TaskCompletedBy", fields: [completedById], references: [id])
-  workspaces              ReportWorkspace[]   @relation("TaskWorkspace")
+model ProductCategory {
+  id          String       @id @default(cuid())
+  groupCode   String       @db.VarChar(50)
+  groupName   String       @db.VarChar(255)
+  name        String       @unique @db.VarChar(255)
+  description String?
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
+  criteriaSet CriteriaSet?
+  products    Product[]
+  assignments JudgeAssignment[]
 
-  @@index([programId])
-  @@index([type, deadlineStatus])
-  @@index([deletedAt])
-  @@index([assigningOrganizationId])
-  @@index([leadOrganizationId])
-  @@map("tasks")
+  @@index([groupCode, name])
+  @@map("product_categories")
 }
 
-model ProgramCollaborator {
-  id             Int          @id @default(autoincrement())
-  programId      Int
-  organizationId Int
-  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
-  program        Program      @relation(fields: [programId], references: [id], onDelete: Cascade)
-  organization   Organization @relation(fields: [organizationId], references: [id])
+model CriteriaSet {
+  id         String          @id @default(cuid())
+  categoryId String          @unique
+  name       String?         @db.VarChar(255)
+  source     String?         @db.VarChar(500)
+  createdAt  DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime        @updatedAt @db.Timestamptz(3)
+  category   ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  criteria   Criterion[]
 
-  @@unique([programId, organizationId])
-  @@map("program_collaborators")
+  @@map("criteria_sets")
 }
 
-model TaskCollaborator {
-  id             Int          @id @default(autoincrement())
-  taskId         Int
-  organizationId Int
-  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
-  task           Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  organization   Organization @relation(fields: [organizationId], references: [id])
+model Criterion {
+  id          String        @id @default(cuid())
+  setId       String
+  code        String        @db.VarChar(50)
+  name        String        @db.VarChar(500)
+  maxScore    Int
+  order       Int
+  criteriaSet CriteriaSet   @relation(fields: [setId], references: [id], onDelete: Cascade)
+  subCriteria SubCriterion[]
 
-  @@unique([taskId, organizationId])
-  @@map("task_collaborators")
+  @@unique([setId, code])
+  @@unique([id, setId])
+  @@index([setId, order])
+  @@map("criteria")
 }
 
-model ReportWorkspace {
-  id                  Int               @id @default(autoincrement())
-  kind                ReportKind
-  taskId              Int
-  ownerOrganizationId Int
-  ownerUserId         Int?
-  status              ReportStatus      @default(DRAFT)
-  content             String?
-  createdAt           DateTime          @default(now()) @db.Timestamptz(3)
-  updatedAt           DateTime          @updatedAt @db.Timestamptz(3)
-  task                Task              @relation("TaskWorkspace", fields: [taskId], references: [id], onDelete: Cascade)
-  ownerOrganization   Organization      @relation(fields: [ownerOrganizationId], references: [id])
-  ownerUser           User?             @relation("ReportWorkspaceOwnerUser", fields: [ownerUserId], references: [id])
-  versions            ReportVersion[]
-  draftAttachments    DraftAttachment[]
+model SubCriterion {
+  id          String       @id @default(cuid())
+  criterionId String
+  content     String
+  order       Int
+  criterion   Criterion    @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+  options     ScoreOption[]
+  scores      Score[]
 
-  @@index([taskId, kind])
-  @@index([ownerUserId])
-  @@map("report_workspaces")
+  @@unique([criterionId, order])
+  @@unique([id, criterionId])
+  @@index([criterionId])
+  @@map("sub_criteria")
 }
 
-model ReportVersion {
-  id              Int                 @id @default(autoincrement())
-  workspaceId     Int
-  versionNumber   Int
-  content         String?
-  submittedById   Int
-  submittedAt     DateTime            @default(now()) @db.Timestamptz(3)
-  status          ReportStatus        @default(SUBMITTED)
-  reviewedById    Int?
-  reviewedAt      DateTime?           @db.Timestamptz(3)
-  rejectionReason String?
-  workspace       ReportWorkspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  submittedBy     User                @relation("ReportVersionSubmittedBy", fields: [submittedById], references: [id])
-  reviewedBy      User?               @relation("ReportVersionReviewedBy", fields: [reviewedById], references: [id])
-  attachments     VersionAttachment[]
+model ScoreOption {
+  id             String       @id @default(cuid())
+  subCriterionId String
+  label          String
+  points         Int
+  subCriterion   SubCriterion  @relation(fields: [subCriterionId], references: [id], onDelete: Cascade)
+  scores         Score[]
 
-  @@unique([workspaceId, versionNumber])
-  @@map("report_versions")
+  @@unique([id, subCriterionId])
+  @@unique([subCriterionId, points])
+  @@index([subCriterionId])
+  @@map("score_options")
 }
 
-model StoredFile {
-  id           Int                 @id @default(autoincrement())
-  originalName String              @db.VarChar(500)
-  storageKey   String              @unique @db.VarChar(500)
-  mimeType     String              @db.VarChar(255)
-  sizeBytes    Int
-  checksum     String              @db.VarChar(128)
-  uploadedById Int
-  createdAt    DateTime            @default(now()) @db.Timestamptz(3)
-  uploadedBy   User                @relation(fields: [uploadedById], references: [id])
-  drafts       DraftAttachment[]
-  versions     VersionAttachment[]
+model Product {
+  id           String        @id @default(cuid())
+  registrantId String
+  categoryId   String
+  name         String        @db.VarChar(255)
+  description  String?
+  formData     Json
+  status       ProductStatus @default(DRAFT)
+  finalScore   Float?
+  starRating   Int?
+  createdAt    DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime      @updatedAt @db.Timestamptz(3)
+  registrant   User          @relation(fields: [registrantId], references: [id], onDelete: Restrict)
+  category     ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  attachments  Attachment[]
+  evaluations  Evaluation[]
 
-  @@map("stored_files")
+  @@index([status, categoryId, createdAt])
+  @@index([registrantId, createdAt])
+  @@map("products")
 }
 
-model DraftAttachment {
-  workspaceId  Int
-  storedFileId Int
-  workspace    ReportWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  storedFile   StoredFile      @relation(fields: [storedFileId], references: [id], onDelete: Restrict)
+model Attachment {
+  id        String         @id @default(cuid())
+  productId String
+  type      AttachmentType
+  fileName  String         @db.VarChar(500)
+  filePath  String         @db.VarChar(1000)
+  createdAt DateTime       @default(now()) @db.Timestamptz(3)
+  product   Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
 
-  @@id([workspaceId, storedFileId])
-  @@map("draft_attachments")
+  @@index([productId, type])
+  @@map("attachments")
 }
 
-model VersionAttachment {
-  reportVersionId Int
-  storedFileId    Int
-  reportVersion   ReportVersion @relation(fields: [reportVersionId], references: [id], onDelete: Cascade)
-  storedFile      StoredFile    @relation(fields: [storedFileId], references: [id], onDelete: Restrict)
+model JudgeAssignment {
+  judgeId      String
+  categoryId   String
+  criterionIds String[]     @default([])
+  createdAt    DateTime     @default(now()) @db.Timestamptz(3)
+  judge        User         @relation(fields: [judgeId], references: [id], onDelete: Cascade)
+  category     ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
-  @@id([reportVersionId, storedFileId])
-  @@map("version_attachments")
+  @@id([judgeId, categoryId])
+  @@index([categoryId])
+  @@map("judge_assignments")
 }
 
-model Notification {
-  id          Int              @id @default(autoincrement())
-  recipientId Int
-  eventKey    String           @db.VarChar(255)
-  type        NotificationType
-  title       String           @db.VarChar(255)
-  body        String?
-  entityType  String?          @db.VarChar(100)
-  entityId    Int?
-  readAt      DateTime?        @db.Timestamptz(3)
-  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
-  recipient   User             @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+model Evaluation {
+  id        String           @id @default(cuid())
+  judgeId   String
+  productId String
+  status    EvaluationStatus @default(IN_PROGRESS)
+  total     Int?
+  createdAt DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime         @updatedAt @db.Timestamptz(3)
+  judge     User             @relation(fields: [judgeId], references: [id], onDelete: Restrict)
+  product   Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  scores    Score[]
 
-  @@unique([recipientId, eventKey])
-  @@index([recipientId, readAt])
-  @@map("notifications")
+  @@unique([judgeId, productId])
+  @@index([productId, status])
+  @@map("evaluations")
 }
 
-model AuditLog {
-  id             Int           @id @default(autoincrement())
-  actorId        Int?
-  organizationId Int?
-  action         String        @db.VarChar(100)
-  entityType     String        @db.VarChar(100)
-  entityId       Int?
-  beforeData     Json?
-  afterData      Json?
-  reason         String?
-  ipAddress      String?       @db.VarChar(64)
-  userAgent      String?
-  requestId      String?       @db.VarChar(100)
-  createdAt      DateTime      @default(now()) @db.Timestamptz(3)
-  actor          User?         @relation(fields: [actorId], references: [id], onDelete: SetNull)
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+model Score {
+  evaluationId   String
+  subCriterionId String
+  optionId       String
+  note           String?       @db.VarChar(2000)
+  evaluation     Evaluation    @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  subCriterion   SubCriterion  @relation(fields: [subCriterionId], references: [id], onDelete: Restrict)
+  option         ScoreOption   @relation(fields: [optionId, subCriterionId], references: [id, subCriterionId], onDelete: Restrict)
 
-  @@index([entityType, entityId])
-  @@index([createdAt])
-  @@map("audit_logs")
-}
-
-model RefreshSession {
-  id        Int       @id @default(autoincrement())
-  userId    Int
-  tokenHash String    @unique @db.VarChar(255)
-  expiresAt DateTime  @db.Timestamptz(3)
-  revokedAt DateTime? @db.Timestamptz(3)
-  createdAt DateTime  @default(now()) @db.Timestamptz(3)
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, expiresAt])
-  @@map("refresh_sessions")
+  @@id([evaluationId, subCriterionId])
+  @@index([subCriterionId])
+  @@map("scores")
 }
