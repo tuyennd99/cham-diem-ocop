@@ -1,6 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { databaseObject } from '../prisma/sql';
+import { lockEvaluationCategory } from '../utils/evaluation-result';
+import { productRegistrationTypes } from '../constants/products';
 
 const publicProductSelect = {
   id: true,
@@ -40,6 +43,8 @@ export class ProductsRepository {
         id: true,
         groupCode: true,
         groupName: true,
+        classificationGroup: true,
+        classificationSubgroup: true,
         name: true,
         description: true,
         criteriaSet: {
@@ -61,7 +66,7 @@ export class ProductsRepository {
                     content: true,
                     order: true,
                     options: {
-                      orderBy: { points: 'asc' },
+                      orderBy: { order: 'asc' },
                       select: { id: true, label: true, points: true },
                     },
                   },
@@ -75,10 +80,18 @@ export class ProductsRepository {
     });
   }
 
-  async listPublic(input: { page: number; limit: number; categoryId?: string }) {
-    const where = {
-      status: { in: ['SUBMITTED', 'SCORING', 'COMPLETED'] as const },
+  async listPublic(input: { page: number; limit: number; categoryId?: string; query?: string }) {
+    const where: Prisma.ProductWhereInput = {
+      status: { in: ['SUBMITTED', 'SCORING', 'COMPLETED'] },
       ...(input.categoryId ? { categoryId: input.categoryId } : {}),
+      ...(input.query ? {
+        OR: [
+          { name: { contains: input.query, mode: 'insensitive' } },
+          { id: { contains: input.query, mode: 'insensitive' } },
+          { category: { name: { contains: input.query, mode: 'insensitive' } } },
+          { category: { groupName: { contains: input.query, mode: 'insensitive' } } },
+        ],
+      } : {}),
     };
     const [rows, total] = await Promise.all([
       this.prisma.product.findMany({
@@ -142,7 +155,7 @@ export class ProductsRepository {
     },
   ) {
     return this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "products" WHERE "id" = ${id} FOR UPDATE`);
+      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM ${databaseObject('products')} WHERE "id" = ${id} FOR UPDATE`);
       const updated = await tx.product.updateMany({
         where: { id, registrantId, status: 'DRAFT' },
         data: input,
@@ -157,7 +170,7 @@ export class ProductsRepository {
 
   async deleteDraft(id: string, registrantId: string) {
     return this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "products" WHERE "id" = ${id} FOR UPDATE`);
+      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM ${databaseObject('products')} WHERE "id" = ${id} FOR UPDATE`);
       const product = await tx.product.findFirst({
         where: { id, registrantId, status: 'DRAFT' },
         select: { attachments: { select: { filePath: true } } },
@@ -170,10 +183,37 @@ export class ProductsRepository {
 
   async submitDraft(id: string, registrantId: string) {
     return this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "products" WHERE "id" = ${id} FOR UPDATE`);
+      const initial = await tx.product.findUnique({ where: { id }, select: { categoryId: true } });
+      if (!initial) return null;
+      await lockEvaluationCategory(tx, initial.categoryId);
+      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM ${databaseObject('products')} WHERE "id" = ${id} FOR UPDATE`);
+      const product = await tx.product.findFirst({
+        where: { id, registrantId, status: 'DRAFT' },
+        select: { categoryId: true, formData: true },
+      });
+      if (!product) return null;
+      if (product.categoryId !== initial.categoryId) {
+        throw new ConflictException('Product category changed while submitting');
+      }
+      const form = product.formData;
+      const hasText = (value: Prisma.JsonValue | undefined) =>
+        typeof value === 'string' && value.trim().length > 0;
+      if (
+        !form || typeof form !== 'object' || Array.isArray(form) ||
+        !['entityName', 'representativeName', 'representativeTitle', 'contactAddress', 'provinceName']
+          .every((key) => hasText(form[key])) ||
+        !(hasText(form.phone) || hasText(form.email)) ||
+        !productRegistrationTypes.includes(String(form.registrationType) as (typeof productRegistrationTypes)[number]) ||
+        typeof form.sampleQuantity !== 'number' || !Number.isInteger(form.sampleQuantity) ||
+        form.sampleQuantity < 1 || typeof form.assessmentYear !== 'number' ||
+        !Number.isInteger(form.assessmentYear) || form.assessmentYear < 2020 ||
+        form.declarationAccepted !== true
+      ) {
+        throw new BadRequestException('Complete all required application fields and accept the declaration before submitting');
+      }
       const updated = await tx.product.updateMany({
         where: { id, registrantId, status: 'DRAFT' },
-        data: { status: 'SUBMITTED' },
+        data: { status: 'SUBMITTED', submittedAt: new Date() },
       });
       if (!updated.count) return null;
       return tx.product.findUniqueOrThrow({
@@ -189,7 +229,7 @@ export class ProductsRepository {
     input: { type: 'IMAGE' | 'EVIDENCE'; fileName: string; filePath: string },
   ) {
     return this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "products" WHERE "id" = ${productId} FOR UPDATE`);
+      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM ${databaseObject('products')} WHERE "id" = ${productId} FOR UPDATE`);
       const product = await tx.product.findFirst({
         where: { id: productId, registrantId, status: 'DRAFT' },
         select: { id: true },
@@ -208,7 +248,7 @@ export class ProductsRepository {
     registrantId: string,
   ) {
     return this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "products" WHERE "id" = ${productId} FOR UPDATE`);
+      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM ${databaseObject('products')} WHERE "id" = ${productId} FOR UPDATE`);
       const attachment = await tx.attachment.findFirst({
         where: {
           id: attachmentId,

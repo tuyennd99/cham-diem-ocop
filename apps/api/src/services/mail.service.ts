@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import nodemailer from 'nodemailer';
 import { env } from '../config/env';
+import { OTP_TTL_MS } from '../constants/auth';
 
 @Injectable()
 export class MailService {
@@ -21,7 +22,7 @@ export class MailService {
       from: config.smtpFrom,
       to: email,
       subject: 'Mã xác thực OCOP',
-      text: `Mã OTP để ${action} OCOP của bạn là ${code}. Mã hết hạn sau 5 phút.`,
+      text: `Mã OTP để ${action} OCOP của bạn là ${code}. Mã hết hạn sau ${OTP_TTL_MS / 60_000} phút.`,
     });
   }
 }

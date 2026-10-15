@@ -14,7 +14,7 @@ export class ProductsController {
   @Public()
   @Get()
   list(@Query() query: PublicProductQueryDto) {
-    return this.products.listPublic(query.page, query.limit, query.categoryId);
+    return this.products.listPublic(query.page, query.limit, query.categoryId, query.q);
   }
 
   @Public()
@@ -24,7 +24,7 @@ export class ProductsController {
     @Param('id') id: string,
     @Param('attachmentId') attachmentId: string,
   ): Promise<StreamableFile> {
-    return asDownload(await this.products.getPublicAttachment(id, attachmentId));
+    return asDownload(await this.products.getPublicAttachment(id, attachmentId), 'inline');
   }
 
   @Public()

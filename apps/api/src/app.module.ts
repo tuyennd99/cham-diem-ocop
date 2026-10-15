@@ -5,7 +5,6 @@ import { AccountGuard } from './guards/account.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RoleGuard } from './guards/role.guard';
 import { UserThrottlerGuard } from './guards/user-throttler.guard';
-import { TaskStatusJob } from './jobs/task-status.job';
 import { PrismaService } from './prisma/prisma.service';
 import { appControllers } from './controllers';
 import { appServices } from './services';
@@ -20,7 +19,6 @@ import { OtpService } from './services/otp.service';
     ...appRepositories,
     ...appServices,
     PrismaService,
-    TaskStatusJob,
     MailService,
     OtpService,
     { provide: APP_GUARD, useClass: JwtAuthGuard },

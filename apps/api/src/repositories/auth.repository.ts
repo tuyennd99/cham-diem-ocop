@@ -3,6 +3,8 @@ import { OtpPurpose, Prisma, Role } from '@prisma/client';
 import type { User } from '@prisma/client';
 import { timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { databaseObject } from '../prisma/sql';
+import { OTP_MAX_ATTEMPTS, OTP_TTL_MS } from '../constants/auth';
 import type { PublicUser } from '../types/auth';
 
 @Injectable()
@@ -13,10 +15,24 @@ export class AuthRepository {
     return this.prisma.user.findUnique({ where: { email } });
   }
 
-  findUserById(id: string): Promise<(PublicUser & { isActive: boolean }) | null> {
+  findUserById(id: string): Promise<(PublicUser & { isActive: boolean; tokenVersion: number }) | null> {
     return this.prisma.user.findUnique({
       where: { id },
-      select: { id: true, email: true, fullName: true, phone: true, role: true, verified: true, isActive: true },
+      select: { id: true, email: true, fullName: true, phone: true, role: true, verified: true, isActive: true, tokenVersion: true },
+    });
+  }
+
+  findCredentialsById(id: string) {
+    return this.prisma.user.findUnique({
+      where: { id },
+      select: { password: true, verified: true, isActive: true },
+    });
+  }
+
+  changePassword(id: string, currentPasswordHash: string, newPasswordHash: string) {
+    return this.prisma.user.updateMany({
+      where: { id, password: currentPasswordHash, verified: true, isActive: true },
+      data: { password: newPasswordHash, tokenVersion: { increment: 1 } },
     });
   }
 
@@ -28,7 +44,7 @@ export class AuthRepository {
 
   async saveOtp(email: string, purpose: OtpPurpose, codeHash: string, userId?: string) {
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + 5 * 60_000);
+    const expiresAt = new Date(now.getTime() + OTP_TTL_MS);
     await this.prisma.$transaction(async (tx) => {
       await tx.otpCode.updateMany({
         where: { email, purpose, usedAt: null },
@@ -51,20 +67,20 @@ export class AuthRepository {
         { id: string; code: string; attempts: number; expiresAt: Date; usedAt: Date | null }[]
       >(Prisma.sql`
         SELECT "id", "code", "attempts", "expiresAt", "usedAt"
-        FROM "otp_codes"
-        WHERE "email" = ${email} AND "purpose" = ${purpose}::"OtpPurpose"
+        FROM ${databaseObject('otp_codes')}
+        WHERE "email" = ${email} AND "purpose" = ${purpose}::${databaseObject('OtpPurpose')}
         ORDER BY "createdAt" DESC
         LIMIT 1 FOR UPDATE
       `);
       const otp = rows[0];
       const now = new Date();
-      if (!otp || otp.usedAt || otp.expiresAt <= now || otp.attempts >= 5) return false;
+      if (!otp || otp.usedAt || otp.expiresAt <= now || otp.attempts >= OTP_MAX_ATTEMPTS) return false;
 
       if (!this.equal(otp.code, codeHash)) {
         const attempts = otp.attempts + 1;
         await tx.otpCode.update({
           where: { id: otp.id },
-          data: { attempts, ...(attempts >= 5 ? { usedAt: now } : {}) },
+          data: { attempts, ...(attempts >= OTP_MAX_ATTEMPTS ? { usedAt: now } : {}) },
         });
         return false;
       }
@@ -80,7 +96,7 @@ export class AuthRepository {
       if (!newPasswordHash) return false;
       const result = await tx.user.updateMany({
         where: { email, verified: true, isActive: true },
-        data: { password: newPasswordHash },
+        data: { password: newPasswordHash, tokenVersion: { increment: 1 } },
       });
       return result.count === 1;
     });

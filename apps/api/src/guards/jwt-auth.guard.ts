@@ -11,6 +11,7 @@ import { Role } from '@prisma/client';
 import type { Request } from 'express';
 import { isObjectLike } from 'lodash';
 import { env } from '../config/env';
+import { JWT_AUDIENCE, JWT_ISSUER } from '../constants/auth';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import type { AccessTokenPayload } from '../types/auth';
 
@@ -30,8 +31,8 @@ export class JwtAuthGuard implements CanActivate {
       const payload: unknown = await this.jwtService.verifyAsync(token, {
         secret: env(process.env).jwtSecret,
         algorithms: ['HS256'],
-        issuer: 'ocop-api',
-        audience: 'ocop-web',
+        issuer: JWT_ISSUER,
+        audience: JWT_AUDIENCE,
       });
       if (!this.isPayload(payload)) throw this.unauthorized();
       request.user = payload;
@@ -47,6 +48,7 @@ export class JwtAuthGuard implements CanActivate {
     return typeof payload.sub === 'string' && payload.sub.length > 0 &&
       typeof payload.email === 'string' &&
       Object.values(Role).includes(payload.role as Role) &&
+      Number.isInteger(payload.tokenVersion) && (payload.tokenVersion as number) >= 0 &&
       typeof payload.iat === 'number' && Number.isFinite(payload.iat) &&
       typeof payload.exp === 'number' && Number.isFinite(payload.exp);
   }

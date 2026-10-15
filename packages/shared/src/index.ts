@@ -1,9 +1,86 @@
 export type Role = 'REGISTRANT' | 'JUDGE' | 'ADMIN';
 export type ProductStatus = 'DRAFT' | 'SUBMITTED' | 'SCORING' | 'COMPLETED';
+export const productRegistrationTypes = ['FIRST', 'UPGRADE', 'REASSESSMENT'] as const;
+export type ProductRegistrationType = (typeof productRegistrationTypes)[number];
+
+export interface ProductApplicationForm {
+  entityName: string;
+  representativeName: string;
+  representativeTitle: string;
+  contactAddress: string;
+  provinceName: string;
+  phone?: string;
+  email?: string;
+  registrationType: ProductRegistrationType;
+  sampleQuantity: number;
+  assessmentYear: number;
+  declarationAccepted: boolean;
+}
 
 export interface ProductCategory {
   id: string;
   name: string;
+  groupCode?: string;
+  groupName?: string;
+  classificationGroup?: string;
+  classificationSubgroup?: string | null;
+}
+
+export interface ProductAttachment {
+  id: string;
+  fileName: string;
+  type?: 'IMAGE' | 'EVIDENCE';
+  createdAt?: string;
+}
+
+export interface Product {
+  id: string;
+  name: string;
+  description: string | null;
+  status: ProductStatus;
+  finalScore?: number | null;
+  starRating?: number | null;
+  createdAt?: string;
+  updatedAt?: string;
+  submittedAt?: string | null;
+  formData?: Record<string, unknown>;
+  category: ProductCategory;
+  attachments: ProductAttachment[];
+}
+
+export interface ScoreOption {
+  id: string;
+  label: string;
+  points: number;
+}
+
+export interface SubCriterion {
+  id: string;
+  content: string;
+  order: number;
+  options: ScoreOption[];
+}
+
+export interface Criterion {
+  id: string;
+  code: string;
+  name: string;
+  maxScore: number;
+  order: number;
+  subCriteria: SubCriterion[];
+}
+
+export interface EvaluationScore {
+  subCriterionId: string;
+  optionId: string;
+  note?: string | null;
+}
+
+export interface Evaluation {
+  id: string | null;
+  status: string;
+  total: number | null;
+  scores: EvaluationScore[];
 }
 
 export interface ApiSuccess<T> {
@@ -15,10 +92,8 @@ export interface ApiSuccess<T> {
 
 export interface ApiError {
   statusCode: number;
-  errorCode: string;
   message: string;
-  details?: unknown;
-  requestId: string;
+  requestId?: string;
 }
 
 export type ApiResult<T> = ApiSuccess<T> | ApiError;

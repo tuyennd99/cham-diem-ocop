@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { setSession } from "../auth";
+import { homeFor, setSession } from "../auth";
 import type { ReactNode } from "react";
 import { getSession } from "../auth";
 
@@ -7,15 +7,16 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const session = getSession();
   const role = session?.user.role;
+  const homePath = role ? homeFor(role) : "/";
   return (
     <div className="application-shell">
       <a className="skip-link" href="#content">Bỏ qua điều hướng</a>
       <aside className="application-sidebar" aria-label="Khu vực làm việc">
-        <Link className="application-brand" to={role === "ADMIN" ? "/admin/products" : role === "JUDGE" ? "/judge" : "/my/products">OCOP Đánh Giá</Link>
+        <Link className="application-brand" to={homePath}>OCOP Đánh Giá</Link>
         <nav aria-label="Điều hướng khu vực làm việc">
           {role === "REGISTRANT" && <><Link to="/my/products">Hồ sơ của tôi</Link><Link to="/my/products/new">Tạo hồ sơ</Link></>}
           {role === "JUDGE" && <Link to="/judge">Hàng chờ chấm</Link>}
-          {role === "ADMIN" && <><Link to="/admin/products">Tất cả hồ sơ</Link><Link to="/admin/judges">Quản lý giám khảo</Link><Link to="/admin/assignments">Phân công</Link></>}
+          {role === "ADMIN" && <><Link to="/admin">Tổng quan</Link><Link to="/admin/products">Tất cả hồ sơ</Link><Link to="/admin/judges">Quản lý giám khảo</Link><Link to="/admin/assignments">Phân công</Link></>}
           <Link to="/account">Tài khoản</Link>
         </nav>
       </aside>

@@ -1,6 +1,6 @@
 # OCOP Monorepo Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Turn the existing FE and NestJS base into one pnpm OCOP monorepo with the registration, judging, admin, and public flows from the approved spec.
 
@@ -36,8 +36,8 @@
 - Root scripts forward `dev`, `build`, and `typecheck` to both apps.
 - Keep FE dependencies in `apps/web` and API dependencies in `apps/api`.
 
-- [ ] Move both app working trees, preserving all authored source/assets and excluding `node_modules`, `dist`, coverage, storage, and local env files.
-- [ ] Add root workspace declarations:
+- [x] Move both app working trees, preserving all authored source/assets and excluding `node_modules`, `dist`, coverage, storage, and local env files.
+- [x] Add root workspace declarations:
 
 ```yaml
 packages:
@@ -45,11 +45,11 @@ packages:
   - packages/*
 ```
 
-- [ ] Create root scripts that use `pnpm --filter @ocop/web ...` and `pnpm --filter @ocop/api ...`.
-- [ ] Rename app package metadata to `@ocop/web` and `@ocop/api`; retain each app's existing stack and scripts.
-- [ ] Consolidate Git at the workspace root and preserve the old FE/BE repositories as recoverable history before removing nested `.git` metadata.
-- [ ] Create `packages/shared` for the roles, product status, category, and API result types consumed by both apps; do not move Prisma-only types there.
-- [ ] Generate the root lockfile from the two app manifests.
+- [x] Create root scripts that use `pnpm --filter @ocop/web ...` and `pnpm --filter @ocop/api ...`.
+- [x] Rename app package metadata to `@ocop/web` and `@ocop/api`; retain each app's existing stack and scripts.
+- [x] Consolidate Git at the workspace root and preserve the old FE/BE repositories as recoverable history before removing nested `.git` metadata.
+- [x] Create `packages/shared` for the roles, product status, category, and API result types consumed by both apps; do not move Prisma-only types there.
+- [x] Generate the root lockfile from the two app manifests.
 
 ### Task 2: Replace the Prisma domain and seed
 
@@ -66,12 +66,12 @@ packages:
 - `calculateStars(score: number): number` maps the spec's five thresholds.
 - `calculateFinalScore(...)` averages full-assignment totals, or averages each criterion across partial assignments before summing.
 
-- [ ] Replace task/report enums and models with the approved OCOP data model; use cuid IDs and explicit foreign keys, uniqueness, indexes, and delete behavior.
-- [ ] Add DB constraints/relations so an evaluation score can only select an option belonging to that score's subcriterion.
-- [ ] Create a forward migration that removes the approved-disposable task/report tables and creates OCOP tables; leave historical migration files unchanged.
-- [ ] Source category/criterion/score-option values and registration form fields from the official decision and appendices. Keep the source edition in the seed metadata.
-- [ ] Seed categories and criteria idempotently; never seed fabricated score options or sample users/products.
-- [ ] Add the scoring utility with the exact threshold and partial-assignment rules above.
+- [x] Replace task/report enums and models with the approved OCOP data model; use cuid IDs and explicit foreign keys, uniqueness, indexes, and delete behavior.
+- [x] Add DB constraints/relations so an evaluation score can only select an option belonging to that score's subcriterion.
+- [x] Create a forward migration that removes the approved-disposable task/report tables and creates OCOP tables; leave historical migration files unchanged.
+- [x] Source category/criterion/score-option values and registration form fields from the official decision and appendices. Keep the source edition in the seed metadata.
+- [x] Seed categories and criteria idempotently; never seed fabricated score options or sample users/products.
+- [x] Add the scoring utility with the exact threshold and partial-assignment rules above.
 
 ### Task 3: Implement email account and OTP flows
 
@@ -93,11 +93,11 @@ packages:
 - JWT claims contain `sub`, `email`, and `role`; role guards enforce registrant/judge/admin access.
 - OTP service validates purpose, expiry, one-time use, and attempt limits before account/password changes.
 
-- [ ] Replace the base's username/admin-id auth flow with email and persisted role checks.
-- [ ] Implement bcrypt password hashing using `bcryptjs` and retain constant-time credential failure behavior where compatible.
-- [ ] Add Nodemailer SMTP configuration with required env validation; never log OTP values.
-- [ ] Store OTPs safely, expire and consume them atomically, and rate-limit send/verify endpoints.
-- [ ] Remove refresh-cookie/CSRF endpoints from the OCOP API, since refresh tokens are explicitly out of scope.
+- [x] Replace the base's username/admin-id auth flow with email and persisted role checks.
+- [x] Implement bcrypt password hashing using `bcryptjs` and retain constant-time credential failure behavior where compatible.
+- [x] Add Nodemailer SMTP configuration with required env validation; never log OTP values.
+- [x] Store OTPs safely, expire and consume them atomically, and rate-limit send/verify endpoints.
+- [x] Remove refresh-cookie/CSRF endpoints from the OCOP API, since refresh tokens are explicitly out of scope.
 
 ### Task 4: Implement public and registrant product flows
 
@@ -118,11 +118,11 @@ packages:
 - Registrant endpoints enforce ownership and draft-only updates/deletes/submission.
 - Attachment endpoints accept images/PDFs, record metadata, and prevent access outside the owning product's scope.
 
-- [ ] Implement categories, paginated public products, and public product detail.
-- [ ] Implement registrant product CRUD, submit transition, and attachment add/remove.
-- [ ] Derive `SCORING`/`COMPLETED` status from evaluation progress, not client-supplied status.
-- [ ] Validate MIME using file content plus extension; cap upload size to 10 MB and clean up rejected files.
-- [ ] Allowlist public `formData` fields instead of returning arbitrary JSON with ad-hoc redaction.
+- [x] Implement categories, paginated public products, and public product detail.
+- [x] Implement registrant product CRUD, submit transition, and attachment add/remove.
+- [x] Derive `SCORING`/`COMPLETED` status from evaluation progress, not client-supplied status.
+- [x] Validate MIME using file content plus extension; cap upload size to 10 MB and clean up rejected files.
+- [x] Allowlist public `formData` fields instead of returning arbitrary JSON with ad-hoc redaction.
 
 ### Task 5: Implement judge assignments and evaluations
 
@@ -140,11 +140,11 @@ packages:
 - Draft writes accept only assigned subcriteria and valid options; submit rejects missing required scores.
 - Submitted evaluations are immutable; product aggregate updates in the same transaction.
 
-- [ ] Implement queue, evaluation read, draft save, and submit endpoints.
-- [ ] Enforce assignment and product status at the repository transaction boundary.
-- [ ] On submit, require complete coverage for the assigned criterion scope and calculate its total from selected options.
-- [ ] Recompute final score and stars only when configured coverage is complete; otherwise leave them null.
-- [ ] Reject cross-subcriterion option IDs and duplicate score entries.
+- [x] Implement queue, evaluation read, draft save, and submit endpoints.
+- [x] Enforce assignment and product status at the repository transaction boundary.
+- [x] On submit, require complete coverage for the assigned criterion scope and calculate its total from selected options.
+- [x] Recompute final score and stars only when configured coverage is complete; otherwise leave them null.
+- [x] Reject cross-subcriterion option IDs and duplicate score entries.
 
 ### Task 6: Implement admin judges, assignments, and results
 
@@ -161,10 +161,10 @@ packages:
 - Admin endpoints manage judges and category/criterion assignments and return all product statuses/results.
 - Only `ADMIN` may call admin endpoints; assignment updates validate category and criterion membership.
 
-- [ ] Implement judge create/update/delete/reset-password.
-- [ ] Implement category assignments and criterion scope management.
-- [ ] Implement all-products and per-product results views with evaluator and aggregate scores.
-- [ ] Audit role/assignment changes using the existing audit mechanism.
+- [x] Implement judge create/update/delete/reset-password.
+- [x] Implement category assignments and criterion scope management.
+- [x] Implement all-products and per-product results views with evaluator and aggregate scores.
+- [x] Audit role/assignment changes using the existing audit mechanism.
 
 ### Task 7: Connect the existing FE to the API
 
@@ -186,11 +186,11 @@ packages:
 - FE API client uses `VITE_API_URL` and the shared role/status/request types.
 - Existing route loaders/actions consume server data; mock registries remain only where the spec explicitly calls for demonstrative static content.
 
-- [ ] Replace sample product/category/auth/score data with API calls for public, registrant, judge, and admin routes.
-- [ ] Implement auth forms and OTP verification against the new endpoints.
-- [ ] Wire draft save, product submit, attachment upload, evaluation draft/submit, assignments, and result views.
-- [ ] Keep current visual components and route structure; do not migrate Vite/TanStack Router to TanStack Start in this scope.
-- [ ] Add a development proxy to the API prefix and document required `VITE_API_URL` configuration.
+- [x] Replace sample product/category/auth/score data with API calls for public, registrant, judge, and admin routes.
+- [x] Implement auth forms and OTP verification against the new endpoints.
+- [x] Wire draft save, product submit, attachment upload, evaluation draft/submit, assignments, and result views.
+- [x] Keep current visual components and route structure; do not migrate Vite/TanStack Router to TanStack Start in this scope.
+- [x] Add a development proxy to the API prefix and document required `VITE_API_URL` configuration.
 
 ### Task 8: Align application configuration and docs
 
@@ -201,13 +201,16 @@ packages:
 - Modify: `apps/api/README.md`
 - Modify: root `README.md`
 
-- [ ] Set the API prefix to `/api`, update Swagger metadata, and remove duplicate Swagger setup.
-- [ ] Document root install/dev/build commands, app-specific commands, PostgreSQL setup, SMTP env vars, upload storage, seed, and migration deploy.
-- [ ] Ensure old task/report seed scripts and scheduled jobs are no longer registered or runnable.
-- [ ] Do not run Prisma migrations or seed against the configured database.
+- [x] Set the API prefix to `/api`, update Swagger metadata, and remove duplicate Swagger setup.
+- [x] Document root install/dev/build commands, app-specific commands, PostgreSQL setup, SMTP env vars, upload storage, seed, and migration deploy.
+- [x] Ensure old task/report seed scripts and scheduled jobs are no longer registered or runnable.
+- [x] Do not run Prisma migrations or seed against the configured database.
 
 ## Self-review
 
 - Spec coverage: monorepo/REST prefix (Tasks 1, 8); roles/OTP (Task 3); categories/criteria/official seed (Task 2); public and registrant flows (Task 4); judge queue/scoring and partial assignments (Tasks 2, 5); admin management/results (Task 6); existing FE surfaces (Task 7); local upload constraints (Task 4); out-of-scope refresh/SMS/criteria UI/S3 remain absent.
-- No official criteria or registration-form rows are present in the workspace; Task 2 requires extraction from the cited official decision before seed data can be claimed complete.
+- All 26 category-specific criteria sets are transcribed from the cited Appendix II and validated to total 100 points; known transcription defects are called out in seed metadata and are not guessed.
+- Mẫu 01 is represented by named form fields, and the API rejects submission until required identity, registration, sample, contact, and declaration values are complete.
 - Database changes are code-only in this task; no configured database migration or reset will run.
+- UI refinements from the gap review are design-only handoffs in `docs/open-design/ocop-ui-review-prompts.md`.
+- Unit coverage now checks star boundaries and complete/partial score aggregation; database-backed API e2e requires a disposable test database and was not run here.

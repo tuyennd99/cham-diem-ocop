@@ -11,12 +11,18 @@ import { OtpPurpose, Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'node:crypto';
 import { env } from '../config/env';
+import {
+  ACCESS_TOKEN_TTL_SECONDS,
+  JWT_AUDIENCE,
+  JWT_ISSUER,
+  PASSWORD_MAX_BYTES,
+  PASSWORD_ROUNDS,
+} from '../constants/auth';
 import { AuthRepository } from '../repositories/auth.repository';
 import { MailService } from './mail.service';
 import { OtpService } from './otp.service';
 import type { AccessTokenPayload, PublicUser } from '../types/auth';
 
-const PASSWORD_ROUNDS = 12;
 const DUMMY_BCRYPT_HASH = bcrypt.hashSync(randomBytes(32).toString('hex'), PASSWORD_ROUNDS);
 
 @Injectable()
@@ -65,6 +71,20 @@ export class AuthService {
     return { message: 'Account verified' };
   }
 
+  async resendRegistrationOtp(rawEmail: string) {
+    const email = this.normalizeEmail(rawEmail);
+    const user = await this.repository.findUserByEmail(email);
+    if (user?.role === Role.REGISTRANT && !user.verified && user.isActive) {
+      try {
+        const code = await this.otpService.issue(email, OtpPurpose.REGISTER, user.id);
+        await this.mailService.sendOtp(email, code, 'REGISTER');
+      } catch {
+        this.logger.error('Registration verification email could not be sent');
+      }
+    }
+    return { message: 'If an unverified account exists, a verification code has been sent' };
+  }
+
   async login(rawEmail: string, password: string) {
     const email = this.normalizeEmail(rawEmail);
     const user = await this.repository.findUserByEmail(email);
@@ -80,6 +100,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role,
+      tokenVersion: user.tokenVersion,
     }, this.publicUser(user));
   }
 
@@ -108,6 +129,25 @@ export class AuthService {
     return { message: 'Password reset' };
   }
 
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    this.assertPassword(currentPassword);
+    this.assertPassword(newPassword);
+    const user = await this.repository.findCredentialsById(userId);
+    if (!user?.verified || !user.isActive || !(await bcrypt.compare(currentPassword, user.password))) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+    if (await bcrypt.compare(newPassword, user.password)) {
+      throw new BadRequestException('New password must be different');
+    }
+    const updated = await this.repository.changePassword(
+      userId,
+      user.password,
+      await bcrypt.hash(newPassword, PASSWORD_ROUNDS),
+    );
+    if (!updated.count) throw new ConflictException('Password changed; sign in again');
+    return { message: 'Password changed' };
+  }
+
   async me(userId: string): Promise<PublicUser> {
     const user = await this.repository.findUserById(userId);
     if (!user?.verified || !user.isActive) throw new UnauthorizedException('Authentication required');
@@ -115,13 +155,13 @@ export class AuthService {
   }
 
   private async issueToken(payload: AccessTokenPayload, user: PublicUser) {
-    const expiresIn = 7 * 24 * 60 * 60;
+    const expiresIn = ACCESS_TOKEN_TTL_SECONDS;
     return {
       accessToken: await this.jwtService.signAsync(payload, {
         secret: env(process.env).jwtSecret,
         algorithm: 'HS256',
-        issuer: 'ocop-api',
-        audience: 'ocop-web',
+        issuer: JWT_ISSUER,
+        audience: JWT_AUDIENCE,
         expiresIn,
       }),
       expiresIn,
@@ -152,8 +192,8 @@ export class AuthService {
   }
 
   private assertPassword(password: string) {
-    if (Buffer.byteLength(password, 'utf8') > 72) {
-      throw new BadRequestException('Password must be at most 72 UTF-8 bytes');
+    if (Buffer.byteLength(password, 'utf8') > PASSWORD_MAX_BYTES) {
+      throw new BadRequestException(`Password must be at most ${PASSWORD_MAX_BYTES} UTF-8 bytes`);
     }
   }
 

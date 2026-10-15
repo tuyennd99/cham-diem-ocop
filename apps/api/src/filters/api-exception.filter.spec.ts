@@ -1,50 +1,65 @@
-import { ArgumentsHost, BadRequestException } from '@nestjs/common';
+import { ArgumentsHost, BadRequestException, Logger } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { ApiExceptionFilter } from './api-exception.filter';
 
+function hostFor(request: Partial<Request>) {
+  const response = { status: jest.fn().mockReturnThis(), json: jest.fn() } as unknown as Response;
+  const host = {
+    switchToHttp: () => ({
+      getRequest: () => ({ method: 'POST', path: '/api/auth/login', ...request }),
+      getResponse: () => response,
+    }),
+  } as unknown as ArgumentsHost;
+  return { host, response };
+}
+
 describe('ApiExceptionFilter', () => {
-  it('returns the API error contract for validation failures', () => {
-    const json = jest.fn();
-    const status = jest.fn().mockReturnValue({ json });
-    const host = {
-      switchToHttp: () => ({
-        getRequest: () => ({ header: () => 'request-1' }),
-        getResponse: () => ({ status }),
-      }),
-    } as unknown as ArgumentsHost;
+  let filter: ApiExceptionFilter;
+  let log: jest.SpyInstance;
 
-    new ApiExceptionFilter().catch(
-      new BadRequestException({
-        message: ['name must be a string'],
-        details: ['name'],
-      }),
-      host,
-    );
-
-    expect(status).toHaveBeenCalledWith(400);
-    expect(json).toHaveBeenCalledWith({
-      statusCode: 400,
-      errorCode: 'VALIDATION_ERROR',
-      message: 'name must be a string',
-      details: ['name'],
-      requestId: 'request-1',
-    });
+  beforeEach(() => {
+    filter = new ApiExceptionFilter();
+    log = jest.spyOn(Logger.prototype, 'error').mockImplementation();
   });
 
-  it('does not reflect an invalid request id', () => {
-    const json = jest.fn();
-    const status = jest.fn().mockReturnValue({ json });
-    const host = {
-      switchToHttp: () => ({
-        getRequest: () => ({ header: () => 'x'.repeat(101) }),
-        getResponse: () => ({ status }),
-      }),
-    } as unknown as ArgumentsHost;
+  afterEach(() => jest.restoreAllMocks());
 
-    new ApiExceptionFilter().catch(new BadRequestException(), host);
+  it('returns a safe internal error, propagates a valid request ID, and logs no exception contents', () => {
+    const { host, response } = hostFor({
+      headers: { 'x-request-id': 'trace-123' } as Request['headers'],
+      query: { token: 'query-secret' },
+      body: { password: 'password-secret', otp: '123456' },
+    });
+    const error = Object.assign(new Error('database password-secret'), { code: 'P1001' });
 
-    const payload = (json.mock.calls as unknown[][])[0][0] as {
-      requestId: string;
-    };
-    expect(payload.requestId).toMatch(/^[0-9a-f-]{36}$/);
+    filter.catch(error, host);
+
+    expect(response.status).toHaveBeenCalledWith(500);
+    expect(response.json).toHaveBeenCalledWith({
+      statusCode: 500,
+      message: 'Internal server error',
+      requestId: 'trace-123',
+    });
+    expect(JSON.stringify(log.mock.calls)).not.toContain('password-secret');
+    expect(JSON.stringify(log.mock.calls)).not.toContain('query-secret');
+    expect(JSON.stringify(log.mock.calls)).not.toContain('123456');
+    expect(log).toHaveBeenCalledWith(expect.objectContaining({
+      requestId: 'trace-123',
+      method: 'POST',
+      path: '/api/auth/login',
+      errorType: 'Error',
+      errorCode: 'P1001',
+    }));
+  });
+
+  it('replaces an invalid request ID and preserves safe HTTP errors', () => {
+    const { host, response } = hostFor({ headers: { 'x-request-id': 'bad id' } as Request['headers'] });
+    filter.catch(new BadRequestException('Invalid input'), host);
+
+    expect(response.status).toHaveBeenCalledWith(400);
+    const payload = (response.json as jest.Mock).mock.calls[0][0];
+    expect(payload).toMatchObject({ statusCode: 400, message: 'Invalid input' });
+    expect(payload.requestId).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(log).not.toHaveBeenCalled();
   });
 });

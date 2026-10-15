@@ -1,4 +1,5 @@
 import { Transform } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsEmail,
   IsOptional,
@@ -9,25 +10,31 @@ import {
 } from 'class-validator';
 
 export class EmailDto {
-  @Transform(({ value }) => typeof value === 'string' ? value.trim().toLowerCase() : value)
+  @ApiProperty({ format: 'email', maxLength: 320 })
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim().toLowerCase() : value,
+  )
   @IsEmail()
   @MaxLength(320)
   email!: string;
 }
 
 export class RegisterDto extends EmailDto {
+  @ApiProperty({ minLength: 8, maxLength: 72 })
   @IsString()
   @MinLength(8)
   @MaxLength(72)
   password!: string;
 
-  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @ApiProperty({ minLength: 1, maxLength: 255 })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @MinLength(1)
   @MaxLength(255)
   fullName!: string;
 
-  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @ApiPropertyOptional({ maxLength: 30, nullable: true })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
   @IsString()
   @MaxLength(30)
@@ -35,6 +42,7 @@ export class RegisterDto extends EmailDto {
 }
 
 export class LoginDto extends EmailDto {
+  @ApiProperty({ minLength: 1, maxLength: 72 })
   @IsString()
   @MinLength(1)
   @MaxLength(72)
@@ -42,12 +50,28 @@ export class LoginDto extends EmailDto {
 }
 
 export class VerifyOtpDto extends EmailDto {
+  @ApiProperty({ pattern: '^\\d{6}$' })
   @IsString()
   @Matches(/^\d{6}$/)
   code!: string;
 }
 
 export class ResetPasswordDto extends VerifyOtpDto {
+  @ApiProperty({ minLength: 8, maxLength: 72 })
+  @IsString()
+  @MinLength(8)
+  @MaxLength(72)
+  newPassword!: string;
+}
+
+export class ChangePasswordDto {
+  @ApiProperty({ minLength: 1, maxLength: 72 })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(72)
+  currentPassword!: string;
+
+  @ApiProperty({ minLength: 8, maxLength: 72 })
   @IsString()
   @MinLength(8)
   @MaxLength(72)

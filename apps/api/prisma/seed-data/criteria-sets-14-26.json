@@ -2,7 +2,7 @@
   "sourceEdition": "Quyết định 26/2026/QĐ-TTg ngày 22/05/2026, Phụ lục II",
   "sourceUrl": "https://xaydungchinhsach.chinhphu.vn/quyet-dinh-so-26-2026-qd-ttg-bo-tieu-chi-va-quy-trinh-danh-gia-phan-hang-san-pham-ocop-119260529164111182.htm",
   "transcriptionUrl": "https://thuvienphapluat.vn/van-ban/thuong-mai/quyet-dinh-26-2026-qd-ttg-bo-tieu-chi-danh-gia-phan-hang-san-pham-moi-xa-mot-san-pham-ocop-707078.aspx",
-  "notes": "Nguồn có thẩm quyền là PDF chính thức tại Chinhphu.vn; dùng bản phiên âm Thư Viện Pháp Luật để trích nội dung và số điểm ở cuối lựa chọn. Dấu sao trong nhãn là ngưỡng sao tối thiểu, không phải điểm. Trong phạm vi 14–26, bỏ bộ 19 và 20 vì bản phiên âm chèn khoảng trắng vào điểm/max điểm và từ trong nhãn khiến số điểm không thể bảo toàn chắc chắn; bỏ bộ 23 vì dòng max tiêu chí 9 hiển thị “4 1” không rõ điểm hay chú thích. Bộ 26 ghi tiêu đề Phần A là 35 điểm trong khi ba tiêu chí A cộng 40; giữ max điểm theo từng tiêu chí, tổng bộ là 100, và lưu ý sai khác nguồn.",
+  "notes": "Bộ 19 và 20: phiên âm có khoảng trắng/OCR bất thường ở tiêu đề; điểm lựa chọn được giữ theo dòng điểm cuối lựa chọn. Bộ 23, tiêu chí 9 hiển thị điểm tối đa “4 1”; hai lựa chọn lần lượt 2 và 4, tổng điểm bộ là 100, nên dùng mức tối đa 4 theo dòng 3779–3781. Bộ 26 ghi tiêu đề Phần A là 35 điểm trong khi tiêu chí A cộng 40; giữ điểm tối đa theo từng tiêu chí và tổng bộ 100, đồng thời lưu ý sai khác nguồn.",
   "criteriaSets": [
     {
       "categoryKey": "white-liquor",
@@ -210,7 +210,12 @@
               "code": "2.4",
               "content": "Ghi nhãn hàng hóa có sử dụng song ngữ (Việt - Anh hoặc ngôn ngữ nước ngoài khác)",
               "order": 4,
-              "options": []
+              "options": [
+                {
+                  "label": "Ghi nhãn hàng hóa có sử dụng song ngữ (Việt - Anh hoặc ngôn ngữ nước ngoài khác)",
+                  "points": 1
+                }
+              ]
             }
           ]
         },
@@ -903,7 +908,12 @@
               "code": "2.4",
               "content": "Ghi nhãn hàng hóa có sử dụng song ngữ (Việt - Anh hoặc ngôn ngữ nước ngoài khác)",
               "order": 4,
-              "options": []
+              "options": [
+                {
+                  "label": "Ghi nhãn hàng hóa có sử dụng song ngữ (Việt - Anh hoặc ngôn ngữ nước ngoài khác)",
+                  "points": 1
+                }
+              ]
             }
           ]
         },
@@ -1596,7 +1606,12 @@
               "code": "2.4",
               "content": "Ghi nhãn hàng hóa có sử dụng song ngữ (Việt - Anh hoặc ngôn ngữ nước ngoài khác)",
               "order": 4,
-              "options": []
+              "options": [
+                {
+                  "label": "Ghi nhãn hàng hóa có sử dụng song ngữ (Việt - Anh hoặc ngôn ngữ nước ngoài khác)",
+                  "points": 1
+                }
+              ]
             }
           ]
         },
@@ -2269,7 +2284,12 @@
               "code": "2.4",
               "content": "Ghi nhãn hàng hóa có sử dụng song ngữ (Việt - Anh hoặc ngôn ngữ nước ngoài khác)",
               "order": 4,
-              "options": []
+              "options": [
+                {
+                  "label": "Ghi nhãn hàng hóa có sử dụng song ngữ (Việt - Anh hoặc ngôn ngữ nước ngoài khác)",
+                  "points": 1
+                }
+              ]
             }
           ]
         },
@@ -2981,7 +3001,12 @@
               "code": "2.4",
               "content": "Ghi nhãn hàng hóa có sử dụng song ngữ (Việt - Anh hoặc ngôn ngữ nước ngoài khác)",
               "order": 4,
-              "options": []
+              "options": [
+                {
+                  "label": "Ghi nhãn hàng hóa có sử dụng song ngữ (Việt - Anh hoặc ngôn ngữ nước ngoài khác)",
+                  "points": 1
+                }
+              ]
             }
           ]
         },
@@ -3690,7 +3715,12 @@
               "code": "2.3",
               "content": "Ghi nhãn hàng hóa có sử dụng song ngữ (Việt - Anh hoặc ngôn ngữ nước ngoài khác)",
               "order": 3,
-              "options": []
+              "options": [
+                {
+                  "label": "Ghi nhãn hàng hóa có sử dụng song ngữ (Việt - Anh hoặc ngôn ngữ nước ngoài khác)",
+                  "points": 1
+                }
+              ]
             }
           ]
         },
@@ -4342,7 +4372,12 @@
               "code": "2.3",
               "content": "Ghi nhãn hàng hóa có sử dụng song ngữ (Việt - Anh hoặc ngôn ngữ nước ngoài khác)",
               "order": 3,
-              "options": []
+              "options": [
+                {
+                  "label": "Ghi nhãn hàng hóa có sử dụng song ngữ (Việt - Anh hoặc ngôn ngữ nước ngoài khác)",
+                  "points": 1
+                }
+              ]
             }
           ]
         },
@@ -6808,6 +6843,2141 @@
                 {
                   "label": "Hàng hóa dịch vụ có nguồn gốc rõ ràng, có tiêu chuẩn chất lượng phù hợp mang tính đặc sản địa phương, và bảo đảm vệ sinh an toàn thực phẩm, có sản phẩm OCOP được bày, bán",
                   "points": 2
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "categoryKey": "herbal-cosmetics",
+      "name": "Bộ sản phẩm: Mỹ phẩm có thành phần từ dược liệu",
+      "source": "Quyết định 26/2026/QĐ-TTg, Phụ lục II, bộ 19; phiên âm Thư Viện Pháp Luật, dòng 3084–3232",
+      "criteria": [
+        {
+          "code": "1",
+          "name": "TỔ CHỨC SẢN XUẤT",
+          "maxScore": 17,
+          "order": 1,
+          "sectionCode": "A",
+          "sectionName": "SẢN PHẨM VÀ SỨC MẠNH CỦA CỘNG ĐỒNG",
+          "subCriteria": [
+            {
+              "code": "1.1",
+              "content": "Nguồn nguyên liệu. Ghi chú: Bị loại nếu sử dụng toàn bộ nguyên liệu nhập khẩu hoặc không rõ nguồn gốc",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Có sử dụng nguyên liệu có nguồn gốc trong tỉnh, nhưng có tỷ lệ dưới 50%***",
+                  "points": 1
+                },
+                {
+                  "label": "Sử dụng nguyên liệu có nguồn gốc trong tỉnh từ 50% đến dưới 75%",
+                  "points": 2
+                },
+                {
+                  "label": "Sử dụng nguyên liệu có nguồn gốc trong tỉnh từ 75% đến 100%",
+                  "points": 4
+                }
+              ]
+            },
+            {
+              "code": "1.2",
+              "content": "Gia tăng giá trị",
+              "order": 2,
+              "options": [
+                {
+                  "label": "Phân loại, sơ chế",
+                  "points": 0
+                },
+                {
+                  "label": "Chế biến đơn giản",
+                  "points": 1
+                },
+                {
+                  "label": "Chế biến",
+                  "points": 2
+                },
+                {
+                  "label": "Chế biến sâu từ vùng nguyên liệu địa phương (tạo ra sản phẩm chất lượng cao theo nhu cầu của thị trường)",
+                  "points": 3
+                }
+              ]
+            },
+            {
+              "code": "1.3",
+              "content": "Năng lực sản xuất để đáp ứng yêu cầu phân phối (Khả năng sản xuất đáp ứng nhu cầu về số lượng/quy mô của thị trường, so sánh với quy mô trung bình ở cùng đối tượng sản xuất tại địa phương về sản lượng hoặc giá trị sản xuất)",
+              "order": 3,
+              "options": [
+                {
+                  "label": "Có năng lực, quy mô sản xuất mức độ nhỏ",
+                  "points": 1
+                },
+                {
+                  "label": "Có năng lực, quy mô sản xuất trung bình",
+                  "points": 2
+                },
+                {
+                  "label": "Có năng lực, quy mô sản xuất lớn",
+                  "points": 3
+                }
+              ]
+            },
+            {
+              "code": "1.4",
+              "content": "Liên kết chuỗi trong sản xuất",
+              "order": 4,
+              "options": [
+                {
+                  "label": "Không có liên kết hoặc có liên kết nhưng không rõ ràng",
+                  "points": 0
+                },
+                {
+                  "label": "Có hợp đồng liên kết từ 50% đến dưới 75% sản lượng tiêu thụ",
+                  "points": 1
+                },
+                {
+                  "label": "Có hợp đồng liên kết trên 75% sản lượng tiêu thụ****",
+                  "points": 2
+                },
+                {
+                  "label": "Có hợp đồng liên kết trên 75% sản lượng tiêu thụ và tổ chức thực hiện hợp đồng ổn định từ 12 tháng trở lên tính đến thời điểm đăng ký đánh giá, phân hạng OCOP*****",
+                  "points": 3
+                }
+              ]
+            },
+            {
+              "code": "1.5",
+              "content": "Bảo vệ môi trường trong quá trình sản xuất",
+              "order": 5,
+              "options": [
+                {
+                  "label": "Có Hồ sơ, thủ tục về môi trường theo quy định của pháp luật và các quy định khác về bảo vệ môi trường****",
+                  "points": 1
+                },
+                {
+                  "label": "Có Hồ sơ, thủ tục về môi trường theo quy định của pháp luật về bảo vệ môi trường và hồ sơ minh chứng về công trình thu gom và xử lý chất thải theo quy định",
+                  "points": 2
+                },
+                {
+                  "label": "Có Hồ sơ, thủ tục về môi trường theo quy định của pháp luật về bảo vệ môi trường; hồ sơ minh chứng về công trình thu gom và xử lý chất thải theo quy định và hồ sơ minh chứng về sử dụng bao gói thân thiện với môi trường",
+                  "points": 3
+                }
+              ]
+            },
+            {
+              "code": "1.6",
+              "content": "Sử dụng công nghệ theo hướng bền vững trong sản xuất",
+              "order": 6,
+              "options": [
+                {
+                  "label": "Không sử dụng công nghệ theo hướng bền vững trong sản xuất",
+                  "points": 0
+                },
+                {
+                  "label": "Có áp dụng công nghệ theo hướng bền vững môi trường (công nghệ tiết kiệm nguyên liệu, nhiên liệu; hoạt động xử lý/tái chế chất thải; tận thu tái sử dụng, tái chế phụ phẩm nông nghiệp,...)",
+                  "points": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "2",
+          "name": "PHÁT TRIỂN SẢN PHẨM",
+          "maxScore": 11,
+          "order": 2,
+          "sectionCode": "A",
+          "sectionName": "SẢN PHẨM VÀ SỨC MẠNH CỦA CỘNG ĐỒNG",
+          "subCriteria": [
+            {
+              "code": "2.1",
+              "content": "Nguồn gốc ý tưởng sản phẩm",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Sản phẩm được sản xuất phổ biến ở nhiều tỉnh, thành phố",
+                  "points": 0
+                },
+                {
+                  "label": "Sản phẩm được sản xuất phổ biến ở nhiều tỉnh, thành phố nhưng có chất lượng nổi trội, khác biệt do điều kiện về nguyên liệu, kỹ thuật truyền thống",
+                  "points": 1
+                },
+                {
+                  "label": "Sản phẩm được sản xuất ở nhiều nơi trên địa bàn, là sản phẩm đặc trưng của tỉnh, có chất lượng nổi trội/sản phẩm mới được chế biến từ nguyên liệu đặc trưng của địa phương",
+                  "points": 2
+                },
+                {
+                  "label": "Sản phẩm là đặc sản, truyền thống, chỉ sản xuất trên địa bàn của xã, có chất lượng đặc sắc, thương mại gắn với chỉ dẫn nguồn gốc địa lý hoặc sản phẩm mới được chế biến từ nguyên liệu đặc trưng của địa phương, được thương mại ổn định ít nhất 36 tháng ****",
+                  "points": 4
+                }
+              ]
+            },
+            {
+              "code": "2.2",
+              "content": "Đóng gói, bao bì sản phẩm",
+              "order": 2,
+              "options": [
+                {
+                  "label": "Đóng gói theo hình thức thông thường, không có bao bì",
+                  "points": 0
+                },
+                {
+                  "label": "Đóng gói theo hình thức thông thường, bao bì đơn giản",
+                  "points": 1
+                },
+                {
+                  "label": "Đóng gói sáng tạo, bao bì đẹp***",
+                  "points": 2
+                },
+                {
+                  "label": "Đóng gói sáng tạo, tiện lợi, bao bì đẹp, sang trọng",
+                  "points": 3
+                }
+              ]
+            },
+            {
+              "code": "2.3",
+              "content": "Phong cách, ghi nhãn hàng hóa",
+              "order": 3,
+              "options": [
+                {
+                  "label": "Đơn đăng ký nhãn hiệu đã được cơ quan có thẩm quyền chấp nhận hoặc công bố (đã qua vòng thẩm định hình thức)***",
+                  "points": 1
+                },
+                {
+                  "label": "Ghi nhãn hàng hóa đầy đủ, đúng quy định và thể hiện được thông điệp câu chuyện sản phẩm (hình ảnh hoặc lời giới thiệu)",
+                  "points": 2
+                },
+                {
+                  "label": "Ghi nhãn hàng hóa đầy đủ, đúng quy định, đẹp và thể hiện được thông điệp câu chuyện sản phẩm (hình ảnh hoặc lời giới thiệu) và có mã truy xuất nguồn gốc điện tử****",
+                  "points": 3
+                }
+              ]
+            },
+            {
+              "code": "2.4",
+              "content": "Ghi nhãn hàng hóa có sử dụng song ngữ (Việt - Anh hoặc ngôn ngữ nước ngoài khác)",
+              "order": 4,
+              "options": [
+                {
+                  "label": "Ghi nhãn hàng hóa có sử dụng song ngữ (Việt - Anh hoặc ngôn ngữ nước ngoài khác)",
+                  "points": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "3",
+          "name": "SỨC MẠNH CỘNG ĐỒNG",
+          "maxScore": 12,
+          "order": 3,
+          "sectionCode": "A",
+          "sectionName": "SẢN PHẨM VÀ SỨC MẠNH CỦA CỘNG ĐỒNG",
+          "subCriteria": [
+            {
+              "code": "3.1",
+              "content": "Loại hình tổ chức sản xuất - kinh doanh",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Hộ sản xuất/hộ gia đình có đăng ký kinh doanh; hoặc trang trại; hoặc tổ hợp tác (có giấy đăng ký kinh doanh theo quy định)",
+                  "points": 1
+                },
+                {
+                  "label": "Công ty TNHH; hoặc doanh nghiệp tư nhân; hoặc công ty cổ phần có vốn góp của cộng đồng người địa phương <51%",
+                  "points": 2
+                },
+                {
+                  "label": "HTX tổ chức, hoạt động theo đúng quy định của pháp luật; hoặc công ty cổ phần có vốn góp của cộng đồng người địa phương ≥ 51%",
+                  "points": 3
+                }
+              ]
+            },
+            {
+              "code": "3.2",
+              "content": "Đại diện pháp luật của chủ thể là nữ; hoặc đồng bào dân tộc thiểu số; hoặc người khuyết tật",
+              "order": 2,
+              "options": [
+                {
+                  "label": "Đại diện pháp luật của chủ thể không phải nữ, không phải là đồng bào dân tộc thiểu số, không phải là người khuyết tật",
+                  "points": 0
+                },
+                {
+                  "label": "Đại diện pháp luật của chủ thể là nữ; hoặc là đồng bào dân tộc thiểu số; hoặc là người khuyết tật",
+                  "points": 1
+                }
+              ]
+            },
+            {
+              "code": "3.3",
+              "content": "Sử dụng lao động địa phương",
+              "order": 3,
+              "options": [
+                {
+                  "label": "Có sử dụng từ 25% đến dưới 50% lao động là người trên địa bàn cấp xã",
+                  "points": 1
+                },
+                {
+                  "label": "Có sử dụng từ 50% đến 75% lao động là người trên địa bàn cấp xã",
+                  "points": 2
+                },
+                {
+                  "label": "Có sử dụng ≥ 75% lao động là người trên địa bàn cấp xã",
+                  "points": 3
+                }
+              ]
+            },
+            {
+              "code": "3.4",
+              "content": "Tăng trưởng sản xuất kinh doanh",
+              "order": 4,
+              "options": [
+                {
+                  "label": "Hợp tác xã xếp loại trung bình hoặc năm trước liền kề năm đánh giá có lợi nhuận cao hơn so với năm trước liền kề; các loại hình khác: Năm trước liền kề năm đánh giá có lợi nhuận cao hơn so với năm trước liền kề.",
+                  "points": 1
+                },
+                {
+                  "label": "Hợp tác xã xếp loại khá trở lên hoặc có 02 năm liên tiếp tăng trưởng dương về lợi nhuận tính từ năm trước liền kề năm đánh giá; các loại hình khác: Có 02 năm liên tiếp tăng trưởng dương về lợi nhuận tính từ năm trước liền kề năm đánh giá****",
+                  "points": 2
+                }
+              ]
+            },
+            {
+              "code": "3.5",
+              "content": "Sở hữu trí tuệ",
+              "order": 5,
+              "options": [
+                {
+                  "label": "Đơn đăng ký nhãn hiệu đã được cơ quan có thẩm quyền chấp nhận hoặc công bố (đã qua vòng thẩm định hình thức)***",
+                  "points": 1
+                },
+                {
+                  "label": "Các nhãn hiệu sử dụng trên bao bì, nhãn của sản phẩm được cấp Giấy chứng nhận đăng ký nhãn hiệu và sản phẩm có sử dụng dấu hiệu chỉ dẫn nguồn gốc địa lý gắn với cộng đồng địa phương (trường hợp sản phẩm đã được nhà nước bảo hộ chỉ dẫn địa lý, nhãn hiệu tập thể, nhãn hiệu chứng nhận thì phải có văn bản ghi nhận quyền sử dụng)****",
+                  "points": 2
+                },
+                {
+                  "label": "Các nhãn hiệu sử dụng trên bao bì, nhãn của sản phẩm được cấp Giấy chứng nhận đăng ký nhãn hiệu và sản phẩm có sử dụng dấu hiệu chỉ dẫn nguồn gốc địa lý gắn với cộng đồng địa phương (trường hợp sản phẩm đã được nhà nước bảo hộ chỉ dẫn địa lý, nhãn hiệu tập thể, nhãn hiệu chứng nhận thì phải có văn bản ghi nhận quyền sử dụng) và có Bằng độc quyền kiểu dáng công nghiệp, hoặc Bằng sáng chế, hoặc Bằng độc quyền giải pháp hữu ích, hoặc Giấy chứng nhận đăng ký quyền tác giả (trừ Giấy chứng nhận đăng ký quyền tác giả đối với nhãn hiệu).",
+                  "points": 3
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "4",
+          "name": "TIẾP THỊ",
+          "maxScore": 13,
+          "order": 4,
+          "sectionCode": "B",
+          "sectionName": "KHẢ NĂNG TIẾP THỊ",
+          "subCriteria": [
+            {
+              "code": "4.1",
+              "content": "Khu vực phân phối chính",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Thị trường trong địa bàn cấp xã",
+                  "points": 1
+                },
+                {
+                  "label": "Thị trường ngoài địa bàn cấp xã, có dưới 5 đại diện/đại lý phân phối***",
+                  "points": 2
+                },
+                {
+                  "label": "Thị trường ngoài địa bàn cấp xã, có ≥ 5 đại diện/đại lý phân phối****",
+                  "points": 3
+                },
+                {
+                  "label": "Thị trường quốc tế (có hợp đồng và tài liệu minh chứng thực hiện hợp đồng) hoặc phân phối tại các kênh thương mại hiện đại: siêu thị, thương mại điện tử,... (có hợp đồng và tài liệu minh chứng thực hiện hợp đồng, đường dẫn gian hàng điện tử) *****",
+                  "points": 5
+                }
+              ]
+            },
+            {
+              "code": "4.2",
+              "content": "Tổ chức phân phối (Gồm: Tổ chức kinh doanh, phân phối sản phẩm)",
+              "order": 2,
+              "options": [
+                {
+                  "label": "Không có người chịu trách nhiệm quản lý phân phối",
+                  "points": 0
+                },
+                {
+                  "label": "Có người chịu trách nhiệm quản lý phân phối",
+                  "points": 1
+                },
+                {
+                  "label": "Có bộ phận/phòng quản lý phân phối",
+                  "points": 2
+                },
+                {
+                  "label": "Có bộ phận/phòng quản lý phân phối, có ứng dụng công nghệ thông tin trong quản lý",
+                  "points": 3
+                }
+              ]
+            },
+            {
+              "code": "4.3",
+              "content": "Quảng bá sản phẩm",
+              "order": 3,
+              "options": [
+                {
+                  "label": "Không có hoạt động quảng bá sản phẩm",
+                  "points": 0
+                },
+                {
+                  "label": "Có 03 hoạt động quảng bá sản phẩm trở xuống",
+                  "points": 1
+                },
+                {
+                  "label": "Có nhiều hơn 03 hoạt động quảng bá sản phẩm, có website của cơ sở (hoặc quảng bá trên mạng xã hội) và có tham gia hoạt động xúc tiến thương mại, hội chợ, triển lãm trong tỉnh",
+                  "points": 2
+                },
+                {
+                  "label": "Có nhiều hơn 03 hoạt động quảng bá sản phẩm, có website của cơ sở (hoặc quảng bá trên mạng xã hội) và có tham gia hoạt động xúc tiến thương mại, hội chợ, triển lãm ngoài tỉnh",
+                  "points": 3
+                },
+                {
+                  "label": "Có nhiều hơn 03 hoạt động quảng bá sản phẩm và có website của cơ sở (hoặc quảng bá trên mạng xã hội, hoạt động thường xuyên) và có tham gia hoạt động xúc tiến thương mại, hội chợ, triển lãm ngoài tỉnh và quốc tế",
+                  "points": 5
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "5",
+          "name": "CÂU CHUYỆN SẢN PHẨM",
+          "maxScore": 12,
+          "order": 5,
+          "sectionCode": "B",
+          "sectionName": "KHẢ NĂNG TIẾP THỊ",
+          "subCriteria": [
+            {
+              "code": "5.1",
+              "content": "Câu chuyện sản phẩm",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Không có câu chuyện sản phẩm",
+                  "points": 0
+                },
+                {
+                  "label": "Có câu chuyện sản phẩm",
+                  "points": 1
+                },
+                {
+                  "label": "Có câu chuyện sản phẩm được tư liệu hóa và thể hiện trên tờ rơi",
+                  "points": 2
+                },
+                {
+                  "label": "Có câu chuyện sản phẩm được tư liệu hóa, thể hiện trên tờ rơi và website (dưới dạng hình ảnh, clip,...)",
+                  "points": 3
+                },
+                {
+                  "label": "Có câu chuyện sản phẩm được tư liệu hóa, thể hiện trên tờ rơi, website (dưới dạng hình ảnh, clip,...) và đưa vào nội dung truy xuất nguồn gốc điện tử ****",
+                  "points": 5
+                }
+              ]
+            },
+            {
+              "code": "5.2",
+              "content": "Cấu trúc câu chuyện sản phẩm Chỉ áp dụng khi có câu chuyện sản phẩm",
+              "order": 2,
+              "options": [
+                {
+                  "label": "Đơn giản",
+                  "points": 0
+                },
+                {
+                  "label": "Ngắn gọn, xúc tích",
+                  "points": 1
+                },
+                {
+                  "label": "Ngắn gọn, xúc tích và có văn phong kể chuyện",
+                  "points": 2
+                }
+              ]
+            },
+            {
+              "code": "5.3",
+              "content": "Trí tuệ/bản sắc địa phương Yêu cầu: Nội dung câu chuyện sản phẩm OCOP phải thể hiện rõ nguồn gốc, tài nguyên bản địa, văn hóa, bản sắc địa phương, giá trị đặc trưng của sản phẩm, có tính truyền cảm và thuyết phục.",
+              "order": 3,
+              "options": [
+                {
+                  "label": "Giống với câu chuyện sản phẩm của chủ thể khác, hoặc sản phẩm khác của cùng chủ thể",
+                  "points": 0
+                },
+                {
+                  "label": "Có câu chuyện riêng, gắn với nguồn gốc xuất xứ sản phẩm***",
+                  "points": 1
+                },
+                {
+                  "label": "Nội dung câu chuyện mang sắc thái truyền thống, văn hóa địa phương và giá trị đặc trưng của sản phẩm",
+                  "points": 3
+                },
+                {
+                  "label": "Nội dung câu chuyện mang sắc thái truyền thống, văn hóa địa phương, giá trị đặc trưng của sản phẩm, có tính truyền cảm và thuyết phục",
+                  "points": 5
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "6",
+          "name": "CÔNG BỐ CHẤT LƯỢNG",
+          "maxScore": 5,
+          "order": 6,
+          "sectionCode": "C",
+          "sectionName": "CHẤT LƯỢNG SẢN PHẨM",
+          "subCriteria": [
+            {
+              "code": "6",
+              "content": "CÔNG BỐ CHẤT LƯỢNG",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Không có hồ sơ công bố tiêu chuẩn sản phẩm",
+                  "points": 0
+                },
+                {
+                  "label": "Có hồ sơ công bố tiêu chuẩn sản phẩm",
+                  "points": 1
+                },
+                {
+                  "label": "Có hồ sơ công bố tiêu chuẩn sản phẩm; tiêu chuẩn nguyên liệu/tiêu chuẩn bao bì sản phẩm",
+                  "points": 3
+                },
+                {
+                  "label": "Có hồ sơ công bố tiêu chuẩn sản phẩm; tiêu chuẩn nguyên liệu; tiêu chuẩn bao bì; phiếu kiểm nghiệm theo tiêu chuẩn tại cơ quan kiểm nghiệm độc lập",
+                  "points": 5
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "7",
+          "name": "CHỈ TIÊU CẢM QUAN (Kiểm tra theo tiêu chuẩn công bố)",
+          "maxScore": 3,
+          "order": 7,
+          "sectionCode": "C",
+          "sectionName": "CHẤT LƯỢNG SẢN PHẨM",
+          "subCriteria": [
+            {
+              "code": "7",
+              "content": "CHỈ TIÊU CẢM QUAN (Kiểm tra theo tiêu chuẩn công bố)",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Không đạt",
+                  "points": 0
+                },
+                {
+                  "label": "Tương đối đạt",
+                  "points": 1
+                },
+                {
+                  "label": "Đạt",
+                  "points": 3
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "8",
+          "name": "SỰ TIỆN LỢI KHI SỬ DỤNG, BẢO QUẢN",
+          "maxScore": 5,
+          "order": 8,
+          "sectionCode": "C",
+          "sectionName": "CHẤT LƯỢNG SẢN PHẨM",
+          "subCriteria": [
+            {
+              "code": "8",
+              "content": "SỰ TIỆN LỢI KHI SỬ DỤNG, BẢO QUẢN",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Không tiện lợi",
+                  "points": 0
+                },
+                {
+                  "label": "Tương đối tiện lợi",
+                  "points": 1
+                },
+                {
+                  "label": "Tiện lợi",
+                  "points": 3
+                },
+                {
+                  "label": "Rất tiện lợi",
+                  "points": 5
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "9",
+          "name": "HIỆU QUẢ SỬ DỤNG (Sử dụng trực tiếp sản phẩm hoặc thông qua tài liệu chính thống/kết quả nghiên cứu, minh chứng người sử dụng)",
+          "maxScore": 4,
+          "order": 9,
+          "sectionCode": "C",
+          "sectionName": "CHẤT LƯỢNG SẢN PHẨM",
+          "subCriteria": [
+            {
+              "code": "9",
+              "content": "HIỆU QUẢ SỬ DỤNG (Sử dụng trực tiếp sản phẩm hoặc thông qua tài liệu chính thống/kết quả nghiên cứu, minh chứng người sử dụng)",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Thấp, không rõ",
+                  "points": 0
+                },
+                {
+                  "label": "Có hiệu quả tương đối rõ",
+                  "points": 1
+                },
+                {
+                  "label": "Hiệu quả tốt",
+                  "points": 2
+                },
+                {
+                  "label": "Hiệu quả rất tốt",
+                  "points": 4
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "10",
+          "name": "TÍNH ĐỘC ĐÁO",
+          "maxScore": 5,
+          "order": 10,
+          "sectionCode": "C",
+          "sectionName": "CHẤT LƯỢNG SẢN PHẨM",
+          "subCriteria": [
+            {
+              "code": "10",
+              "content": "TÍNH ĐỘC ĐÁO",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Trung bình",
+                  "points": 0
+                },
+                {
+                  "label": "Tương đối độc đáo",
+                  "points": 1
+                },
+                {
+                  "label": "Độc đáo, mang tính đặc trưng****",
+                  "points": 3
+                },
+                {
+                  "label": "Rất độc đáo và có tính đặc trưng*****",
+                  "points": 5
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "11",
+          "name": "KIỂM TRA ĐỊNH KỲ (Hồ sơ kiểm tra định kỳ các chỉ tiêu an toàn)",
+          "maxScore": 3,
+          "order": 11,
+          "sectionCode": "C",
+          "sectionName": "CHẤT LƯỢNG SẢN PHẨM",
+          "subCriteria": [
+            {
+              "code": "11",
+              "content": "KIỂM TRA ĐỊNH KỲ (Hồ sơ kiểm tra định kỳ các chỉ tiêu an toàn)",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Có, nhưng không đạt",
+                  "points": 0
+                },
+                {
+                  "label": "Có, đạt nhưng không đủ",
+                  "points": 1
+                },
+                {
+                  "label": "Có, đạt đầy đủ",
+                  "points": 3
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "12",
+          "name": "ĐẢM BẢO CHẤT LƯỢNG SẢN PHẨM",
+          "maxScore": 5,
+          "order": 12,
+          "sectionCode": "C",
+          "sectionName": "CHẤT LƯỢNG SẢN PHẨM",
+          "subCriteria": [
+            {
+              "code": "12",
+              "content": "ĐẢM BẢO CHẤT LƯỢNG SẢN PHẨM",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Cơ sở chế biến, đóng gói có giấy chứng nhận đủ điều kiện an toàn thực phẩm theo quy định***",
+                  "points": 1
+                },
+                {
+                  "label": "Cơ sở chế biến, đóng gói có chứng nhận quản lý chất lượng theo tiêu chuẩn quốc gia (ISO, HACCP,...)****",
+                  "points": 3
+                },
+                {
+                  "label": "Cơ sở chế biến, đóng gói có chứng nhận quản lý chất lượng theo tiêu chuẩn quốc tế, đủ điều kiện an toàn thực phẩm cho xuất khẩu và các thủ tục pháp lý khác theo yêu cầu của thị trường đích (ISO, HACCP, BRC, Halal, FDA...)",
+                  "points": 5
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "13",
+          "name": "HƯỚNG DẪN SỬ DỤNG ĐỂ ĐẢM BẢO SẢN PHẨM CÓ CHẤT LƯỢNG TỐT NHẤT CHO NGƯỜI TIÊU DÙNG",
+          "maxScore": 2,
+          "order": 13,
+          "sectionCode": "C",
+          "sectionName": "CHẤT LƯỢNG SẢN PHẨM",
+          "subCriteria": [
+            {
+              "code": "13",
+              "content": "HƯỚNG DẪN SỬ DỤNG ĐỂ ĐẢM BẢO SẢN PHẨM CÓ CHẤT LƯỢNG TỐT NHẤT CHO NGƯỜI TIÊU DÙNG",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Có hướng dẫn sử dụng sản phẩm đơn giản",
+                  "points": 1
+                },
+                {
+                  "label": "Có hướng dẫn sử dụng chi tiết, cụ thể để đảm bảo chất lượng sản phẩm",
+                  "points": 2
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "14",
+          "name": "CƠ HỘI THỊ TRƯỜNG TOÀN CẦU",
+          "maxScore": 3,
+          "order": 14,
+          "sectionCode": "C",
+          "sectionName": "CHẤT LƯỢNG SẢN PHẨM",
+          "subCriteria": [
+            {
+              "code": "14",
+              "content": "CƠ HỘI THỊ TRƯỜNG TOÀN CẦU",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Có thể xuất khẩu đến thị trường khu vực Đông Nam Á",
+                  "points": 1
+                },
+                {
+                  "label": "Có thể xuất khẩu các thị trường ngoài khu vực Đông Nam Á",
+                  "points": 2
+                },
+                {
+                  "label": "Có thể xuất khẩu đến các thị trường có tiêu chuẩn cao (Mỹ, Nhật, EU...)",
+                  "points": 3
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "categoryKey": "essential-oils-and-herbs",
+      "name": "Bộ sản phẩm: Tinh dầu và dược liệu khác",
+      "source": "Quyết định 26/2026/QĐ-TTg, Phụ lục II, bộ 20; phiên âm Thư Viện Pháp Luật, dòng 3233–3381",
+      "criteria": [
+        {
+          "code": "1",
+          "name": "TỔ CHỨC SẢN XUẤT",
+          "maxScore": 17,
+          "order": 1,
+          "sectionCode": "A",
+          "sectionName": "SẢN PHẨM VÀ SỨC MẠNH CỦA CỘNG ĐỒNG",
+          "subCriteria": [
+            {
+              "code": "1.1",
+              "content": "Nguồn nguyên liệu. Ghi chú: Bị loại nếu sử dụng toàn bộ nguyên liệu nhập khẩu hoặc không rõ nguồn gốc",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Có sử dụng nguyên liệu có nguồn gốc trong tỉnh, nhưng có tỷ lệ dưới 50%***",
+                  "points": 1
+                },
+                {
+                  "label": "Sử dụng nguyên liệu có nguồn gốc trong tỉnh từ 50% đến dưới 75%",
+                  "points": 2
+                },
+                {
+                  "label": "Sử dụng nguyên liệu có nguồn gốc trong tỉnh từ 75% đến 100%",
+                  "points": 4
+                }
+              ]
+            },
+            {
+              "code": "1.2",
+              "content": "Gia tăng giá trị",
+              "order": 2,
+              "options": [
+                {
+                  "label": "Phân loại, sơ chế",
+                  "points": 0
+                },
+                {
+                  "label": "Chế biến đơn giản",
+                  "points": 1
+                },
+                {
+                  "label": "Chế biến",
+                  "points": 2
+                },
+                {
+                  "label": "Chế biến sâu từ vùng nguyên liệu địa phương (tạo ra sản phẩm chất lượng cao theo nhu cầu của thị trường)",
+                  "points": 3
+                }
+              ]
+            },
+            {
+              "code": "1.3",
+              "content": "Năng lực sản xuất để đáp ứng yêu cầu phân phối (Khả năng sản xuất đáp ứng nhu cầu về số lượng/quy mô của thị trường, so sánh với quy mô trung bình ở cùng đối tượng sản xuất tại địa phương về sản lượng hoặc giá trị sản xuất)",
+              "order": 3,
+              "options": [
+                {
+                  "label": "Có năng lực, quy mô sản xuất mức độ nhỏ",
+                  "points": 1
+                },
+                {
+                  "label": "Có năng lực, quy mô sản xuất trung bình",
+                  "points": 2
+                },
+                {
+                  "label": "Có năng lực, quy mô sản xuất lớn",
+                  "points": 3
+                }
+              ]
+            },
+            {
+              "code": "1.4",
+              "content": "Liên kết chuỗi trong sản xuất",
+              "order": 4,
+              "options": [
+                {
+                  "label": "Không có liên kết hoặc có liên kết nhưng không rõ ràng",
+                  "points": 0
+                },
+                {
+                  "label": "Có hợp đồng liên kết từ 50% đến dưới 75% sản lượng tiêu thụ",
+                  "points": 1
+                },
+                {
+                  "label": "Có hợp đồng liên kết trên 75% sản lượng tiêu thụ****",
+                  "points": 2
+                },
+                {
+                  "label": "Có hợp đồng liên kết trên 75% sản lượng tiêu thụ và tổ chức thực hiện hợp đồng ổn định từ 12 tháng trở lên tính đến thời điểm đăng ký đánh giá, phân hạng OCOP*****",
+                  "points": 3
+                }
+              ]
+            },
+            {
+              "code": "1.5",
+              "content": "Bảo vệ môi trường trong quá trình sản xuất",
+              "order": 5,
+              "options": [
+                {
+                  "label": "Có Hồ sơ, thủ tục về môi trường theo quy định của pháp luật và các quy định khác về bảo vệ môi trường****",
+                  "points": 1
+                },
+                {
+                  "label": "Có Hồ sơ, thủ tục về môi trường theo quy định của pháp luật về bảo vệ môi trường và hồ sơ minh chứng về công trình thu gom và xử lý chất thải theo quy định",
+                  "points": 2
+                },
+                {
+                  "label": "Có Hồ sơ, thủ tục về môi trường theo quy định của pháp luật về bảo vệ môi trường; hồ sơ minh chứng về công trình thu gom và xử lý chất thải theo quy định và hồ sơ minh chứng về sử dụng bao gói thân thiện với môi trường",
+                  "points": 3
+                }
+              ]
+            },
+            {
+              "code": "1.6",
+              "content": "Sử dụng công nghệ theo hướng bền vững trong sản xuất",
+              "order": 6,
+              "options": [
+                {
+                  "label": "Không sử dụng công nghệ theo hướng bền vững trong sản xuất",
+                  "points": 0
+                },
+                {
+                  "label": "Có áp dụng công nghệ theo hướng bền vững môi trường (công nghệ tiết kiệm nguyên liệu, nhiên liệu; hoạt động xử lý/tái chế chất thải; tận thu tái sử dụng, tái chế phụ phẩm nông nghiệp,...)",
+                  "points": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "2",
+          "name": "PHÁT TRIỂN SẢN PHẨM",
+          "maxScore": 11,
+          "order": 2,
+          "sectionCode": "A",
+          "sectionName": "SẢN PHẨM VÀ SỨC MẠNH CỦA CỘNG ĐỒNG",
+          "subCriteria": [
+            {
+              "code": "2.1",
+              "content": "Nguồn gốc ý tưởng sản phẩm",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Sản phẩm được sản xuất phổ biến ở nhiều tỉnh, thành phố",
+                  "points": 0
+                },
+                {
+                  "label": "Sản phẩm được sản xuất phổ biến ở nhiều tỉnh, thành phố nhưng có chất lượng nổi trội, khác biệt do điều kiện về nguyên liệu, kỹ thuật truyền thống",
+                  "points": 1
+                },
+                {
+                  "label": "Sản phẩm được sản xuất ở nhiều nơi trên địa bàn, là sản phẩm đặc trưng của tỉnh, có chất lượng nổi trội/sản phẩm mới được chế biến từ nguyên liệu đặc trưng của địa phương",
+                  "points": 2
+                },
+                {
+                  "label": "Sản phẩm là đặc sản, truyền thống, chỉ sản xuất trên địa bàn của xã, có chất lượng đặc sắc, thương mại gắn với chỉ dẫn nguồn gốc địa lý hoặc sản phẩm mới được chế biến từ nguyên liệu đặc trưng của địa phương, được thương mại ổn định ít nhất 36 tháng ****",
+                  "points": 4
+                }
+              ]
+            },
+            {
+              "code": "2.2",
+              "content": "Đóng gói, bao bì sản phẩm",
+              "order": 2,
+              "options": [
+                {
+                  "label": "Đóng gói theo hình thức thông thường, không có bao bì",
+                  "points": 0
+                },
+                {
+                  "label": "Đóng gói theo hình thức thông thường, bao bì đơn giản",
+                  "points": 1
+                },
+                {
+                  "label": "Đóng gói sáng tạo, bao bì đẹp***",
+                  "points": 2
+                },
+                {
+                  "label": "Đóng gói sáng tạo, tiện lợi, bao bì đẹp, sang trọng",
+                  "points": 3
+                }
+              ]
+            },
+            {
+              "code": "2.3",
+              "content": "Phong cách, ghi nhãn hàng hóa",
+              "order": 3,
+              "options": [
+                {
+                  "label": "Có nhãn, ghi nhãn hàng hóa đầy đủ, đúng quy định***",
+                  "points": 1
+                },
+                {
+                  "label": "Ghi nhãn hàng hóa đầy đủ, đúng quy định và thể hiện được thông điệp câu chuyện sản phẩm (hình ảnh hoặc lời giới thiệu)",
+                  "points": 2
+                },
+                {
+                  "label": "Ghi nhãn hàng hóa đầy đủ, đúng quy định, đẹp và thể hiện được thông điệp câu chuyện sản phẩm (hình ảnh hoặc lời giới thiệu) và có mã truy xuất nguồn gốc điện tử****",
+                  "points": 3
+                }
+              ]
+            },
+            {
+              "code": "2.4",
+              "content": "Ghi nhãn hàng hóa có sử dụng song ngữ (Việt - Anh hoặc ngôn ngữ nước ngoài khác)",
+              "order": 4,
+              "options": [
+                {
+                  "label": "Ghi nhãn hàng hóa có sử dụng song ngữ (Việt - Anh hoặc ngôn ngữ nước ngoài khác)",
+                  "points": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "3",
+          "name": "SỨC MẠNH CỘNG ĐỒNG",
+          "maxScore": 12,
+          "order": 3,
+          "sectionCode": "A",
+          "sectionName": "SẢN PHẨM VÀ SỨC MẠNH CỦA CỘNG ĐỒNG",
+          "subCriteria": [
+            {
+              "code": "3.1",
+              "content": "Loại hình tổ chức sản xuất - kinh doanh",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Hộ sản xuất/hộ gia đình có đăng ký kinh doanh; hoặc trang trại; hoặc tổ hợp tác (có giấy đăng ký kinh doanh theo quy định)",
+                  "points": 1
+                },
+                {
+                  "label": "Công ty TNHH; hoặc doanh nghiệp tư nhân; hoặc công ty cổ phần có vốn góp của cộng đồng người địa phương <51%",
+                  "points": 2
+                },
+                {
+                  "label": "HTX tổ chức, hoạt động theo đúng quy định của pháp luật; hoặc công ty cổ phần có vốn góp của cộng đồng người địa phương ≥ 51%",
+                  "points": 3
+                }
+              ]
+            },
+            {
+              "code": "3.2",
+              "content": "Đại diện pháp luật của chủ thể là nữ; hoặc đồng bào dân tộc thiểu số; hoặc người khuyết tật",
+              "order": 2,
+              "options": [
+                {
+                  "label": "Đại diện pháp luật của chủ thể không phải nữ, không phải là đồng bào dân tộc thiểu số, không phải là người khuyết tật",
+                  "points": 0
+                },
+                {
+                  "label": "Đại diện pháp luật của chủ thể là nữ; hoặc là đồng bào dân tộc thiểu số; hoặc là người khuyết tật",
+                  "points": 1
+                }
+              ]
+            },
+            {
+              "code": "3.3",
+              "content": "Sử dụng lao động địa phương",
+              "order": 3,
+              "options": [
+                {
+                  "label": "Có sử dụng từ 25% đến dưới 50% lao động là người trên địa bàn cấp xã",
+                  "points": 1
+                },
+                {
+                  "label": "Có sử dụng từ 50% đến 75% lao động là người trên địa bàn cấp xã",
+                  "points": 2
+                },
+                {
+                  "label": "Có sử dụng ≥ 75% lao động là người trên địa bàn cấp xã",
+                  "points": 3
+                }
+              ]
+            },
+            {
+              "code": "3.4",
+              "content": "Tăng trưởng sản xuất kinh doanh",
+              "order": 4,
+              "options": [
+                {
+                  "label": "Hợp tác xã xếp loại trung bình hoặc năm trước liền kề năm đánh giá có lợi nhuận cao hơn so với năm trước liền kề; các loại hình khác: Năm trước liền kề năm đánh giá có lợi nhuận cao hơn so với năm trước liền kề.",
+                  "points": 1
+                },
+                {
+                  "label": "Hợp tác xã xếp loại khá trở lên hoặc có 02 năm liên tiếp tăng trưởng dương về lợi nhuận tính từ năm trước liền kề năm đánh giá; các loại hình khác: Có 02 năm liên tiếp tăng trưởng dương về lợi nhuận tính từ năm trước liền kề năm đánh giá****",
+                  "points": 2
+                }
+              ]
+            },
+            {
+              "code": "3.5",
+              "content": "Sở hữu trí tuệ",
+              "order": 5,
+              "options": [
+                {
+                  "label": "Đơn đăng ký nhãn hiệu đã được cơ quan có thẩm quyền chấp nhận hoặc công bố (đã qua vòng thẩm định hình thức)***",
+                  "points": 1
+                },
+                {
+                  "label": "Các nhãn hiệu sử dụng trên bao bì, nhãn của sản phẩm được cấp Giấy chứng nhận đăng ký nhãn hiệu và sản phẩm có sử dụng dấu hiệu chỉ dẫn nguồn gốc địa lý gắn với cộng đồng địa phương (trường hợp sản phẩm đã được nhà nước bảo hộ chỉ dẫn địa lý, nhãn hiệu tập thể, nhãn hiệu chứng nhận thì phải có văn bản ghi nhận quyền sử dụng)****",
+                  "points": 2
+                },
+                {
+                  "label": "Các nhãn hiệu sử dụng trên bao bì, nhãn của sản phẩm được cấp Giấy chứng nhận đăng ký nhãn hiệu và sản phẩm có sử dụng dấu hiệu chỉ dẫn nguồn gốc địa lý gắn với cộng đồng địa phương (trường hợp sản phẩm đã được nhà nước bảo hộ chỉ dẫn địa lý, nhãn hiệu tập thể, nhãn hiệu chứng nhận thì phải có văn bản ghi nhận quyền sử dụng) và có Bằng độc quyền kiểu dáng công nghiệp, hoặc Bằng sáng chế, hoặc Bằng độc quyền giải pháp hữu ích, hoặc Giấy chứng nhận đăng ký quyền tác giả (trừ Giấy chứng nhận đăng ký quyền tác giả đối với nhãn hiệu).",
+                  "points": 3
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "4",
+          "name": "TIẾP THỊ",
+          "maxScore": 13,
+          "order": 4,
+          "sectionCode": "B",
+          "sectionName": "KHẢ NĂNG TIẾP THỊ",
+          "subCriteria": [
+            {
+              "code": "4.1",
+              "content": "Khu vực phân phối chính",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Thị trường trong địa bàn cấp xã",
+                  "points": 1
+                },
+                {
+                  "label": "Thị trường ngoài địa bàn cấp xã, có dưới 5 đại diện/đại lý phân phối***",
+                  "points": 2
+                },
+                {
+                  "label": "Thị trường ngoài địa bàn cấp xã, có ≥ 5 đại diện/đại lý phân phối****",
+                  "points": 3
+                },
+                {
+                  "label": "Thị trường quốc tế (có hợp đồng và tài liệu minh chứng thực hiện hợp đồng) hoặc phân phối tại các kênh thương mại hiện đại: siêu thị, thương mại điện tử,... (có hợp đồng và tài liệu minh chứng thực hiện hợp đồng, đường dẫn gian hàng điện tử) *****",
+                  "points": 5
+                }
+              ]
+            },
+            {
+              "code": "4.2",
+              "content": "Tổ chức phân phối (Gồm: Tổ chức kinh doanh, phân phối sản phẩm)",
+              "order": 2,
+              "options": [
+                {
+                  "label": "Không có người chịu trách nhiệm quản lý phân phối",
+                  "points": 0
+                },
+                {
+                  "label": "Có người chịu trách nhiệm quản lý phân phối",
+                  "points": 1
+                },
+                {
+                  "label": "Có bộ phận/phòng quản lý phân phối",
+                  "points": 2
+                },
+                {
+                  "label": "Có bộ phận/phòng quản lý phân phối, có ứng dụng công nghệ thông tin trong quản lý",
+                  "points": 3
+                }
+              ]
+            },
+            {
+              "code": "4.3",
+              "content": "Quảng bá sản phẩm",
+              "order": 3,
+              "options": [
+                {
+                  "label": "Không có hoạt động quảng bá sản phẩm",
+                  "points": 0
+                },
+                {
+                  "label": "Có 03 hoạt động quảng bá sản phẩm trở xuống",
+                  "points": 1
+                },
+                {
+                  "label": "Có nhiều hơn 03 hoạt động quảng bá sản phẩm, có website của cơ sở (hoặc quảng bá trên mạng xã hội) và có tham gia hoạt động xúc tiến thương mại, hội chợ, triển lãm trong tỉnh",
+                  "points": 2
+                },
+                {
+                  "label": "Có nhiều hơn 03 hoạt động quảng bá sản phẩm, có website của cơ sở (hoặc quảng bá trên mạng xã hội) và có tham gia hoạt động xúc tiến thương mại, hội chợ, triển lãm ngoài tỉnh",
+                  "points": 3
+                },
+                {
+                  "label": "Có nhiều hơn 03 hoạt động quảng bá sản phẩm và có website của cơ sở (hoặc quảng bá trên mạng xã hội, hoạt động thường xuyên) và có tham gia hoạt động xúc tiến thương mại, hội chợ, triển lãm ngoài tỉnh và quốc tế",
+                  "points": 5
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "5",
+          "name": "CÂU CHUYỆN SẢN PHẨM",
+          "maxScore": 12,
+          "order": 5,
+          "sectionCode": "B",
+          "sectionName": "KHẢ NĂNG TIẾP THỊ",
+          "subCriteria": [
+            {
+              "code": "5.1",
+              "content": "Câu chuyện sản phẩm",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Không có câu chuyện sản phẩm",
+                  "points": 0
+                },
+                {
+                  "label": "Có câu chuyện sản phẩm",
+                  "points": 1
+                },
+                {
+                  "label": "Có câu chuyện sản phẩm được tư liệu hóa và thể hiện trên tờ rơi",
+                  "points": 2
+                },
+                {
+                  "label": "Có câu chuyện sản phẩm được tư liệu hóa, thể hiện trên tờ rơi và website (dưới dạng hình ảnh, clip,...)",
+                  "points": 3
+                },
+                {
+                  "label": "Có câu chuyện sản phẩm được tư liệu hóa, thể hiện trên tờ rơi, website (dưới dạng hình ảnh, clip,...) và đưa vào nội dung truy xuất nguồn gốc điện tử ****",
+                  "points": 5
+                }
+              ]
+            },
+            {
+              "code": "5.2",
+              "content": "Cấu trúc câu chuyện sản phẩm Chỉ áp dụng khi có câu chuyện sản phẩm",
+              "order": 2,
+              "options": [
+                {
+                  "label": "Đơn giản",
+                  "points": 0
+                },
+                {
+                  "label": "Ngắn gọn, xúc tích",
+                  "points": 1
+                },
+                {
+                  "label": "Ngắn gọn, xúc tích và có văn phong kể chuyện",
+                  "points": 2
+                }
+              ]
+            },
+            {
+              "code": "5.3",
+              "content": "Trí tuệ/bản sắc địa phương Yêu cầu: Nội dung câu chuyện sản phẩm OCOP phải thể hiện rõ nguồn gốc, tài nguyên bản địa, văn hóa, bản sắc địa phương, giá trị đặc trưng của sản phẩm, có tính truyền cảm và thuyết phục.",
+              "order": 3,
+              "options": [
+                {
+                  "label": "Giống với câu chuyện sản phẩm của chủ thể khác, hoặc sản phẩm khác của cùng chủ thể",
+                  "points": 0
+                },
+                {
+                  "label": "Có câu chuyện riêng, gắn với nguồn gốc xuất xứ sản phẩm***",
+                  "points": 1
+                },
+                {
+                  "label": "Nội dung câu chuyện mang sắc thái truyền thống, văn hóa địa phương và giá trị đặc trưng của sản phẩm",
+                  "points": 3
+                },
+                {
+                  "label": "Nội dung câu chuyện mang sắc thái truyền thống, văn hóa địa phương, giá trị đặc trưng của sản phẩm, có tính truyền cảm và thuyết phục",
+                  "points": 5
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "6",
+          "name": "CÔNG BỐ CHẤT LƯỢNG",
+          "maxScore": 5,
+          "order": 6,
+          "sectionCode": "C",
+          "sectionName": "CHẤT LƯỢNG SẢN PHẨM",
+          "subCriteria": [
+            {
+              "code": "6",
+              "content": "CÔNG BỐ CHẤT LƯỢNG",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Có hồ sơ công bố tiêu chuẩn sản phẩm",
+                  "points": 1
+                },
+                {
+                  "label": "Có hồ sơ công bố tiêu chuẩn sản phẩm; tiêu chuẩn nguyên liệu",
+                  "points": 3
+                },
+                {
+                  "label": "Có hồ sơ công bố tiêu chuẩn sản phẩm; tiêu chuẩn nguyên liệu; phiếu kiểm nghiệm theo tiêu chuẩn tại cơ quan kiểm nghiệm độc lập",
+                  "points": 5
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "7",
+          "name": "CHỈ TIÊU CẢM QUAN (Kiểm tra theo tiêu chuẩn công bố)",
+          "maxScore": 3,
+          "order": 7,
+          "sectionCode": "C",
+          "sectionName": "CHẤT LƯỢNG SẢN PHẨM",
+          "subCriteria": [
+            {
+              "code": "7",
+              "content": "CHỈ TIÊU CẢM QUAN (Kiểm tra theo tiêu chuẩn công bố)",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Không đạt",
+                  "points": 0
+                },
+                {
+                  "label": "Tương đối đạt",
+                  "points": 1
+                },
+                {
+                  "label": "Đạt",
+                  "points": 3
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "8",
+          "name": "SỰ TIỆN LỢI KHI SỬ DỤNG, BẢO QUẢN",
+          "maxScore": 5,
+          "order": 8,
+          "sectionCode": "C",
+          "sectionName": "CHẤT LƯỢNG SẢN PHẨM",
+          "subCriteria": [
+            {
+              "code": "8",
+              "content": "SỰ TIỆN LỢI KHI SỬ DỤNG, BẢO QUẢN",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Không tiện lợi",
+                  "points": 0
+                },
+                {
+                  "label": "Tương đối tiện lợi",
+                  "points": 1
+                },
+                {
+                  "label": "Tiện lợi",
+                  "points": 3
+                },
+                {
+                  "label": "Rất tiện lợi",
+                  "points": 5
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "9",
+          "name": "HIỆU QUẢ SỬ DỤNG (Sử dụng trực tiếp sản phẩm hoặc thông qua tài liệu chính thống/kết quả nghiên cứu, minh chứng người sử dụng)",
+          "maxScore": 4,
+          "order": 9,
+          "sectionCode": "C",
+          "sectionName": "CHẤT LƯỢNG SẢN PHẨM",
+          "subCriteria": [
+            {
+              "code": "9",
+              "content": "HIỆU QUẢ SỬ DỤNG (Sử dụng trực tiếp sản phẩm hoặc thông qua tài liệu chính thống/kết quả nghiên cứu, minh chứng người sử dụng)",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Thấp, không rõ",
+                  "points": 0
+                },
+                {
+                  "label": "Có hiệu quả tương đối rõ",
+                  "points": 1
+                },
+                {
+                  "label": "Hiệu quả tốt",
+                  "points": 2
+                },
+                {
+                  "label": "Hiệu quả rất tốt",
+                  "points": 4
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "10",
+          "name": "TÍNH AN TOÀN (Theo hồ sơ nghiên cứu, thử nghiệm,...)",
+          "maxScore": 3,
+          "order": 10,
+          "sectionCode": "C",
+          "sectionName": "CHẤT LƯỢNG SẢN PHẨM",
+          "subCriteria": [
+            {
+              "code": "10",
+              "content": "TÍNH AN TOÀN (Theo hồ sơ nghiên cứu, thử nghiệm,...)",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Tương đối an toàn",
+                  "points": 0
+                },
+                {
+                  "label": "An toàn",
+                  "points": 1
+                },
+                {
+                  "label": "Rất an toàn",
+                  "points": 3
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "11",
+          "name": "TÍNH ĐỘC ĐÁO",
+          "maxScore": 5,
+          "order": 11,
+          "sectionCode": "C",
+          "sectionName": "CHẤT LƯỢNG SẢN PHẨM",
+          "subCriteria": [
+            {
+              "code": "11",
+              "content": "TÍNH ĐỘC ĐÁO",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Trung bình",
+                  "points": 0
+                },
+                {
+                  "label": "Tương đối độc đáo",
+                  "points": 1
+                },
+                {
+                  "label": "Độc đáo, mang tính đặc trưng****",
+                  "points": 3
+                },
+                {
+                  "label": "Rất độc đáo và có tính đặc trưng*****",
+                  "points": 5
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "12",
+          "name": "ĐẢM BẢO CHẤT LƯỢNG SẢN PHẨM",
+          "maxScore": 5,
+          "order": 12,
+          "sectionCode": "C",
+          "sectionName": "CHẤT LƯỢNG SẢN PHẨM",
+          "subCriteria": [
+            {
+              "code": "12",
+              "content": "ĐẢM BẢO CHẤT LƯỢNG SẢN PHẨM",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Cơ sở chế biến, đóng gói có giấy chứng nhận đủ điều kiện an toàn thực phẩm theo quy định***",
+                  "points": 1
+                },
+                {
+                  "label": "Cơ sở chế biến, đóng gói có chứng nhận quản lý chất lượng theo tiêu chuẩn quốc gia (ISO, HACCP,...)****",
+                  "points": 3
+                },
+                {
+                  "label": "Cơ sở chế biến, đóng gói có chứng nhận quản lý chất lượng theo tiêu chuẩn quốc tế, đủ điều kiện an toàn thực phẩm cho xuất khẩu và các thủ tục pháp lý khác theo yêu cầu của thị trường đích (ISO, HACCP, BRC, Halal, FDA...)",
+                  "points": 5
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "13",
+          "name": "HƯỚNG DẪN SỬ DỤNG ĐỂ ĐẢM BẢO SẢN PHẨM CÓ CHẤT LƯỢNG TỐT NHẤT CHO NGƯỜI TIÊU DÙNG",
+          "maxScore": 2,
+          "order": 13,
+          "sectionCode": "C",
+          "sectionName": "CHẤT LƯỢNG SẢN PHẨM",
+          "subCriteria": [
+            {
+              "code": "13",
+              "content": "HƯỚNG DẪN SỬ DỤNG ĐỂ ĐẢM BẢO SẢN PHẨM CÓ CHẤT LƯỢNG TỐT NHẤT CHO NGƯỜI TIÊU DÙNG",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Có hướng dẫn sử dụng sản phẩm đơn giản",
+                  "points": 1
+                },
+                {
+                  "label": "Có hướng dẫn sử dụng chi tiết, cụ thể để đảm bảo chất lượng sản phẩm, tránh tác dụng phụ (nếu có)",
+                  "points": 2
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "14",
+          "name": "CƠ HỘI THỊ TRƯỜNG TOÀN CẦU",
+          "maxScore": 3,
+          "order": 14,
+          "sectionCode": "C",
+          "sectionName": "CHẤT LƯỢNG SẢN PHẨM",
+          "subCriteria": [
+            {
+              "code": "14",
+              "content": "CƠ HỘI THỊ TRƯỜNG TOÀN CẦU",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Có thể xuất khẩu đến thị trường khu vực Đông Nam Á",
+                  "points": 1
+                },
+                {
+                  "label": "Có thể xuất khẩu các thị trường ngoài khu vực Đông Nam Á",
+                  "points": 2
+                },
+                {
+                  "label": "Có thể xuất khẩu đến các thị trường có tiêu chuẩn cao (Mỹ, Nhật, EU...)",
+                  "points": 3
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "categoryKey": "flowers",
+      "name": "Bộ sản phẩm: Hoa",
+      "source": "Quyết định 26/2026/QĐ-TTg, Phụ lục II, bộ 23; phiên âm Thư Viện Pháp Luật, dòng 3659–3787",
+      "criteria": [
+        {
+          "code": "1",
+          "name": "TỔ CHỨC SẢN XUẤT",
+          "maxScore": 19,
+          "order": 1,
+          "sectionCode": "A",
+          "sectionName": "SẢN PHẨM VÀ SỨC MẠNH CỦA CỘNG ĐỒNG",
+          "subCriteria": [
+            {
+              "code": "1.1",
+              "content": "Nguồn gốc sản phẩm. Yêu cầu: 100% sản phẩm được trồng trên địa bàn cấp tỉnh",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Có sản phẩm được trồng trên địa bàn cấp xã, nhưng tỷ lệ dưới 50%",
+                  "points": 1
+                },
+                {
+                  "label": "Sản phẩm được trồng trên địa bàn cấp xã từ 50% đến dưới 75%",
+                  "points": 2
+                },
+                {
+                  "label": "Sản phẩm được trồng trên địa bàn cấp xã từ 75% đến 100%",
+                  "points": 4
+                }
+              ]
+            },
+            {
+              "code": "1.2",
+              "content": "Gia tăng giá trị",
+              "order": 2,
+              "options": [
+                {
+                  "label": "Sơ chế (làm sạch, phân loại, đóng gói...) thủ công",
+                  "points": 1
+                },
+                {
+                  "label": "Ứng dụng máy móc trong đóng gói, bảo quản sản phẩm",
+                  "points": 2
+                },
+                {
+                  "label": "Ứng dụng công nghệ cao trong sơ chế, bảo quản (nâng cao chất lượng sản phẩm/kéo dài thời gian bảo quản và giữ chất lượng ổn định trong quá trình bảo quản...)",
+                  "points": 4
+                }
+              ]
+            },
+            {
+              "code": "1.3",
+              "content": "Năng lực sản xuất để đáp ứng yêu cầu phân phối (Khả năng sản xuất đáp ứng nhu cầu về số lượng/quy mô của thị trường, so sánh với quy mô trung bình ở cùng đối tượng sản xuất tại địa phương về sản lượng hoặc giá trị sản xuất)",
+              "order": 3,
+              "options": [
+                {
+                  "label": "Có năng lực, quy mô sản xuất mức độ nhỏ",
+                  "points": 1
+                },
+                {
+                  "label": "Có năng lực, quy mô sản xuất trung bình",
+                  "points": 2
+                },
+                {
+                  "label": "Có năng lực, quy mô sản xuất lớn",
+                  "points": 3
+                }
+              ]
+            },
+            {
+              "code": "1.4",
+              "content": "Liên kết chuỗi trong sản xuất",
+              "order": 4,
+              "options": [
+                {
+                  "label": "Không có liên kết hoặc có liên kết nhưng không rõ ràng",
+                  "points": 0
+                },
+                {
+                  "label": "Có hợp đồng liên kết từ 50% đến dưới 75% sản lượng tiêu thụ",
+                  "points": 1
+                },
+                {
+                  "label": "Có hợp đồng liên kết trên 75% sản lượng tiêu thụ****",
+                  "points": 2
+                },
+                {
+                  "label": "Có hợp đồng liên kết trên 75% sản lượng tiêu thụ và tổ chức thực hiện hợp đồng ổn định từ 12 tháng trở lên tính đến thời điểm đăng ký đánh giá, phân hạng OCOP*****",
+                  "points": 4
+                }
+              ]
+            },
+            {
+              "code": "1.5",
+              "content": "Bảo vệ môi trường trong quá trình sản xuất",
+              "order": 5,
+              "options": [
+                {
+                  "label": "Có hồ sơ, thủ tục về môi trường theo quy định của pháp luật và các quy định khác về bảo vệ môi trường****",
+                  "points": 1
+                },
+                {
+                  "label": "Có hồ sơ, thủ tục về môi trường theo quy định của pháp luật về bảo vệ môi trường và hồ sơ minh chứng về công trình thu gom và xử lý chất thải theo quy định",
+                  "points": 2
+                },
+                {
+                  "label": "Có hồ sơ, thủ tục về môi trường theo quy định của pháp luật về bảo vệ môi trường; hồ sơ minh chứng về công trình thu gom và xử lý chất thải theo quy định và hồ sơ minh chứng về sử dụng bao gói thân thiện với môi trường",
+                  "points": 3
+                }
+              ]
+            },
+            {
+              "code": "1.6",
+              "content": "Sử dụng công nghệ theo hướng bền vững trong sản xuất",
+              "order": 6,
+              "options": [
+                {
+                  "label": "Không sử dụng công nghệ theo hướng bền vững trong sản xuất",
+                  "points": 0
+                },
+                {
+                  "label": "Có áp dụng công nghệ theo hướng bền vững môi trường (công nghệ tiết kiệm nguyên liệu, nhiên liệu; hoạt động xử lý/tái chế chất thải; tận thu tái sử dụng, tái chế phụ phẩm nông nghiệp,...)",
+                  "points": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "2",
+          "name": "PHÁT TRIỂN SẢN PHẨM",
+          "maxScore": 9,
+          "order": 2,
+          "sectionCode": "A",
+          "sectionName": "SẢN PHẨM VÀ SỨC MẠNH CỦA CỘNG ĐỒNG",
+          "subCriteria": [
+            {
+              "code": "2.1",
+              "content": "Nguồn gốc ý tưởng sản phẩm",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Sản phẩm được sản xuất phổ biến ở nhiều tỉnh, thành phố",
+                  "points": 0
+                },
+                {
+                  "label": "Sản phẩm được sản xuất phổ biến ở nhiều tỉnh, thành phố nhưng có chất lượng nổi trội, khác biệt do điều kiện về nguyên liệu, kỹ thuật truyền thống",
+                  "points": 1
+                },
+                {
+                  "label": "Sản phẩm được sản xuất ở nhiều nơi trên địa bàn, là sản phẩm đặc trưng của tỉnh, có chất lượng nổi trội/sản phẩm mới được chế biến từ nguyên liệu đặc trưng của địa phương",
+                  "points": 3
+                },
+                {
+                  "label": "Sản phẩm là đặc sản, truyền thống, chỉ sản xuất trên địa bàn của xã, có chất lượng đặc sắc, thương mại gắn với chỉ dẫn nguồn gốc địa lý hoặc sản phẩm mới được chế biến từ nguyên liệu đặc trưng của địa phương, được thương mại ổn định ít nhất 36 tháng ****",
+                  "points": 5
+                }
+              ]
+            },
+            {
+              "code": "2.2",
+              "content": "Bao bì, ghi nhãn sản phẩm",
+              "order": 2,
+              "options": [
+                {
+                  "label": "Có nhãn, ghi nhãn hàng hóa đầy đủ, theo đúng quy định***",
+                  "points": 1
+                },
+                {
+                  "label": "Ghi nhãn hàng hóa đầy đủ, đúng quy định và thể hiện được thông điệp câu chuyện sản phẩm (hình ảnh hoặc lời giới thiệu)",
+                  "points": 3
+                },
+                {
+                  "label": "Ghi nhãn hàng hóa đầy đủ, đúng quy định, đẹp và thể hiện được thông điệp câu chuyện sản phẩm (hình ảnh hoặc lời giới thiệu) và có mã truy xuất nguồn gốc điện tử****",
+                  "points": 4
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "3",
+          "name": "SỨC MẠNH CỘNG ĐỒNG",
+          "maxScore": 12,
+          "order": 3,
+          "sectionCode": "A",
+          "sectionName": "SẢN PHẨM VÀ SỨC MẠNH CỦA CỘNG ĐỒNG",
+          "subCriteria": [
+            {
+              "code": "3.1",
+              "content": "Loại hình tổ chức sản xuất - kinh doanh",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Hộ sản xuất/hộ gia đình có đăng ký kinh doanh; hoặc trang trại; hoặc tổ hợp tác (có giấy đăng ký kinh doanh theo quy định)",
+                  "points": 1
+                },
+                {
+                  "label": "Công ty TNHH; hoặc doanh nghiệp tư nhân; hoặc công ty cổ phần có vốn góp của cộng đồng người địa phương <51%",
+                  "points": 2
+                },
+                {
+                  "label": "HTX tổ chức, hoạt động theo đúng quy định của pháp luật; hoặc công ty cổ phần có vốn góp của cộng đồng người địa phương ≥ 51%",
+                  "points": 3
+                }
+              ]
+            },
+            {
+              "code": "3.2",
+              "content": "Đại diện pháp luật của chủ thể là nữ; hoặc đồng bào dân tộc thiểu số; hoặc người khuyết tật",
+              "order": 2,
+              "options": [
+                {
+                  "label": "Đại diện pháp luật của chủ thể không phải nữ, không phải là đồng bào dân tộc thiểu số, không phải là người khuyết tật",
+                  "points": 0
+                },
+                {
+                  "label": "Đại diện pháp luật của chủ thể là nữ; hoặc là đồng bào dân tộc thiểu số; hoặc là người khuyết tật.",
+                  "points": 1
+                }
+              ]
+            },
+            {
+              "code": "3.3",
+              "content": "Sử dụng lao động địa phương",
+              "order": 3,
+              "options": [
+                {
+                  "label": "Có sử dụng từ 25% đến dưới 50% lao động là người trên địa bàn cấp xã",
+                  "points": 1
+                },
+                {
+                  "label": "Có sử dụng từ 50% đến 75% lao động là người trên địa bàn cấp xã",
+                  "points": 2
+                },
+                {
+                  "label": "Có sử dụng ≥ 75% lao động là người trên địa bàn cấp xã",
+                  "points": 3
+                }
+              ]
+            },
+            {
+              "code": "3.4",
+              "content": "Tăng trưởng sản xuất kinh doanh",
+              "order": 4,
+              "options": [
+                {
+                  "label": "Hợp tác xã xếp loại trung bình hoặc năm trước liền kề năm đánh giá có lợi nhuận cao hơn so với năm trước liền kề; các loại hình khác: Năm trước liền kề năm đánh giá có lợi nhuận cao hơn so với năm trước liền kề.",
+                  "points": 1
+                },
+                {
+                  "label": "Hợp tác xã xếp loại khá trở lên hoặc có 02 năm liên tiếp tăng trưởng dương về lợi nhuận tính từ năm trước liền kề năm đánh giá; các loại hình khác: Có 02 năm liên tiếp tăng trưởng dương về lợi nhuận tính từ năm trước liền kề năm đánh giá****",
+                  "points": 2
+                }
+              ]
+            },
+            {
+              "code": "3.5",
+              "content": "Sở hữu trí tuệ",
+              "order": 5,
+              "options": [
+                {
+                  "label": "Đơn đăng ký nhãn hiệu đã được cơ quan có thẩm quyền chấp nhận hoặc công bố (đã qua vòng thẩm định hình thức)***",
+                  "points": 1
+                },
+                {
+                  "label": "Các nhãn hiệu sử dụng trên bao bì, nhãn của sản phẩm được cấp Giấy chứng nhận đăng ký nhãn hiệu và sản phẩm có sử dụng dấu hiệu chỉ dẫn nguồn gốc địa lý gắn với cộng đồng địa phương (trường hợp sản phẩm đã được nhà nước bảo hộ chỉ dẫn địa lý, nhãn hiệu tập thể, nhãn hiệu chứng nhận thì phải có văn bản ghi nhận quyền sử dụng)****",
+                  "points": 2
+                },
+                {
+                  "label": "Các nhãn hiệu sử dụng trên bao bì, nhãn của sản phẩm được cấp Giấy chứng nhận đăng ký nhãn hiệu và sản phẩm có sử dụng dấu hiệu chỉ dẫn nguồn gốc địa lý gắn với cộng đồng địa phương (trường hợp sản phẩm đã được nhà nước bảo hộ chỉ dẫn địa lý, nhãn hiệu tập thể, nhãn hiệu chứng nhận thì phải có văn bản ghi nhận quyền sử dụng) và có Bằng độc quyền kiểu dáng công nghiệp, hoặc Bằng sáng chế, hoặc Bằng độc quyền giải pháp hữu ích, hoặc Giấy chứng nhận đăng ký quyền tác giả (trừ Giấy chứng nhận đăng ký quyền tác giả đối với nhãn hiệu).",
+                  "points": 3
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "4",
+          "name": "TIẾP THỊ",
+          "maxScore": 13,
+          "order": 4,
+          "sectionCode": "B",
+          "sectionName": "KHẢ NĂNG TIẾP THỊ",
+          "subCriteria": [
+            {
+              "code": "4.1",
+              "content": "Khu vực phân phối chính",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Thị trường trong địa bàn cấp xã",
+                  "points": 1
+                },
+                {
+                  "label": "Thị trường ngoài địa bàn cấp xã, có dưới 5 đại diện/đại lý phân phối***",
+                  "points": 2
+                },
+                {
+                  "label": "Thị trường ngoài địa bàn cấp xã, có ≥ 5 đại diện/đại lý phân phối****",
+                  "points": 3
+                },
+                {
+                  "label": "Thị trường quốc tế (có hợp đồng và tài liệu minh chứng thực hiện hợp đồng) hoặc phân phối tại các kênh thương mại hiện đại: siêu thị, thương mại điện tử,... (có hợp đồng và tài liệu minh chứng thực hiện hợp đồng, đường dẫn gian hàng điện tử) *****",
+                  "points": 5
+                }
+              ]
+            },
+            {
+              "code": "4.2",
+              "content": "Tổ chức phân phối (Gồm: Tổ chức kinh doanh, phân phối sản phẩm)",
+              "order": 2,
+              "options": [
+                {
+                  "label": "Không có người chịu trách nhiệm quản lý phân phối",
+                  "points": 0
+                },
+                {
+                  "label": "Có người chịu trách nhiệm quản lý phân phối",
+                  "points": 1
+                },
+                {
+                  "label": "Có bộ phận/phòng quản lý phân phối",
+                  "points": 2
+                },
+                {
+                  "label": "Có bộ phận/phòng quản lý phân phối, có ứng dụng công nghệ thông tin trong quản lý",
+                  "points": 3
+                }
+              ]
+            },
+            {
+              "code": "4.3",
+              "content": "Quảng bá sản phẩm",
+              "order": 3,
+              "options": [
+                {
+                  "label": "Không có hoạt động quảng bá sản phẩm",
+                  "points": 0
+                },
+                {
+                  "label": "Có 03 hoạt động quảng bá sản phẩm trở xuống",
+                  "points": 1
+                },
+                {
+                  "label": "Có nhiều hơn 03 hoạt động quảng bá sản phẩm, có website của cơ sở (hoặc quảng bá trên mạng xã hội) và có tham gia hoạt động xúc tiến thương mại, hội chợ, triển lãm trong tỉnh",
+                  "points": 2
+                },
+                {
+                  "label": "Có nhiều hơn 03 hoạt động quảng bá sản phẩm, có website của cơ sở (hoặc quảng bá trên mạng xã hội) và có tham gia hoạt động xúc tiến thương mại, hội chợ, triển lãm ngoài tỉnh",
+                  "points": 3
+                },
+                {
+                  "label": "Có nhiều hơn 03 hoạt động quảng bá sản phẩm và có website của cơ sở (hoặc quảng bá trên mạng xã hội, hoạt động thường xuyên) và có tham gia hoạt động xúc tiến thương mại, hội chợ, triển lãm ngoài tỉnh và quốc tế",
+                  "points": 5
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "5",
+          "name": "CÂU CHUYỆN SẢN PHẨM",
+          "maxScore": 12,
+          "order": 5,
+          "sectionCode": "B",
+          "sectionName": "KHẢ NĂNG TIẾP THỊ",
+          "subCriteria": [
+            {
+              "code": "5.1",
+              "content": "Câu chuyện sản phẩm",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Không có câu chuyện sản phẩm",
+                  "points": 0
+                },
+                {
+                  "label": "Có câu chuyện sản phẩm",
+                  "points": 1
+                },
+                {
+                  "label": "Có câu chuyện sản phẩm được tư liệu hóa và thể hiện trên tờ rơi",
+                  "points": 2
+                },
+                {
+                  "label": "Có câu chuyện sản phẩm được tư liệu hóa, thể hiện trên tờ rơi và website (dưới dạng hình ảnh, clip,...)",
+                  "points": 3
+                },
+                {
+                  "label": "Có câu chuyện sản phẩm được tư liệu hóa, thể hiện trên tờ rơi, website (dưới dạng hình ảnh, clip,...) và đưa vào nội dung truy xuất nguồn gốc điện tử ****",
+                  "points": 5
+                }
+              ]
+            },
+            {
+              "code": "5.2",
+              "content": "Cấu trúc câu chuyện sản phẩm Chỉ áp dụng khi có câu chuyện sản phẩm",
+              "order": 2,
+              "options": [
+                {
+                  "label": "Đơn giản",
+                  "points": 0
+                },
+                {
+                  "label": "Ngắn gọn, xúc tích",
+                  "points": 1
+                },
+                {
+                  "label": "Ngắn gọn, xúc tích và có văn phong kể chuyện",
+                  "points": 2
+                }
+              ]
+            },
+            {
+              "code": "5.3",
+              "content": "Trí tuệ/bản sắc địa phương Yêu cầu: Nội dung câu chuyện sản phẩm OCOP phải thể hiện rõ nguồn gốc, tài nguyên bản địa, văn hóa, bản sắc địa phương, giá trị đặc trưng của sản phẩm, có tính truyền cảm và thuyết phục.",
+              "order": 3,
+              "options": [
+                {
+                  "label": "Giống với câu chuyện sản phẩm của chủ thể khác, hoặc sản phẩm khác của cùng chủ thể",
+                  "points": 0
+                },
+                {
+                  "label": "Có câu chuyện riêng, gắn với nguồn gốc xuất xứ sản phẩm***",
+                  "points": 1
+                },
+                {
+                  "label": "Nội dung câu chuyện mang sắc thái truyền thống, văn hóa địa phương và giá trị đặc trưng của sản phẩm",
+                  "points": 3
+                },
+                {
+                  "label": "Nội dung câu chuyện mang sắc thái truyền thống, văn hóa địa phương, giá trị đặc trưng của sản phẩm, có tính truyền cảm và thuyết phục",
+                  "points": 5
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "6",
+          "name": "CHẤT LƯỢNG SẢN PHẨM",
+          "maxScore": 14,
+          "order": 6,
+          "sectionCode": "C",
+          "sectionName": "CHẤT LƯỢNG SẢN PHẨM",
+          "subCriteria": [
+            {
+              "code": "6.1",
+              "content": "Kích thước, hình dạng bề ngoài",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Không đồng đều",
+                  "points": 0
+                },
+                {
+                  "label": "Không đồng đều, chấp nhận được",
+                  "points": 1
+                },
+                {
+                  "label": "Tương đối đồng đều",
+                  "points": 2
+                },
+                {
+                  "label": "Đồng đều****",
+                  "points": 5
+                }
+              ]
+            },
+            {
+              "code": "6.2",
+              "content": "Màu sắc",
+              "order": 2,
+              "options": [
+                {
+                  "label": "Chấp nhận được",
+                  "points": 1
+                },
+                {
+                  "label": "Phù hợp với đặc tính sản phẩm",
+                  "points": 1
+                },
+                {
+                  "label": "Đẹp, bắt mắt so với đặc tính sản phẩm****",
+                  "points": 3
+                },
+                {
+                  "label": "Rất đẹp, bắt mắt và ấn tượng so với đặc tính sản phẩm*****",
+                  "points": 5
+                }
+              ]
+            },
+            {
+              "code": "6.3",
+              "content": "Thiết kế sản phẩm (bao gói, chậu trồng,...)",
+              "order": 3,
+              "options": [
+                {
+                  "label": "Thiết kế sản phẩm đơn giản, phổ biến",
+                  "points": 1
+                },
+                {
+                  "label": "Thiết kế đẹp, phù hợp với sản phẩm",
+                  "points": 2
+                },
+                {
+                  "label": "Thiết kế ấn tượng, sử dụng vật liệu thân thiện môi trường",
+                  "points": 4
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "7",
+          "name": "TÍNH ĐỘC ĐÁO (Chất lượng: màu sắc, mùi thơm,...; có nét riêng, khác biệt, có dấu hiệu nhận biết rõ ràng so với sản phẩm khác, tiềm năng thành thương hiệu của địa phương)",
+          "maxScore": 8,
+          "order": 7,
+          "sectionCode": "C",
+          "sectionName": "CHẤT LƯỢNG SẢN PHẨM",
+          "subCriteria": [
+            {
+              "code": "7",
+              "content": "TÍNH ĐỘC ĐÁO (Chất lượng: màu sắc, mùi thơm,...; có nét riêng, khác biệt, có dấu hiệu nhận biết rõ ràng so với sản phẩm khác, tiềm năng thành thương hiệu của địa phương)",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Trung bình",
+                  "points": 2
+                },
+                {
+                  "label": "Tương đối độc đáo",
+                  "points": 4
+                },
+                {
+                  "label": "Độc đáo, mang tính đặc trưng****",
+                  "points": 6
+                },
+                {
+                  "label": "Rất độc đáo và có tính đặc trưng*****",
+                  "points": 8
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "8",
+          "name": "ĐẢM BẢO CHẤT LƯỢNG SẢN PHẨM",
+          "maxScore": 4,
+          "order": 8,
+          "sectionCode": "C",
+          "sectionName": "CHẤT LƯỢNG SẢN PHẨM",
+          "subCriteria": [
+            {
+              "code": "8",
+              "content": "ĐẢM BẢO CHẤT LƯỢNG SẢN PHẨM",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Không có hoạt động kiểm soát chất lượng sản phẩm",
+                  "points": 0
+                },
+                {
+                  "label": "Có kế hoạch kiểm soát nội bộ chất lượng sản phẩm",
+                  "points": 2
+                },
+                {
+                  "label": "Có kế hoạch kiểm soát nội bộ gắn với truy xuất nguồn gốc theo quy định***",
+                  "points": 4
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "9",
+          "name": "HƯỚNG DẪN SỬ DỤNG ĐỂ ĐẢM BẢO SẢN PHẨM CÓ CHẤT LƯỢNG TỐT NHẤT CHO NGƯỜI TIÊU DÙNG",
+          "maxScore": 4,
+          "order": 9,
+          "sectionCode": "C",
+          "sectionName": "CHẤT LƯỢNG SẢN PHẨM",
+          "subCriteria": [
+            {
+              "code": "9",
+              "content": "HƯỚNG DẪN SỬ DỤNG ĐỂ ĐẢM BẢO SẢN PHẨM CÓ CHẤT LƯỢNG TỐT NHẤT CHO NGƯỜI TIÊU DÙNG",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Có hướng dẫn sử dụng sản phẩm đơn giản",
+                  "points": 2
+                },
+                {
+                  "label": "Có hướng dẫn sử dụng chi tiết, cụ thể để kéo dài thời gian, duy trì chất lượng sản phẩm",
+                  "points": 4
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "10",
+          "name": "CƠ HỘI THỊ TRƯỜNG TOÀN CẦU",
+          "maxScore": 5,
+          "order": 10,
+          "sectionCode": "C",
+          "sectionName": "CHẤT LƯỢNG SẢN PHẨM",
+          "subCriteria": [
+            {
+              "code": "10",
+              "content": "CƠ HỘI THỊ TRƯỜNG TOÀN CẦU",
+              "order": 1,
+              "options": [
+                {
+                  "label": "Có thể xuất khẩu đến thị trường khu vực Đông Nam Á",
+                  "points": 1
+                },
+                {
+                  "label": "Có thể xuất khẩu các thị trường ngoài khu vực Đông Nam Á",
+                  "points": 3
+                },
+                {
+                  "label": "Có thể xuất khẩu đến các thị trường có tiêu chuẩn cao (Mỹ, Nhật, EU...)",
+                  "points": 5
                 }
               ]
             }

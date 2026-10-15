@@ -12,8 +12,6 @@ export type ApiSuccess<T> = {
 
 export type ApiError = {
   statusCode: number;
-  errorCode: string;
   message: string;
-  details?: unknown;
-  requestId: string;
+  requestId?: string;
 }

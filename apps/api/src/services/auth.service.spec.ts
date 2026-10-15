@@ -1,328 +1,126 @@
-import { JwtService } from '@nestjs/jwt';
-import { HttpException } from '@nestjs/common';
-import { hashPassword, verifyPassword } from '../../prisma/seed/password';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { OtpPurpose, Role } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 import { AuthRepository } from '../repositories/auth.repository';
 import { AuthService } from './auth.service';
-
-jest.mock('../../prisma/seed/password', () => ({
-  hashPassword: jest.fn().mockResolvedValue('new-password-hash'),
-  verifyPassword: jest.fn(),
-}));
-
-const now = new Date('2026-07-24T00:00:00.000Z');
-const testSecret = 'test-secret-at-least-32-characters';
-const originalJwtSecret = process.env.JWT_SECRET;
-const originalCsrfSecret = process.env.CSRF_SECRET;
-const meta = {
-  ipAddress: '127.0.0.1',
-  userAgent: 'jest',
-  requestId: 'request-1',
-};
-const user = {
-  id: 1,
-  username: 'user',
-  fullName: 'Test User',
-  passwordHash: 'password-hash',
-  organizationId: 10,
-  organization: { id: 10, code: 'UNIT', name: 'Test Unit' },
-  status: 'ACTIVE' as const,
-  lockedUntil: null,
-  failedLoginCount: 0,
-  failedLoginWindowStartedAt: null,
-};
+import { MailService } from './mail.service';
+import { OtpService } from './otp.service';
 
 describe('AuthService', () => {
-  let service: AuthService;
-  let repo: Record<string, jest.Mock>;
-  let jwtService: { signAsync: jest.Mock };
+  const repository = {
+    createRegistrant: jest.fn(),
+    findUserByEmail: jest.fn(),
+    findCredentialsById: jest.fn(),
+    changePassword: jest.fn(),
+  };
+  const jwtService = { signAsync: jest.fn().mockResolvedValue('signed-token') };
+  const otpService = { issue: jest.fn(), verify: jest.fn() };
+  const mailService = { sendOtp: jest.fn() };
+  const service = new AuthService(
+    repository as unknown as AuthRepository,
+    jwtService as never,
+    otpService as unknown as OtpService,
+    mailService as unknown as MailService,
+  );
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    jest.useFakeTimers().setSystemTime(now);
-    process.env.JWT_SECRET = testSecret;
-    process.env.CSRF_SECRET = testSecret;
-    repo = {
-      findUserByUsername: jest.fn(),
-      findUserById: jest.fn(),
-      recordUnknownLoginFailure: jest.fn(),
-      registerFailedLogin: jest.fn(),
-      unlockAutomatically: jest.fn(),
-      completeLogin: jest.fn(),
-      findSessionByHash: jest.fn(),
-      rotateSession: jest.fn(),
-      revokeSession: jest.fn(),
-      revokeAllSessions: jest.fn(),
-      changePassword: jest.fn(),
-    };
-    jwtService = {
-      signAsync: jest.fn().mockResolvedValue('access-token'),
-    };
-    service = new AuthService(
-      repo as unknown as AuthRepository,
-      jwtService as unknown as JwtService,
-    );
-    jest.mocked(verifyPassword).mockResolvedValue(false);
-  });
+  beforeEach(() => jest.clearAllMocks());
 
-  afterEach(() => {
-    jest.useRealTimers();
-  });
+  it('returns the same resend response when no pending account exists', async () => {
+    repository.findUserByEmail.mockResolvedValue(null);
 
-  afterAll(() => {
-    if (originalJwtSecret === undefined) delete process.env.JWT_SECRET;
-    else process.env.JWT_SECRET = originalJwtSecret;
-    if (originalCsrfSecret === undefined) delete process.env.CSRF_SECRET;
-    else process.env.CSRF_SECRET = originalCsrfSecret;
-  });
-
-  it('locks the fifth failed login for five minutes', async () => {
-    repo.findUserByUsername.mockResolvedValue({
-      ...user,
-      failedLoginCount: 4,
-      failedLoginWindowStartedAt: new Date(now.getTime() - 30_000),
+    await expect(service.resendRegistrationOtp(' Missing@Example.com ')).resolves.toEqual({
+      message: 'If an unverified account exists, a verification code has been sent',
     });
-    repo.registerFailedLogin.mockResolvedValue({
-      locked: true,
-      lockedUntil: new Date(now.getTime() + 5 * 60_000),
+    expect(repository.findUserByEmail).toHaveBeenCalledWith('missing@example.com');
+    expect(otpService.issue).not.toHaveBeenCalled();
+    expect(mailService.sendOtp).not.toHaveBeenCalled();
+  });
+
+  it('includes the current token version in a login token without exposing it publicly', async () => {
+    const previousEnv = { ...process.env };
+    Object.assign(process.env, {
+      JWT_SECRET: 'isolated-test-jwt-secret-at-least-32-bytes',
+      SMTP_HOST: '127.0.0.1', SMTP_USER: 'test', SMTP_PASSWORD: 'test', SMTP_FROM: 'test@example.invalid',
+    });
+    repository.findUserByEmail.mockResolvedValue({
+      id: 'user-1', email: 'person@example.com', password: await bcrypt.hash('ValidPassword1!', 4),
+      fullName: 'Person', phone: null, role: Role.REGISTRANT, verified: true, isActive: true, tokenVersion: 2,
     });
 
-    await expect(service.login('user', 'wrong', meta)).rejects.toMatchObject({
-      status: 423,
-    });
-    expect(repo.registerFailedLogin).toHaveBeenCalledWith(user.id, now, meta);
-    expect(repo.revokeAllSessions).not.toHaveBeenCalled();
+    try {
+      await expect(service.login('person@example.com', 'ValidPassword1!')).resolves.toMatchObject({
+        accessToken: 'signed-token',
+        user: { id: 'user-1', email: 'person@example.com' },
+      });
+      expect(jwtService.signAsync).toHaveBeenCalledWith(
+        { sub: 'user-1', email: 'person@example.com', role: Role.REGISTRANT, tokenVersion: 2 },
+        expect.any(Object),
+      );
+      expect((await service.login('person@example.com', 'ValidPassword1!')).user).not.toHaveProperty('tokenVersion');
+    } finally {
+      process.env = previousEnv;
+    }
   });
 
-  it('returns unauthorized when a failed login does not lock the account', async () => {
-    repo.findUserByUsername.mockResolvedValue({
-      ...user,
-      failedLoginCount: 4,
-      failedLoginWindowStartedAt: new Date(now.getTime() - 60_001),
-    });
-    repo.registerFailedLogin.mockResolvedValue({
-      locked: false,
-      lockedUntil: null,
-    });
+  it('sends a registration code only to an active, unverified registrant', async () => {
+    repository.findUserByEmail.mockResolvedValue({ id: 'user-1', role: Role.REGISTRANT, verified: false, isActive: true });
+    otpService.issue.mockResolvedValue('012345');
 
-    await expect(service.login('user', 'wrong', meta)).rejects.toMatchObject({
-      status: 401,
-    });
-    expect(repo.registerFailedLogin).toHaveBeenCalledWith(user.id, now, meta);
+    await service.resendRegistrationOtp('person@example.com');
+
+    expect(otpService.issue).toHaveBeenCalledWith('person@example.com', OtpPurpose.REGISTER, 'user-1');
+    expect(mailService.sendOtp).toHaveBeenCalledWith('person@example.com', '012345', 'REGISTER');
   });
 
-  it('automatically unlocks after five minutes and continues login', async () => {
-    const expiredLock = new Date(now.getTime() - 1);
-    repo.findUserByUsername.mockResolvedValue({
-      ...user,
-      status: 'LOCKED',
-      lockedUntil: expiredLock,
-    });
-    repo.unlockAutomatically.mockResolvedValue(true);
-    repo.completeLogin.mockResolvedValue(true);
-    jest.mocked(verifyPassword).mockResolvedValue(true);
+  it('leaves a pending registration recoverable after mail fails and sends a fresh code on resend', async () => {
+    repository.createRegistrant.mockResolvedValue({ id: 'user-1' });
+    otpService.issue.mockResolvedValueOnce('012345').mockResolvedValueOnce('678901');
+    mailService.sendOtp.mockRejectedValueOnce(new Error('smtp unavailable')).mockResolvedValueOnce(undefined);
 
-    const result = await service.login('user', 'correct', meta);
+    await expect(service.register({
+      email: 'Person@example.com', password: 'Password1!', fullName: 'Person',
+    })).rejects.toThrow('Could not send verification email');
+    expect(repository.createRegistrant).toHaveBeenCalledWith(expect.objectContaining({
+      email: 'person@example.com', fullName: 'Person',
+    }));
 
-    expect(repo.unlockAutomatically).toHaveBeenCalledWith(
-      user.id,
-      expiredLock,
-      now,
-      meta,
-    );
-    expect(repo.completeLogin).toHaveBeenCalledWith(
-      user.id,
-      user.passwordHash,
-      expect.any(String),
-      new Date(now.getTime() + 30 * 24 * 60 * 60_000),
-      now,
-      meta,
-    );
-    expect(jwtService.signAsync).toHaveBeenCalledWith(
-      // expect.anything() is typed `any` in @types/jest, which trips
-      // no-unsafe-assignment for this object literal property.
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      expect.not.objectContaining({ permissions: expect.anything() }),
-      expect.any(Object),
-    );
-
-    expect(result.user).toEqual(
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      expect.not.objectContaining({ permissions: expect.anything() }),
-    );
+    repository.findUserByEmail.mockResolvedValue({ id: 'user-1', role: Role.REGISTRANT, verified: false, isActive: true });
+    await expect(service.resendRegistrationOtp('person@example.com')).resolves.toMatchObject({ message: expect.any(String) });
+    expect(otpService.issue).toHaveBeenNthCalledWith(2, 'person@example.com', OtpPurpose.REGISTER, 'user-1');
+    expect(mailService.sendOtp).toHaveBeenNthCalledWith(2, 'person@example.com', '678901', 'REGISTER');
+    expect(mailService.sendOtp.mock.calls[1][1]).not.toBe(mailService.sendOtp.mock.calls[0][1]);
   });
 
-  it('does not automatically unlock a manually locked account', async () => {
-    repo.findUserByUsername.mockResolvedValue({
-      ...user,
-      status: 'LOCKED',
-      lockedUntil: null,
+  it('changes a password only after checking the current password', async () => {
+    const currentHash = await bcrypt.hash('CurrentPassword1!', 4);
+    repository.findCredentialsById.mockResolvedValue({ password: currentHash, verified: true, isActive: true });
+    repository.changePassword.mockResolvedValue({ count: 1 });
+
+    await expect(service.changePassword('user-1', 'CurrentPassword1!', 'NewPassword2!')).resolves.toEqual({
+      message: 'Password changed',
+    });
+    expect(repository.changePassword).toHaveBeenCalledWith('user-1', currentHash, expect.any(String));
+  });
+
+  it('rejects a password change when the current password is wrong', async () => {
+    repository.findCredentialsById.mockResolvedValue({
+      password: await bcrypt.hash('CurrentPassword1!', 4),
+      verified: true,
+      isActive: true,
     });
 
-    await expect(service.login('user', 'correct', meta)).rejects.toMatchObject({
-      status: 423,
-    });
-    expect(repo.unlockAutomatically).not.toHaveBeenCalled();
-    expect(verifyPassword).not.toHaveBeenCalled();
+    await expect(service.changePassword('user-1', 'wrong', 'NewPassword2!')).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(repository.changePassword).not.toHaveBeenCalled();
   });
 
-  it('rejects login when the serialized success transition loses a race', async () => {
-    repo.findUserByUsername.mockResolvedValue({ ...user });
-    repo.completeLogin.mockResolvedValue(false);
-    jest.mocked(verifyPassword).mockResolvedValue(true);
-
-    await expect(service.login('user', 'correct', meta)).rejects.toMatchObject({
-      status: 401,
-    });
-    expect(jwtService.signAsync).not.toHaveBeenCalled();
-  });
-
-  it('rotates a refresh session without extending its absolute expiry', async () => {
-    const expiresAt = new Date(now.getTime() + 60_000);
-    const csrfToken = service.createCsrfToken();
-    repo.findSessionByHash.mockResolvedValue({
-      id: 7,
-      user: { ...user },
-      expiresAt,
-      revokedAt: null,
-    });
-    repo.rotateSession.mockResolvedValue(true);
-
-    await service.refresh('raw-token', csrfToken, meta);
-
-    expect(repo.rotateSession).toHaveBeenCalledWith(
-      7,
-      user.id,
-      expect.any(String),
-      expiresAt,
-      now,
-      meta,
-    );
-  });
-
-  it('rejects refresh reuse and revokes all sessions', async () => {
-    const csrfToken = service.createCsrfToken();
-    repo.findSessionByHash.mockResolvedValue({
-      id: 7,
-      user: { ...user },
-      expiresAt: new Date(now.getTime() + 60_000),
-      revokedAt: new Date(now.getTime() - 1),
+  it('rejects reusing the current password', async () => {
+    repository.findCredentialsById.mockResolvedValue({
+      password: await bcrypt.hash('CurrentPassword1!', 4),
+      verified: true,
+      isActive: true,
     });
 
-    await expect(
-      service.refresh('reused-token', csrfToken, meta),
-    ).rejects.toMatchObject({ status: 401 });
-    expect(repo.revokeAllSessions).toHaveBeenCalledWith(
-      user.id,
-      now,
-      'REFRESH_TOKEN_REUSE',
-      meta,
-    );
-  });
-
-  it('rejects a concurrent refresh rotation loser as reuse', async () => {
-    const csrfToken = service.createCsrfToken();
-    repo.findSessionByHash.mockResolvedValue({
-      id: 7,
-      user: { ...user },
-      expiresAt: new Date(now.getTime() + 60_000),
-      revokedAt: null,
-    });
-    repo.rotateSession.mockResolvedValue(false);
-
-    await expect(
-      service.refresh('raw-token', csrfToken, meta),
-    ).rejects.toMatchObject({ status: 401 });
-    expect(repo.revokeAllSessions).toHaveBeenCalledWith(
-      user.id,
-      now,
-      'REFRESH_TOKEN_REUSE',
-      meta,
-    );
-  });
-
-  it('rejects expired refresh sessions', async () => {
-    const csrfToken = service.createCsrfToken();
-    repo.findSessionByHash.mockResolvedValue({
-      id: 7,
-      user: { ...user },
-      expiresAt: new Date(now.getTime() - 1),
-      revokedAt: null,
-    });
-
-    await expect(
-      service.refresh('expired-token', csrfToken, meta),
-    ).rejects.toMatchObject({ status: 401 });
-    expect(repo.rotateSession).not.toHaveBeenCalled();
-  });
-
-  it('validates signed double-submit CSRF tokens', () => {
-    const token = service.createCsrfToken();
-
-    expect(() => service.assertCsrfToken(token)).not.toThrow();
-    expect(() => service.assertCsrfToken(`${token}x`)).toThrow(HttpException);
-    expect(() => service.assertCsrfToken('unsigned')).toThrow(HttpException);
-  });
-
-  it('does not fall back when the CSRF secret is missing', () => {
-    delete process.env.CSRF_SECRET;
-    service = new AuthService(
-      repo as unknown as AuthRepository,
-      jwtService as unknown as JwtService,
-    );
-
-    expect(() => service.createCsrfToken()).toThrow('CSRF_SECRET');
-  });
-
-  it('performs a dummy password verification for an unknown username', async () => {
-    repo.findUserByUsername.mockResolvedValue(null);
-
-    await expect(
-      service.login('missing', 'candidate-password', meta),
-    ).rejects.toMatchObject({ status: 401 });
-    expect(verifyPassword).toHaveBeenCalledWith(
-      expect.stringMatching(/^\$argon2id\$/),
-      'candidate-password',
-    );
-  });
-
-  it('revokes only the matching refresh session on logout', async () => {
-    repo.findSessionByHash.mockResolvedValue({
-      id: 7,
-      user: { ...user },
-      expiresAt: new Date(now.getTime() + 60_000),
-      revokedAt: null,
-    });
-
-    await service.logout('raw-token', meta);
-
-    expect(repo.revokeSession).toHaveBeenCalledWith(
-      7,
-      user.id,
-      now,
-      'LOGOUT',
-      meta,
-    );
-    expect(repo.revokeAllSessions).not.toHaveBeenCalled();
-  });
-
-  it('changes the password and revokes sessions through one repository transaction', async () => {
-    repo.findUserById.mockResolvedValue({ ...user });
-    jest.mocked(verifyPassword).mockResolvedValue(true);
-
-    await service.changePassword(
-      user.id,
-      'current-password',
-      'new-password-value',
-      meta,
-    );
-
-    expect(hashPassword).toHaveBeenCalledWith('new-password-value');
-    expect(repo.changePassword).toHaveBeenCalledWith(
-      user.id,
-      user.passwordHash,
-      'new-password-hash',
-      now,
-      meta,
-    );
+    await expect(service.changePassword('user-1', 'CurrentPassword1!', 'CurrentPassword1!')).rejects.toBeInstanceOf(BadRequestException);
+    expect(repository.changePassword).not.toHaveBeenCalled();
   });
 });

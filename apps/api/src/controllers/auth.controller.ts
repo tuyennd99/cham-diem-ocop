@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { Public } from '../decorators/public.decorator';
-import { EmailDto, LoginDto, RegisterDto, ResetPasswordDto, VerifyOtpDto } from '../dtos/auth.dto';
+import { ChangePasswordDto, EmailDto, LoginDto, RegisterDto, ResetPasswordDto, VerifyOtpDto } from '../dtos/auth.dto';
 import { AuthService } from '../services/auth.service';
 import type { AccessTokenPayload } from '../types/auth';
 
@@ -26,6 +26,14 @@ export class AuthController {
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   verifyOtp(@Body() body: VerifyOtpDto) {
     return this.authService.verifyOtp(body.email, body.code);
+  }
+
+  @Public()
+  @Post('resend-otp')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 3, ttl: 15 * 60_000 } })
+  resendOtp(@Body() body: EmailDto) {
+    return this.authService.resendRegistrationOtp(body.email);
   }
 
   @Public()
@@ -56,5 +64,12 @@ export class AuthController {
   @ApiBearerAuth()
   me(@CurrentUser() user: AccessTokenPayload) {
     return this.authService.me(user.sub);
+  }
+
+  @Post('change-password')
+  @ApiBearerAuth()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  changePassword(@Body() body: ChangePasswordDto, @CurrentUser() user: AccessTokenPayload) {
+    return this.authService.changePassword(user.sub, body.currentPassword, body.newPassword);
   }
 }

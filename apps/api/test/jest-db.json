@@ -1,12 +1,10 @@
 {
   "moduleFileExtensions": ["js", "json", "ts"],
-  "rootDir": ".",
+  "rootDir": "..",
+  "testRegex": "test/.*\\.db-spec\\.ts$",
+  "transform": { "^.+\\.(t|j)s$": "ts-jest" },
+  "transformIgnorePatterns": ["node_modules/(?!.*uuid)"],
+  "moduleNameMapper": { "^(\\.{1,2}/.*)\\.js$": "$1" },
   "testEnvironment": "node",
-  "testRegex": ".db-spec.ts$",
-  "transform": {
-    "^.+\\.(t|j)s$": "ts-jest"
-  },
-  "moduleNameMapper": {
-    "^(\\.{1,2}/.*)\\.js$": "$1"
-  }
+  "testTimeout": 60000
 }

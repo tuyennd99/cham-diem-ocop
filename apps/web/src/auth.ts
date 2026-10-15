@@ -14,6 +14,11 @@ export interface Session {
   user: SessionUser;
 }
 
+export function homeFor(role: AppRole, registrantPath: "/my/products" | "/my/products/new" = "/my/products"):
+  "/admin/products" | "/judge" | "/my/products" | "/my/products/new" {
+  return role === "ADMIN" ? "/admin/products" : role === "JUDGE" ? "/judge" : registrantPath;
+}
+
 const storageKey = "ocop-session";
 
 function readSession(): Session | null {

@@ -16,6 +16,6 @@ From the repository root, install workspace dependencies with `pnpm install`, th
 
 Authenticated API requests use bearer access tokens stored for the current browser session in local storage. The API response contract is `{ statusCode, data, meta? }`, with errors shaped as `{ statusCode, message }`.
 
-The product form's `formData` field is currently edited as JSON because the API exposes stored form data without a dynamic form-schema endpoint. Product search filters the currently loaded API page; the product listing API does not currently accept a search parameter.
+The product registration form follows Mẫu 01 in three steps with named fields; the API validates required fields when a draft is submitted. Photos and evidence attachments are optional. Product search filters the currently loaded API page; the product listing API does not currently accept a search parameter.
 
 No build or runtime verification is recorded in this README.

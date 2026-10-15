@@ -6,6 +6,14 @@ DROP TABLE IF EXISTS "report_workspaces" CASCADE;
 DROP TABLE IF EXISTS "notifications" CASCADE;
 DROP TABLE IF EXISTS "refresh_sessions" CASCADE;
 DROP TABLE IF EXISTS "audit_logs" CASCADE;
+DROP TABLE IF EXISTS "task_user_groups" CASCADE;
+DROP TABLE IF EXISTS "user_group_members" CASCADE;
+DROP TABLE IF EXISTS "user_groups" CASCADE;
+DROP TABLE IF EXISTS "user_permission_groups" CASCADE;
+DROP TABLE IF EXISTS "permission_group_permissions" CASCADE;
+DROP TABLE IF EXISTS "permission_groups" CASCADE;
+DROP TABLE IF EXISTS "permissions" CASCADE;
+DROP TABLE IF EXISTS "reporting_subtasks" CASCADE;
 DROP TABLE IF EXISTS "task_collaborators" CASCADE;
 DROP TABLE IF EXISTS "program_collaborators" CASCADE;
 DROP TABLE IF EXISTS "stored_files" CASCADE;
@@ -16,6 +24,8 @@ DROP TABLE IF EXISTS "users" CASCADE;
 
 DROP TYPE IF EXISTS "TaskType" CASCADE;
 DROP TYPE IF EXISTS "TaskDeadlineStatus" CASCADE;
+DROP TYPE IF EXISTS "Frequency" CASCADE;
+DROP TYPE IF EXISTS "SubtaskStatus" CASCADE;
 DROP TYPE IF EXISTS "ReportKind" CASCADE;
 DROP TYPE IF EXISTS "ReportStatus" CASCADE;
 DROP TYPE IF EXISTS "UserStatus" CASCADE;
@@ -36,12 +46,33 @@ CREATE TABLE "users" (
     "phone" VARCHAR(30),
     "role" "Role" NOT NULL DEFAULT 'REGISTRANT',
     "verified" BOOLEAN NOT NULL DEFAULT false,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMPTZ(3) NOT NULL,
     CONSTRAINT "users_pkey" PRIMARY KEY ("id")
 );
 CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
 CREATE INDEX "users_role_idx" ON "users"("role");
+
+CREATE TABLE "audit_logs" (
+    "id" TEXT NOT NULL,
+    "actorId" TEXT,
+    "action" VARCHAR(100) NOT NULL,
+    "entityType" VARCHAR(100) NOT NULL,
+    "entityId" VARCHAR(100),
+    "beforeData" JSONB,
+    "afterData" JSONB,
+    "reason" VARCHAR(255),
+    "ipAddress" VARCHAR(45),
+    "userAgent" VARCHAR(500),
+    "requestId" VARCHAR(100),
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "audit_logs_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX "audit_logs_actorId_createdAt_idx" ON "audit_logs"("actorId", "createdAt");
+CREATE INDEX "audit_logs_entityType_entityId_createdAt_idx" ON "audit_logs"("entityType", "entityId", "createdAt");
+ALTER TABLE "audit_logs" ADD CONSTRAINT "audit_logs_actorId_fkey"
+  FOREIGN KEY ("actorId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 CREATE TABLE "otp_codes" (
     "id" TEXT NOT NULL,
@@ -65,6 +96,8 @@ CREATE TABLE "product_categories" (
     "id" TEXT NOT NULL,
     "groupCode" VARCHAR(50) NOT NULL,
     "groupName" VARCHAR(255) NOT NULL,
+    "classificationGroup" VARCHAR(255) NOT NULL,
+    "classificationSubgroup" VARCHAR(255),
     "name" VARCHAR(255) NOT NULL,
     "description" TEXT,
     "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -93,6 +126,8 @@ CREATE TABLE "criteria" (
     "code" VARCHAR(50) NOT NULL,
     "name" VARCHAR(500) NOT NULL,
     "maxScore" INTEGER NOT NULL,
+    "sectionCode" VARCHAR(1) NOT NULL,
+    "sectionName" VARCHAR(255) NOT NULL,
     "order" INTEGER NOT NULL,
     CONSTRAINT "criteria_pkey" PRIMARY KEY ("id"),
     CONSTRAINT "criteria_maxScore_check" CHECK ("maxScore" >= 0)
@@ -106,11 +141,13 @@ ALTER TABLE "criteria" ADD CONSTRAINT "criteria_setId_fkey"
 CREATE TABLE "sub_criteria" (
     "id" TEXT NOT NULL,
     "criterionId" TEXT NOT NULL,
+    "code" VARCHAR(50) NOT NULL,
     "content" TEXT NOT NULL,
     "order" INTEGER NOT NULL,
     CONSTRAINT "sub_criteria_pkey" PRIMARY KEY ("id")
 );
 CREATE UNIQUE INDEX "sub_criteria_criterionId_order_key" ON "sub_criteria"("criterionId", "order");
+CREATE UNIQUE INDEX "sub_criteria_criterionId_code_key" ON "sub_criteria"("criterionId", "code");
 CREATE UNIQUE INDEX "sub_criteria_id_criterionId_key" ON "sub_criteria"("id", "criterionId");
 CREATE INDEX "sub_criteria_criterionId_idx" ON "sub_criteria"("criterionId");
 ALTER TABLE "sub_criteria" ADD CONSTRAINT "sub_criteria_criterionId_fkey"
@@ -121,10 +158,11 @@ CREATE TABLE "score_options" (
     "subCriterionId" TEXT NOT NULL,
     "label" TEXT NOT NULL,
     "points" INTEGER NOT NULL,
+    "order" INTEGER NOT NULL,
     CONSTRAINT "score_options_pkey" PRIMARY KEY ("id")
 );
 CREATE UNIQUE INDEX "score_options_id_subCriterionId_key" ON "score_options"("id", "subCriterionId");
-CREATE UNIQUE INDEX "score_options_subCriterionId_points_key" ON "score_options"("subCriterionId", "points");
+CREATE UNIQUE INDEX "score_options_subCriterionId_order_key" ON "score_options"("subCriterionId", "order");
 CREATE INDEX "score_options_subCriterionId_idx" ON "score_options"("subCriterionId");
 ALTER TABLE "score_options" ADD CONSTRAINT "score_options_subCriterionId_fkey"
   FOREIGN KEY ("subCriterionId") REFERENCES "sub_criteria"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -139,6 +177,7 @@ CREATE TABLE "products" (
     "status" "ProductStatus" NOT NULL DEFAULT 'DRAFT',
     "finalScore" DOUBLE PRECISION,
     "starRating" INTEGER,
+    "submittedAt" TIMESTAMPTZ(3),
     "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMPTZ(3) NOT NULL,
     CONSTRAINT "products_pkey" PRIMARY KEY ("id"),

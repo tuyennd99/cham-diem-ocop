@@ -1,12 +1,12 @@
 import { Link, Outlet } from "@tanstack/react-router";
 import { useState } from "react";
-import { getSession } from "../auth";
+import { getSession, homeFor } from "../auth";
 
 export function PublicLayout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const session = getSession();
   const signedIn = Boolean(session);
-  const workPath = session?.user.role === "ADMIN" ? "/admin/products" : session?.user.role === "JUDGE" ? "/judge" : "/my/products/new";
+  const workPath = session ? homeFor(session.user.role, "/my/products/new") : "/my/products/new";
 
   return (
     <>

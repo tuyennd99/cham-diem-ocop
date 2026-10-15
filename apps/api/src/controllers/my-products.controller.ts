@@ -11,7 +11,7 @@ import {
   StreamableFile,
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
-import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { Roles } from '../decorators/roles.decorator';
@@ -35,6 +35,11 @@ export class MyProductsController {
   @Get()
   list(@CurrentUser() principal: AccessTokenPayload) {
     return this.products.listMine(principal);
+  }
+
+  @Get(':id')
+  detail(@Param('id') id: string, @CurrentUser() principal: AccessTokenPayload) {
+    return this.products.getMine(id, principal);
   }
 
   @Post()
@@ -67,6 +72,9 @@ export class MyProductsController {
 
   @Post(':id/attachments')
   @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } } },
+  })
   @UseInterceptors(FileInterceptor('file', productUploadOptions()))
   upload(
     @Param('id') id: string,

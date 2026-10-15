@@ -38,8 +38,8 @@ export class ProductsService {
     return this.repository.listCategories();
   }
 
-  async listPublic(page: number, limit: number, categoryId?: string) {
-    const { data, total } = await this.repository.listPublic({ page, limit, categoryId });
+  async listPublic(page: number, limit: number, categoryId?: string, query?: string) {
+    const { data, total } = await this.repository.listPublic({ page, limit, categoryId, query });
     return { data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }
 
@@ -59,6 +59,12 @@ export class ProductsService {
 
   listMine(principal: AccessTokenPayload) {
     return this.repository.listMine(principal.sub);
+  }
+
+  async getMine(id: string, principal: AccessTokenPayload) {
+    const product = await this.repository.findMine(id, principal.sub);
+    if (!product) throw new NotFoundException('Product not found');
+    return product;
   }
 
   create(input: ProductWriteDto, principal: AccessTokenPayload) {
@@ -143,7 +149,7 @@ export class ProductsService {
       categoryId: input.categoryId,
       name: this.requiredText(input.name, 'Product name'),
       description: input.description?.trim() || null,
-      formData: input.formData,
+      formData: input.formData as unknown as Prisma.InputJsonValue,
     });
   }
 

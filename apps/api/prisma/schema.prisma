@@ -42,15 +42,38 @@ model User {
   phone        String?           @db.VarChar(30)
   role         Role              @default(REGISTRANT)
   verified     Boolean           @default(false)
+  isActive     Boolean           @default(true)
+  tokenVersion Int               @default(0)
   createdAt    DateTime          @default(now()) @db.Timestamptz(3)
   updatedAt    DateTime          @updatedAt @db.Timestamptz(3)
   products     Product[]
   assignments  JudgeAssignment[]
   evaluations  Evaluation[]
   otpCodes     OtpCode[]
+  auditLogs    AuditLog[]      @relation("AuditActor")
 
   @@index([role])
   @@map("users")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String   @db.VarChar(100)
+  entityType String   @db.VarChar(100)
+  entityId   String?  @db.VarChar(100)
+  beforeData Json?
+  afterData  Json?
+  reason     String?  @db.VarChar(255)
+  ipAddress  String?  @db.VarChar(45)
+  userAgent  String?  @db.VarChar(500)
+  requestId  String?  @db.VarChar(100)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  actor      User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId, createdAt])
+  @@map("audit_logs")
 }
 
 model OtpCode {
@@ -71,16 +94,18 @@ model OtpCode {
 }
 
 model ProductCategory {
-  id          String       @id @default(cuid())
-  groupCode   String       @db.VarChar(50)
-  groupName   String       @db.VarChar(255)
-  name        String       @unique @db.VarChar(255)
-  description String?
-  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
-  criteriaSet CriteriaSet?
-  products    Product[]
-  assignments JudgeAssignment[]
+  id                    String       @id @default(cuid())
+  groupCode             String       @db.VarChar(50)
+  groupName             String       @db.VarChar(255)
+  classificationGroup  String       @db.VarChar(255)
+  classificationSubgroup String?     @db.VarChar(255)
+  name                  String       @unique @db.VarChar(255)
+  description           String?
+  createdAt             DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime     @updatedAt @db.Timestamptz(3)
+  criteriaSet           CriteriaSet?
+  products              Product[]
+  assignments           JudgeAssignment[]
 
   @@index([groupCode, name])
   @@map("product_categories")
@@ -105,6 +130,8 @@ model Criterion {
   code        String        @db.VarChar(50)
   name        String        @db.VarChar(500)
   maxScore    Int
+  sectionCode String        @db.VarChar(1)
+  sectionName String        @db.VarChar(255)
   order       Int
   criteriaSet CriteriaSet   @relation(fields: [setId], references: [id], onDelete: Cascade)
   subCriteria SubCriterion[]
@@ -118,12 +145,14 @@ model Criterion {
 model SubCriterion {
   id          String       @id @default(cuid())
   criterionId String
+  code        String       @db.VarChar(50)
   content     String
   order       Int
   criterion   Criterion    @relation(fields: [criterionId], references: [id], onDelete: Cascade)
   options     ScoreOption[]
   scores      Score[]
 
+  @@unique([criterionId, code])
   @@unique([criterionId, order])
   @@unique([id, criterionId])
   @@index([criterionId])
@@ -135,11 +164,12 @@ model ScoreOption {
   subCriterionId String
   label          String
   points         Int
+  order          Int
   subCriterion   SubCriterion  @relation(fields: [subCriterionId], references: [id], onDelete: Cascade)
   scores         Score[]
 
   @@unique([id, subCriterionId])
-  @@unique([subCriterionId, points])
+  @@unique([subCriterionId, order])
   @@index([subCriterionId])
   @@map("score_options")
 }
@@ -154,6 +184,7 @@ model Product {
   status       ProductStatus @default(DRAFT)
   finalScore   Float?
   starRating   Int?
+  submittedAt  DateTime?     @db.Timestamptz(3)
   createdAt    DateTime      @default(now()) @db.Timestamptz(3)
   updatedAt    DateTime      @updatedAt @db.Timestamptz(3)
   registrant   User          @relation(fields: [registrantId], references: [id], onDelete: Restrict)

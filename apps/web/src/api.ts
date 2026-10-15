@@ -14,7 +14,7 @@ export class ApiError extends Error {
 
 const apiBase = (import.meta.env.VITE_API_URL || "/api").replace(/\/$/, "");
 
-export async function api<T>(path: string, init: RequestInit = {}): Promise<ApiResult<T>> {
+async function request(path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   const session = getSession();
   if (session?.accessToken) headers.set("Authorization", `Bearer ${session.accessToken}`);
@@ -22,17 +22,23 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<ApiR
     headers.set("Content-Type", "application/json");
   }
   const response = await fetch(`${apiBase}${path}`, { ...init, headers });
-  const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    if (response.status === 401 && session) {
-      setSession(null);
-      window.location.replace("/login");
-    }
+    const body: unknown = await response.json().catch(() => null);
     const message = typeof body === "object" && body !== null && "message" in body && typeof body.message === "string"
       ? body.message
       : `Request failed (${response.status})`;
+    if (response.status === 401 && session && !(path === "/auth/change-password" && message === "Current password is incorrect")) {
+      setSession(null);
+      window.location.replace("/login");
+    }
     throw new ApiError(message, response.status);
   }
+
+  return response;
+}
+
+export async function api<T>(path: string, init: RequestInit = {}): Promise<ApiResult<T>> {
+  const body: unknown = await (await request(path, init)).json().catch(() => null);
   if (typeof body === "object" && body !== null && "data" in body) {
     return { data: body.data as T, ...( "meta" in body ? { meta: body.meta as ApiResult<T>["meta"] } : {}) };
   }
@@ -40,23 +46,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<ApiR
 }
 
 export async function apiBlob(path: string): Promise<Blob> {
-  const headers = new Headers();
-  const session = getSession();
-  if (session?.accessToken) headers.set("Authorization", `Bearer ${session.accessToken}`);
-  const response = await fetch(`${apiBase}${path}`, { headers });
-  if (!response.ok) {
-    if (response.status === 401 && session) {
-      setSession(null);
-      window.location.replace("/login");
-    }
-    const body = await response.json().catch(() => null) as { message?: string } | null;
-    throw new ApiError(body?.message ?? `Request failed (${response.status})`, response.status);
-  }
-  return response.blob();
-}
-
-export function jsonBody(value: unknown): string {
-  return JSON.stringify(value);
+  return (await request(path)).blob();
 }
 
 export function messageOf(error: unknown): string {

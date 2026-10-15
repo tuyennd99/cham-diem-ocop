@@ -9,6 +9,8 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as R403RouteImport } from './routes/403'
+import { Route as R404RouteImport } from './routes/404'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as PublicRouteImport } from './routes/_public'
@@ -16,7 +18,10 @@ import { Route as AppAccountRouteImport } from './routes/_app.account'
 import { Route as AuthForgotPasswordRouteImport } from './routes/_auth.forgot-password'
 import { Route as AuthLoginRouteImport } from './routes/_auth.login'
 import { Route as AuthRegisterRouteImport } from './routes/_auth.register'
+import { Route as AuthVerifyOtpRouteImport } from './routes/_auth.verify-otp'
 import { Route as PublicIndexRouteImport } from './routes/_public.index'
+import { Route as AppAccountPasswordRouteImport } from './routes/_app.account.password'
+import { Route as AppAdminIndexRouteImport } from './routes/_app.admin.index'
 import { Route as AppAdminAssignmentsRouteImport } from './routes/_app.admin.assignments'
 import { Route as AppAdminJudgesRouteImport } from './routes/_app.admin.judges'
 import { Route as AppJudgeIndexRouteImport } from './routes/_app.judge.index'
@@ -30,6 +35,16 @@ import { Route as AppMyProductsIdRouteImport } from './routes/_app.my.products.$
 import { Route as AppMyProductsNewRouteImport } from './routes/_app.my.products.new'
 import { Route as AppMyProductsIdEditRouteImport } from './routes/_app.my.products.$id.edit'
 
+const R403Route = R403RouteImport.update({
+  id: '/403',
+  path: '/403',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const R404Route = R404RouteImport.update({
+  id: '/404',
+  path: '/404',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppRoute = AppRouteImport.update({
   id: '/_app',
   getParentRoute: () => rootRouteImport,
@@ -62,10 +77,25 @@ const AuthRegisterRoute = AuthRegisterRouteImport.update({
   path: '/register',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthVerifyOtpRoute = AuthVerifyOtpRouteImport.update({
+  id: '/verify-otp',
+  path: '/verify-otp',
+  getParentRoute: () => AuthRoute,
+} as any)
 const PublicIndexRoute = PublicIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => PublicRoute,
+} as any)
+const AppAccountPasswordRoute = AppAccountPasswordRouteImport.update({
+  id: '/password',
+  path: '/password',
+  getParentRoute: () => AppAccountRoute,
+} as any)
+const AppAdminIndexRoute = AppAdminIndexRouteImport.update({
+  id: '/admin/',
+  path: '/admin/',
+  getParentRoute: () => AppRoute,
 } as any)
 const AppAdminAssignmentsRoute = AppAdminAssignmentsRouteImport.update({
   id: '/admin/assignments',
@@ -129,14 +159,19 @@ const AppMyProductsIdEditRoute = AppMyProductsIdEditRouteImport.update({
 } as any)
 
 export interface FileRoutesByFullPath {
+  '/403': typeof R403Route
+  '/404': typeof R404Route
   '/': typeof PublicIndexRoute
-  '/account': typeof AppAccountRoute
+  '/account': typeof AppAccountRouteWithChildren
   '/forgot-password': typeof AuthForgotPasswordRoute
   '/login': typeof AuthLoginRoute
   '/register': typeof AuthRegisterRoute
+  '/verify-otp': typeof AuthVerifyOtpRoute
+  '/account/password': typeof AppAccountPasswordRoute
   '/admin/assignments': typeof AppAdminAssignmentsRoute
   '/admin/judges': typeof AppAdminJudgesRoute
   '/products/$id': typeof PublicProductsIdRoute
+  '/admin/': typeof AppAdminIndexRoute
   '/judge/': typeof AppJudgeIndexRoute
   '/products/': typeof PublicProductsIndexRoute
   '/admin/products/$id': typeof AppAdminProductsIdRoute
@@ -148,14 +183,19 @@ export interface FileRoutesByFullPath {
   '/my/products/$id/edit': typeof AppMyProductsIdEditRoute
 }
 export interface FileRoutesByTo {
+  '/403': typeof R403Route
+  '/404': typeof R404Route
   '/': typeof PublicIndexRoute
-  '/account': typeof AppAccountRoute
+  '/account': typeof AppAccountRouteWithChildren
   '/forgot-password': typeof AuthForgotPasswordRoute
   '/login': typeof AuthLoginRoute
   '/register': typeof AuthRegisterRoute
+  '/verify-otp': typeof AuthVerifyOtpRoute
+  '/account/password': typeof AppAccountPasswordRoute
   '/admin/assignments': typeof AppAdminAssignmentsRoute
   '/admin/judges': typeof AppAdminJudgesRoute
   '/products/$id': typeof PublicProductsIdRoute
+  '/admin': typeof AppAdminIndexRoute
   '/judge': typeof AppJudgeIndexRoute
   '/products': typeof PublicProductsIndexRoute
   '/admin/products/$id': typeof AppAdminProductsIdRoute
@@ -168,17 +208,22 @@ export interface FileRoutesByTo {
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
+  '/403': typeof R403Route
+  '/404': typeof R404Route
   '/_app': typeof AppRouteWithChildren
   '/_auth': typeof AuthRouteWithChildren
   '/_public': typeof PublicRouteWithChildren
-  '/_app/account': typeof AppAccountRoute
+  '/_app/account': typeof AppAccountRouteWithChildren
   '/_auth/forgot-password': typeof AuthForgotPasswordRoute
   '/_auth/login': typeof AuthLoginRoute
   '/_auth/register': typeof AuthRegisterRoute
+  '/_auth/verify-otp': typeof AuthVerifyOtpRoute
   '/_public/': typeof PublicIndexRoute
+  '/_app/account/password': typeof AppAccountPasswordRoute
   '/_app/admin/assignments': typeof AppAdminAssignmentsRoute
   '/_app/admin/judges': typeof AppAdminJudgesRoute
   '/_public/products/$id': typeof PublicProductsIdRoute
+  '/_app/admin/': typeof AppAdminIndexRoute
   '/_app/judge/': typeof AppJudgeIndexRoute
   '/_public/products/': typeof PublicProductsIndexRoute
   '/_app/admin/products/$id': typeof AppAdminProductsIdRoute
@@ -192,14 +237,19 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
+    | '/403'
+    | '/404'
     | '/'
     | '/account'
     | '/forgot-password'
     | '/login'
     | '/register'
+    | '/verify-otp'
+    | '/account/password'
     | '/admin/assignments'
     | '/admin/judges'
     | '/products/$id'
+    | '/admin/'
     | '/judge/'
     | '/products/'
     | '/admin/products/$id'
@@ -211,14 +261,19 @@ export interface FileRouteTypes {
     | '/my/products/$id/edit'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/403'
+    | '/404'
     | '/'
     | '/account'
     | '/forgot-password'
     | '/login'
     | '/register'
+    | '/verify-otp'
+    | '/account/password'
     | '/admin/assignments'
     | '/admin/judges'
     | '/products/$id'
+    | '/admin'
     | '/judge'
     | '/products'
     | '/admin/products/$id'
@@ -230,6 +285,8 @@ export interface FileRouteTypes {
     | '/my/products/$id/edit'
   id:
     | '__root__'
+    | '/403'
+    | '/404'
     | '/_app'
     | '/_auth'
     | '/_public'
@@ -237,10 +294,13 @@ export interface FileRouteTypes {
     | '/_auth/forgot-password'
     | '/_auth/login'
     | '/_auth/register'
+    | '/_auth/verify-otp'
     | '/_public/'
+    | '/_app/account/password'
     | '/_app/admin/assignments'
     | '/_app/admin/judges'
     | '/_public/products/$id'
+    | '/_app/admin/'
     | '/_app/judge/'
     | '/_public/products/'
     | '/_app/admin/products/$id'
@@ -253,6 +313,8 @@ export interface FileRouteTypes {
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
+  R403Route: typeof R403Route
+  R404Route: typeof R404Route
   AppRoute: typeof AppRouteWithChildren
   AuthRoute: typeof AuthRouteWithChildren
   PublicRoute: typeof PublicRouteWithChildren
@@ -260,6 +322,20 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/403': {
+      id: '/403'
+      path: '/403'
+      fullPath: '/403'
+      preLoaderRoute: typeof R403RouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/404': {
+      id: '/404'
+      path: '/404'
+      fullPath: '/404'
+      preLoaderRoute: typeof R404RouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_app': {
       id: '/_app'
       path: ''
@@ -309,12 +385,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRegisterRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/_auth/verify-otp': {
+      id: '/_auth/verify-otp'
+      path: '/verify-otp'
+      fullPath: '/verify-otp'
+      preLoaderRoute: typeof AuthVerifyOtpRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_public/': {
       id: '/_public/'
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof PublicIndexRouteImport
       parentRoute: typeof PublicRoute
+    }
+    '/_app/account/password': {
+      id: '/_app/account/password'
+      path: '/password'
+      fullPath: '/account/password'
+      preLoaderRoute: typeof AppAccountPasswordRouteImport
+      parentRoute: typeof AppAccountRoute
+    }
+    '/_app/admin/': {
+      id: '/_app/admin/'
+      path: '/admin'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AppAdminIndexRouteImport
+      parentRoute: typeof AppRoute
     }
     '/_app/admin/assignments': {
       id: '/_app/admin/assignments'
@@ -403,6 +500,18 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AppAccountRouteChildren {
+  AppAccountPasswordRoute: typeof AppAccountPasswordRoute
+}
+
+const AppAccountRouteChildren: AppAccountRouteChildren = {
+  AppAccountPasswordRoute: AppAccountPasswordRoute,
+}
+
+const AppAccountRouteWithChildren = AppAccountRoute._addFileChildren(
+  AppAccountRouteChildren,
+)
+
 interface AppMyProductsIdRouteChildren {
   AppMyProductsIdEditRoute: typeof AppMyProductsIdEditRoute
 }
@@ -416,9 +525,10 @@ const AppMyProductsIdRouteWithChildren = AppMyProductsIdRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
-  AppAccountRoute: typeof AppAccountRoute
+  AppAccountRoute: typeof AppAccountRouteWithChildren
   AppAdminAssignmentsRoute: typeof AppAdminAssignmentsRoute
   AppAdminJudgesRoute: typeof AppAdminJudgesRoute
+  AppAdminIndexRoute: typeof AppAdminIndexRoute
   AppJudgeIndexRoute: typeof AppJudgeIndexRoute
   AppAdminProductsIdRoute: typeof AppAdminProductsIdRoute
   AppJudgeProductsIdRoute: typeof AppJudgeProductsIdRoute
@@ -429,9 +539,10 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
-  AppAccountRoute: AppAccountRoute,
+  AppAccountRoute: AppAccountRouteWithChildren,
   AppAdminAssignmentsRoute: AppAdminAssignmentsRoute,
   AppAdminJudgesRoute: AppAdminJudgesRoute,
+  AppAdminIndexRoute: AppAdminIndexRoute,
   AppJudgeIndexRoute: AppJudgeIndexRoute,
   AppAdminProductsIdRoute: AppAdminProductsIdRoute,
   AppJudgeProductsIdRoute: AppJudgeProductsIdRoute,
@@ -447,12 +558,14 @@ interface AuthRouteChildren {
   AuthForgotPasswordRoute: typeof AuthForgotPasswordRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthRegisterRoute: typeof AuthRegisterRoute
+  AuthVerifyOtpRoute: typeof AuthVerifyOtpRoute
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
   AuthForgotPasswordRoute: AuthForgotPasswordRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthRegisterRoute: AuthRegisterRoute,
+  AuthVerifyOtpRoute: AuthVerifyOtpRoute,
 }
 
 const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
@@ -473,6 +586,8 @@ const PublicRouteWithChildren =
   PublicRoute._addFileChildren(PublicRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
+  R403Route: R403Route,
+  R404Route: R404Route,
   AppRoute: AppRouteWithChildren,
   AuthRoute: AuthRouteWithChildren,
   PublicRoute: PublicRouteWithChildren,

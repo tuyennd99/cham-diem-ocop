@@ -4,82 +4,47 @@ import {
   ExceptionFilter,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
-import { Request, Response } from 'express';
-import { isObjectLike } from 'lodash';
-import { ZodValidationException } from 'nestjs-zod';
-import type { ZodError } from 'zod';
+import type { Request, Response } from 'express';
 import { ApiError } from '../types/api';
+import { requestMeta } from '../utils/request-meta';
 
 @Catch()
 export class ApiExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(ApiExceptionFilter.name);
+
   catch(exception: unknown, host: ArgumentsHost) {
     const context = host.switchToHttp();
     const response = context.getResponse<Response>();
     const request = context.getRequest<Request>();
-
-    if (exception instanceof ZodValidationException) {
-      const issues = (exception.getZodError() as ZodError).issues;
-      const message = issues
-        .map((i) => {
-          const field = i.path.join('.');
-          return field ? `${field}: ${i.message}` : i.message;
-        })
-        .join(', ');
-      const payload: ApiError = {
-        statusCode: HttpStatus.BAD_REQUEST,
-        errorCode: 'VALIDATION_ERROR',
-        message: message || 'Request failed',
-        requestId: this.requestId(request),
-        details: issues,
-      };
-      response.status(HttpStatus.BAD_REQUEST).json(payload);
-      return;
+    const statusCode = exception instanceof HttpException
+      ? exception.getStatus()
+      : HttpStatus.INTERNAL_SERVER_ERROR;
+    const body = exception instanceof HttpException ? exception.getResponse() : undefined;
+    const message = typeof body === 'string'
+      ? body
+      : Array.isArray((body as { message?: unknown[] } | undefined)?.message)
+        ? ((body as { message: unknown[] }).message).map(String).join(', ')
+        : typeof (body as { message?: unknown } | undefined)?.message === 'string'
+          ? String((body as { message: string }).message)
+          : statusCode === HttpStatus.INTERNAL_SERVER_ERROR
+            ? 'Internal server error'
+            : `${request.method} ${request.path} failed`;
+    const requestId = requestMeta(request).requestId;
+    if (statusCode >= HttpStatus.INTERNAL_SERVER_ERROR) {
+      const errorCode = typeof exception === 'object' && exception !== null && 'code' in exception
+        ? String(exception.code)
+        : undefined;
+      this.logger.error({
+        requestId,
+        method: request.method,
+        path: request.path,
+        errorType: exception instanceof Error ? exception.name : 'UnknownError',
+        ...(errorCode ? { errorCode } : {}),
+      });
     }
-
-    const status: HttpStatus =
-      exception instanceof HttpException
-        ? exception.getStatus()
-        : HttpStatus.INTERNAL_SERVER_ERROR;
-    const exceptionResponse =
-      exception instanceof HttpException ? exception.getResponse() : undefined;
-    const body: Record<string, unknown> = isObjectLike(exceptionResponse)
-      ? (exceptionResponse as Record<string, unknown>)
-      : {};
-    const message =
-      typeof exceptionResponse === 'string'
-        ? exceptionResponse
-        : Array.isArray(body.message)
-          ? body.message.join(', ')
-          : typeof body.message === 'string'
-            ? body.message
-            : status === HttpStatus.INTERNAL_SERVER_ERROR
-              ? 'Internal server error'
-              : 'Request failed';
-    const errorCode =
-      typeof body.errorCode === 'string'
-        ? body.errorCode
-        : status === HttpStatus.BAD_REQUEST
-          ? 'VALIDATION_ERROR'
-          : status === HttpStatus.INTERNAL_SERVER_ERROR
-            ? 'INTERNAL_SERVER_ERROR'
-            : `HTTP_${status}`;
-    const payload: ApiError = {
-      statusCode: status,
-      errorCode,
-      message,
-      requestId: this.requestId(request),
-      ...(body.details === undefined ? {} : { details: body.details }),
-    };
-
-    response.status(status).json(payload);
-  }
-
-  private requestId(request: Request): string {
-    const supplied = request.header('x-request-id');
-    return supplied && /^[A-Za-z0-9._-]{1,100}$/.test(supplied)
-      ? supplied
-      : randomUUID();
+    const payload: ApiError = { statusCode, message, requestId };
+    response.status(statusCode).json(payload);
   }
 }

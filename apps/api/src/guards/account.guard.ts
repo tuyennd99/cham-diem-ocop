@@ -11,7 +11,9 @@ export class AccountGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Request & { user?: AccessTokenPayload }>();
     if (!request.user) return true;
     const user = await this.repository.findUserById(request.user.sub);
-    if (!user?.verified || !user.isActive) throw new UnauthorizedException('Account is unavailable');
+    if (!user?.verified || !user.isActive || request.user.tokenVersion !== user.tokenVersion) {
+      throw new UnauthorizedException('Authentication required');
+    }
     request.user.email = user.email;
     request.user.role = user.role;
     return true;

@@ -1,191 +1,324 @@
-import { Prisma, PrismaClient } from '@prisma/client';
-import { createPrismaAdapter } from '../src/prisma/client';
-import { seedDefaultAdminInTransaction } from '../prisma/seed/admin';
+import { EvaluationStatus, ProductStatus, Role } from '@prisma/client';
+import { spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { PrismaService } from '../src/prisma/prisma.service';
+import { withTestApp } from './support/db-app';
 
-const testUrl = process.env.TEST_DATABASE_URL;
-if (
-  !testUrl ||
-  !/^postgresql:\/\/[^/]+@(?:127\.0\.0\.1|localhost):5433\/congan_task_test(?:\?|$)/.test(
-    testUrl,
-  )
-) {
-  throw new Error(
-    'TEST_DATABASE_URL must target congan_task_test on localhost:5433',
+const officialDataDir = resolve(__dirname, '../prisma/seed-data');
+type SeedSet = {
+  categoryKey: string;
+  name: string;
+  criteria: Array<{
+    subCriteria: Array<{ options: Array<{ points: number }> }>;
+  }>;
+};
+const officialCategories = (
+  JSON.parse(
+    readFileSync(join(officialDataDir, 'categories.json'), 'utf8'),
+  ) as {
+    categories: Array<{ id: string; criteriaSetKey: string }>;
+  }
+).categories;
+
+function seedSandbox(mutate: (sets: SeedSet[]) => void = () => {}) {
+  const root = mkdtempSync(join(tmpdir(), 'ocop-seed-'));
+  const dataDir = join(root, 'prisma', 'seed-data');
+  mkdirSync(dataDir, { recursive: true });
+  for (const file of readdirSync(officialDataDir)) {
+    copyFileSync(join(officialDataDir, file), join(dataDir, file));
+  }
+  writeFileSync(join(root, '.env'), '');
+  const files = readdirSync(dataDir)
+    .filter(
+      (file) => file.startsWith('criteria-sets') && file.endsWith('.json'),
+    )
+    .sort();
+  const documents = files.map((file) => ({
+    file,
+    document: JSON.parse(readFileSync(join(dataDir, file), 'utf8')) as {
+      criteriaSets: SeedSet[];
+    },
+  }));
+  const sets = documents.flatMap(({ document }) => document.criteriaSets);
+  mutate(sets);
+  for (const { file, document } of documents) {
+    writeFileSync(join(dataDir, file), JSON.stringify(document, null, 2));
+  }
+  return { root, sets };
+}
+
+function runSeed(root: string) {
+  return spawnSync(
+    process.execPath,
+    [
+      '--import',
+      require.resolve('tsx'),
+      resolve(__dirname, '../prisma/seed/seed.ts'),
+    ],
+    {
+      cwd: root,
+      env: {
+        ...process.env,
+        DOTENV_CONFIG_PATH: join(root, '.env'),
+      },
+      encoding: 'utf8',
+      timeout: 60000,
+    },
   );
 }
 
-process.env.DATABASE_URL = testUrl;
-
-describe('default admin seed', () => {
-  let prisma: PrismaClient;
-
-  beforeAll(async () => {
-    prisma = new PrismaClient({ adapter: createPrismaAdapter(testUrl) });
-    await prisma.$connect();
-  });
-
-  afterAll(async () => {
-    await prisma?.$disconnect();
-  });
-
-  it('creates admin as id 1 and advances the users sequence', async () => {
-    await withRollback(prisma, async (tx) => {
-      const organization = await createOrganization(tx);
-      const admin = await seedDefaultAdminInTransaction(tx, {
-        passwordHash: 'hash',
-        organizationId: organization.id,
-      });
-      const next = await tx.user.create({
-        data: {
-          username: `next-user-${organization.id}`,
-          fullName: 'Next user',
-          passwordHash: 'hash',
-          organizationId: organization.id,
-        },
-      });
-
-      expect(admin.id).toBe(1);
-      expect(next.id).toBeGreaterThan(1);
+function officialSets(): SeedSet[] {
+  return readdirSync(officialDataDir)
+    .filter(
+      (file) => file.startsWith('criteria-sets') && file.endsWith('.json'),
+    )
+    .sort()
+    .flatMap((file) => {
+      const document = JSON.parse(
+        readFileSync(join(officialDataDir, file), 'utf8'),
+      ) as {
+        criteriaSets: SeedSet[];
+      };
+      return document.criteriaSets;
     });
-  });
-
-  it('does not lower an advanced users sequence', async () => {
-    await withRollback(prisma, async (tx) => {
-      const organization = await createOrganization(tx);
-      await tx.$queryRaw(
-        Prisma.sql`SELECT setval(pg_get_serial_sequence('users', 'id')::regclass, 1000000)`,
-      );
-
-      await seedDefaultAdminInTransaction(tx, {
-        passwordHash: 'hash',
-        organizationId: organization.id,
-      });
-      const next = await tx.user.create({
-        data: {
-          username: `high-water-${organization.id}`,
-          fullName: 'High water user',
-          passwordHash: 'hash',
-          organizationId: organization.id,
-        },
-      });
-
-      expect(next.id).toBeGreaterThan(1_000_000);
-    });
-  });
-
-  it('fails when id 1 belongs to another username', async () => {
-    await withRollback(prisma, async (tx) => {
-      const organization = await createOrganization(tx);
-      await tx.user.create({
-        data: {
-          id: 1,
-          username: 'occupied',
-          fullName: 'Occupied',
-          passwordHash: 'hash',
-          organizationId: organization.id,
-        },
-      });
-
-      await expect(
-        seedDefaultAdminInTransaction(tx, {
-          passwordHash: 'hash',
-          organizationId: organization.id,
-        }),
-      ).rejects.toThrow('User id 1 is reserved for admin');
-    });
-  });
-
-  it('reactivates an existing default admin', async () => {
-    await withRollback(prisma, async (tx) => {
-      const organization = await createOrganization(tx);
-      await seedDefaultAdminInTransaction(tx, {
-        passwordHash: 'hash',
-        organizationId: organization.id,
-      });
-      await tx.user.update({
-        where: { id: 1 },
-        data: { status: 'LOCKED', lockedAt: new Date(), deletedAt: new Date() },
-      });
-
-      const admin = await seedDefaultAdminInTransaction(tx, {
-        passwordHash: 'hash',
-        organizationId: organization.id,
-      });
-
-      expect(admin).toMatchObject({
-        id: 1,
-        status: 'ACTIVE',
-        lockedAt: null,
-        lockedUntil: null,
-        deletedAt: null,
-      });
-    });
-  });
-
-  it('fails when admin belongs to another id', async () => {
-    await withRollback(prisma, async (tx) => {
-      const organization = await createOrganization(tx);
-      await tx.user.create({
-        data: {
-          id: 2,
-          username: 'admin',
-          fullName: 'Admin elsewhere',
-          passwordHash: 'hash',
-          organizationId: organization.id,
-        },
-      });
-
-      await expect(
-        seedDefaultAdminInTransaction(tx, {
-          passwordHash: 'hash',
-          organizationId: organization.id,
-        }),
-      ).rejects.toThrow('Admin must use user id 1');
-    });
-  });
-});
-
-async function createOrganization(prisma: Prisma.TransactionClient) {
-  const suffix = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
-  return prisma.organization.create({
-    data: { code: `seed-${suffix}`, name: `Seed ${suffix}` },
-  });
 }
 
-async function withRollback(
-  prisma: PrismaClient,
-  run: (transaction: Prisma.TransactionClient) => Promise<void>,
+async function scoringSnapshot(prisma: PrismaService, categoryIds: string[]) {
+  const categories = await prisma.productCategory.findMany({
+    where: { id: { in: categoryIds } },
+    orderBy: { id: 'asc' },
+    select: {
+      id: true,
+      criteriaSet: {
+        select: {
+          id: true,
+          name: true,
+          source: true,
+          criteria: {
+            orderBy: { order: 'asc' },
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              maxScore: true,
+              order: true,
+              sectionCode: true,
+              sectionName: true,
+              subCriteria: {
+                orderBy: { order: 'asc' },
+                select: {
+                  id: true,
+                  code: true,
+                  content: true,
+                  order: true,
+                  options: {
+                    orderBy: { order: 'asc' },
+                    select: {
+                      id: true,
+                      label: true,
+                      points: true,
+                      order: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  return categories;
+}
+
+async function createEvaluation(prisma: PrismaService, categoryId: string) {
+  const suffix = randomUUID();
+  const [registrant, judge] = await Promise.all([
+    prisma.user.create({
+      data: {
+        email: `seed-registrant-${suffix}@example.invalid`,
+        password: 'unused',
+        fullName: 'Seed test registrant',
+        role: Role.REGISTRANT,
+      },
+    }),
+    prisma.user.create({
+      data: {
+        email: `seed-judge-${suffix}@example.invalid`,
+        password: 'unused',
+        fullName: 'Seed test judge',
+        role: Role.JUDGE,
+      },
+    }),
+  ]);
+  const product = await prisma.product.create({
+    data: {
+      registrantId: registrant.id,
+      categoryId,
+      name: 'Seed history test',
+      formData: {},
+      status: ProductStatus.SUBMITTED,
+    },
+  });
+  const criteriaSet = await prisma.criteriaSet.findUniqueOrThrow({
+    where: { categoryId },
+    select: {
+      criteria: {
+        orderBy: { order: 'asc' },
+        select: {
+          subCriteria: {
+            orderBy: { order: 'asc' },
+            select: {
+              id: true,
+              options: {
+                orderBy: { order: 'asc' },
+                select: { id: true, points: true },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  const subCriterion = criteriaSet.criteria[0].subCriteria[0];
+  const option = subCriterion.options[0];
+  const evaluation = await prisma.evaluation.create({
+    data: {
+      judgeId: judge.id,
+      productId: product.id,
+      status: EvaluationStatus.IN_PROGRESS,
+      total: option.points,
+    },
+  });
+  await prisma.score.create({
+    data: {
+      evaluationId: evaluation.id,
+      subCriterionId: subCriterion.id,
+      optionId: option.id,
+    },
+  });
+  return { id: evaluation.id, total: option.points };
+}
+
+async function expectEvaluationUnchanged(
+  prisma: PrismaService,
+  evaluationId: string,
+  total: number,
 ) {
-  try {
-    await prisma.$transaction(async (transaction) => {
-      await transaction.$executeRaw(Prisma.sql`TRUNCATE TABLE "users" CASCADE`);
-      await run(transaction);
-      throw new Rollback();
-    });
-  } catch (error) {
-    if (error instanceof Rollback) return;
-    throw error;
-  } finally {
-    await prisma.$transaction(async (transaction) => {
-      await transaction.$executeRaw(
-        Prisma.sql`LOCK TABLE "users" IN SHARE ROW EXCLUSIVE MODE`,
-      );
-      await transaction.$queryRaw(
-        Prisma.sql`
-          SELECT setval(
-            pg_get_serial_sequence('users', 'id')::regclass,
-            GREATEST(
-              COALESCE((SELECT MAX(id) FROM users), 1),
-              COALESCE(
-                pg_sequence_last_value(pg_get_serial_sequence('users', 'id')::regclass),
-                1
-              )
-            )
-          )
-        `,
-      );
-    });
-  }
+  await expect(
+    prisma.evaluation.findUniqueOrThrow({
+      where: { id: evaluationId },
+      include: {
+        scores: { include: { option: { select: { points: true } } } },
+      },
+    }),
+  ).resolves.toMatchObject({
+    total,
+    scores: [{ option: { points: total } }],
+  });
 }
 
-class Rollback extends Error {}
+describe('seed scoring history guard', () => {
+  it('is idempotent and preserves category, criterion, and option IDs', async () => {
+    await withTestApp(async ({ prisma }) => {
+      const before = await scoringSnapshot(
+        prisma,
+        officialCategories.map(({ id }) => id),
+      );
+      const sandbox = seedSandbox();
+      try {
+        expect(runSeed(sandbox.root).status).toBe(0);
+        expect(runSeed(sandbox.root).status).toBe(0);
+      } finally {
+        rmSync(sandbox.root, { recursive: true, force: true });
+      }
+      await expect(
+        scoringSnapshot(
+          prisma,
+          officialCategories.map(({ id }) => id),
+        ),
+      ).resolves.toEqual(before);
+    });
+  });
+
+  it('preflights late used bundles before any earlier bundle upsert', async () => {
+    await withTestApp(async ({ prisma }) => {
+      const first = officialCategories[0];
+      const lastSet = officialSets().at(-1);
+      const last = officialCategories.find(
+        ({ criteriaSetKey }) => criteriaSetKey === lastSet.categoryKey,
+      );
+      const evaluation = await createEvaluation(prisma, last.id);
+      const before = await scoringSnapshot(prisma, [first.id, last.id]);
+      const sandbox = seedSandbox((sets) => {
+        const early = sets[0];
+        early.name = `${early.name} edited`;
+        const used = sets.find(
+          ({ categoryKey }) => categoryKey === last.criteriaSetKey,
+        );
+        used.criteria[0].subCriteria[0].options[0].points += 1;
+      });
+      try {
+        const result = runSeed(sandbox.root);
+        expect(result.status).not.toBe(0);
+        expect(result.stderr).toContain(
+          `Cannot alter used scoring criteria for category ${last.id}`,
+        );
+      } finally {
+        rmSync(sandbox.root, { recursive: true, force: true });
+      }
+      await expect(
+        scoringSnapshot(prisma, [first.id, last.id]),
+      ).resolves.toEqual(before);
+      await expectEvaluationUnchanged(prisma, evaluation.id, evaluation.total);
+    });
+  });
+
+  it.each(['points', 'option order', 'removed option'] as const)(
+    'rejects a used bundle %s mutation',
+    async (mutation) => {
+      await withTestApp(async ({ prisma }) => {
+        const category = officialCategories[0];
+        const evaluation = await createEvaluation(prisma, category.id);
+        const before = await scoringSnapshot(prisma, [category.id]);
+        const sandbox = seedSandbox((sets) => {
+          const set = sets.find(
+            ({ categoryKey }) => categoryKey === category.criteriaSetKey,
+          );
+          const options = set.criteria[0].subCriteria[0].options;
+          if (mutation === 'points') options[0].points += 1;
+          else if (mutation === 'option order') options.reverse();
+          else options.splice(0, 1);
+        });
+        try {
+          const result = runSeed(sandbox.root);
+          expect(result.status).not.toBe(0);
+          expect(result.stderr).toContain(
+            `Cannot alter used scoring criteria for category ${category.id}`,
+          );
+        } finally {
+          rmSync(sandbox.root, { recursive: true, force: true });
+        }
+        await expect(scoringSnapshot(prisma, [category.id])).resolves.toEqual(
+          before,
+        );
+        await expectEvaluationUnchanged(
+          prisma,
+          evaluation.id,
+          evaluation.total,
+        );
+      });
+    },
+  );
+});
