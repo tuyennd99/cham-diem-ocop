@@ -1,19 +1,12 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { api, messageOf } from "../api";
-import type { Criterion, Evaluation, Product as SharedProduct, ScoreOption, SubCriterion } from "@ocop/shared";
+import { api, messageOf } from "../lib/api";
+import type { ScoreOption } from "@ocop/shared";
 import { Button } from "@/components/ui/button";
-import { openAttachment } from "../attachments";
-import { useApi } from "../use-api";
-import type { Attachment, Category, ProductAttachmentRecord } from "../types";
-
-type QueueProduct = Pick<SharedProduct, "id" | "name" | "description" | "status" | "createdAt" | "category"> & {
-  createdAt: string; category: Category; attachments: Attachment[];
-  evaluations: { status: string; total: number | null }[];
-};
-type Option = ScoreOption;
-type Subcriterion = SubCriterion;
-interface EvaluationData { product: Omit<QueueProduct, "attachments"> & { formData: Record<string, unknown>; attachments: ProductAttachmentRecord[] }; criteria: Criterion[]; evaluation: Evaluation }
+import { openAttachment } from "../lib/attachments";
+import { useApi } from "../lib/use-api";
+import { formatFormEntries } from "../lib/utils";
+import type { EvaluationData, QueueProduct } from "../types/judge";
 
 export function JudgeQueuePage() {
   const { result, error, loading } = useApi<QueueProduct[]>("/judge/products");
@@ -68,11 +61,9 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
     { key: "C", label: "C. Chất lượng sản phẩm" },
     { key: "other", label: "Tiêu chí được phân công" },
   ];
-  const formLabels: Record<string, string> = { entityName: "Tên chủ thể", representativeName: "Người đại diện", representativeTitle: "Chức danh", contactAddress: "Địa chỉ liên hệ", provinceName: "Tỉnh/thành", phone: "Điện thoại", email: "Email", productName: "Tên sản phẩm", registrationType: "Loại đăng ký", sampleQuantity: "Số lượng mẫu", assessmentYear: "Năm đánh giá", declarationAccepted: "Cam kết hồ sơ" };
-  const entries = Object.entries(data.product.formData ?? {}) as [string, unknown][];
+  const entries = formatFormEntries(data.product.formData);
   const entityKeys = new Set(["entityName", "representativeName", "representativeTitle", "contactAddress", "provinceName", "phone", "email"]);
-  const formatValue = (value: unknown): string => value == null ? "Chưa cung cấp" : typeof value === "boolean" ? value ? "Có" : "Không" : Array.isArray(value) ? value.map(formatValue).join(", ") : typeof value === "object" ? Object.values(value).map(formatValue).join(" · ") : String(value);
-  const renderFormSection = (title: string, rows: [string, unknown][]) => <details className="judge-details"><summary>{title}</summary><dl className="detail-facts">{rows.map(([key, value]) => <div key={key}><dt>{formLabels[key] ?? key.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase())}</dt><dd>{formatValue(value)}</dd></div>)}</dl></details>;
+  const renderFormSection = (title: string, rows: typeof entries) => <details className="judge-details"><summary>{title}</summary><dl className="detail-facts">{rows.map((row) => <div key={row.key}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}</dl></details>;
 
   return <section className="judge-page">
     <div className="judge-page-header"><div><Link className="text-link" to="/judge">← Hàng chờ chấm</Link><p className="eyebrow">{data.product.category.groupName} · {data.product.category.name}</p><h1>{data.product.name}</h1><p>Mã hồ sơ <code>{data.product.id}</code></p></div><span className={`badge ${locked ? "status-completed" : "badge-category"}`}>{locked ? "Đã nộp · chỉ đọc" : "Phiếu nháp"}</span></div>
@@ -82,13 +73,13 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
         {sections.map((section) => { const items = data.criteria.filter((criterion) => section.key === "other" ? !/^[ABC]/i.test(criterion.code) : criterion.code.toUpperCase().startsWith(section.key)); return items.length ? <div className="criteria-nav-group" key={section.key}><h2>{section.label}</h2>{items.map((criterion) => { const done = criterion.subCriteria.length > 0 && criterion.subCriteria.every((sub) => Boolean(selected[sub.id])); const score = criterion.subCriteria.reduce((sum, sub) => sum + (sub.options.find((option) => option.id === selected[sub.id])?.points ?? 0), 0); return <button type="button" className={`criterion-nav-item${criterion.id === activeCriterionId ? " is-current" : ""}`} key={criterion.id} aria-current={criterion.id === activeCriterionId ? "step" : undefined} onClick={() => setActiveCriterionId(criterion.id)}><span className="criterion-nav-name">{criterion.code}. {criterion.name}</span><span className="criterion-nav-meta"><span>{score}/{criterion.maxScore}</span><span>{done ? "✓ Đã chấm" : "Chưa chấm"}</span></span></button>; })}</div> : null; })}
       </aside>
       <main className="judge-scoring-main"><div className="criteria-summary"><div><p className="eyebrow">TIÊU CHÍ {activeIndex + 1} / {data.criteria.length}</p><h2>{activeCriterion ? `${activeCriterion.code} — ${activeCriterion.name}` : "Chưa có tiêu chí được phân công"}</h2></div>{activeCriterion && <span className="badge badge-category">Tối đa {activeCriterion.maxScore} điểm</span>}</div>
-        {activeCriterion ? <div className="subcriteria-list">{activeCriterion.subCriteria.map((sub) => <fieldset className="score-card" key={sub.id} disabled={locked}><legend>{sub.content}</legend><div className="score-options">{sub.options.map((option: Option) => <label className={`score-option${selected[sub.id] === option.id ? " is-selected" : ""}`} key={option.id}><input type="radio" name={`score-${sub.id}`} value={option.id} checked={selected[sub.id] === option.id} onChange={() => { setSelected((current) => ({ ...current, [sub.id]: option.id })); setNotice(""); setError(""); }} /><span>{option.label}</span><strong>{option.points} điểm</strong></label>)}</div><details className="judge-note"><summary>Ghi chú của giám khảo</summary><label htmlFor={`note-${sub.id}`}>Ghi chú (không bắt buộc)</label><textarea id={`note-${sub.id}`} rows={3} maxLength={2000} value={notes[sub.id] ?? ""} onChange={(event) => { setNotes((current) => ({ ...current, [sub.id]: event.target.value })); setNotice(""); }} /></details></fieldset>)}</div> : <div className="empty-state"><p>Chưa có tiêu chí nào được phân công cho phiếu này.</p></div>}
+        {activeCriterion ? <div className="subcriteria-list">{activeCriterion.subCriteria.map((sub) => <fieldset className="score-card" key={sub.id} disabled={locked}><legend>{sub.content}</legend><div className="score-options">{sub.options.map((option: ScoreOption) => <label className={`score-option${selected[sub.id] === option.id ? " is-selected" : ""}`} key={option.id}><input type="radio" name={`score-${sub.id}`} value={option.id} checked={selected[sub.id] === option.id} onChange={() => { setSelected((current) => ({ ...current, [sub.id]: option.id })); setNotice(""); setError(""); }} /><span>{option.label}</span><strong>{option.points} điểm</strong></label>)}</div><details className="judge-note"><summary>Ghi chú của giám khảo</summary><label htmlFor={`note-${sub.id}`}>Ghi chú (không bắt buộc)</label><textarea id={`note-${sub.id}`} rows={3} maxLength={2000} value={notes[sub.id] ?? ""} onChange={(event) => { setNotes((current) => ({ ...current, [sub.id]: event.target.value })); setNotice(""); }} /></details></fieldset>)}</div> : <div className="empty-state"><p>Chưa có tiêu chí nào được phân công cho phiếu này.</p></div>}
         <div className="judge-criterion-nav"><Button variant="secondary" disabled={activeIndex <= 0} onClick={() => setActiveCriterionId(data.criteria[activeIndex - 1]?.id ?? "")}>← Tiêu chí trước</Button><span>{completed}/{subcriteria.length} tiểu tiêu chí đã chọn</span><Button variant="secondary" disabled={activeIndex < 0 || activeIndex >= data.criteria.length - 1} onClick={() => setActiveCriterionId(data.criteria[activeIndex + 1]?.id ?? "")}>Tiêu chí tiếp theo →</Button></div>
       </main>
       <aside className="judge-evidence-panel" aria-label="Thông tin sản phẩm và minh chứng"><h2>Minh chứng hồ sơ</h2><div className="evidence-gallery">{data.product.attachments.filter((file) => file.type === "IMAGE").map((file) => <button type="button" className="evidence-thumb" key={file.id} onClick={() => void openJudgeAttachment(productId, file.id, file.fileName)} aria-label={`Mở ảnh ${file.fileName}`}><span>{file.fileName}</span></button>)}</div>
         <article className="product-summary"><span className="badge badge-category">{data.product.category.groupName} · {data.product.category.name}</span><h3>{data.product.name}</h3><p>{String(data.product.formData.entityName ?? "Chưa có thông tin chủ thể")}</p><p>Mã hồ sơ <code>{data.product.id}</code></p></article>
-        {renderFormSection("Thông tin chủ thể", entries.filter(([key]) => entityKeys.has(key)))}
-        {renderFormSection("Thông tin sản phẩm (Mẫu 01)", entries.filter(([key]) => !entityKeys.has(key)))}
+        {renderFormSection("Thông tin chủ thể", entries.filter((row) => entityKeys.has(row.key)))}
+        {renderFormSection("Thông tin sản phẩm (Mẫu 01)", entries.filter((row) => !entityKeys.has(row.key)))}
         <section className="evidence-files"><h3>Tệp minh chứng</h3>{data.product.attachments.filter((file) => file.type !== "IMAGE").length ? <ul>{data.product.attachments.filter((file) => file.type !== "IMAGE").map((file) => <li key={file.id}><button type="button" onClick={() => void openJudgeAttachment(productId, file.id, file.fileName)}>{/\.pdf$/i.test(file.fileName) ? "PDF · " : "Tệp · "}{file.fileName}</button></li>)}</ul> : <p>Không có tệp minh chứng bổ sung.</p>}</section>
       </aside>
     </div>

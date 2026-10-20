@@ -109,7 +109,9 @@ describe('AuthService', () => {
       isActive: true,
     });
 
-    await expect(service.changePassword('user-1', 'wrong', 'NewPassword2!')).rejects.toBeInstanceOf(UnauthorizedException);
+    const attempt = service.changePassword('user-1', 'wrong', 'NewPassword2!');
+    await expect(attempt).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(attempt).rejects.toThrow('Current password is incorrect');
     expect(repository.changePassword).not.toHaveBeenCalled();
   });
 
@@ -122,5 +124,18 @@ describe('AuthService', () => {
 
     await expect(service.changePassword('user-1', 'CurrentPassword1!', 'CurrentPassword1!')).rejects.toBeInstanceOf(BadRequestException);
     expect(repository.changePassword).not.toHaveBeenCalled();
+  });
+
+  it('MailService can be instantiated without SMTP environment variables until sendOtp is called', () => {
+    const previousEnv = { ...process.env };
+    try {
+      delete process.env.SMTP_HOST;
+      delete process.env.SMTP_USER;
+      delete process.env.SMTP_PASSWORD;
+      delete process.env.SMTP_FROM;
+      expect(() => new MailService()).not.toThrow();
+    } finally {
+      process.env = previousEnv;
+    }
   });
 });

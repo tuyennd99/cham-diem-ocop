@@ -30,3 +30,7 @@ Product image and evidence files are stored on disk under `STORAGE_PATH`; mount 
 ## Source history
 
 The original API and web Git histories are retained as ancestors of the monorepo import and under `refs/archive/api/*` and `refs/archive/web/*`. Local Git metadata is also preserved in `.git/legacy-repos/` and is not transferred by a normal clone. The OCOP design spec is [2026-10-12-ocop-scoring-system-design.md](2026-10-12-ocop-scoring-system-design.md).
+
+The current FE/BE API integration specification is [docs/superpowers/specs/2026-10-15-fe-be-api-integration.md](docs/superpowers/specs/2026-10-15-fe-be-api-integration.md).
+
+The specification for the seven admin modules is [docs/superpowers/specs/2026-10-17-admin-modules-spec.md](docs/superpowers/specs/2026-10-17-admin-modules-spec.md).

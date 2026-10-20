@@ -5,20 +5,25 @@ import { OTP_TTL_MS } from '../constants/auth';
 
 @Injectable()
 export class MailService {
-  private readonly transporter = (() => {
-    const config = env(process.env);
-    return nodemailer.createTransport({
-      host: config.smtpHost,
-      port: config.smtpPort,
-      secure: config.smtpPort === 465,
-      auth: { user: config.smtpUser, pass: config.smtpPassword },
-    });
-  })();
+  private transporter?: ReturnType<typeof nodemailer.createTransport>;
+
+  private getTransporter() {
+    if (!this.transporter) {
+      const config = env(process.env);
+      this.transporter = nodemailer.createTransport({
+        host: config.smtpHost,
+        port: config.smtpPort,
+        secure: config.smtpPort === 465,
+        auth: { user: config.smtpUser, pass: config.smtpPassword },
+      });
+    }
+    return this.transporter;
+  }
 
   async sendOtp(email: string, code: string, purpose: 'REGISTER' | 'RESET_PASSWORD') {
     const config = env(process.env);
     const action = purpose === 'REGISTER' ? 'xác thực tài khoản' : 'đặt lại mật khẩu';
-    await this.transporter.sendMail({
+    await this.getTransporter().sendMail({
       from: config.smtpFrom,
       to: email,
       subject: 'Mã xác thực OCOP',

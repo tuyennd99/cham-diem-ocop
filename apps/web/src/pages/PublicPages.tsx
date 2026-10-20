@@ -1,15 +1,10 @@
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
-import type { Product as SharedProduct } from "@ocop/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useApi } from "../use-api";
-import type { Attachment, Category } from "../types";
-
-type PublicProduct = Omit<SharedProduct, "status" | "description" | "finalScore" | "starRating" | "createdAt" | "category" | "attachments"> & {
-  status: "SUBMITTED" | "SCORING" | "COMPLETED"; description: string | null;
-  finalScore: number | null; starRating: number | null; createdAt: string; category: Category; attachments: Attachment[];
-};
+import { useApi } from "../lib/use-api";
+import type { Category } from "../types/product";
+import type { PublicProduct } from "../types/public";
 
 const apiBase = (import.meta.env.VITE_API_URL || "/api").replace(/\/$/, "");
 const statusLabel: Record<PublicProduct["status"], string> = { SUBMITTED: "Đã tiếp nhận", SCORING: "Đang đánh giá", COMPLETED: "Đã xếp hạng" };
@@ -37,8 +32,19 @@ export function PublicCatalogPage() {
       <div className="field status-field"><label htmlFor="product-category">Nhóm sản phẩm</label><select id="product-category" value={categoryId} onChange={(e) => { setCategoryId(e.target.value); setPage(1); }}><option value="">Tất cả nhóm</option>{categories.map((item) => <option key={item.id} value={item.id}>{item.groupName} · {item.name}</option>)}</select></div>
       <Button type="submit" disabled={loading}>Tìm kiếm</Button>
     </form>
-    <p className="result-count" aria-live="polite">{loading ? "Đang tải hồ sơ…" : `${meta.total} hồ sơ`}</p>
-    {error && <p role="alert" className="form-note">{error}</p>}
+    <p className="result-count" aria-live="polite">{loading ? "Đang tải hồ sơ…" : error ? "Tạm thời chưa tải được dữ liệu" : `${meta.total} hồ sơ`}</p>
+    {!loading && error && (
+      <div className="state-panel state-panel-error" role="alert">
+        <div className="state-panel-copy">
+          <p className="state-eyebrow">TẠM THỜI GIÁN ĐOẠN KẾT NỐI</p>
+          <h2>Chưa tải được danh sách sản phẩm OCOP</h2>
+          <p>Hệ thống tra cứu đang tạm thời không phản hồi ({error}). Vui lòng thử tải lại.</p>
+        </div>
+        <div className="state-actions">
+          <button type="button" className="button button-primary" onClick={() => { categoryRequest.reload(); productRequest.reload(); }}>Thử lại</button>
+        </div>
+      </div>
+    )}
     {loading && <div className="record-list-skeleton" aria-busy="true" aria-label="Đang tải danh sách">{Array.from({ length: 4 }, (_, index) => <div className="record-row skeleton-record" key={index}><div className="skeleton-media" /><div className="skeleton-copy"><div className="skeleton-line" /><div className="skeleton-line short" /><div className="skeleton-line" /></div></div>)}</div>}
     {!loading && !error && rows.length === 0 && <div className="empty-state"><h2>Chưa có hồ sơ phù hợp</h2><p>Thử đổi từ khóa hoặc nhóm sản phẩm.</p></div>}
     {!loading && !error && <div className="record-list">{rows.map((product) => <article className="record-row" key={product.id}>

@@ -1,5 +1,5 @@
 import { createRouter } from "@tanstack/react-router";
-import { getSession } from "./auth";
+import { getSession } from "./lib/auth";
 import { routeTree } from "./routeTree.gen";
 
 export const router = createRouter({
@@ -7,9 +7,3 @@ export const router = createRouter({
   context: { getSession },
   scrollRestoration: true,
 });
-
-declare module "@tanstack/react-router" {
-  interface Register {
-    router: typeof router;
-  }
-}

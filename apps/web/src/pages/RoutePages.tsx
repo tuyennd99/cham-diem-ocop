@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { getSession, homeFor } from "../auth";
+import { getSession, homeFor } from "../lib/auth";
 
 export function ForbiddenPage() {
   const session = getSession();

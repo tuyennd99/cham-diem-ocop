@@ -1,12 +1,11 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { api, ApiError, messageOf } from "../api";
-import { homeFor, setSession, type SessionUser } from "../auth";
-import { useApi } from "../use-api";
+import { api, ApiError, messageOf } from "../lib/api";
+import { homeFor, setSession, validatePasswordBytes } from "../lib/auth";
+import { useApi } from "../lib/use-api";
+import type { LoginResponse, SessionUser } from "../types/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-
-interface LoginResponse { accessToken: string; user: SessionUser }
 
 function readPendingEmail() {
   try { return window.sessionStorage.getItem("ocop.pendingEmail") ?? ""; } catch { return ""; }
@@ -20,14 +19,69 @@ function clearPendingEmail() {
   try { window.sessionStorage.removeItem("ocop.pendingEmail"); } catch { /* Verification should still succeed. */ }
 }
 
-function AuthFrame({ eyebrow, title, intro, children }: { eyebrow: string; title: string; intro: string; children: ReactNode }) {
-  return <main className="route-main" id="content"><div className="container route-container"><section className="route-panel" aria-labelledby="route-title"><p className="eyebrow">{eyebrow}</p><h1 id="route-title">{title}</h1><p className="route-intro">{intro}</p>{children}</section></div></main>;
+function AuthFrame({
+  eyebrow,
+  title,
+  intro,
+  mode,
+  aside,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  intro: string;
+  mode?: "login" | "register";
+  aside?: ReactNode;
+  children: ReactNode;
+}) {
+  const panel = (
+    <section className="route-panel auth-panel" aria-labelledby="route-title">
+      {mode && (
+        <div className="auth-tabs" aria-label="Chuyển đổi đăng nhập và đăng ký">
+          <Link
+            className={`auth-tab${mode === "login" ? " is-active" : ""}`}
+            to="/login"
+            aria-current={mode === "login" ? "page" : undefined}
+          >
+            Đăng nhập
+          </Link>
+          <Link
+            className={`auth-tab${mode === "register" ? " is-active" : ""}`}
+            to="/register"
+            aria-current={mode === "register" ? "page" : undefined}
+          >
+            Đăng ký tài khoản
+          </Link>
+        </div>
+      )}
+      <p className="eyebrow">{eyebrow}</p>
+      <h1 id="route-title">{title}</h1>
+      <p className="route-intro">{intro}</p>
+      {children}
+    </section>
+  );
+
+  return (
+    <main className="route-main" id="content">
+      <div className="container route-container">
+        {aside ? (
+          <div className="auth-grid">
+            {panel}
+            {aside}
+          </div>
+        ) : (
+          panel
+        )}
+      </div>
+    </main>
+  );
 }
 
 export function LoginPage() {
   const navigate = useNavigate();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError(""); setBusy(true);
     const form = new FormData(event.currentTarget);
@@ -38,16 +92,67 @@ export function LoginPage() {
     } catch (error) { setError(messageOf(error)); }
     finally { setBusy(false); }
   }
-  return <AuthFrame eyebrow="TÀI KHOẢN OCOP" title="Đăng nhập" intro="Dùng email đã xác thực để tiếp tục làm việc với hồ sơ.">
+  const loginAside = (
+    <aside className="auth-aside" aria-label="Phân quyền hệ thống">
+      <p className="eyebrow">KHU VỰC HỆ THỐNG</p>
+      <h2>Làm việc theo vai trò được phân quyền</h2>
+      <p className="auth-aside-lead">Hệ thống tự động chuyển hướng tới không gian làm việc tương ứng ngay sau khi đăng nhập thành công:</p>
+      <ol className="auth-steps">
+        <li className="auth-step">
+          <span className="step-number">VAI TRÒ · CHỦ THỂ</span>
+          <h3>Chủ thể sản xuất (Hợp tác xã, hộ kinh doanh, doanh nghiệp)</h3>
+          <p>Quản lý danh mục sản phẩm của đơn vị, tạo hồ sơ mới, tải lên tài liệu minh chứng và xem phiếu tổng hợp điểm.</p>
+        </li>
+        <li className="auth-step">
+          <span className="step-number">VAI TRÒ · GIÁM KHẢO</span>
+          <h3>Giám khảo hội đồng chấm điểm</h3>
+          <p>Truy cập danh sách hồ sơ được phân công, đối chiếu minh chứng và chấm điểm từng tiêu chí theo Quyết định 26/2026/QĐ-TTg.</p>
+        </li>
+        <li className="auth-step">
+          <span className="step-number">VAI TRÒ · QUẢN TRỊ</span>
+          <h3>Quản trị viên hệ thống</h3>
+          <p>Tiếp nhận hồ sơ, phân công giám khảo theo nhóm tiêu chí và công bố kết quả xếp hạng sản phẩm OCOP.</p>
+        </li>
+      </ol>
+      <div className="auth-aside-meta">
+        <div>
+          <strong>Cần kích hoạt tài khoản mới?</strong>
+          <span>Nếu vừa đăng ký nhưng chưa nhập mã OTP 6 chữ số, hãy chuyển tới trang <Link className="text-link" to="/verify-otp">Xác thực email</Link>.</span>
+        </div>
+      </div>
+    </aside>
+  );
+
+  return <AuthFrame eyebrow="TÀI KHOẢN OCOP" title="Đăng nhập" intro="Dùng email đã xác thực để tiếp tục làm việc với hồ sơ sản phẩm hoặc hội đồng chấm điểm." mode="login" aside={loginAside}>
     <form className="account-form" onSubmit={submit}>
-      <label>Email<Input name="email" type="email" autoComplete="email" required /></label>
-      <label>Mật khẩu<Input name="password" type="password" autoComplete="current-password" required /></label>
-      {error && <p className="form-note" role="alert">{error}</p>}
-      <Button type="submit" disabled={busy}>{busy ? "Đang đăng nhập…" : "Đăng nhập"}</Button>
+      <label>
+        <span className="field-label-row">Email</span>
+        <Input name="email" type="email" autoComplete="email" placeholder="Ví dụ: lienhe@htxcheshan.vn" required />
+      </label>
+      <label>
+        <span className="field-label-row">Mật khẩu</span>
+        <div className="password-input-group">
+          <Input name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" placeholder="Nhập mật khẩu của bạn" required />
+          <button type="button" className="password-visibility-btn" aria-pressed={showPassword} onClick={() => setShowPassword((value) => !value)}>
+            {showPassword ? "Ẩn" : "Hiện"}
+          </button>
+        </div>
+      </label>
+      {error && (
+        <div className="form-alert" role="alert">
+          <strong>Không thể đăng nhập</strong>
+          <p>{error}</p>
+        </div>
+      )}
+      <Button type="submit" className="auth-submit-btn" disabled={busy}>{busy ? "Đang đăng nhập…" : "Đăng nhập"}</Button>
     </form>
-    <p><Link className="text-link" to="/forgot-password">Quên mật khẩu?</Link></p>
-    <p><Link className="text-link" to="/verify-otp">Cần xác thực email?</Link></p>
-    <p>Chưa có tài khoản? <Link className="text-link" to="/register">Đăng ký</Link></p>
+    <div className="auth-card-footer">
+      <div className="auth-help-links">
+        <Link className="text-link" to="/forgot-password">Quên mật khẩu?</Link>
+        <Link className="text-link" to="/verify-otp">Cần xác thực email?</Link>
+      </div>
+      <p className="auth-switch-prompt">Chưa có tài khoản? <Link className="text-link" to="/register">Đăng ký</Link></p>
+    </div>
   </AuthFrame>;
 }
 
@@ -55,28 +160,97 @@ export function RegisterPage() {
   const navigate = useNavigate();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   async function register(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError(""); setBusy(true);
     const form = new FormData(event.currentTarget);
     const emailValue = String(form.get("email") ?? "").trim().toLowerCase();
-    writePendingEmail(emailValue);
+    const passwordValue = String(form.get("password") ?? "");
     try {
-      await api("/auth/register", { method: "POST", body: JSON.stringify({ email: emailValue, fullName: form.get("fullName"), phone: form.get("phone") || undefined, password: form.get("password") }) });
+      validatePasswordBytes(passwordValue);
+      writePendingEmail(emailValue);
+      await api("/auth/register", { method: "POST", body: JSON.stringify({ email: emailValue, fullName: form.get("fullName"), phone: form.get("phone") || undefined, password: passwordValue }) });
       await navigate({ to: "/verify-otp" });
     } catch (error) { setError(messageOf(error)); }
     finally { setBusy(false); }
   }
-  return <AuthFrame eyebrow="TÀI KHOẢN OCOP" title="Đăng ký tài khoản" intro="Tạo tài khoản chủ thể để lập và gửi hồ sơ sản phẩm OCOP.">
+  const registerAside = (
+    <aside className="auth-aside" aria-label="Hướng dẫn đăng ký tài khoản chủ thể OCOP">
+      <p className="eyebrow">HƯỚNG DẪN CHỦ THỂ</p>
+      <h2>3 bước chuẩn bị và nộp hồ sơ OCOP</h2>
+      <p className="auth-aside-lead">Tài khoản chủ thể giúp hợp tác xã, doanh nghiệp và hộ sản xuất lưu trữ hồ sơ trực tuyến và theo dõi kết quả chấm điểm minh bạch.</p>
+      <ol className="auth-steps">
+        <li className="auth-step">
+          <span className="step-number">BƯỚC 01 · KÍCH HOẠT</span>
+          <h3>Xác thực email nhận thông báo</h3>
+          <p>Sau khi gửi biểu mẫu đăng ký, nhập mã gồm 6 chữ số được gửi tới hộp thư để kích hoạt tài khoản chủ thể.</p>
+        </li>
+        <li className="auth-step">
+          <span className="step-number">BƯỚC 02 · KHAI BÁO HỒ SƠ</span>
+          <h3>Lập hồ sơ &amp; đính kèm minh chứng</h3>
+          <p>Khai báo thông tin sản phẩm, xuất xứ địa phương, câu chuyện sản phẩm và tải lên tài liệu minh chứng theo từng nhóm tiêu chí.</p>
+        </li>
+        <li className="auth-step">
+          <span className="step-number">BƯỚC 03 · TRA CỨU KẾT QUẢ</span>
+          <h3>Theo dõi tiến độ chấm điểm và sao đạt</h3>
+          <p>Xem trạng thái tiếp nhận, điểm chi tiết theo Quyết định 26/2026/QĐ-TTg (thang 100 điểm) và mức xếp hạng từ 1 đến 5 sao.</p>
+        </li>
+      </ol>
+      <div className="auth-aside-meta">
+        <div>
+          <strong>Căn cứ áp dụng</strong>
+          <span>Bộ tiêu chí đánh giá, phân hạng sản phẩm OCOP theo Quyết định số 26/2026/QĐ-TTg.</span>
+        </div>
+        <Link className="text-link" to="/products">Xem danh sách hồ sơ công khai →</Link>
+      </div>
+    </aside>
+  );
+
+  return <AuthFrame eyebrow="TÀI KHOẢN OCOP" title="Đăng ký tài khoản" intro="Tạo tài khoản chủ thể để lập và gửi hồ sơ sản phẩm OCOP." mode="register" aside={registerAside}>
     <form className="account-form" onSubmit={register}>
-      <label>Tên chủ thể<Input name="fullName" autoComplete="organization" maxLength={255} required /></label>
-      <label>Email<Input name="email" type="email" autoComplete="email" required /></label>
-      <label>Số điện thoại <span>(không bắt buộc)</span><Input name="phone" type="tel" autoComplete="tel" maxLength={30} /></label>
-      <label>Mật khẩu<Input name="password" type="password" autoComplete="new-password" minLength={8} maxLength={72} required /></label>
-      {error && <p className="form-note" role="alert">{error}</p>}
-      {error && <p><Link className="text-link" to="/verify-otp">Xác thực email hoặc gửi lại mã</Link></p>}
-      <Button type="submit" disabled={busy}>{busy ? "Đang gửi…" : "Tạo tài khoản"}</Button>
+      <label>
+        <span className="field-label-row">Tên chủ thể</span>
+        <span className="field-hint">Ghi đúng tên hợp tác xã, doanh nghiệp hoặc hộ sản xuất kinh doanh trên giấy phép.</span>
+        <Input name="fullName" autoComplete="organization" placeholder="Ví dụ: Hợp tác xã Chè Shan Tuyết Pà Cò" maxLength={255} required />
+      </label>
+      <label>
+        <span className="field-label-row">Email</span>
+        <span className="field-hint">Hệ thống sẽ gửi mã OTP gồm 6 chữ số tới địa chỉ email này để kích hoạt tài khoản.</span>
+        <Input name="email" type="email" autoComplete="email" placeholder="Ví dụ: lienhe@htxcheshan.vn" required />
+      </label>
+      <label>
+        <span className="field-label-row">
+          <span>Số điện thoại</span>
+          <span className="field-optional">(không bắt buộc)</span>
+        </span>
+        <span className="field-hint">Dùng để hội đồng chấm điểm liên hệ khi cần đối chiếu bổ sung hồ sơ minh chứng.</span>
+        <Input name="phone" type="tel" autoComplete="tel" placeholder="Ví dụ: 0912 345 678" maxLength={30} />
+      </label>
+      <label>
+        <span className="field-label-row">Mật khẩu</span>
+        <span className="field-hint">Tối thiểu 8 ký tự (tối đa 72 ký tự).</span>
+        <div className="password-input-group">
+          <Input name="password" type={showPassword ? "text" : "password"} autoComplete="new-password" placeholder="Nhập mật khẩu từ 8 ký tự trở lên" minLength={8} maxLength={72} required />
+          <button type="button" className="password-visibility-btn" aria-pressed={showPassword} onClick={() => setShowPassword((value) => !value)}>
+            {showPassword ? "Ẩn" : "Hiện"}
+          </button>
+        </div>
+      </label>
+      {error && (
+        <div className="form-alert" role="alert">
+          <strong>Không thể hoàn tất đăng ký</strong>
+          <p>{error}</p>
+          <p><Link className="text-link" to="/verify-otp">Xác thực email hoặc gửi lại mã →</Link></p>
+        </div>
+      )}
+      <Button type="submit" className="auth-submit-btn" disabled={busy}>{busy ? "Đang gửi…" : "Tạo tài khoản"}</Button>
     </form>
-    <p>Đã có tài khoản? <Link className="text-link" to="/login">Đăng nhập</Link></p>
+    <div className="auth-card-footer">
+      <p className="auth-switch-prompt">Đã có tài khoản? <Link className="text-link" to="/login">Đăng nhập</Link></p>
+      <div className="auth-help-links">
+        <Link className="text-link" to="/verify-otp">Đã đăng ký nhưng chưa nhập mã OTP? Xác thực email</Link>
+      </div>
+    </div>
   </AuthFrame>;
 }
 
@@ -173,8 +347,10 @@ export function ForgotPasswordPage() {
   async function reset(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError(""); setBusy(true);
     const form = new FormData(event.currentTarget);
+    const newPassword = String(form.get("password") ?? "");
     try {
-      await api("/auth/reset-password", { method: "POST", body: JSON.stringify({ email, code: form.get("code"), newPassword: form.get("password") }) });
+      validatePasswordBytes(newPassword);
+      await api("/auth/reset-password", { method: "POST", body: JSON.stringify({ email, code: form.get("code"), newPassword }) });
       setNotice("Đã đổi mật khẩu. Bạn có thể đăng nhập.");
       setSent(false);
     } catch (error) { setError(messageOf(error)); }
@@ -217,6 +393,8 @@ export function ChangePasswordPage() {
     if (newPassword !== confirmPassword) { setError("Mật khẩu nhập lại chưa khớp."); return; }
     setBusy(true);
     try {
+      validatePasswordBytes(currentPassword);
+      validatePasswordBytes(newPassword);
       await api("/auth/change-password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) });
       formElement.reset(); setSession(null); window.location.replace("/login");
     } catch (cause) {

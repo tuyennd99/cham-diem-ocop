@@ -44,7 +44,7 @@ export async function recomputeProductResult(
 
   const criteria = product.category.criteriaSet?.criteria ?? [];
   const assignments = await tx.judgeAssignment.findMany({
-    where: { categoryId: product.categoryId },
+    where: { categoryId: product.categoryId, judge: { is: { isActive: true } } },
     select: { judgeId: true, criterionIds: true },
   });
   const existingEvaluationCount = await tx.evaluation.count({

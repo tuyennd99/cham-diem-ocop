@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { JudgeEvaluationPage } from "../pages/JudgePages";
-import { requireRole } from "../route-guards";
+import { requireRole } from "../lib/route-guards";
 
 export const Route = createFileRoute("/_app/judge/products/$id")({
   beforeLoad: requireRole("JUDGE"),

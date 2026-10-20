@@ -1,25 +1,21 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
   PayloadTooLargeException,
   UnsupportedMediaTypeException,
 } from '@nestjs/common';
-import { createReadStream } from 'node:fs';
 import { unlink } from 'node:fs/promises';
-import { join, resolve, sep } from 'node:path';
+import { resolve, sep } from 'node:path';
 import { Prisma, ProductStatus } from '@prisma/client';
 import { ProductUpdateDto, ProductWriteDto } from '../dtos/products.dto';
 import { ProductsRepository } from '../repositories/products.repository';
 import type { AccessTokenPayload } from '../types/auth';
 import type { UploadedPrivateFile } from '../types/files';
 import { inspectProductUpload } from '../utils/product-files';
-import { MAX_IMAGE_BYTES, storageRoot } from '../utils/private-storage';
-import { stat } from 'node:fs/promises';
+import { MAX_IMAGE_BYTES, openStoredFile, resolveStoredPath, storageRoot, uuidStorageKeyPattern } from '../utils/private-storage';
 
-const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const publicStatuses = new Set<ProductStatus>([
   ProductStatus.SUBMITTED,
   ProductStatus.SCORING,
@@ -171,7 +167,7 @@ export class ProductsService {
   private assertStoredUpload(file: UploadedPrivateFile) {
     const expected = this.pathFor(file.filename);
     if (
-      !uuidPattern.test(file.filename) ||
+      !uuidStorageKeyPattern.test(file.filename) ||
       resolve(file.path) !== expected ||
       file.size < 1
     ) {
@@ -183,27 +179,11 @@ export class ProductsService {
   }
 
   private pathFor(storageKey: string) {
-    const path = resolve(join(this.root, storageKey));
-    if (!uuidPattern.test(storageKey) || !path.startsWith(`${this.root}${sep}`)) {
-      throw new ForbiddenException('Invalid storage key');
-    }
-    return path;
+    return resolveStoredPath(storageKey, this.root);
   }
 
-  private async asFile(storageKey: string, originalName: string) {
-    const path = this.pathFor(storageKey);
-    const extension = originalName.split('.').pop()?.toLowerCase();
-    const mimeType: Record<string, string> = {
-      png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
-      webp: 'image/webp', pdf: 'application/pdf',
-    };
-    const info = await stat(path);
-    return {
-      stream: createReadStream(path),
-      originalName,
-      mimeType: mimeType[extension ?? ''] ?? 'application/octet-stream',
-      sizeBytes: info.size,
-    };
+  private asFile(storageKey: string, originalName: string) {
+    return openStoredFile(storageKey, originalName, this.root);
   }
 
   private async safeUnlink(path: string) {

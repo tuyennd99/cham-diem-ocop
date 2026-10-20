@@ -111,7 +111,7 @@ describe('password changes revoke all earlier access tokens', () => {
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ currentPassword, newPassword: nextPassword }),
         });
-        expect(changed.status).toBe(200);
+        expect(changed.status).toBe(201);
         await expect(prisma.user.findUniqueOrThrow({ where: { id: user.id } })).resolves.toMatchObject({ tokenVersion: 1 });
         expect((await me(baseUrl, token)).status).toBe(401);
         expect((await me(baseUrl, await login(baseUrl, email, nextPassword))).status).toBe(200);
@@ -165,7 +165,7 @@ describe('password changes revoke all earlier access tokens', () => {
           headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ password: 'AdminSetPassword3!' }),
         });
-        expect(reset.status).toBe(200);
+        expect(reset.status).toBe(201);
         await expect(prisma.user.findUniqueOrThrow({ where: { id: judge.id } })).resolves.toMatchObject({ tokenVersion: 1 });
         expect((await me(baseUrl, judgeToken)).status).toBe(401);
         expect((await me(baseUrl, await login(baseUrl, judge.email, 'AdminSetPassword3!'))).status).toBe(200);

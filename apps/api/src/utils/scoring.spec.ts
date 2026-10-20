@@ -1,7 +1,7 @@
 import { calculateFinalScore, calculateStars } from './scoring';
 
 describe('calculateStars', () => {
-  it.each([[0, 1], [29.99, 1], [30, 2], [50, 3], [70, 4], [90, 5], [100, 5]])(
+  it.each([[0, 1], [29.99, 1], [30, 2], [50, 3], [70, 4], [89.99, 4], [90, 5], [100, 5]])(
     'maps %s points to %s star(s)',
     (score, stars) => expect(calculateStars(score)).toBe(stars),
   );

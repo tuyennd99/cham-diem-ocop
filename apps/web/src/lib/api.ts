@@ -1,9 +1,5 @@
 import { getSession, setSession } from "./auth";
-
-export interface ApiResult<T> {
-  data: T;
-  meta?: { page: number; limit: number; total: number; totalPages: number };
-}
+import type { ApiResult } from "../types/api";
 
 export class ApiError extends Error {
   constructor(message: string, readonly status: number) {

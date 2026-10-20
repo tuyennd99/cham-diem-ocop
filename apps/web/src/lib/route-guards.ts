@@ -1,6 +1,6 @@
 import { redirect } from "@tanstack/react-router";
-import type { AppRole } from "./auth";
-import type { RouterContext } from "./router-context";
+import type { AppRole } from "../types/auth";
+import type { RouterContext } from "../types/router-context";
 
 export function requireRole(role: AppRole) {
   return ({ context }: { context: RouterContext }) => {

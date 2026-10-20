@@ -14,8 +14,10 @@ From the repository root, install workspace dependencies with `pnpm install`, th
 - Judge queue, evaluation scoring, save, and submit
 - Admin judge accounts, category/criterion assignments, products, and results
 
-Authenticated API requests use bearer access tokens stored for the current browser session in local storage. The API response contract is `{ statusCode, data, meta? }`, with errors shaped as `{ statusCode, message }`.
+Authenticated requests use Bearer tokens stored in localStorage under `ocop-session`. The session persists across browser restarts until cleared or rejected by the API. JSON responses use `{ statusCode, data, meta?, message? }`; errors use `{ statusCode, message, requestId? }`. File downloads return binary data.
 
-The product registration form follows Mẫu 01 in three steps with named fields; the API validates required fields when a draft is submitted. Photos and evidence attachments are optional. Product search filters the currently loaded API page; the product listing API does not currently accept a search parameter.
+The product registration form follows Mẫu 01 in three steps with named fields; the API validates required fields when a draft is submitted. Photos and evidence attachments are optional.
 
-No build or runtime verification is recorded in this README.
+Product search sends `q` to the API and searches across the matching database records, with server-side pagination. `VITE_API_URL` controls the browser base URL; the dev proxy reads `VITE_API_PROXY` from process variables or Vite env files and defaults to `http://localhost:3030`.
+
+Verification results and runtime blockers: [FE–BE integration report](../../docs/verification/2026-10-16-fe-be-integration.md).

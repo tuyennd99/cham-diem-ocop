@@ -1,7 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { homeFor, setSession } from "../auth";
+import { getSession, homeFor, setSession } from "../lib/auth";
 import type { ReactNode } from "react";
-import { getSession } from "../auth";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
@@ -10,7 +9,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const homePath = role ? homeFor(role) : "/";
   return (
     <div className="application-shell">
-      <a className="skip-link" href="#content">Bỏ qua điều hướng</a>
       <aside className="application-sidebar" aria-label="Khu vực làm việc">
         <Link className="application-brand" to={homePath}>OCOP Đánh Giá</Link>
         <nav aria-label="Điều hướng khu vực làm việc">

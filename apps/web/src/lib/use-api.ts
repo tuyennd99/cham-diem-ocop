@@ -1,10 +1,16 @@
-import { useEffect, useState } from "react";
-import { api, messageOf, type ApiResult } from "./api";
+import { useCallback, useEffect, useState } from "react";
+import { api, messageOf } from "./api";
+import type { ApiResult } from "../types/api";
 
 export function useApi<T>(path: string) {
   const [result, setResult] = useState<ApiResult<T> | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [revision, setRevision] = useState(0);
+
+  const reload = useCallback(() => {
+    setRevision((current) => current + 1);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -14,7 +20,7 @@ export function useApi<T>(path: string) {
       .catch((cause) => { if (active) setError(messageOf(cause)); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [path]);
+  }, [path, revision]);
 
-  return { result, error, loading };
+  return { result, error, loading, reload };
 }

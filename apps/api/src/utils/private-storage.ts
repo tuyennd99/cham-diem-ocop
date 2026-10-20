@@ -1,14 +1,46 @@
-import { mkdirSync, createWriteStream } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { createReadStream, mkdirSync, createWriteStream } from 'node:fs';
+import { stat } from 'node:fs/promises';
+import { join, resolve, sep } from 'node:path';
 import { v7 as uuidv7 } from 'uuid';
 import { pipeline, Readable } from 'node:stream';
-import { StreamableFile } from '@nestjs/common';
+import { ForbiddenException, StreamableFile } from '@nestjs/common';
 import type { MulterOptions } from '@nestjs/platform-express/multer/interfaces/multer-options.interface';
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+export const uuidStorageKeyPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const storedFileMimeTypes: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  pdf: 'application/pdf',
+};
 
 export function storageRoot(value = process.env.STORAGE_PATH) {
   return resolve(value ?? join(process.cwd(), 'storage'));
+}
+
+export function resolveStoredPath(storageKey: string, root = storageRoot()): string {
+  const resolvedRoot = resolve(root);
+  const path = resolve(join(resolvedRoot, storageKey));
+  if (!uuidStorageKeyPattern.test(storageKey) || !path.startsWith(`${resolvedRoot}${sep}`)) {
+    throw new ForbiddenException('Invalid storage key');
+  }
+  return path;
+}
+
+export async function openStoredFile(storageKey: string, originalName: string, root = storageRoot()) {
+  const path = resolveStoredPath(storageKey, root);
+  const extension = originalName.split('.').pop()?.toLowerCase();
+  const info = await stat(path);
+  return {
+    stream: createReadStream(path),
+    originalName,
+    mimeType: storedFileMimeTypes[extension ?? ''] ?? 'application/octet-stream',
+    sizeBytes: info.size,
+  };
 }
 
 interface IncomingFile {

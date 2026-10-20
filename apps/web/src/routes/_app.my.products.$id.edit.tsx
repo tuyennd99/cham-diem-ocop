@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ProductEditorPage } from "../pages/RegistrantPages";
-import { requireRole } from "../route-guards";
+import { requireRole } from "../lib/route-guards";
 
 export const Route = createFileRoute("/_app/my/products/$id/edit")({
   beforeLoad: requireRole("REGISTRANT"),

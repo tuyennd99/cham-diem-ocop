@@ -1,23 +1,12 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
-import { api, messageOf, type ApiResult } from "../api";
-import type { Criterion as SharedCriterion, Product as SharedProduct } from "@ocop/shared";
+import { api, messageOf } from "../lib/api";
+import { validatePasswordBytes } from "../lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useApi } from "../use-api";
-import type { Category as ProductCategoryView } from "../types";
-
-interface Judge { id: string; email: string; fullName: string; phone: string | null; verified: boolean; isActive: boolean; createdAt: string }
-type Criterion = Pick<SharedCriterion, "id" | "code" | "name">;
-type Category = ProductCategoryView & { groupCode: string; criteriaSet?: { criteria: SharedCriterion[] } | null };
-interface Assignment { judgeId: string; categoryId: string; criterionIds: string[]; judge: Pick<Judge, "id" | "email" | "fullName" | "isActive">; category: Pick<Category, "id" | "name" | "groupCode" | "groupName"> }
-type AdminProduct = Pick<SharedProduct, "id" | "name" | "status" | "finalScore" | "starRating" | "createdAt" | "category"> & { status: string; finalScore: number | null; starRating: number | null; createdAt: string; category: Category; registrant: { id: string; fullName: string; email: string }; evaluations: { judgeId: string; status: string; total: number | null }[] };
-
-interface AdminDashboard {
-  productsByStatus: Record<"DRAFT" | "SUBMITTED" | "SCORING" | "COMPLETED", number>;
-  judges: { judgeId: string; fullName: string; assigned: number; submitted: number; pending: number }[];
-  needsAttention: { id: string; name: string; status: "SUBMITTED" | "SCORING"; submittedAt: string | null; category: { id: string; name: string; groupName: string }; assignedJudgeCount: number; submittedEvaluationCount: number; pendingEvaluationCount: number }[];
-}
+import { useApi } from "../lib/use-api";
+import type { AdminCategory as Category, AdminDashboard, AdminJudge as Judge, AdminProduct, Assignment, ProductResults } from "../types/admin";
+import type { ApiResult } from "../types/api";
 
 const dashboardStatusLabel = { DRAFT: "Bản nháp", SUBMITTED: "Đã nộp", SCORING: "Đang chấm", COMPLETED: "Hoàn tất" } as const;
 
@@ -51,11 +40,47 @@ export function AdminJudgesPage() {
   const [busy, setBusy] = useState(false);
   const load = () => api<Judge[]>("/admin/judges").then(({ data }) => setJudges(data)).catch((e) => setError(messageOf(e)));
   useEffect(() => { void load(); }, []);
-  async function create(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const formElement = event.currentTarget; setError(""); setNotice(""); setBusy(true); const form = new FormData(formElement); try { await api("/admin/judges", { method: "POST", body: JSON.stringify({ email: form.get("email"), fullName: form.get("fullName"), phone: form.get("phone") || undefined, password: form.get("password") }) }); formElement.reset(); setNotice("Đã tạo tài khoản giám khảo."); await load(); } catch (e) { setError(messageOf(e)); } finally { setBusy(false); } }
-  async function update(judge: Judge, form: HTMLFormElement) { const data = new FormData(form); try { await api(`/admin/judges/${judge.id}`, { method: "PUT", body: JSON.stringify({ fullName: data.get("fullName"), phone: data.get("phone") || null }) }); setNotice("Đã cập nhật giám khảo."); await load(); } catch (e) { setError(messageOf(e)); } }
-  async function resetPassword(judge: Judge, form: HTMLFormElement) { const password = new FormData(form).get("password"); try { await api(`/admin/judges/${judge.id}/reset-password`, { method: "POST", body: JSON.stringify({ password }) }); form.reset(); setNotice("Đã đặt mật khẩu mới."); } catch (e) { setError(messageOf(e)); } }
-  async function deactivate(judge: Judge) { if (!window.confirm(`Ngừng hoạt động tài khoản ${judge.email}?`)) return; try { await api(`/admin/judges/${judge.id}`, { method: "DELETE" }); await load(); } catch (e) { setError(messageOf(e)); } }
-  return <section><p className="eyebrow">QUẢN TRỊ</p><h1>Quản lý giám khảo</h1>{error && <p role="alert" className="form-note">{error}</p>}{notice && <p role="status">{notice}</p>}<section className="route-panel"><h2>Tạo tài khoản giám khảo</h2><form className="account-form" onSubmit={create}><label>Họ tên<Input name="fullName" maxLength={255} required /></label><label>Email<Input name="email" type="email" maxLength={320} required /></label><label>Số điện thoại<Input name="phone" type="tel" maxLength={30} /></label><label>Mật khẩu tạm thời<Input name="password" type="password" minLength={12} maxLength={72} required /></label><Button disabled={busy}>{busy ? "Đang tạo…" : "Tạo giám khảo"}</Button></form></section><h2>Danh sách giám khảo</h2><div className="record-list">{judges.map((judge) => <article className="route-panel" key={judge.id}><form className="account-form" onSubmit={(e) => { e.preventDefault(); void update(judge, e.currentTarget); }}><strong>{judge.email} · {judge.isActive ? "Đang hoạt động" : "Đã ngừng"}</strong><label>Họ tên<Input name="fullName" defaultValue={judge.fullName} maxLength={255} required /></label><label>Số điện thoại<Input name="phone" defaultValue={judge.phone ?? ""} maxLength={30} /></label><Button variant="secondary">Lưu thay đổi</Button></form><form className="account-form" onSubmit={(e) => { e.preventDefault(); void resetPassword(judge, e.currentTarget); }}><label>Đặt mật khẩu mới<Input name="password" type="password" minLength={12} maxLength={72} required /></label><Button variant="secondary">Đặt lại mật khẩu</Button></form>{judge.isActive && <Button variant="secondary" onClick={() => void deactivate(judge)}>Ngừng hoạt động</Button>}</article>)}</div></section>;
+  async function create(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    const formElement = event.currentTarget;
+    setError(""); setNotice(""); setBusy(true);
+    const form = new FormData(formElement);
+    const password = String(form.get("password") ?? "");
+    try {
+      validatePasswordBytes(password);
+      await api("/admin/judges", { method: "POST", body: JSON.stringify({ email: form.get("email"), fullName: form.get("fullName"), phone: form.get("phone") || undefined, password }) });
+      formElement.reset(); setNotice("Đã tạo tài khoản giám khảo."); await load();
+    } catch (e) { setError(messageOf(e)); } finally { setBusy(false); }
+  }
+  async function update(judge: Judge, form: HTMLFormElement) {
+    if (busy) return;
+    const data = new FormData(form);
+    setError(""); setNotice(""); setBusy(true);
+    try {
+      await api(`/admin/judges/${judge.id}`, { method: "PUT", body: JSON.stringify({ fullName: data.get("fullName"), phone: data.get("phone") || null }) });
+      setNotice("Đã cập nhật giám khảo."); await load();
+    } catch (e) { setError(messageOf(e)); } finally { setBusy(false); }
+  }
+  async function resetPassword(judge: Judge, form: HTMLFormElement) {
+    if (busy) return;
+    const password = String(new FormData(form).get("password") ?? "");
+    setError(""); setNotice(""); setBusy(true);
+    try {
+      validatePasswordBytes(password);
+      await api(`/admin/judges/${judge.id}/reset-password`, { method: "POST", body: JSON.stringify({ password }) });
+      form.reset(); setNotice("Đã đặt mật khẩu mới.");
+    } catch (e) { setError(messageOf(e)); } finally { setBusy(false); }
+  }
+  async function deactivate(judge: Judge) {
+    if (busy || !window.confirm(`Ngừng hoạt động tài khoản ${judge.email}?`)) return;
+    setError(""); setNotice(""); setBusy(true);
+    try {
+      await api(`/admin/judges/${judge.id}`, { method: "DELETE" });
+      await load();
+    } catch (e) { setError(messageOf(e)); } finally { setBusy(false); }
+  }
+  return <section><p className="eyebrow">QUẢN TRỊ</p><h1>Quản lý giám khảo</h1>{error && <p role="alert" className="form-note">{error}</p>}{notice && <p role="status">{notice}</p>}<section className="route-panel"><h2>Tạo tài khoản giám khảo</h2><form className="account-form" onSubmit={create}><label>Họ tên<Input name="fullName" maxLength={255} required /></label><label>Email<Input name="email" type="email" maxLength={320} required /></label><label>Số điện thoại<Input name="phone" type="tel" maxLength={30} /></label><label>Mật khẩu tạm thời<Input name="password" type="password" minLength={12} maxLength={72} required /></label><Button disabled={busy}>{busy ? "Đang tạo…" : "Tạo giám khảo"}</Button></form></section><h2>Danh sách giám khảo</h2><div className="record-list">{judges.map((judge) => <article className="route-panel" key={judge.id}><form className="account-form" onSubmit={(e) => { e.preventDefault(); void update(judge, e.currentTarget); }}><strong>{judge.email} · {judge.isActive ? "Đang hoạt động" : "Đã ngừng"}</strong><label>Họ tên<Input name="fullName" defaultValue={judge.fullName} maxLength={255} required /></label><label>Số điện thoại<Input name="phone" defaultValue={judge.phone ?? ""} maxLength={30} /></label><Button variant="secondary" disabled={busy}>Lưu thay đổi</Button></form><form className="account-form" onSubmit={(e) => { e.preventDefault(); void resetPassword(judge, e.currentTarget); }}><label>Đặt mật khẩu mới<Input name="password" type="password" minLength={12} maxLength={72} required /></label><Button variant="secondary" disabled={busy}>Đặt lại mật khẩu</Button></form>{judge.isActive && <Button variant="secondary" disabled={busy} onClick={() => void deactivate(judge)}>Ngừng hoạt động</Button>}</article>)}</div></section>;
 }
 
 export function AdminAssignmentsPage() {
@@ -150,8 +175,6 @@ export function AdminProductsPage() {
   const result: ApiResult<AdminProduct[]> = response ?? { data: [] };
   return <section><p className="eyebrow">QUẢN TRỊ</p><h1>Tất cả hồ sơ</h1>{error && <p role="alert" className="form-note">{error}</p>}{loading && <div className="record-list-skeleton" aria-busy="true" aria-label="Đang tải danh sách hồ sơ">{Array.from({ length: 5 }, (_, index) => <div className="skeleton-block" key={index} />)}</div>}{!loading && !error && <><p>{result.meta?.total ?? result.data.length} hồ sơ</p>{result.data.length ? <div className="record-list">{result.data.map((product) => <article className="record-row" key={product.id}><div className="record-main"><span className="badge">{product.status}</span><h2>{product.name}</h2><p>{product.category.groupName} · {product.category.name}</p><p>{product.registrant.fullName} · {product.registrant.email}</p></div><div className="record-result"><span>{product.evaluations.filter((row) => row.status === "SUBMITTED").length} phiếu</span><Link className="button button-secondary" to="/admin/products/$id" params={{ id: product.id }}>Xem kết quả</Link></div></article>)}</div> : <div className="empty-state"><h2>Chưa có hồ sơ</h2><p>Hồ sơ sẽ xuất hiện sau khi chủ thể nộp đăng ký.</p></div>}<div className="hero-actions"><Button variant="secondary" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Trước</Button><span>Trang {page} / {result.meta?.totalPages ?? 1}</span><Button variant="secondary" disabled={page >= (result.meta?.totalPages ?? 1)} onClick={() => setPage((value) => value + 1)}>Sau</Button></div></>}</section>;
 }
-
-interface ProductResults { id: string; name: string; status: string; finalScore: number | null; starRating: number | null; category: Category; evaluations: { judge: { id: string; fullName: string; email: string }; status: string; total: number | null; scores: { option: { label: string; points: number }; note: string | null; subCriterion: { code: string; criterion: { code: string; name: string } } }[] }[] }
 
 export function AdminProductResultsPage({ productId }: { productId: string }) {
   const { result, error } = useApi<ProductResults>(`/admin/products/${productId}/results`);
