@@ -9,7 +9,13 @@ export type RegistrantProduct = Omit<SharedProduct, "formData" | "finalScore" | 
   starRating: number | null;
   submittedAt: string | null;
   updatedAt: string;
-  category: ProductCategoryView;
+  category: ProductCategoryView & {
+    classificationGroup: string;
+    classificationSubgroup: string | null;
+    isActive: boolean;
+    group: { isActive: boolean };
+    criteriaSet: { isActive: boolean } | null;
+  };
   attachments: ProductAttachmentRecord[];
 };
 

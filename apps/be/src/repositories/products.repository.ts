@@ -23,7 +23,8 @@ const publicProductSelect = {
 } satisfies Prisma.ProductSelect;
 
 const registrantProductInclude = {
-  category: { select: { id: true, name: true, groupCode: true, groupName: true, isActive: true,
+  category: { select: { id: true, name: true, groupCode: true, groupName: true,
+    classificationGroup: true, classificationSubgroup: true, isActive: true,
     group: { select: { isActive: true } }, criteriaSet: { select: { isActive: true } } } },
   attachments: {
     select: { id: true, type: true, fileName: true, createdAt: true },

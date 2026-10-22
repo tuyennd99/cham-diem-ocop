@@ -3,6 +3,8 @@ import type { EvaluationData } from "./judge";
 
 const summary = {
   id: "category-1", name: "Phân loại", groupCode: "A", groupName: "Nhóm",
+  classificationGroup: "Nông nghiệp", classificationSubgroup: null,
+  isActive: true, group: { isActive: true }, criteriaSet: { isActive: true },
 } satisfies RegistrantProduct["category"];
 
 const evaluation = {

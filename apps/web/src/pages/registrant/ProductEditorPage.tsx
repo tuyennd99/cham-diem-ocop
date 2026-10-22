@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PRODUCT_FILE_ACCEPT, validateProductFile } from "../../lib/attachments";
 import { queryKeys } from "../../constants/query-key";
-import type { RegistrantCategory as Category, RegistrantFormData as RegistrationFormData, RegistrantProduct as Product } from "../../types/registrant";
+import type { RegistrantFormData as RegistrationFormData, RegistrantProduct as Product } from "../../types/registrant";
+import { productEditorCategories, type ProductEditorCategory } from "../../lib/product-editor-categories";
 import { AttachmentLink } from "./AttachmentLink";
 
 const emptyRegistrationForm: RegistrationFormData = {
@@ -20,7 +21,7 @@ const applicationSteps = ["Đơn vị đăng ký", "Thông tin sản phẩm", "C
 export function ProductEditorPage({ productId }: { productId?: string }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [categories, setCategories] = useState<ProductEditorCategory[]>([]);
   const [product, setProduct] = useState<Product | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [name, setName] = useState("");
@@ -36,8 +37,9 @@ export function ProductEditorPage({ productId }: { productId?: string }) {
   useEffect(() => { let active = true;
     setLoaded(false); setError(""); setProduct(null);
     Promise.all([productsApi.categories(), productId ? myProductsApi.detail(productId) : Promise.resolve({ data: null })]).then(([categoryResult, productResult]) => {
-      if (!active) return; setCategories(categoryResult.data);
+      if (!active) return;
       const current = productResult.data;
+      setCategories(productEditorCategories(categoryResult.data, current));
       if (current) {
         const saved = current.formData ?? {};
         setProduct(current); setName(current.name); setDescription(current.description ?? ""); setCategoryId(current.category.id);
@@ -127,7 +129,8 @@ export function ProductEditorPage({ productId }: { productId?: string }) {
       </>}
       {step === 1 && <>
         <label>Tên sản phẩm<Input value={name} onChange={(e) => setName(e.target.value)} maxLength={255} /></label>
-        <label>Ngành, nhóm, phân nhóm sản phẩm<select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}><option value="">Chọn phân loại sản phẩm</option>{categories.map((item) => <option key={item.id} value={item.id}>{[item.groupName, item.classificationGroup, item.classificationSubgroup].filter(Boolean).join(" · ")}</option>)}</select></label>
+        <label>Ngành, nhóm, phân nhóm sản phẩm<select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}><option value="">Chọn phân loại sản phẩm</option>{categories.map((item) => <option key={item.id} value={item.id} disabled={item.unavailable}>{[item.groupName, item.classificationGroup, item.classificationSubgroup].filter(Boolean).join(" · ")}{item.unavailable ? " · Đã ngừng sử dụng" : ""}</option>)}</select></label>
+        {categories.some((item) => item.id === categoryId && item.unavailable) && <p role="status" className="form-note">Danh mục của bản nháp đã ngừng sử dụng. Hồ sơ vẫn được lưu và chỉnh sửa; hãy chọn danh mục đang hoạt động trước khi nộp.</p>}
         <label>Mô tả<textarea rows={4} maxLength={10000} value={description} onChange={(e) => setDescription(e.target.value)} /></label>
         <label>Lần đăng ký đánh giá<select value={registration.registrationType} onChange={(e) => setRegistration({ ...registration, registrationType: e.target.value as RegistrationFormData["registrationType"] })}><option value="">Chọn lần đăng ký</option><option value="FIRST">Lần đầu</option><option value="UPGRADE">Nâng hạng</option><option value="REASSESSMENT">Đánh giá lại</option></select></label>
         <label>Số lượng sản phẩm mẫu<Input type="number" min={0} step={1} value={registration.sampleQuantity} onChange={(e) => setRegistration({ ...registration, sampleQuantity: e.target.value })} /></label>
