@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EvaluationScoreDto } from '../dtos/evaluations.dto';
 import { databaseObject } from '../prisma/sql';
 import { lockEvaluationCategory, recomputeProductResult } from '../utils/evaluation-result';
+import { recordProductStatusEvent } from '../utils/product-status';
 
 @Injectable()
 export class EvaluationsRepository {
@@ -151,10 +152,11 @@ export class EvaluationsRepository {
           })),
         });
       }
-      await tx.product.update({
-        where: { id: productId },
-        data: { status: ProductStatus.SCORING },
-      });
+      if (context.product.status === ProductStatus.SUBMITTED) {
+        const scoringAt = new Date();
+        await tx.product.update({ where: { id: productId }, data: { status: ProductStatus.SCORING } });
+        await recordProductStatusEvent(tx, productId, ProductStatus.SUBMITTED, ProductStatus.SCORING, judgeId, scoringAt);
+      }
       return { id: evaluation.id, status: EvaluationStatus.IN_PROGRESS, scores };
     }, { timeout: 15000, maxWait: 10000 });
   }
@@ -178,7 +180,10 @@ export class EvaluationsRepository {
       const evaluation = await tx.evaluation.findUnique({
         where: { judgeId_productId: { judgeId, productId } },
         include: {
-          scores: { include: { subCriterion: { select: { criterionId: true } }, option: { select: { points: true } } } },
+          scores: { include: {
+            subCriterion: { include: { criterion: { select: { id: true, code: true, name: true } } } },
+            option: { select: { id: true, label: true, points: true } },
+          } },
         },
       });
       if (evaluation?.status === EvaluationStatus.SUBMITTED) {
@@ -188,13 +193,59 @@ export class EvaluationsRepository {
         throw new ConflictException('Score every assigned subcriterion before submitting');
       }
       const total = evaluation.scores.reduce((sum, score) => sum + score.option.points, 0);
+      const submittedAt = new Date();
+      const criteriaSet = context.product.category.criteriaSet;
+      if (!criteriaSet) throw new ConflictException('No scoring criteria are configured for this product');
+      const scoreBySubCriterion = new Map(evaluation.scores.map((score) => [score.subCriterionId, score]));
+      const submissionSnapshot = {
+        version: 1,
+        submittedAt: submittedAt.toISOString(),
+        product: {
+          id: context.product.id,
+          name: context.product.name,
+          description: context.product.description,
+          formData: context.product.formData,
+          category: {
+            id: context.product.category.id,
+            name: context.product.category.name,
+            group: context.product.category.group,
+          },
+        },
+        criteriaSet: {
+          id: criteriaSet.id,
+          name: criteriaSet.name,
+          source: criteriaSet.source,
+          version: criteriaSet.version,
+          sourceHash: criteriaSet.sourceHash,
+        },
+        judge: {
+          id: context.assignment.judge.id,
+          fullName: context.assignment.judge.fullName,
+          organizationUnit: context.assignment.judge.organizationUnit,
+        },
+        assignedCriterionIds: assignedCriteria,
+        scores: expected.map((subCriterionId) => {
+          const score = scoreBySubCriterion.get(subCriterionId)!;
+          return {
+            criterion: score.subCriterion.criterion,
+            subCriterion: {
+              id: score.subCriterion.id,
+              code: score.subCriterion.code,
+              content: score.subCriterion.content,
+            },
+            option: score.option,
+            note: score.note,
+          };
+        }),
+        total,
+      } as Prisma.InputJsonValue;
       const submitted = await tx.evaluation.update({
         where: { id: evaluation.id },
-        data: { status: EvaluationStatus.SUBMITTED, total },
+        data: { status: EvaluationStatus.SUBMITTED, total, submittedAt, submissionSnapshot },
         select: { id: true, total: true, status: true },
       });
 
-      await recomputeProductResult(tx, productId);
+      await recomputeProductResult(tx, productId, judgeId);
       return submitted;
     }, { timeout: 15000, maxWait: 10000 });
   }
@@ -210,6 +261,7 @@ export class EvaluationsRepository {
       include: {
         category: {
           include: {
+            group: { select: { id: true, code: true, name: true } },
             criteriaSet: {
               include: {
                 criteria: {
@@ -227,6 +279,7 @@ export class EvaluationsRepository {
     const assignment = await db.judgeAssignment.findUnique({
       where: { judgeId_categoryId: { judgeId, categoryId: product.categoryId },
         judge: { is: { role: { not: Role.REGISTRANT }, staffPermissions: { has: StaffPermission.SCORE }, isActive: true, verified: true } } },
+      include: { judge: { select: { id: true, fullName: true, organizationUnit: { select: { id: true, code: true, name: true } } } } },
     });
     if (!assignment) throw new ForbiddenException('Product is outside the judge assignment');
     if (product.status !== ProductStatus.SUBMITTED && product.status !== ProductStatus.SCORING &&

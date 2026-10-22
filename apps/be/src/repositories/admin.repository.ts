@@ -383,7 +383,7 @@ export class AdminRepository {
         for (const product of openProducts.filter(({ categoryId }) =>
           changedCategoryIds.includes(categoryId),
         )) {
-          await recomputeProductResult(tx, product.id);
+          await recomputeProductResult(tx, product.id, actorId);
         }
       }
 

@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { databaseObject } from '../prisma/sql';
 import { lockEvaluationCategory } from '../utils/evaluation-result';
 import { productRegistrationTypes } from '../constants/products';
+import { recordProductStatusEvent } from '../utils/product-status';
 
 const publicProductSelect = {
   id: true,
@@ -22,7 +23,8 @@ const publicProductSelect = {
 } satisfies Prisma.ProductSelect;
 
 const registrantProductInclude = {
-  category: { select: { id: true, name: true, groupCode: true, groupName: true } },
+  category: { select: { id: true, name: true, groupCode: true, groupName: true, isActive: true,
+    group: { select: { isActive: true } }, criteriaSet: { select: { isActive: true } } } },
   attachments: {
     select: { id: true, type: true, fileName: true, createdAt: true },
     orderBy: { createdAt: 'asc' as const },
@@ -39,6 +41,7 @@ export class ProductsRepository {
 
   listCategories() {
     return this.prisma.productCategory.findMany({
+      where: { isActive: true, group: { isActive: true }, criteriaSet: { is: { isActive: true } } },
       select: {
         id: true,
         groupCode: true,
@@ -138,9 +141,15 @@ export class ProductsRepository {
     description?: string | null;
     formData: Prisma.InputJsonValue;
   }) {
-    return this.prisma.product.create({
-      data: input,
-      include: registrantProductInclude,
+    return this.prisma.$transaction(async (tx) => {
+      await lockEvaluationCategory(tx, input.categoryId);
+      await this.assertActiveCategory(tx, input.categoryId);
+      const product = await tx.product.create({
+        data: { ...input, createdById: input.registrantId },
+        include: registrantProductInclude,
+      });
+      await recordProductStatusEvent(tx, product.id, null, 'DRAFT', input.registrantId, product.createdAt);
+      return product;
     });
   }
 
@@ -155,7 +164,16 @@ export class ProductsRepository {
     },
   ) {
     return this.prisma.$transaction(async (tx) => {
+      const initial = await tx.product.findFirst({ where: { id, registrantId, status: 'DRAFT' }, select: { categoryId: true } });
+      if (!initial) return null;
+      for (const categoryId of [...new Set([initial.categoryId, input.categoryId].filter((value): value is string => Boolean(value)))].sort()) {
+        await lockEvaluationCategory(tx, categoryId);
+      }
       await tx.$queryRaw(Prisma.sql`SELECT "id" FROM ${databaseObject('products')} WHERE "id" = ${id} FOR UPDATE`);
+      const current = await tx.product.findFirst({ where: { id, registrantId, status: 'DRAFT' }, select: { categoryId: true } });
+      if (!current) return null;
+      if (current.categoryId !== initial.categoryId) throw new ConflictException('Product category changed while updating draft');
+      if (input.categoryId !== undefined && input.categoryId !== current.categoryId) await this.assertActiveCategory(tx, input.categoryId);
       const updated = await tx.product.updateMany({
         where: { id, registrantId, status: 'DRAFT' },
         data: input,
@@ -195,6 +213,7 @@ export class ProductsRepository {
       if (product.categoryId !== initial.categoryId) {
         throw new ConflictException('Product category changed while submitting');
       }
+      await this.assertActiveCategory(tx, product.categoryId);
       const form = product.formData;
       const hasText = (value: Prisma.JsonValue | undefined) =>
         typeof value === 'string' && value.trim().length > 0;
@@ -211,11 +230,13 @@ export class ProductsRepository {
       ) {
         throw new BadRequestException('Complete all required application fields and accept the declaration before submitting');
       }
+      const submittedAt = new Date();
       const updated = await tx.product.updateMany({
         where: { id, registrantId, status: 'DRAFT' },
-        data: { status: 'SUBMITTED', submittedAt: new Date() },
+        data: { status: 'SUBMITTED', submittedAt },
       });
       if (!updated.count) return null;
+      await recordProductStatusEvent(tx, id, 'DRAFT', 'SUBMITTED', registrantId, submittedAt);
       return tx.product.findUniqueOrThrow({
         where: { id },
         include: registrantProductInclude,
@@ -274,5 +295,12 @@ export class ProductsRepository {
         product: { select: { registrantId: true, status: true } },
       },
     });
+  }
+
+  private async assertActiveCategory(tx: Prisma.TransactionClient, id: string) {
+    const available = await tx.productCategory.count({ where: {
+      id, isActive: true, group: { isActive: true }, criteriaSet: { is: { isActive: true } },
+    } });
+    if (!available) throw new ConflictException('Product category, group or criteria set is unavailable for new registration');
   }
 }

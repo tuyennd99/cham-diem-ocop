@@ -2,6 +2,7 @@ import { ConflictException } from '@nestjs/common';
 import { EvaluationStatus, Prisma, ProductStatus, Role, StaffPermission } from '@prisma/client';
 import { databaseObject } from '../prisma/sql';
 import { calculateFinalScore, calculateStars } from './scoring';
+import { recordProductStatusEvent } from './product-status';
 
 export async function lockEvaluationCategory(
   tx: Prisma.TransactionClient,
@@ -17,11 +18,13 @@ export async function lockEvaluationCategory(
 export async function recomputeProductResult(
   tx: Prisma.TransactionClient,
   productId: string,
+  actorId: string,
 ): Promise<void> {
   const product = await tx.product.findUnique({
     where: { id: productId },
     select: {
       status: true,
+      completedAt: true,
       categoryId: true,
       category: {
         select: {
@@ -129,21 +132,30 @@ export async function recomputeProductResult(
   const finalScore = complete
     ? calculateFinalScore(totals, criterionIds)
     : null;
+  const nextStatus = finalScore === null
+    ? existingEvaluationCount ? ProductStatus.SCORING : product.status
+    : ProductStatus.COMPLETED;
+  const transitionedAt = nextStatus !== product.status ? new Date() : undefined;
+  const completedAt = nextStatus === ProductStatus.COMPLETED
+    ? product.completedAt ?? transitionedAt
+    : undefined;
   await tx.product.update({
     where: { id: productId },
     data:
       finalScore === null
         ? {
-            status: existingEvaluationCount
-              ? ProductStatus.SCORING
-              : ProductStatus.SUBMITTED,
+            status: nextStatus,
             finalScore: null,
             starRating: null,
           }
         : {
-            status: ProductStatus.COMPLETED,
+            status: nextStatus,
             finalScore,
             starRating: calculateStars(finalScore),
+            ...(completedAt ? { completedAt } : {}),
           },
   });
+  if (nextStatus !== product.status) {
+    await recordProductStatusEvent(tx, productId, product.status, nextStatus, actorId, transitionedAt);
+  }
 }
