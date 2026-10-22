@@ -40,11 +40,11 @@
 
 **Produces:** `StaffPermission` (`MANAGE`, `VIEW`, `SCORE`), compatibility `Role.VIEWER`, `OrganizationUnit` (`code`, `name`, `description`, `order`, `isActive`, timestamps), six `ProductGroup` records, empty `Locality` (`code`, `name`, `type`, `provinceName`, effective dates, `isActive`), `ProductCategory.groupId/isActive`, `CriteriaSet.isActive/version/sourceHash`, optional Product `createdById/localityId/completedAt` and locality-at-submit fields, `ProductStatusEvent`, and Evaluation `submittedAt/submissionSnapshot`.
 
-- [ ] Add `admin-foundation-migration.db-spec.ts` that creates an isolated schema, installs the pre-0011 Prisma migrations there, inserts one user of each legacy role plus linked category/product/attachment/assignment/evaluation/score rows, then applies `0011_admin_foundation/migration.sql`.
-- [ ] Assert exact mapping ADMIN → MANAGE + VIEW, JUDGE → SCORE, REGISTRANT → no staff permission; preserve every inserted ID and row count; legacy `completedAt`, locality/unit and unprovable event times remain null/empty; existing submitted evaluations are labeled pre-upgrade and snapshot only values present in legacy rows.
-- [ ] Seed six ProductGroups from existing category codes/names and link all 26 existing categories without changing category IDs, names, group labels, or criteria IDs; make seed re-runnable.
-- [ ] Assert CAT-01’s six-group/26-category/criteria links and that the new locality/unit catalogs contain no fabricated rows.
-- [ ] Generate Prisma client and run focused migration/seed DB tests; commit the task.
+- [x] Add `admin-foundation-migration.db-spec.ts` that creates an isolated schema, installs the pre-0011 Prisma migrations there, inserts one user of each legacy role plus linked category/product/attachment/assignment/evaluation/score rows, then applies `0011_admin_foundation/migration.sql`.
+- [x] Assert exact mapping ADMIN → MANAGE + VIEW, JUDGE → SCORE, REGISTRANT → no staff permission; preserve every inserted ID and row count; legacy `completedAt`, locality/unit and unprovable event times remain null/empty; existing submitted evaluations are labeled pre-upgrade and snapshot only values present in legacy rows.
+- [x] Seed six ProductGroups from existing category codes/names and link all 26 existing categories without changing category IDs, names, group labels, or criteria IDs; make seed re-runnable.
+- [x] Assert CAT-01’s six-group/26-category/criteria links and that the new locality/unit catalogs contain no fabricated rows.
+- [x] Generate Prisma client and run focused migration/seed DB tests; commit the task.
 
 ### Task 2: Permission enforcement and staff-access mutation
 
