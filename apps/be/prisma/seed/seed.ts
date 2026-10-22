@@ -1,7 +1,8 @@
 import 'dotenv/config';
+import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { Prisma, PrismaClient, Role } from '@prisma/client';
+import { Prisma, PrismaClient, Role, StaffPermission } from '@prisma/client';
 import { databaseObject } from '../../src/prisma/sql';
 import bcrypt from 'bcryptjs';
 import { createPrismaAdapter } from '../../src/prisma/client';
@@ -161,6 +162,7 @@ async function seedBootstrapAdmin() {
       password: await bcrypt.hash(password, PASSWORD_ROUNDS),
       fullName: 'Quản trị viên',
       role: Role.ADMIN,
+      staffPermissions: [StaffPermission.MANAGE, StaffPermission.VIEW],
       verified: true,
       isActive: true,
     },
@@ -227,10 +229,23 @@ async function main() {
       }
     }
 
+    const groupIds = new Map<string, string>();
+    const groups = [...new Map(catalog.categories.map(({ groupCode, groupName }) => [groupCode, groupName]))]
+      .sort(([a], [b]) => a.localeCompare(b));
+    for (const [index, [code, name]] of groups.entries()) {
+      const group = await tx.productGroup.upsert({
+        where: { code },
+        update: {},
+        create: { id: 'product-group-' + code, code, name, order: index + 1 },
+        select: { id: true },
+      });
+      groupIds.set(code, group.id);
+    }
     for (const category of catalog.categories) {
       const row = await tx.productCategory.upsert({
         where: { id: category.id },
         update: {
+          groupId: groupIds.get(category.groupCode)!,
           groupCode: category.groupCode,
           groupName: category.groupName,
           classificationGroup: category.classificationGroup,
@@ -239,6 +254,7 @@ async function main() {
         },
         create: {
           id: category.id,
+          groupId: groupIds.get(category.groupCode)!,
           groupCode: category.groupCode,
           groupName: category.groupName,
           classificationGroup: category.classificationGroup,
@@ -253,10 +269,12 @@ async function main() {
     for (const seed of criteriaSets) {
       const categoryId = categoryByKey.get(seed.categoryKey);
       if (!categoryId) throw new Error(`Unknown criteria category ${seed.categoryKey}`);
+      const sourceHash = createHash('sha256')
+        .update(JSON.stringify(incomingScoringProjection(seed))).digest('hex');
       const criteriaSet = await tx.criteriaSet.upsert({
         where: { categoryId },
-        update: { name: seed.name, source: seed.source },
-        create: { categoryId, name: seed.name, source: seed.source },
+        update: { name: seed.name, source: seed.source, sourceHash },
+        create: { categoryId, name: seed.name, source: seed.source, sourceHash, version: '1' },
         select: { id: true },
       });
       for (const criterionSeed of seed.criteria) {

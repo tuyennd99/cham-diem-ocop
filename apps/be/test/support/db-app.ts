@@ -20,9 +20,11 @@ async function clearExistingData(client: Client) {
   await client.query('DELETE FROM "judge_assignments"');
   await client.query('DELETE FROM "attachments"');
   await client.query('DELETE FROM "products"');
+  await client.query('DELETE FROM "localities"');
   await client.query('DELETE FROM "otp_codes"');
   await client.query('DELETE FROM "audit_logs"');
   await client.query('DELETE FROM "users"');
+  await client.query('DELETE FROM "organization_units"');
 }
 
 async function copySeedData(client: Client, schema: string) {
@@ -41,6 +43,7 @@ async function copySeedData(client: Client, schema: string) {
     }
     await client.query(`SET search_path TO "${schema}"`);
     await client.query('BEGIN');
+    await client.query('INSERT INTO "product_groups" SELECT * FROM public."product_groups" ON CONFLICT DO NOTHING');
     for (const table of [
       'product_categories',
       'criteria_sets',

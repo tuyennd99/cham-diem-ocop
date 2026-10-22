@@ -241,13 +241,17 @@ describe('seed scoring history guard', () => {
         rows.map(({ id, criteriaSet }) => ({
           id,
           criteriaSet: criteriaSet?.id,
-          criteria: criteriaSet?.criteria.map(({ id: criterionId, subCriteria }) => ({
-            id: criterionId,
-            subCriteria: subCriteria.map(({ id: subCriterionId, options }) => ({
-              id: subCriterionId,
-              options: options.map(({ id: optionId }) => optionId),
-            })),
-          })),
+          criteria: criteriaSet?.criteria.map(
+            ({ id: criterionId, subCriteria }) => ({
+              id: criterionId,
+              subCriteria: subCriteria.map(
+                ({ id: subCriterionId, options }) => ({
+                  id: subCriterionId,
+                  options: options.map(({ id: optionId }) => optionId),
+                }),
+              ),
+            }),
+          ),
         }));
       const sandbox = seedSandbox();
       try {
@@ -339,4 +343,54 @@ describe('seed scoring history guard', () => {
       });
     },
   );
+});
+
+it('seeds six official groups and links all 26 classifications without fabricated catalogs', async () => {
+  await withTestApp(async ({ prisma }) => {
+    const initialSeed = seedSandbox();
+    try {
+      expect(runSeed(initialSeed.root).status).toBe(0);
+    } finally {
+      rmSync(initialSeed.root, { recursive: true, force: true });
+    }
+    const groups = await prisma.productGroup.findMany({
+      include: { categories: { include: { criteriaSet: true } } },
+    });
+    expect(groups).toHaveLength(6);
+    expect(groups.flatMap((group) => group.categories)).toHaveLength(26);
+    const catalog = JSON.parse(
+      readFileSync(join(officialDataDir, 'categories.json'), 'utf8'),
+    ).categories;
+    for (const category of catalog) {
+      const group = groups.find(({ code }) => code === category.groupCode);
+      expect(group?.name).toBe(category.groupName);
+      expect(group?.categories).toContainEqual(
+        expect.objectContaining({
+          id: category.id,
+          name: category.name,
+          groupCode: category.groupCode,
+          groupName: category.groupName,
+          criteriaSet: expect.objectContaining({
+            isActive: true,
+            version: expect.any(String),
+            sourceHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+          }),
+        }),
+      );
+    }
+    expect(await prisma.organizationUnit.count()).toBe(0);
+    expect(await prisma.locality.count()).toBe(0);
+    const before = await prisma.productGroup.findMany({
+      orderBy: { code: 'asc' },
+    });
+    const sandbox = seedSandbox();
+    try {
+      expect(runSeed(sandbox.root).status).toBe(0);
+    } finally {
+      rmSync(sandbox.root, { recursive: true, force: true });
+    }
+    expect(
+      await prisma.productGroup.findMany({ orderBy: { code: 'asc' } }),
+    ).toEqual(before);
+  });
 });
