@@ -54,11 +54,11 @@
 
 **Produces:** A DB-derived authenticated principal with effective permissions and unit; MANAGE/VIEW/SCORE authorization; `PUT /admin/users/:id/staff-access` accepting `{ staffPermissions, organizationUnitId, isActive, reason }`, auditing before/after and incrementing `tokenVersion`; concurrent requests cannot deactivate or remove MANAGE from the last active verified MANAGE account.
 
-- [ ] Add tests for `MANAGE` implying VIEW only, `MANAGE` not implying SCORE, and token-version mismatch rejecting old sessions; then implement the shared permission decorator/guard and database principal hydration.
-- [ ] Apply MANAGE to admin writes/user data, VIEW to permitted read endpoints, and SCORE plus current DB assignment to judging routes; retain REGISTRANT role protection.
-- [ ] Replace judge-role checks in assignment, progress, and scoring paths with SCORE eligibility while preserving active/verified checks.
-- [ ] Add focused DB coverage for USR-01..04, including simultaneous attempts to remove access from the final admin; make access changes atomic with audit and token-version increment.
-- [ ] Run focused BE unit and isolated DB tests; commit the task.
+- [x] Add tests for `MANAGE` implying VIEW only, `MANAGE` not implying SCORE, and token-version mismatch rejecting old sessions; then implement the shared permission decorator/guard and database principal hydration.
+- [x] Apply MANAGE to admin writes/user data, VIEW to permitted read endpoints, and SCORE plus current DB assignment to judging routes; retain REGISTRANT role protection.
+- [x] Replace judge-role checks in assignment, progress, and scoring paths with SCORE eligibility while preserving active/verified checks.
+- [x] Add focused DB coverage for USR-01..04, including simultaneous attempts to remove access from the final admin; make access changes atomic with audit and token-version increment.
+- [x] Run focused BE unit and isolated DB tests; commit the task.
 
 ### Task 3: Transactional product/evaluation history and active-category rules
 
@@ -66,11 +66,11 @@
 
 **Consumes:** Task 1’s ProductStatusEvent and snapshot fields; Task 2’s current principal.
 
-- [ ] Add failing DB cases for one event per actual status transition, retry idempotency, `completedAt` set only on first COMPLETED transition, and actor attribution; implement shared transaction-local event writes for product creation/submission, first scoring, and completion.
-- [ ] Reject new submissions when category or its criteria set is inactive while leaving existing submitted products/evaluations readable and scoreable; exclude inactive categories from new-registration choices and allow existing drafts to load.
-- [ ] On BE evaluation submit, persist fixed version-1 snapshot data for product/category/group, criteria-set version/source hash, judge and unit-at-submit, assigned criterion IDs, and selected criterion/subcriterion/option labels, points, and notes; prove changing the judge’s unit later does not change submitted history (ORG-01).
-- [ ] Assert CAT-02’s inactive-category choice/submission behavior and ensure no historical product/category/evaluation row is deleted or rewritten.
-- [ ] Run focused repository and isolated DB tests; commit the task.
+- [x] Add failing DB cases for one event per actual status transition, retry idempotency, `completedAt` set only on first COMPLETED transition, and actor attribution; implement shared transaction-local event writes for product creation/submission, first scoring, and completion.
+- [x] Reject new submissions when category or its criteria set is inactive while leaving existing submitted products/evaluations readable and scoreable; exclude inactive categories from new-registration choices and allow existing drafts to load.
+- [x] On BE evaluation submit, persist fixed version-1 snapshot data for product/category/group, criteria-set version/source hash, judge and unit-at-submit, assigned criterion IDs, and selected criterion/subcriterion/option labels, points, and notes; prove changing the judge’s unit later does not change submitted history (ORG-01).
+- [x] Assert CAT-02’s inactive-category choice/submission behavior and ensure no historical product/category/evaluation row is deleted or rewritten.
+- [x] Run focused repository and isolated DB tests; commit the task.
 
 ### Task 4: Shared client contract and permission-based navigation
 
@@ -78,10 +78,10 @@
 
 **Consumes:** Task 2’s auth response permissions and unit.
 
-- [ ] Add client tests for VIEWER persistence, legacy ADMIN → MANAGE + VIEW migration, judge SCORE access, and combined MANAGE + SCORE access.
-- [ ] Replace role-only admin/judge checks with permission checks: MANAGE sees admin navigation, VIEW sees allowed read routes, SCORE sees `/judge`, and MANAGE + SCORE sees both; do not expose user-management routes to VIEW.
-- [ ] Keep server authorization authoritative; route redirects only improve navigation and do not substitute for BE guards.
-- [ ] Run web typecheck, focused tests, API unit tests, and production builds for web and BE; commit the task.
+- [x] Add client tests for VIEWER persistence, legacy ADMIN → MANAGE + VIEW migration, judge SCORE access, and combined MANAGE + SCORE access.
+- [x] Replace role-only admin/judge checks with permission checks: MANAGE sees admin navigation, VIEW sees allowed read routes, SCORE sees `/judge`, and MANAGE + SCORE sees both; do not expose user-management routes to VIEW.
+- [x] Keep server authorization authoritative; route redirects only improve navigation and do not substitute for BE guards.
+- [x] Run web typecheck, focused tests, API unit tests, and production builds for web and BE; commit the task.
 
 ## Acceptance Map and Self-Review
 

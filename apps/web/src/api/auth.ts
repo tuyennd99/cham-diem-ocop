@@ -1,5 +1,6 @@
 import { API } from "../constants/api";
 import { requestJson } from "./base-request";
+import { getSession, setSession } from "../stores/session-store";
 import type {
   ChangePasswordInput,
   LoginInput,
@@ -19,5 +20,11 @@ export const authApi = {
   forgotPassword: (email: string) => requestJson<MessageResponse>({ url: API.auth.forgotPassword, method: "POST", data: { email } }),
   resetPassword: (data: ResetPasswordInput) => requestJson<MessageResponse>({ url: API.auth.resetPassword, method: "POST", data }),
   changePassword: (data: ChangePasswordInput) => requestJson<MessageResponse>({ url: API.auth.changePassword, method: "POST", data }),
-  me: () => requestJson<SessionUser>({ url: API.auth.me }),
+  me: async () => {
+    const accessToken = getSession()?.accessToken;
+    const result = await requestJson<SessionUser>({ url: API.auth.me });
+    const session = getSession();
+    if (accessToken && session?.accessToken === accessToken) setSession({ ...session, user: result.data });
+    return result;
+  },
 };

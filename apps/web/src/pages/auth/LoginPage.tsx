@@ -21,7 +21,7 @@ export function LoginPage() {
         password: String(form.get("password") ?? ""),
       });
       setSession({ accessToken: data.accessToken, user: data.user });
-      await navigate({ to: homeFor(data.user.role) });
+      await navigate({ to: homeFor(data.user.role, data.user.staffPermissions) });
     } catch (error) { setError(messageOf(error)); }
     finally { setBusy(false); }
   }

@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { requireRole } from "../lib/route-guards";
+import { requirePermission } from "../lib/route-guards";
 import { AdminDashboardPage } from "../pages/admin/AdminDashboardPage";
 
 export const Route = createFileRoute("/_app/admin/")({
-  beforeLoad: requireRole("ADMIN"),
+  beforeLoad: requirePermission("VIEW"),
   component: AdminDashboardRoute,
 });
 

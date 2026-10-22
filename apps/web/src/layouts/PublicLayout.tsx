@@ -6,7 +6,7 @@ export function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const session = useSession();
   const signedIn = Boolean(session);
-  const workPath = session ? homeFor(session.user.role, "/my/products/new") : "/my/products/new";
+  const workPath = session ? homeFor(session.user.role, session.user.staffPermissions, "/my/products/new") : "/my/products/new";
 
   return (
     <header className="site-header">

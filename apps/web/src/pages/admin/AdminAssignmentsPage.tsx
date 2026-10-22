@@ -4,9 +4,13 @@ import { adminApi, productsApi } from "../../api";
 import { messageOf } from "../../lib/api-error";
 import { Button } from "@/components/ui/button";
 import { queryKeys } from "../../constants/query-key";
+import { hasStaffPermission } from "../../lib/session-contract";
+import { useSession } from "../../lib/auth";
 import type { AdminCategory as Category, AdminJudge as Judge, Assignment } from "../../types/admin";
 
 export function AdminAssignmentsPage() {
+  const session = useSession();
+  const canManage = hasStaffPermission(session?.user, "MANAGE");
   const queryClient = useQueryClient();
   const [judges, setJudges] = useState<Judge[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -19,7 +23,28 @@ export function AdminAssignmentsPage() {
   const [judgeId, setJudgeId] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [criterionIds, setCriterionIds] = useState<string[]>([]);
-  useEffect(() => { let active = true; Promise.all([adminApi.judges(), productsApi.categories(), adminApi.assignments()]).then(([j, c, a]) => { if (!active) return; setJudges(j.data.filter((item) => item.isActive)); setCategories(c.data); setAssignments(a.data); setSavedAssignments(a.data); }).catch((e) => { if (active) setError(messageOf(e)); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, []);
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      try {
+        if (canManage) {
+          const [j, c, a] = await Promise.all([adminApi.judges(), productsApi.categories(), adminApi.assignments()]);
+          if (!active) return;
+          setJudges(j.data.filter((item) => item.isActive)); setCategories(c.data); setAssignments(a.data); setSavedAssignments(a.data);
+        } else {
+          const { data } = await adminApi.assignments();
+          if (!active) return;
+          setAssignments(data); setSavedAssignments(data);
+        }
+      } catch (cause) {
+        if (active) setError(messageOf(cause));
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    void load();
+    return () => { active = false; };
+  }, [canManage]);
   const selectedCategory = categories.find((category) => category.id === categoryId);
   const keyOf = (judge: string, category: string) => `${judge}:${category}`;
   const originalByKey = new Map(savedAssignments.map((item) => [keyOf(item.judgeId, item.categoryId), item]));
@@ -81,9 +106,9 @@ export function AdminAssignmentsPage() {
 
   return <section className="assignment-page">
     <p className="eyebrow">QUẢN TRỊ</p><h1>Phân công giám khảo</h1>
-    <p className="assignment-warning">Lưu sẽ thay thế toàn bộ phân công hiện tại, không chỉ dòng đang sửa. Xem trước thay đổi và xác nhận trước khi gửi.</p>
+    {canManage && <p className="assignment-warning">Lưu sẽ thay thế toàn bộ phân công hiện tại, không chỉ dòng đang sửa. Xem trước thay đổi và xác nhận trước khi gửi.</p>}
     {error && <p role="alert" className="form-note">{error}</p>}{notice && <p role="status" className="form-success">{notice}</p>}
-    {loading ? <div className="dashboard-skeleton" aria-busy="true" aria-label="Đang tải phân công"><div className="skeleton-table" /></div> : error && !categories.length ? <div className="empty-state"><h2>Chưa tải được phân công</h2><p>Kiểm tra quyền truy cập hoặc kết nối rồi thử lại.</p></div> : <>
+    {loading ? <div className="dashboard-skeleton" aria-busy="true" aria-label="Đang tải phân công"><div className="skeleton-table" /></div> : error && (!canManage || !categories.length) ? <div className="empty-state"><h2>Chưa tải được phân công</h2><p>Kiểm tra quyền truy cập hoặc kết nối rồi thử lại.</p></div> : !canManage ? assignments.length ? <section className="route-panel"><h2>Danh sách phân công hiện tại</h2><p>Tài khoản này có quyền xem nhưng không thể thay đổi phân công.</p><div className="record-list">{assignments.map((item) => <article className="record-row" key={keyOf(item.judgeId, item.categoryId)}><div className="record-main"><h3>{item.judge.fullName}</h3><p>{item.category.groupName} · {item.category.name}</p></div><span>{item.criterionIds.length ? `${item.criterionIds.length} tiêu chí trong phạm vi` : "Toàn bộ tiêu chí"}</span></article>)}</div></section> : <div className="empty-state"><h2>Chưa có phân công</h2></div> : <>
       <section className="route-panel assignment-editor"><h2>Thêm hoặc sửa phạm vi</h2><div className="assignment-form-grid">
         <label>Giám khảo<select value={judgeId} onChange={(event) => setJudgeId(event.target.value)}><option value="">Chọn giám khảo</option>{judges.map((judge) => <option key={judge.id} value={judge.id}>{judge.fullName}</option>)}</select></label>
         <label>Nhóm sản phẩm<select value={categoryId} onChange={(event) => { const nextId = event.target.value; const existing = assignments.find((item) => item.judgeId === judgeId && item.categoryId === nextId); setCategoryId(nextId); setCriterionIds(existing?.criterionIds ?? []); }}><option value="">Chọn nhóm</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.groupName} · {category.name}</option>)}</select></label>

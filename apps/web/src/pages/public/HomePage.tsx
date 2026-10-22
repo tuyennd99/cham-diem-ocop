@@ -9,7 +9,7 @@ import type { FeaturedProduct } from "../../types/public";
 
 export function HomePage() {
   const session = useSession();
-  const workPath = homeFor(session?.user.role ?? "REGISTRANT");
+  const workPath = session ? homeFor(session.user.role, session.user.staffPermissions) : homeFor("REGISTRANT");
   const [categoryId, setCategoryId] = useState("");
   const categoryRequest = useCategories();
   const productRequest = usePublicProducts<FeaturedProduct>({ page: 1, limit: 6, categoryId: categoryId || undefined });

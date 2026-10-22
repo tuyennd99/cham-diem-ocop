@@ -5,7 +5,7 @@ import { homeFor } from "../lib/auth";
 export const Route = createFileRoute("/_auth")({
   beforeLoad: ({ context }) => {
     const session = context.getSession();
-    if (session) throw redirect({ to: homeFor(session.user.role) });
+    if (session) throw redirect({ to: homeFor(session.user.role, session.user.staffPermissions) });
   },
   component: AuthLayout,
 });

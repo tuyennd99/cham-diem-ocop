@@ -1,12 +1,17 @@
-export type AppRole = "REGISTRANT" | "JUDGE" | "ADMIN";
+import type { OrganizationUnitSummary, Role, StaffPermission } from "@ocop/shared";
+
+export type AppRole = Role;
 
 export interface SessionUser {
   id: string;
   email: string;
   fullName: string;
   phone: string | null;
-  role: AppRole;
+  role: Role;
   verified: boolean;
+  staffPermissions: StaffPermission[];
+  organizationUnitId: string | null;
+  organizationUnit: OrganizationUnitSummary | null;
 }
 
 export interface Session {

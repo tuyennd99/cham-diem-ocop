@@ -284,7 +284,11 @@ describe('evaluation persistence', () => {
             judge: { id: fixture.judgeIds[0], organizationUnit: { id: unitAtSubmit.id, code: unitAtSubmit.code, name: 'Unit at submit' } },
             criteriaSet: { version: '1', source: null, sourceHash: null },
             assignedCriterionIds: fixture.criteria.map(({ id }) => id),
-            scores: expect.arrayContaining([expect.objectContaining({ criterion: { code: 'A', name: 'Criterion A' }, subCriterion: { content: 'Subcriterion A' }, option: { points: 60 } })]),
+            scores: expect.arrayContaining([expect.objectContaining({
+              criterion: expect.objectContaining({ code: 'A', name: 'Criterion A' }),
+              subCriterion: expect.objectContaining({ content: 'Subcriterion A' }),
+              option: expect.objectContaining({ points: 60 }),
+            })]),
           });
           await prisma.organizationUnit.update({ where: { id: unitAtSubmit.id }, data: { name: 'Renamed unit' } });
           await prisma.user.update({ where: { id: fixture.judgeIds[0] }, data: { organizationUnitId: newUnit.id } });

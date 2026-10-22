@@ -2,17 +2,13 @@ import { createStore } from "zustand/vanilla";
 import { useStore } from "zustand";
 import { SESSION_STORAGE_KEY } from "../constants/auth";
 import type { Session } from "../types/auth";
+import { normalizeSession, parseStoredSession, serializeSession } from "../lib/session-contract";
 
 export { SESSION_STORAGE_KEY };
 
 function readSession(): Session | null {
   try {
-    const value: unknown = JSON.parse(window.localStorage.getItem(SESSION_STORAGE_KEY) ?? "null");
-    if (typeof value !== "object" || value === null) return null;
-    const session = value as Partial<Session>;
-    if (typeof session.accessToken !== "string" || typeof session.user?.id !== "string" ||
-      !["REGISTRANT", "JUDGE", "ADMIN"].includes(session.user.role)) return null;
-    return session as Session;
+    return parseStoredSession(window.localStorage.getItem(SESSION_STORAGE_KEY));
   } catch {
     return null;
   }
@@ -32,9 +28,10 @@ export function getSession(): Session | null {
 }
 
 export function setSession(next: Session | null): void {
-  if (next) window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(next));
+  const normalized = next ? normalizeSession(next) : null;
+  if (normalized) window.localStorage.setItem(SESSION_STORAGE_KEY, serializeSession(normalized));
   else window.localStorage.removeItem(SESSION_STORAGE_KEY);
-  sessionStore.setState({ session: next });
+  sessionStore.setState({ session: normalized });
 }
 
 export function useSession(): Session | null {
