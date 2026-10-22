@@ -6,6 +6,8 @@
 
 **Architecture:** Giữ React/Vite/TanStack Router và client `src/lib/api.ts`; BE giữ controller → service → repository hiện tại. Sửa cấu hình proxy, types theo response thực tế, các luồng hồ sơ/upload và trạng thái UI tại nơi đang sở hữu chúng. Dùng Node assert, Vite và Jest đã cài để kiểm chứng; không thêm tầng API hoặc framework test.
 
+**Cập nhật quy ước FE (22/10/2026):** Các bước và đường dẫn client trong plan này ghi lại đợt tích hợp cũ. Công việc FE mới/refactor tuân theo [README web](../../../apps/web/README.md#frontend-api-and-constants-convention): `src/api/` chứa Axios base và hàm gọi API theo nghiệp vụ, `src/constants/` chứa hằng số dùng chung; hook/mutation gọi hàm nghiệp vụ thay vì gọi HTTP trực tiếp trong component/page. Mẫu Axios chưa thay thế `src/lib/api.ts`; quy ước mới cho phép dùng Axios khi tích hợp, đồng thời giữ contract `/api`, session, lỗi, upload và response hiện có.
+
 **Tech Stack:** Node.js `>=24.7 <25`, pnpm `11.17.0`, React 19, Vite 8, TanStack Router, Tailwind 4, NestJS 11, Prisma 7, PostgreSQL, Jest.
 
 **Implementation status (2026-10-17):** Code changes and automated checks are complete; DB, SMTP, browser, and deployment acceptance remain blocked as recorded in [verification report](../../verification/2026-10-16-fe-be-integration.md).
@@ -53,7 +55,7 @@ Không có yêu cầu thay schema hoặc endpoint mới. Chỉ sửa production 
 | 4 | `apps/web/src/pages/RegistrantPages.tsx`, hàm `ProductEditorPage` | Tải detail, reset loading theo ID, giữ form/payload. |
 | 5 | `apps/web/src/lib/attachments.ts`; `RegistrantPages.tsx`, editor; tạo `apps/web/test/api-integration.check.mjs` | Validate file, upload tuần tự, phục hồi lỗi một phần. |
 | 6 | `RegistrantPages.tsx`, `MyProductsPage`/`MyProductDetailPage` | Loading/empty/error, retry và pending mutation. |
-| 7 | `apps/api/test/auth.db-spec.ts`; `apps/api/src/services/auth.service.spec.ts`; `apps/api/src/utils/scoring.spec.ts`; `apps/web/test/api-integration.check.mjs` | Kiểm chứng auth/session và sửa hai expectation HTTP lệch contract. |
+| 7 | `apps/be/test/auth.db-spec.ts`; `apps/be/src/services/auth.service.spec.ts`; `apps/be/src/utils/scoring.spec.ts`; `apps/web/test/api-integration.check.mjs` | Kiểm chứng auth/session và sửa hai expectation HTTP lệch contract. |
 | 8 | `apps/web/README.md`; tạo `docs/verification/2026-10-16-fe-be-integration.md` | Chạy regression, nghiệm thu browser và ghi bằng chứng. |
 
 Task 1 làm trước. Task 2 và 3 độc lập; task 4–6 làm nối tiếp vì cùng file. Task 7 tận dụng script task 5. Task 8 làm cuối; thiếu DB/SMTP không cản sửa FE hoặc chạy kiểm tra không phụ thuộc chúng.
@@ -68,7 +70,7 @@ Task 1 làm trước. Task 2 và 3 độc lập; task 4–6 làm nối tiếp v�
 
 ## Task 1: Xác định baseline và môi trường an toàn
 
-**Files:** Read `package.json`, `apps/{web,api}/package.json`, `apps/api/.env.example`, `apps/api/test/support/db-app.ts`, `apps/api/docs/operations.md`. Không sửa `.env` hoặc ứng dụng.
+**Files:** Read `package.json`, `apps/{web,api}/package.json`, `apps/be/.env.example`, `apps/be/test/support/db-app.ts`, `apps/be/docs/operations.md`. Không sửa `.env` hoặc ứng dụng.
 
 **Interfaces:** Consumes cấu hình hiện có; produces danh sách kiểm tra đã chạy và điều kiện còn thiếu để task 8 nghiệm thu. Không truyền secret vào tài liệu.
 
@@ -553,7 +555,7 @@ Checkpoint riêng các hunk list/detail.
 
 ## Task 7: Khóa contract auth, session và status code bằng test hiện có
 
-**Files:** Modify `apps/web/test/api-integration.check.mjs`, `apps/api/src/services/auth.service.spec.ts`, `apps/api/test/auth.db-spec.ts`, `apps/api/src/utils/scoring.spec.ts`. Read `lib/api.ts`, `lib/auth.ts`, `pages/AuthPages.tsx`, auth/admin controllers. Chỉ sửa production client/page nếu check dưới đây thất bại vì logic ứng dụng.
+**Files:** Modify `apps/web/test/api-integration.check.mjs`, `apps/be/src/services/auth.service.spec.ts`, `apps/be/test/auth.db-spec.ts`, `apps/be/src/utils/scoring.spec.ts`. Read `lib/api.ts`, `lib/auth.ts`, `pages/AuthPages.tsx`, auth/admin controllers. Chỉ sửa production client/page nếu check dưới đây thất bại vì logic ứng dụng.
 
 **Interfaces:** Giữ exact message `Current password is incorrect` và mọi đường dẫn hiện tại. Change-password/admin reset-password thành công là 201; OTP reset-password là 200. Script check FE giả lập fetch/storage, không gửi mail hoặc gọi API thật.
 
@@ -723,7 +725,7 @@ Giữ mô tả Mẫu 01/ảnh và evidence tùy chọn. Bổ sung link từ web 
 ```powershell
 git diff --check
 git status --short
-git diff -- apps/web/vite.config.ts apps/web/src/types apps/web/src/pages/RegistrantPages.tsx apps/web/src/lib/attachments.ts apps/api/test/auth.db-spec.ts apps/api/src/services/auth.service.spec.ts apps/api/src/utils/scoring.spec.ts apps/web/README.md
+git diff -- apps/web/vite.config.ts apps/web/src/types apps/web/src/pages/RegistrantPages.tsx apps/web/src/lib/attachments.ts apps/be/test/auth.db-spec.ts apps/be/src/services/auth.service.spec.ts apps/be/src/utils/scoring.spec.ts apps/web/README.md
 ```
 
 Review cả file mới chưa tracked bằng đọc trực tiếp. Nếu tạo checkpoint, stage từng hunk thuộc task; kiểm tra `git diff --cached` trước commit. Không commit thay đổi người dùng chỉ vì cùng file. Không push, merge hoặc deploy trong task này.

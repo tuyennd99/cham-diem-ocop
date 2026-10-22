@@ -49,26 +49,26 @@ Tasks 4 và 5 phải thực hiện nối tiếp vì chia sẻ quy tắc khóa v�
 
 | Files | Trách nhiệm thay đổi |
 |---|---|
-| `apps/api/package.json` | Startup và scripts test DB |
-| `apps/api/test/jest-db.json`, `apps/api/test/support/db-app.ts`, `apps/api/test/*.db-spec.ts` | Test PostgreSQL/API biệt lập bằng Jest và fetch sẵn có |
-| `apps/api/src/prisma/sql.ts` | Định danh schema/table/type an toàn cho raw SQL |
-| `apps/api/src/repositories/{auth,products,admin,evaluations}.repository.ts` | SQL, khóa, điều kiện ghi và phân công |
-| `apps/api/src/utils/evaluation-result.ts`, `apps/api/src/utils/scoring.ts` | Khóa chung/tổng hợp dùng ở submit và thay phân công; tính điểm thuần |
-| `apps/api/prisma/schema.prisma`, migration mới | `User.tokenVersion`; migration bổ sung không sửa lịch sử đã áp dụng |
-| `apps/api/src/{services/auth.service.ts,guards/account.guard.ts,guards/jwt-auth.guard.ts,types/auth.ts}` | Cấp/kiểm tra JWT và thu hồi phiên |
-| `apps/api/src/dtos/{products,admin}.dto.ts` | Phân biệt optional với nullable |
-| `apps/api/src/config/app.ts`, `apps/api/src/controllers/*.ts`, `apps/api/nest-cli.json` | OpenAPI schema/security |
-| `apps/api/prisma/seed/seed.ts` | Chặn sửa bộ tiêu chí đã dùng trước mọi ghi dữ liệu |
-| `apps/api/src/constants/{auth,products}.ts` | Giá trị chính sách dùng lại trong API/seed |
-| `apps/api/src/{services/health.service.ts,filters/api-exception.filter.ts}` | Readiness và log lỗi được che thông tin nhạy cảm |
+| `apps/be/package.json` | Startup và scripts test DB |
+| `apps/be/test/jest-db.json`, `apps/be/test/support/db-app.ts`, `apps/be/test/*.db-spec.ts` | Test PostgreSQL/API biệt lập bằng Jest và fetch sẵn có |
+| `apps/be/src/prisma/sql.ts` | Định danh schema/table/type an toàn cho raw SQL |
+| `apps/be/src/repositories/{auth,products,admin,evaluations}.repository.ts` | SQL, khóa, điều kiện ghi và phân công |
+| `apps/be/src/utils/evaluation-result.ts`, `apps/be/src/utils/scoring.ts` | Khóa chung/tổng hợp dùng ở submit và thay phân công; tính điểm thuần |
+| `apps/be/prisma/schema.prisma`, migration mới | `User.tokenVersion`; migration bổ sung không sửa lịch sử đã áp dụng |
+| `apps/be/src/{services/auth.service.ts,guards/account.guard.ts,guards/jwt-auth.guard.ts,types/auth.ts}` | Cấp/kiểm tra JWT và thu hồi phiên |
+| `apps/be/src/dtos/{products,admin}.dto.ts` | Phân biệt optional với nullable |
+| `apps/be/src/config/app.ts`, `apps/be/src/controllers/*.ts`, `apps/be/nest-cli.json` | OpenAPI schema/security |
+| `apps/be/prisma/seed/seed.ts` | Chặn sửa bộ tiêu chí đã dùng trước mọi ghi dữ liệu |
+| `apps/be/src/constants/{auth,products}.ts` | Giá trị chính sách dùng lại trong API/seed |
+| `apps/be/src/{services/health.service.ts,filters/api-exception.filter.ts}` | Readiness và log lỗi được che thông tin nhạy cảm |
 | `apps/web/src/pages/AuthPages.tsx` | Phục hồi đăng ký và đăng xuất sau đổi mật khẩu |
-| `README.md`, `apps/api/README.md`, `apps/api/docs/{operations,backend-architecture}.md` | Hướng dẫn đúng backend OCOP hiện tại |
+| `README.md`, `apps/be/README.md`, `apps/be/docs/{operations,backend-architecture}.md` | Hướng dẫn đúng backend OCOP hiện tại |
 
 Giữ nguyên các controller/service không cần đổi. Không tách repository chỉ để làm đẹp. `packages/shared` hiện chỉ export types, nên không import runtime constants từ package đó nếu chưa có runtime entrypoint.
 
 ## Task 1: Sửa đường dẫn chạy production
 
-**Files:** Modify `apps/api/package.json:18`; kiểm tra `apps/api/tsconfig.build.json` và output build.
+**Files:** Modify `apps/be/package.json:18`; kiểm tra `apps/be/tsconfig.build.json` và output build.
 
 **Interfaces:** Giữ tên scripts; `pnpm --filter @ocop/api start:prod` phải chạy output của `build`.
 
@@ -100,7 +100,7 @@ Expected PASS. Startup/health smoke thực tế chạy trong Task 12 bằng env 
 
 ## Task 2: Khôi phục bộ kiểm thử DB/API có môi trường riêng
 
-**Files:** Create `apps/api/test/jest-db.json`, `apps/api/test/support/db-app.ts`, `apps/api/test/backend.db-spec.ts`; Modify `apps/api/package.json`.
+**Files:** Create `apps/be/test/jest-db.json`, `apps/be/test/support/db-app.ts`, `apps/be/test/backend.db-spec.ts`; Modify `apps/be/package.json`.
 
 **Interfaces:** `withTestApp(run: (context: { app: INestApplication; prisma: PrismaService; baseUrl: string }) => Promise<void>): Promise<void>`. `apiRequest<T>(baseUrl: string, path: string, init?: RequestInit): Promise<{ status: number; body: T }>` dùng fetch của Node. Không thêm supertest hoặc Nest testing dependency.
 
@@ -166,7 +166,7 @@ Expected ban đầu có thể FAIL do raw SQL custom schema; bộ test không đ
 
 ## Task 3: Sửa raw SQL cho custom schema
 
-**Files:** Create `apps/api/src/prisma/sql.ts`, `sql.spec.ts`; Modify raw queries trong auth/products/admin repositories; Test `apps/api/test/backend.db-spec.ts`.
+**Files:** Create `apps/be/src/prisma/sql.ts`, `sql.spec.ts`; Modify raw queries trong auth/products/admin repositories; Test `apps/be/test/backend.db-spec.ts`.
 
 **Interfaces:** `databaseObject(name: string, databaseUrl?: string): Prisma.Sql` trả identifier schema-qualified. Helper dùng cho table và enum type, không dùng cho dữ liệu request.
 
@@ -219,7 +219,7 @@ pnpm --filter @ocop/api test:db
 
 ## Task 4: Bảo vệ lưu nháp/nộp phiếu và dùng chung tính điểm
 
-**Files:** Modify `apps/api/src/repositories/evaluations.repository.ts`, `apps/api/src/repositories/products.repository.ts` (submitDraft); Create `apps/api/src/utils/evaluation-result.ts`; giữ `scoring.ts`; Test `apps/api/test/evaluation.db-spec.ts`.
+**Files:** Modify `apps/be/src/repositories/evaluations.repository.ts`, `apps/be/src/repositories/products.repository.ts` (submitDraft); Create `apps/be/src/utils/evaluation-result.ts`; giữ `scoring.ts`; Test `apps/be/test/evaluation.db-spec.ts`.
 
 **Interfaces:** `lockEvaluationCategory(tx: Prisma.TransactionClient, categoryId: string): Promise<void>`; `recomputeProductResult(tx: Prisma.TransactionClient, productId: string): Promise<void>`. Submit và Task 5 cùng gọi recompute trong transaction của mình.
 
@@ -270,7 +270,7 @@ await tx.product.update({
 
 ## Task 5: Làm thay phân công nhất quán với phiếu chấm
 
-**Files:** Modify `apps/api/src/repositories/admin.repository.ts`, `apps/api/src/services/admin.service.ts`; dùng helper Task 4; Test `apps/api/test/assignment.db-spec.ts`.
+**Files:** Modify `apps/be/src/repositories/admin.repository.ts`, `apps/be/src/services/admin.service.ts`; dùng helper Task 4; Test `apps/be/test/assignment.db-spec.ts`.
 
 **Interfaces:** Giữ `replaceAssignments(assignments, actorId, reason, meta)` và response hiện tại. 409 khi đổi phạm vi phiếu đã nộp; thay đổi hợp lệ và recompute cùng transaction/audit.
 
@@ -319,7 +319,7 @@ Giữ submitted evaluation lịch sử khi xóa assignment; không delete evalua
 
 ## Task 6: Thu hồi JWT sau mọi đường đổi mật khẩu
 
-**Files:** Modify schema, auth/admin repositories, AuthService, JWT/Account guards, `types/auth.ts`, `AuthPages.tsx`; Create migration mới và `apps/api/test/auth.db-spec.ts`; Update auth unit fixtures.
+**Files:** Modify schema, auth/admin repositories, AuthService, JWT/Account guards, `types/auth.ts`, `AuthPages.tsx`; Create migration mới và `apps/be/test/auth.db-spec.ts`; Update auth unit fixtures.
 
 **Interfaces:** `AccessTokenPayload.tokenVersion: number`; `User.tokenVersion Int @default(0)`; `findUserById(id: string): Promise<(PublicUser & { isActive: boolean; tokenVersion: number }) | null>` và Prisma select trả thêm tokenVersion nhưng PublicUser API không lộ trường nội bộ này.
 
@@ -341,7 +341,7 @@ tokenVersion Int @default(0)
 ALTER TABLE "users" ADD COLUMN "tokenVersion" INTEGER NOT NULL DEFAULT 0;
 ```
 
-Migration mới `0010_backend_stabilization` phải khai báo mọi field/index/table mà schema hiện tại cần nhưng bản `0009` đã commit chưa có, cộng `tokenVersion`. Không sửa, resolve checksum, hay thay nội dung bất kỳ migration đã commit. So sánh bằng `git show HEAD:apps/api/prisma/migrations/0009_ocop_domain/migration.sql` và schema đích. Viết migration 0010 sao cho database đã chạy 0009 cũ được nâng cấp, và database mới chạy 0009 rồi 0010 cũng áp dụng được; dùng `IF NOT EXISTS`/catalog guards cho đối tượng có thể đã được tạo trong bản working tree của 0009. Backfill bắt buộc lấy giá trị chính thức từ seed hiện tại; không ghi điểm/nhãn giả và không xóa dữ liệu OCOP. Kiểm tra migration trên database tạm dựng từ cả hai trạng thái 0009, không đụng DATABASE_URL cấu hình. Không dùng `migrate resolve`, sửa checksum, hoặc reset để né drift.
+Migration mới `0010_backend_stabilization` phải khai báo mọi field/index/table mà schema hiện tại cần nhưng bản `0009` đã commit chưa có, cộng `tokenVersion`. Không sửa, resolve checksum, hay thay nội dung bất kỳ migration đã commit. So sánh bằng `git show HEAD:apps/be/prisma/migrations/0009_ocop_domain/migration.sql` và schema đích. Viết migration 0010 sao cho database đã chạy 0009 cũ được nâng cấp, và database mới chạy 0009 rồi 0010 cũng áp dụng được; dùng `IF NOT EXISTS`/catalog guards cho đối tượng có thể đã được tạo trong bản working tree của 0009. Backfill bắt buộc lấy giá trị chính thức từ seed hiện tại; không ghi điểm/nhãn giả và không xóa dữ liệu OCOP. Kiểm tra migration trên database tạm dựng từ cả hai trạng thái 0009, không đụng DATABASE_URL cấu hình. Không dùng `migrate resolve`, sửa checksum, hoặc reset để né drift.
 
 - [ ] **Step 3 — Tăng version cùng password write và kiểm tra guard.**
 
@@ -368,7 +368,7 @@ Xóa thông báo hiện tại rằng phiên thiết bị khác chưa thu hồi. 
 
 ## Task 7: Chặn null không hợp lệ tại DTO
 
-**Files:** Modify products/admin DTOs; Create `apps/api/src/dtos/update-validation.spec.ts`; DB/API test các PUT hiện tại.
+**Files:** Modify products/admin DTOs; Create `apps/be/src/dtos/update-validation.spec.ts`; DB/API test các PUT hiện tại.
 
 **Interfaces:** Optional `name/categoryId/fullName/reason` chỉ bỏ qua undefined; `description/phone/note` vẫn nhận null đúng ý nghĩa hiện tại.
 
@@ -402,7 +402,7 @@ CategoryId giữ giới hạn 100; reason cho empty string nếu service đang c
 
 ## Task 8: Đường phục hồi đăng ký khi gửi OTP thất bại
 
-**Files:** Modify `apps/web/src/pages/AuthPages.tsx`; mở rộng `apps/api/src/services/auth.service.spec.ts`, `apps/api/test/auth.db-spec.ts`. Giữ API register/resend hiện tại.
+**Files:** Modify `apps/web/src/pages/AuthPages.tsx`; mở rộng `apps/be/src/services/auth.service.spec.ts`, `apps/be/test/auth.db-spec.ts`. Giữ API register/resend hiện tại.
 
 **Interfaces:** Không đổi thành công giả hoặc tự thay password của tài khoản pending. UI có đường đến `/verify-otp` kể cả khi đăng ký trước đó lỗi SMTP hoặc đăng ký lại 409.
 
@@ -437,7 +437,7 @@ Giữ lỗi 400/409/500 và thông báo hiện có; không tự resend trong vò
 
 ## Task 9: Hoàn thiện OpenAPI để kiểm thử bằng Swagger
 
-**Files:** Modify `apps/api/src/config/app.ts`, `apps/api/nest-cli.json`; Test `apps/api/test/openapi.db-spec.ts`.
+**Files:** Modify `apps/be/src/config/app.ts`, `apps/be/nest-cli.json`; Test `apps/be/test/openapi.db-spec.ts`.
 
 **Interfaces:** Giữ HTTP API; security scheme thống nhất `bearer`. DTO properties được sinh bằng Swagger plugin và class-validator shim.
 
@@ -468,7 +468,7 @@ Plugin đặt trong compilerOptions. Kiểm tra `nest build --tsc` có áp trans
 
 ## Task 10: Ngăn seed sửa lịch sử chấm
 
-**Files:** Modify `apps/api/prisma/seed/seed.ts`; Test `apps/api/test/seed.db-spec.ts`. Không thay nội dung official JSON.
+**Files:** Modify `apps/be/prisma/seed/seed.ts`; Test `apps/be/test/seed.db-spec.ts`. Không thay nội dung official JSON.
 
 **Interfaces:** Seed unchanged idempotent. Nếu category có evaluation và cấu trúc/nội dung scoring khác bản DB, seed phải thất bại trước mọi ghi dữ liệu.
 
@@ -490,7 +490,7 @@ if (hasEvaluations && JSON.stringify(existingScoring) !== JSON.stringify(incomin
 
 ## Task 11: Gom constants, readiness, log và tài liệu
 
-**Files:** Create `apps/api/src/constants/auth.ts`, `products.ts`; Modify callers được nêu bên dưới, health service/test, exception filter/test và docs. Không tạo config framework.
+**Files:** Create `apps/be/src/constants/auth.ts`, `products.ts`; Modify callers được nêu bên dưới, health service/test, exception filter/test và docs. Không tạo config framework.
 
 **Interfaces:** API paths/response success giữ nguyên; `/system/health/ready` trả 503 khi DB không sẵn sàng, `/live` vẫn 200. Constants không đổi policy.
 
@@ -547,7 +547,7 @@ Test filter: lỗi nội bộ chứa password mẫu không xuất hiện trong l
 
 ## Task 12: Kiểm thử cuối và bàn giao
 
-**Files:** Hoàn thiện `apps/api/test/backend.db-spec.ts`; cập nhật kết quả thực hiện ngay dưới mục này và docs vận hành. Không tạo feature mới trong task kiểm chứng.
+**Files:** Hoàn thiện `apps/be/test/backend.db-spec.ts`; cập nhật kết quả thực hiện ngay dưới mục này và docs vận hành. Không tạo feature mới trong task kiểm chứng.
 
 **Interfaces:** Dùng HTTP thật qua fetch, guards thật, repository thật, PostgreSQL test; SMTP được mock, lưu file vào thư mục tạm do harness tạo và chỉ dọn thư mục đó.
 
@@ -582,8 +582,8 @@ Start API production với env DB schema test + SMTP giả trên port trống, f
 
 ### Task 12 execution results — 2026-10-14
 
-- Đã bổ sung hành trình HTTP trong `apps/api/test/backend.db-spec.ts`: đăng ký/OTP/login, dùng category/criteria/options từ seed và response thật, tạo hồ sơ với các trường bắt buộc, upload fixture PNG/PDF trong bộ nhớ qua HTTP, nộp hồ sơ, tạo và phân công hai giám khảo, chấm/nộp theo options API trả về, rồi kiểm tra admin result và public detail. Assertion public evidence so sánh ID IMAGE/PDF vì API không trả attachment type.
-- Cùng spec kiểm tra OTP hết hạn qua HTTP trong app context riêng; năm lần sai qua HTTP rồi xác nhận code đúng bị khóa ở `OtpService` trực tiếp (lần gọi HTTP thứ sáu bị limiter thật giới hạn); consume đồng thời qua HTTP; cùng quyền registrant khác đối với hồ sơ COMPLETED và đối với DRAFT (update/delete trên DRAFT), judge chưa phân công, quyền admin, wrong role, inactive token, private/public download. Các kiểm tra thu hồi JWT đã có trong `apps/api/test/auth.db-spec.ts`: password change, OTP reset và admin reset mật khẩu judge.
+- Đã bổ sung hành trình HTTP trong `apps/be/test/backend.db-spec.ts`: đăng ký/OTP/login, dùng category/criteria/options từ seed và response thật, tạo hồ sơ với các trường bắt buộc, upload fixture PNG/PDF trong bộ nhớ qua HTTP, nộp hồ sơ, tạo và phân công hai giám khảo, chấm/nộp theo options API trả về, rồi kiểm tra admin result và public detail. Assertion public evidence so sánh ID IMAGE/PDF vì API không trả attachment type.
+- Cùng spec kiểm tra OTP hết hạn qua HTTP trong app context riêng; năm lần sai qua HTTP rồi xác nhận code đúng bị khóa ở `OtpService` trực tiếp (lần gọi HTTP thứ sáu bị limiter thật giới hạn); consume đồng thời qua HTTP; cùng quyền registrant khác đối với hồ sơ COMPLETED và đối với DRAFT (update/delete trên DRAFT), judge chưa phân công, quyền admin, wrong role, inactive token, private/public download. Các kiểm tra thu hồi JWT đã có trong `apps/be/test/auth.db-spec.ts`: password change, OTP reset và admin reset mật khẩu judge.
 - **Không chạy được kiểm thử DB thật:** `TEST_DATABASE_URL` chưa được cấu hình. Toàn bộ DB suite chạy fail-closed trước kết nối: 6 suites, 36 tests; 11 passed safety checks, 25 failed vì harness yêu cầu `TEST_DATABASE_URL`. Không dùng `DATABASE_URL`, không migrate/seed/reset và không kết nối DB.
 - Offline gates: API unit **10 suites / 48 tests passed**; API typecheck passed; test-inclusive TypeScript check passed; Nest production build (`nest build --tsc`) passed; Prisma validate passed khi chỉ truyền URL thử local làm giá trị config (validate không kết nối).
 - Web gates chưa xác minh được vì workspace dependency thiếu `@typescript/typescript-win32-x64` cho typecheck và thiếu `rolldown` cho Vite build; không cài package trong môi trường offline. OpenAPI DB test và production live/ready smoke chưa chạy vì cần DB thử nghiệm an toàn.

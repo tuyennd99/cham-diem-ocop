@@ -1,10 +1,10 @@
 import { Link, Outlet } from "@tanstack/react-router";
 import { useState } from "react";
-import { getSession, homeFor } from "../lib/auth";
+import { homeFor, useSession } from "../lib/auth";
 
 export function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const session = getSession();
+  const session = useSession();
   const signedIn = Boolean(session);
   const workPath = session ? homeFor(session.user.role, "/my/products/new") : "/my/products/new";
 

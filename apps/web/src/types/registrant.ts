@@ -18,3 +18,10 @@ export type RegistrantFormData = Omit<ProductApplicationForm, "sampleQuantity" |
   sampleQuantity: string;
   assessmentYear: string;
 };
+
+export interface ProductWriteInput {
+  name: string;
+  categoryId: string;
+  description?: string | null;
+  formData: Partial<ProductApplicationForm>;
+}

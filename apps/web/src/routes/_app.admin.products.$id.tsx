@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { AdminProductResultsPage } from "../pages/AdminPages";
+import { AdminProductResultsPage } from "../pages/admin/AdminProductResultsPage";
 import { requireRole } from "../lib/route-guards";
 
 export const Route = createFileRoute("/_app/admin/products/$id")({

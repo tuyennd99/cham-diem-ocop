@@ -4,7 +4,7 @@
 
 **Goal:** Turn the existing FE and NestJS base into one pnpm OCOP monorepo with the registration, judging, admin, and public flows from the approved spec.
 
-**Architecture:** Put the current FE and BE under `apps/web` and `apps/api`, with a root pnpm workspace and shared API contract types in `packages/shared`. Keep the existing FE stack and reusable Nest infrastructure; replace the task/report business domain and seed with OCOP models and endpoints.
+**Architecture:** Put the current FE and BE under `apps/web` and `apps/be`, with a root pnpm workspace and shared API contract types in `packages/shared`. Keep the existing FE stack and reusable Nest infrastructure; replace the task/report business domain and seed with OCOP models and endpoints.
 
 **Tech Stack:** pnpm, Node.js 24.7+, React 19, Vite, TanStack Router, NestJS 11, Prisma 7, PostgreSQL, class-validator, bcrypt, local disk uploads, Nodemailer SMTP.
 
@@ -27,14 +27,14 @@
 
 **Files:**
 - Move: `fe/**` → `apps/web/**`
-- Move: `be/**` → `apps/api/**`
+- Move: `be/**` → `apps/be/**`
 - Create: `package.json`, `pnpm-workspace.yaml`, `.gitignore`, `README.md`
 - Create: `packages/shared/package.json`, `packages/shared/src/index.ts`
 
 **Interfaces:**
 - Root workspace includes `apps/*` and `packages/*`.
 - Root scripts forward `dev`, `build`, and `typecheck` to both apps.
-- Keep FE dependencies in `apps/web` and API dependencies in `apps/api`.
+- Keep FE dependencies in `apps/web` and API dependencies in `apps/be`.
 
 - [x] Move both app working trees, preserving all authored source/assets and excluding `node_modules`, `dist`, coverage, storage, and local env files.
 - [x] Add root workspace declarations:
@@ -54,12 +54,12 @@ packages:
 ### Task 2: Replace the Prisma domain and seed
 
 **Files:**
-- Modify: `apps/api/prisma/schema.prisma`
-- Create: `apps/api/prisma/migrations/<new-migration>/migration.sql`
-- Modify: `apps/api/prisma/seed/seed.ts`
-- Create: `apps/api/prisma/seed-data/categories.json`
-- Create: `apps/api/prisma/seed-data/criteria-*.json`
-- Create: `apps/api/src/utils/scoring.ts`
+- Modify: `apps/be/prisma/schema.prisma`
+- Create: `apps/be/prisma/migrations/<new-migration>/migration.sql`
+- Modify: `apps/be/prisma/seed/seed.ts`
+- Create: `apps/be/prisma/seed-data/categories.json`
+- Create: `apps/be/prisma/seed-data/criteria-*.json`
+- Create: `apps/be/src/utils/scoring.ts`
 
 **Interfaces:**
 - Prisma models: `User`, `OtpCode`, `ProductCategory`, `CriteriaSet`, `Criterion`, `SubCriterion`, `ScoreOption`, `Product`, `Attachment`, `JudgeAssignment`, `Evaluation`, and `Score`.
@@ -76,17 +76,17 @@ packages:
 ### Task 3: Implement email account and OTP flows
 
 **Files:**
-- Modify: `apps/api/src/controllers/auth.controller.ts`
-- Modify: `apps/api/src/services/auth.service.ts`
-- Modify: `apps/api/src/repositories/auth.repository.ts`
-- Modify: `apps/api/src/guards/jwt-auth.guard.ts`
-- Modify: `apps/api/src/guards/account.guard.ts`
-- Modify: `apps/api/src/types/auth.ts`
-- Modify: `apps/api/src/dtos/auth.dto.ts`
-- Create: `apps/api/src/services/otp.service.ts`
-- Create: `apps/api/src/services/mail.service.ts`
-- Modify: `apps/api/src/config/env.ts`
-- Modify: `apps/api/package.json`
+- Modify: `apps/be/src/controllers/auth.controller.ts`
+- Modify: `apps/be/src/services/auth.service.ts`
+- Modify: `apps/be/src/repositories/auth.repository.ts`
+- Modify: `apps/be/src/guards/jwt-auth.guard.ts`
+- Modify: `apps/be/src/guards/account.guard.ts`
+- Modify: `apps/be/src/types/auth.ts`
+- Modify: `apps/be/src/dtos/auth.dto.ts`
+- Create: `apps/be/src/services/otp.service.ts`
+- Create: `apps/be/src/services/mail.service.ts`
+- Modify: `apps/be/src/config/env.ts`
+- Modify: `apps/be/package.json`
 
 **Interfaces:**
 - Endpoints: register, verify OTP, login, forgot password, reset password, and `GET /auth/me`.
@@ -102,16 +102,16 @@ packages:
 ### Task 4: Implement public and registrant product flows
 
 **Files:**
-- Create: `apps/api/src/controllers/categories.controller.ts`
-- Create: `apps/api/src/controllers/products.controller.ts`
-- Create: `apps/api/src/controllers/my-products.controller.ts`
-- Create: `apps/api/src/services/products.service.ts`
-- Create: `apps/api/src/repositories/products.repository.ts`
-- Create: `apps/api/src/dtos/products.dto.ts`
-- Modify: `apps/api/src/utils/private-storage.ts`
-- Modify: `apps/api/src/controllers/index.ts`
-- Modify: `apps/api/src/repositories/index.ts`
-- Modify: `apps/api/src/services/index.ts`
+- Create: `apps/be/src/controllers/categories.controller.ts`
+- Create: `apps/be/src/controllers/products.controller.ts`
+- Create: `apps/be/src/controllers/my-products.controller.ts`
+- Create: `apps/be/src/services/products.service.ts`
+- Create: `apps/be/src/repositories/products.repository.ts`
+- Create: `apps/be/src/dtos/products.dto.ts`
+- Modify: `apps/be/src/utils/private-storage.ts`
+- Modify: `apps/be/src/controllers/index.ts`
+- Modify: `apps/be/src/repositories/index.ts`
+- Modify: `apps/be/src/services/index.ts`
 
 **Interfaces:**
 - Public endpoints list only submitted/scoring/completed products and expose only approved public form fields.
@@ -127,13 +127,13 @@ packages:
 ### Task 5: Implement judge assignments and evaluations
 
 **Files:**
-- Create: `apps/api/src/controllers/judge.controller.ts`
-- Create: `apps/api/src/services/evaluations.service.ts`
-- Create: `apps/api/src/repositories/evaluations.repository.ts`
-- Create: `apps/api/src/dtos/evaluations.dto.ts`
-- Modify: `apps/api/src/controllers/index.ts`
-- Modify: `apps/api/src/repositories/index.ts`
-- Modify: `apps/api/src/services/index.ts`
+- Create: `apps/be/src/controllers/judge.controller.ts`
+- Create: `apps/be/src/services/evaluations.service.ts`
+- Create: `apps/be/src/repositories/evaluations.repository.ts`
+- Create: `apps/be/src/dtos/evaluations.dto.ts`
+- Modify: `apps/be/src/controllers/index.ts`
+- Modify: `apps/be/src/repositories/index.ts`
+- Modify: `apps/be/src/services/index.ts`
 
 **Interfaces:**
 - Judge queue and evaluation endpoints require a matching category assignment.
@@ -149,13 +149,13 @@ packages:
 ### Task 6: Implement admin judges, assignments, and results
 
 **Files:**
-- Create: `apps/api/src/controllers/admin.controller.ts`
-- Create: `apps/api/src/services/admin.service.ts`
-- Create: `apps/api/src/repositories/admin.repository.ts`
-- Create: `apps/api/src/dtos/admin.dto.ts`
-- Modify: `apps/api/src/controllers/index.ts`
-- Modify: `apps/api/src/repositories/index.ts`
-- Modify: `apps/api/src/services/index.ts`
+- Create: `apps/be/src/controllers/admin.controller.ts`
+- Create: `apps/be/src/services/admin.service.ts`
+- Create: `apps/be/src/repositories/admin.repository.ts`
+- Create: `apps/be/src/dtos/admin.dto.ts`
+- Modify: `apps/be/src/controllers/index.ts`
+- Modify: `apps/be/src/repositories/index.ts`
+- Modify: `apps/be/src/services/index.ts`
 
 **Interfaces:**
 - Admin endpoints manage judges and category/criterion assignments and return all product statuses/results.
@@ -195,10 +195,10 @@ packages:
 ### Task 8: Align application configuration and docs
 
 **Files:**
-- Modify: `apps/api/src/config/app.ts`
-- Modify: `apps/api/src/main.ts`
-- Modify: `apps/api/.env.example`
-- Modify: `apps/api/README.md`
+- Modify: `apps/be/src/config/app.ts`
+- Modify: `apps/be/src/main.ts`
+- Modify: `apps/be/.env.example`
+- Modify: `apps/be/README.md`
 - Modify: root `README.md`
 
 - [x] Set the API prefix to `/api`, update Swagger metadata, and remove duplicate Swagger setup.

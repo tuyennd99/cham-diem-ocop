@@ -1,10 +1,10 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { getSession, homeFor, setSession } from "../lib/auth";
+import { homeFor, setSession, useSession } from "../lib/auth";
 import type { ReactNode } from "react";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
-  const session = getSession();
+  const session = useSession();
   const role = session?.user.role;
   const homePath = role ? homeFor(role) : "/";
   return (

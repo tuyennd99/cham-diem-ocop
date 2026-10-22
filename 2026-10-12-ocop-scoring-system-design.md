@@ -30,6 +30,7 @@ cham-diem-ocop/
 ```
 
 - FE gọi BE qua REST, prefix `/api`.
+- Quy ước FE bổ sung ngày 22/10/2026: `apps/web/src/api/` chứa Axios base và các hàm gọi API theo nghiệp vụ; `apps/web/src/constants/` chứa hằng số dùng chung. Component/page sử dụng query hook hoặc hàm API nghiệp vụ thay vì gọi HTTP trực tiếp. Chi tiết và trạng thái tích hợp mẫu xem [quy ước frontend](apps/web/README.md#frontend-api-and-constants-convention).
 - Deploy: VPS VNPT Cloud, Node chạy cả web (TanStack Start server) và api; PostgreSQL cùng máy.
 - File upload lưu disk local trên VPS, serve tĩnh qua NestJS. Chuyển S3 sau nếu cần.
 
@@ -232,7 +233,7 @@ Route guard theo role trong JWT. Form: react-hook-form + zod.
 
 ## 8. Seed bộ tiêu chí
 
-- Trích từ PDF Quyết định 26/2026/QĐ-TTg: mỗi nhóm sản phẩm 1 bộ (26 tiêu chí → sub-criteria → mức điểm) thành file JSON trong `apps/api/prisma/seed-data/`.
+- Trích từ PDF Quyết định 26/2026/QĐ-TTg: mỗi nhóm sản phẩm 1 bộ (26 tiêu chí → sub-criteria → mức điểm) thành file JSON trong `apps/be/prisma/seed-data/`.
 - `prisma db seed` nạp categories + criteria sets.
 - Mẫu giấy đăng ký (tr.149–155) → định nghĩa schema zod cho `formData` của form nhiều bước.
 

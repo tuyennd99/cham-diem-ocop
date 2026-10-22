@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ProductEditorPage } from "../pages/RegistrantPages";
+import { ProductEditorPage } from "../pages/registrant/ProductEditorPage";
 import { requireRole } from "../lib/route-guards";
 
 export const Route = createFileRoute("/_app/my/products/$id/edit")({

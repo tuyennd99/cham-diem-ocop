@@ -1,5 +1,3 @@
-import { apiBlob } from "./api";
-
 export const PRODUCT_FILE_ACCEPT = ".png,.jpg,.jpeg,.gif,.webp,.pdf";
 
 const fileTypes: Record<string, string> = {
@@ -15,8 +13,8 @@ export function validateProductFile(file: Pick<File, "name" | "type" | "size">):
   if (file.size > 10 * 1024 * 1024) throw new Error("Mỗi tệp tối đa 10 MiB.");
 }
 
-export async function openAttachment(path: string, name: string, download = false) {
-  const url = URL.createObjectURL(await apiBlob(path));
+export async function openAttachment(blob: Blob, name: string, download = false) {
+  const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
   link.target = "_blank";

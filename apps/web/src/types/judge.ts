@@ -1,4 +1,4 @@
-import type { Criterion, Evaluation, Product, ProductAttachment } from "@ocop/shared";
+import type { Criterion, Evaluation, EvaluationScore, Product, ProductAttachment } from "@ocop/shared";
 import type { Attachment, Category } from "./product";
 
 export type QueueProduct = Pick<Product, "id" | "name" | "description" | "status" | "createdAt" | "category"> & {
@@ -17,4 +17,12 @@ export interface EvaluationData {
   criteria: Criterion[];
   evaluation: Evaluation;
 }
+
+export interface SaveEvaluationInput { scores: EvaluationScore[] }
+export interface SavedEvaluation {
+  id: string;
+  status: string;
+  scores: EvaluationScore[];
+}
+export interface SubmittedEvaluation { id: string; status: string; total: number }
 

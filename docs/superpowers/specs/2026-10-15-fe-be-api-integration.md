@@ -13,17 +13,19 @@ Người dùng đã bổ sung `DATABASE_URL`. Việc này chưa chứng minh dat
 Nguồn đối chiếu:
 
 - [Thiết kế nghiệp vụ gốc](../../../2026-10-12-ocop-scoring-system-design.md).
-- [Hướng dẫn chạy monorepo](../../../README.md), [vận hành API](../../../apps/api/docs/operations.md).
+- [Hướng dẫn chạy monorepo](../../../README.md), [vận hành API](../../../apps/be/docs/operations.md).
 - [API client FE](../../../apps/web/src/lib/api.ts), [session](../../../apps/web/src/lib/auth.ts), [types dùng chung](../../../packages/shared/src/index.ts).
-- [Controllers](../../../apps/api/src/controllers), [DTOs](../../../apps/api/src/dtos), [repositories](../../../apps/api/src/repositories).
+- [Controllers](../../../apps/be/src/controllers), [DTOs](../../../apps/be/src/dtos), [repositories](../../../apps/be/src/repositories).
 
 Khi tài liệu cũ khác code đã triển khai, dùng các contract được đối chiếu trong spec này. Stack thực tế là React 19, Vite, TanStack Router, Tailwind 4; NestJS 11, Prisma 7 và PostgreSQL. Không chuyển sang TanStack Start hay thay thư viện form.
 
 ## 2. Phạm vi
 
-Bao gồm public, xác thực, tài khoản, hồ sơ chủ thể, giám khảo, quản trị, tệp đính kèm và kết quả chấm. Tái sử dụng `lib/api.ts`, `lib/use-api.ts`, `lib/attachments.ts`, route guards và các lớp controller → service → repository hiện tại.
+Bao gồm public, xác thực, tài khoản, hồ sơ chủ thể, giám khảo, quản trị, tệp đính kèm và kết quả chấm. Tái sử dụng route guards, helper tệp và các lớp controller → service → repository hiện tại.
 
-Không thêm refresh token, endpoint logout, Redis, queue, SMS, S3, UI quản lý tiêu chí, thư viện HTTP, thư viện kiểm chứng schema hoặc thiết kế lại giao diện. Không sửa nội dung bộ tiêu chí trong tác vụ ghép API.
+Quy ước tổ chức FE bổ sung ngày 22/10/2026 theo [README web](../../../apps/web/README.md#frontend-api-and-constants-convention): `src/api/` chứa Axios base dùng chung và các hàm gọi API theo nghiệp vụ; `src/constants/` chứa endpoint, query key và hằng số dùng lại. `src/queries/` gọi các hàm nghiệp vụ; component/page dùng hook hoặc hàm nghiệp vụ cho mutation, không gọi HTTP client trực tiếp. `lib/api.ts` hiện vẫn là fetch client đang chạy; các mẫu Axios chưa được tích hợp. Việc chuyển client phải giữ nguyên contract OCOP trong spec này.
+
+Không thêm refresh token, endpoint logout, Redis, queue, SMS, S3, UI quản lý tiêu chí, thư viện kiểm chứng schema hoặc thiết kế lại giao diện. Axios là lựa chọn cho cấu trúc client dùng chung theo quy ước mới; tác vụ cập nhật tài liệu này không cài thư viện hoặc đổi code gọi API. Không sửa nội dung bộ tiêu chí trong tác vụ ghép API.
 
 Workspace có thay đổi FE chưa commit, gồm chuyển các tiện ích sang `src/lib` và types sang `src/types`. Triển khai theo các đường dẫn hiện tại, giữ nguyên các thay đổi đang có.
 
@@ -31,7 +33,7 @@ Workspace có thay đổi FE chưa commit, gồm chuyển các tiện ích sang 
 
 ### 3.1. Backend
 
-Đặt cấu hình private tại `apps/api/.env`; đối chiếu [`.env.example`](../../../apps/api/.env.example). Các lệnh workspace bên dưới chạy từ thư mục gốc repository.
+Đặt cấu hình private tại `apps/be/.env`; đối chiếu [`.env.example`](../../../apps/be/.env.example). Các lệnh workspace bên dưới chạy từ thư mục gốc repository.
 
 | Biến | Yêu cầu |
 |---|---|
@@ -141,7 +143,7 @@ GET danh sách public và admin products phân trang từ trang `1`, `limit` m�
 
 ### 4.2. Các nguyên tắc gửi dữ liệu
 
-- Dùng `api<T>` cho JSON, `apiBlob`/`openAttachment` cho binary. Không thêm HTTP client khác.
+- Client đang chạy dùng `api<T>` cho JSON, `apiBlob`/`openAttachment` cho binary. Khi chuyển theo quy ước mới ở mục 2, các hàm nghiệp vụ trong `src/api/` dùng chung Axios base và giữ nguyên contract JSON/binary; component/page không gọi client trực tiếp.
 - JSON có `Content-Type: application/json`; `FormData` để trình duyệt tự đặt multipart boundary.
 - DTO bật `whitelist` và `forbidNonWhitelisted`: không gửi `id`, `role`, `registrantId`, `status`, `finalScore` hoặc field chỉ phục vụ UI vào payload ghi.
 - Types shared là hợp đồng compile-time, không kiểm chứng response ở runtime. Nghiệm thu contract bằng API smoke và trình duyệt; không thêm schema library trong phạm vi này.
@@ -340,7 +342,7 @@ pnpm --filter @ocop/api test:db
 
 Không suy ra `TEST_DATABASE_URL` từ DB người dùng. Harness hiện tạo schema ngẫu nhiên, migrate/seed trong schema đó, mock gửi mail và dọn schema khi xong. Suite này không chứng minh SMTP thật hoạt động. Không thay guard an toàn để chạy trên database khác.
 
-Tận dụng các test [auth](../../../apps/api/test/auth.db-spec.ts), [backend](../../../apps/api/test/backend.db-spec.ts), [evaluation](../../../apps/api/test/evaluation.db-spec.ts), [assignment](../../../apps/api/test/assignment.db-spec.ts), [OpenAPI](../../../apps/api/test/openapi.db-spec.ts) và [seed](../../../apps/api/test/seed.db-spec.ts). Khi sửa logic FE không tầm thường, thêm check nhỏ nhất tái hiện lỗi; không thêm test framework chỉ để phục vụ tác vụ này.
+Tận dụng các test [auth](../../../apps/be/test/auth.db-spec.ts), [backend](../../../apps/be/test/backend.db-spec.ts), [evaluation](../../../apps/be/test/evaluation.db-spec.ts), [assignment](../../../apps/be/test/assignment.db-spec.ts), [OpenAPI](../../../apps/be/test/openapi.db-spec.ts) và [seed](../../../apps/be/test/seed.db-spec.ts). Khi sửa logic FE không tầm thường, thêm check nhỏ nhất tái hiện lỗi; không thêm test framework chỉ để phục vụ tác vụ này.
 
 ### 12.2. Ma trận kiểm tra thực tế
 

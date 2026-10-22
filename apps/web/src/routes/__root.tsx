@@ -1,7 +1,7 @@
 import { createRootRouteWithContext, Outlet } from "@tanstack/react-router";
 import type { RouterContext } from "../types/router-context";
 import { SiteHeader } from "../layouts/PublicLayout";
-import { NotFoundPage } from "../pages/RoutePages";
+import { NotFoundPage } from "../pages/errors/NotFoundPage";
 
 export const Route = createRootRouteWithContext<RouterContext>()({
   shellComponent: ({ children }) => (

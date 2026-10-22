@@ -11,6 +11,16 @@ export interface AdminJudge {
   createdAt: string;
 }
 
+export interface CreateJudgeInput {
+  email: string; fullName: string; password: string; phone?: string;
+}
+export interface UpdateJudgeInput { fullName?: string; phone?: string | null }
+export interface ResetJudgePasswordInput { password: string }
+export type DeactivatedJudge = Pick<AdminJudge, "id" | "email" | "fullName" | "isActive">;
+export interface AssignmentInput {
+  judgeId: string; categoryId: string; criterionIds: string[];
+}
+
 export type AdminCategory = ProductCategoryView & { groupCode: string; criteriaSet?: { criteria: SharedCriterion[] } | null };
 
 export interface Assignment {

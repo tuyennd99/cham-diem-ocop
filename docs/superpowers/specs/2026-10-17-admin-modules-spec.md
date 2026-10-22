@@ -8,14 +8,16 @@ Mở rộng khu vực quản trị thành 7 phân hệ: người dùng; nhóm/ph
 
 Nguồn đối chiếu mã nguồn:
 
-- [Schema dữ liệu hiện tại](../../../apps/api/prisma/schema.prisma), [AdminController](../../../apps/api/src/controllers/admin.controller.ts), [AdminRepository](../../../apps/api/src/repositories/admin.repository.ts).
+- [Schema dữ liệu hiện tại](../../../apps/be/prisma/schema.prisma), [AdminController](../../../apps/be/src/controllers/admin.controller.ts), [AdminRepository](../../../apps/be/src/repositories/admin.repository.ts).
 - [Màn hình admin hiện tại](../../../apps/web/src/pages/AdminPages.tsx), [điều hướng](../../../apps/web/src/layouts/AppLayout.tsx), [types dùng chung](../../../packages/shared/src/index.ts).
-- [Danh mục 26 phân loại](../../../apps/api/prisma/seed-data/categories.json), các bộ tiêu chí trong [seed-data](../../../apps/api/prisma/seed-data), [quy tắc tính điểm](../../../apps/api/src/utils/scoring.ts), [điều kiện hoàn tất kết quả](../../../apps/api/src/utils/evaluation-result.ts).
+- [Danh mục 26 phân loại](../../../apps/be/prisma/seed-data/categories.json), các bộ tiêu chí trong [seed-data](../../../apps/be/prisma/seed-data), [quy tắc tính điểm](../../../apps/be/src/utils/scoring.ts), [điều kiện hoàn tất kết quả](../../../apps/be/src/utils/evaluation-result.ts).
 - [Spec tích hợp FE–BE](2026-10-15-fe-be-api-integration.md) tiếp tục áp dụng cho xác thực, envelope HTTP, upload và các luồng hiện có. Tài liệu này mở rộng phạm vi admin của spec đó.
 
 Căn cứ đối chiếu biểu mẫu là [Quyết định 26/2026/QĐ-TTg trên Cổng văn bản Chính phủ](https://vanban.chinhphu.vn/?classid=1&docid=218267&orggroupid=3&pageid=27160), ban hành và có hiệu lực ngày 22/05/2026; [bản PDF ký số](https://datafiles.chinhphu.vn/cpp/files/vbpq/2026/5/26-ttg-2026.signed.pdf) là nguồn kiểm tra nội dung in. Việc lấy đủ dữ liệu seed không thay cho đối chiếu từng tiêu chí với bản ký.
 
 Giữ React/Vite/TanStack Router, NestJS/Prisma/PostgreSQL, API prefix `/api`, client và lưu tệp private hiện có. Không thêm một hệ thống BI riêng, trình thiết kế tiêu chí tùy ý, chữ ký số hoặc quy trình cấp giấy chứng nhận trong đợt này. Chức năng in sử dụng trang in của ứng dụng và In/Lưu PDF của trình duyệt.
+
+Khi triển khai các màn hình admin, áp dụng [quy ước frontend](../../../apps/web/README.md#frontend-api-and-constants-convention): hàm gọi API nghiệp vụ dùng Axios base chung đặt tại `apps/web/src/api/`, hằng số dùng chung đặt tại `apps/web/src/constants/`; query hook và mutation gọi các hàm nghiệp vụ, component/page không gọi HTTP trực tiếp. Các file Axios hiện là mẫu tham khảo, chưa thay client OCOP đang chạy; giữ contract xác thực, `/api`, upload và envelope hiện có khi tích hợp.
 
 ### 1.1. Các quyết định và giả định
 
