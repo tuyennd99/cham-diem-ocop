@@ -138,11 +138,20 @@ it('upgrades legacy rows without inventing historical data or changing identitie
       )
     ).rows[0];
     expect(evaluation.submittedAt).toBeNull();
-    expect(evaluation.submissionSnapshot).toMatchObject({
+    expect(evaluation.submissionSnapshot).toEqual({
       schemaVersion: 1,
       provenance: 'PRE_UPGRADE',
       historicalValuesVerified: false,
       submittedAt: null,
+      total: 100,
+      product: { id: 'product', categoryId: 'category' },
+      criteriaSet: {
+        id: 'set',
+        name: 'Legacy set',
+        source: 'Legacy source',
+        version: null,
+        sourceHash: null,
+      },
       judge: { id: 'judge', fullName: 'Judge', organizationUnit: null },
       scope: { criterionIds: ['criterion'] },
       scores: [
@@ -151,6 +160,16 @@ it('upgrades legacy rows without inventing historical data or changing identitie
           optionId: 'option',
           note: 'Legacy note',
           points: 100,
+          criterion: {
+            id: 'criterion',
+            code: '1',
+            name: 'Criterion',
+            maxScore: 100,
+            sectionCode: 'A',
+            sectionName: 'Section',
+          },
+          subCriterion: { code: '1.1', content: 'Subcriterion' },
+          option: { label: 'Option', points: 100 },
         },
       ],
     });
