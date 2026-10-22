@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { EvaluationStatus, Prisma, ProductStatus } from '@prisma/client';
+import { EvaluationStatus, Prisma, ProductStatus, Role, StaffPermission } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EvaluationScoreDto } from '../dtos/evaluations.dto';
 import { databaseObject } from '../prisma/sql';
@@ -15,14 +15,11 @@ export class EvaluationsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async listQueue(judgeId: string) {
-    const assignments = await this.prisma.judgeAssignment.findMany({
-      where: { judgeId },
-      select: { categoryId: true },
-    });
-    if (!assignments.length) return [];
     return this.prisma.product.findMany({
       where: {
-        categoryId: { in: assignments.map((assignment) => assignment.categoryId) },
+        category: { assignments: { some: { judgeId,
+          judge: { is: { role: { not: Role.REGISTRANT }, staffPermissions: { has: StaffPermission.SCORE }, isActive: true, verified: true } },
+        } } },
         status: { in: [ProductStatus.SUBMITTED, ProductStatus.SCORING] },
       },
       select: {
@@ -84,7 +81,8 @@ export class EvaluationsRepository {
   async findAttachment(judgeId: string, productId: string, attachmentId: string) {
     const product = await this.prisma.product.findUnique({ where: { id: productId }, select: { categoryId: true } });
     if (!product) return null;
-    if (!(await this.prisma.judgeAssignment.findUnique({ where: { judgeId_categoryId: { judgeId, categoryId: product.categoryId } } }))) {
+    if (!(await this.prisma.judgeAssignment.findUnique({ where: { judgeId_categoryId: { judgeId, categoryId: product.categoryId },
+      judge: { is: { role: { not: Role.REGISTRANT }, staffPermissions: { has: StaffPermission.SCORE }, isActive: true, verified: true } } } }))) {
       throw new ForbiddenException('Product is outside the judge assignment');
     }
     return this.prisma.attachment.findFirst({
@@ -227,7 +225,8 @@ export class EvaluationsRepository {
     });
     if (!product) throw new NotFoundException('Product not found');
     const assignment = await db.judgeAssignment.findUnique({
-      where: { judgeId_categoryId: { judgeId, categoryId: product.categoryId } },
+      where: { judgeId_categoryId: { judgeId, categoryId: product.categoryId },
+        judge: { is: { role: { not: Role.REGISTRANT }, staffPermissions: { has: StaffPermission.SCORE }, isActive: true, verified: true } } },
     });
     if (!assignment) throw new ForbiddenException('Product is outside the judge assignment');
     if (product.status !== ProductStatus.SUBMITTED && product.status !== ProductStatus.SCORING &&

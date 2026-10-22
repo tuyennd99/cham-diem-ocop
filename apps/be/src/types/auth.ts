@@ -1,4 +1,5 @@
-import type { Role } from '@prisma/client';
+import type { Role, StaffPermission } from '@prisma/client';
+import type { OrganizationUnitSummary } from '@ocop/shared';
 
 export interface RequestMeta {
   ipAddress?: string;
@@ -15,6 +16,12 @@ export interface AccessTokenPayload {
   exp?: number;
 }
 
+export interface AuthenticatedPrincipal extends AccessTokenPayload {
+  staffPermissions: StaffPermission[];
+  organizationUnitId: string | null;
+  organizationUnit: OrganizationUnitSummary | null;
+}
+
 export interface PublicUser {
   id: string;
   email: string;
@@ -22,4 +29,7 @@ export interface PublicUser {
   phone: string | null;
   role: Role;
   verified: boolean;
+  staffPermissions: StaffPermission[];
+  organizationUnitId: string | null;
+  organizationUnit: OrganizationUnitSummary | null;
 }

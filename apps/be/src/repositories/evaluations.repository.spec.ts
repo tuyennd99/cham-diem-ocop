@@ -83,7 +83,7 @@ describe('EvaluationsRepository.getEvaluation', () => {
     await recomputeProductResult(tx as never, 'product-1');
 
     expect(tx.judgeAssignment.findMany).toHaveBeenCalledWith({
-      where: { categoryId: 'category-1', judge: { is: { isActive: true } } },
+      where: { categoryId: 'category-1', judge: { is: { role: { not: 'REGISTRANT' }, staffPermissions: { has: 'SCORE' }, isActive: true, verified: true } } },
       select: { judgeId: true, criterionIds: true },
     });
     expect(tx.product.update).toHaveBeenCalledWith({

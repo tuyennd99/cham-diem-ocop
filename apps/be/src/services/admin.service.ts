@@ -12,6 +12,7 @@ import {
   ReplaceAssignmentsDto,
   ResetJudgePasswordDto,
   UpdateJudgeDto,
+  UpdateStaffAccessDto,
 } from '../dtos/admin.dto';
 import { AdminRepository, type AdminRequestMeta } from '../repositories/admin.repository';
 import { PASSWORD_MAX_BYTES, PASSWORD_ROUNDS } from '../constants/auth';
@@ -20,8 +21,8 @@ import { PASSWORD_MAX_BYTES, PASSWORD_ROUNDS } from '../constants/auth';
 export class AdminService {
   constructor(private readonly repository: AdminRepository) {}
 
-  async dashboard() {
-    const { productStatuses, judgeProgress, nextProducts } = await this.repository.dashboardData();
+  async dashboard(canManage = true) {
+    const { productStatuses, judgeProgress, nextProducts } = await this.repository.dashboardData(canManage);
     const productsByStatus = Object.fromEntries(
       Object.values(ProductStatus).map((status) => [status, 0]),
     ) as Record<ProductStatus, number>;
@@ -55,6 +56,13 @@ export class AdminService {
 
   listJudges() {
     return this.repository.listJudges();
+  }
+
+  async updateStaffAccess(id: string, input: UpdateStaffAccessDto, actorId: string, meta: AdminRequestMeta) {
+    if (!input.reason.trim()) throw new BadRequestException('Reason is required');
+    const user = await this.repository.updateStaffAccess(id, { ...input, reason: input.reason.trim() }, actorId, meta);
+    if (!user) throw new NotFoundException('Staff user not found');
+    return user;
   }
 
   async createJudge(input: CreateJudgeDto, actorId: string, meta: AdminRequestMeta) {
@@ -119,13 +127,13 @@ export class AdminService {
     return this.repository.replaceAssignments(entries, actorId, input.reason, meta);
   }
 
-  async listProducts(query: AdminProductsQueryDto) {
-    const { data, total } = await this.repository.listProducts(query.page, query.limit);
+  async listProducts(query: AdminProductsQueryDto, canManage = true) {
+    const { data, total } = await this.repository.listProducts(query.page, query.limit, canManage);
     return { data, meta: { page: query.page, limit: query.limit, total, totalPages: Math.ceil(total / query.limit) } };
   }
 
-  async productResults(id: string) {
-    const result = await this.repository.productResults(id);
+  async productResults(id: string, canManage = true) {
+    const result = await this.repository.productResults(id, canManage);
     if (!result) throw new NotFoundException('Product not found');
     return result;
   }

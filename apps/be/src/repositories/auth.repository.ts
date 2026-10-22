@@ -12,13 +12,14 @@ export class AuthRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   findUserByEmail(email: string) {
-    return this.prisma.user.findUnique({ where: { email } });
+    return this.prisma.user.findUnique({ where: { email }, include: { organizationUnit: { select: { id: true, code: true, name: true } } } });
   }
 
   findUserById(id: string): Promise<(PublicUser & { isActive: boolean; tokenVersion: number }) | null> {
     return this.prisma.user.findUnique({
       where: { id },
-      select: { id: true, email: true, fullName: true, phone: true, role: true, verified: true, isActive: true, tokenVersion: true },
+      select: { id: true, email: true, fullName: true, phone: true, role: true, verified: true, isActive: true, tokenVersion: true,
+        staffPermissions: true, organizationUnitId: true, organizationUnit: { select: { id: true, code: true, name: true } } },
     });
   }
 

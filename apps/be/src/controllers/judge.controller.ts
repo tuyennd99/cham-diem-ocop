@@ -1,9 +1,9 @@
 import { Body, Controller, Get, Param, Post, Put, StreamableFile } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { StaffPermission } from '@prisma/client';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { ResponseMessage } from '../decorators/response-message.decorator';
-import { Roles } from '../decorators/roles.decorator';
+import { Permissions } from '../decorators/permissions.decorator';
 import { SaveEvaluationDto } from '../dtos/evaluations.dto';
 import { EvaluationsService } from '../services/evaluations.service';
 import type { AccessTokenPayload } from '../types/auth';
@@ -11,7 +11,7 @@ import { asDownload } from '../utils/private-storage';
 
 @ApiTags('Judge')
 @ApiBearerAuth()
-@Roles(Role.JUDGE)
+@Permissions(StaffPermission.SCORE)
 @Controller('judge')
 export class JudgeController {
   constructor(private readonly evaluations: EvaluationsService) {}

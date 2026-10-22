@@ -1,30 +1,32 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { StaffPermission } from '@prisma/client';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { ResponseMessage } from '../decorators/response-message.decorator';
-import { Roles } from '../decorators/roles.decorator';
+import { Permissions } from '../decorators/permissions.decorator';
 import {
   AdminProductsQueryDto,
   CreateJudgeDto,
   ReplaceAssignmentsDto,
   ResetJudgePasswordDto,
   UpdateJudgeDto,
+  UpdateStaffAccessDto,
 } from '../dtos/admin.dto';
 import { AdminService } from '../services/admin.service';
-import type { AccessTokenPayload } from '../types/auth';
+import type { AccessTokenPayload, AuthenticatedPrincipal } from '../types/auth';
 
 @ApiTags('Admin')
 @ApiBearerAuth()
-@Roles(Role.ADMIN)
+@Permissions(StaffPermission.MANAGE)
 @Controller('admin')
 export class AdminController {
   constructor(private readonly admin: AdminService) {}
 
   @Get('dashboard')
-  dashboard() {
-    return this.admin.dashboard();
+  @Permissions(StaffPermission.VIEW)
+  dashboard(@CurrentUser() principal: AuthenticatedPrincipal) {
+    return this.admin.dashboard(principal.staffPermissions.includes(StaffPermission.MANAGE));
   }
 
   @Get('judges')
@@ -57,6 +59,7 @@ export class AdminController {
   }
 
   @Get('assignments')
+  @Permissions(StaffPermission.VIEW)
   assignments() {
     return this.admin.listAssignments();
   }
@@ -68,13 +71,20 @@ export class AdminController {
   }
 
   @Get('products')
-  products(@Query() query: AdminProductsQueryDto) {
-    return this.admin.listProducts(query);
+  @Permissions(StaffPermission.VIEW)
+  products(@Query() query: AdminProductsQueryDto, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return this.admin.listProducts(query, principal.staffPermissions.includes(StaffPermission.MANAGE));
   }
 
   @Get('products/:id/results')
-  results(@Param('id') id: string) {
-    return this.admin.productResults(id);
+  @Permissions(StaffPermission.VIEW)
+  results(@Param('id') id: string, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return this.admin.productResults(id, principal.staffPermissions.includes(StaffPermission.MANAGE));
+  }
+
+  @Put('users/:id/staff-access')
+  updateStaffAccess(@Param('id') id: string, @Body() body: UpdateStaffAccessDto, @CurrentUser() principal: AccessTokenPayload, @Req() request: Request) {
+    return this.admin.updateStaffAccess(id, body, principal.sub, this.requestMeta(request));
   }
 
   private requestMeta(request: Request) {

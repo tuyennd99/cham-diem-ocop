@@ -1,9 +1,12 @@
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { StaffPermission } from '@prisma/client';
 import {
   ArrayMaxSize,
   ArrayUnique,
   IsArray,
+  IsBoolean,
+  IsEnum,
   IsEmail,
   IsInt,
   IsOptional,
@@ -15,6 +18,32 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
+
+export class UpdateStaffAccessDto {
+  @ApiProperty({ enum: StaffPermission, isArray: true, uniqueItems: true, maxItems: 3 })
+  @IsArray()
+  @ArrayMaxSize(3)
+  @ArrayUnique()
+  @IsEnum(StaffPermission, { each: true })
+  staffPermissions!: StaffPermission[];
+
+  @ApiProperty({ nullable: true, maxLength: 100 })
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  organizationUnitId!: string | null;
+
+  @ApiProperty()
+  @IsBoolean()
+  isActive!: boolean;
+
+  @ApiProperty({ minLength: 1, maxLength: 255 })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(255)
+  reason!: string;
+}
 
 export class CreateJudgeDto {
   @ApiProperty({ format: 'email', maxLength: 320 })

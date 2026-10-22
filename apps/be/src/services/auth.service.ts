@@ -7,7 +7,8 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { OtpPurpose, Role } from '@prisma/client';
+import { OtpPurpose, Role, StaffPermission } from '@prisma/client';
+import type { OrganizationUnitSummary } from '@ocop/shared';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'node:crypto';
 import { env } from '../config/env';
@@ -22,6 +23,7 @@ import { AuthRepository } from '../repositories/auth.repository';
 import { MailService } from './mail.service';
 import { OtpService } from './otp.service';
 import type { AccessTokenPayload, PublicUser } from '../types/auth';
+import { effectiveStaffPermissions } from '../utils/staff-permissions';
 
 const DUMMY_BCRYPT_HASH = bcrypt.hashSync(randomBytes(32).toString('hex'), PASSWORD_ROUNDS);
 
@@ -176,6 +178,9 @@ export class AuthService {
     phone: string | null;
     role: Role;
     verified: boolean;
+    staffPermissions: StaffPermission[];
+    organizationUnitId: string | null;
+    organizationUnit: OrganizationUnitSummary | null;
   }): PublicUser {
     return {
       id: user.id,
@@ -184,6 +189,9 @@ export class AuthService {
       phone: user.phone,
       role: user.role,
       verified: user.verified,
+      staffPermissions: effectiveStaffPermissions(user),
+      organizationUnitId: user.organizationUnitId,
+      organizationUnit: user.organizationUnit,
     };
   }
 

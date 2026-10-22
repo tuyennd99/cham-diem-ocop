@@ -190,6 +190,7 @@ it('migrates and serves the isolated database with seed data', async () => {
         password: 'unused-test-hash',
         fullName: 'Schema Test Admin',
         role: Role.ADMIN,
+        staffPermissions: ['MANAGE', 'VIEW'],
         verified: true,
       },
     });
@@ -281,6 +282,7 @@ describe('HTTP production journey', () => {
           password: await bcrypt.hash('AdminPassword1!', 4),
           fullName: 'Journey Admin',
           role: Role.ADMIN,
+          staffPermissions: ['MANAGE', 'VIEW'],
           verified: true,
         },
       });

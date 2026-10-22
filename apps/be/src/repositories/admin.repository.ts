@@ -1,8 +1,10 @@
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
-import { EvaluationStatus, Prisma, ProductStatus, Role } from '@prisma/client';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
+import { EvaluationStatus, Prisma, ProductStatus, Role, StaffPermission } from '@prisma/client';
+import type { UpdateStaffAccessDto } from '../dtos/admin.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { databaseObject } from '../prisma/sql';
 import { recomputeProductResult } from '../utils/evaluation-result';
+import { effectiveStaffPermissions } from '../utils/staff-permissions';
 
 export type AdminRequestMeta = { ipAddress?: string; userAgent?: string; requestId?: string };
 
@@ -12,15 +14,15 @@ export class AdminRepository {
 
   listJudges() {
     return this.prisma.user.findMany({
-      where: { role: Role.JUDGE },
+      where: { role: { not: Role.REGISTRANT }, staffPermissions: { has: StaffPermission.SCORE } },
       select: { id: true, email: true, fullName: true, phone: true, verified: true, isActive: true, createdAt: true },
       orderBy: [{ fullName: 'asc' }, { id: 'asc' }],
     });
   }
 
-  async dashboardData() {
+  async dashboardData(canManage = true) {
     const [productStatuses, judgeProgress, nextProducts] = await Promise.all([
-      this.prisma.product.groupBy({ by: ['status'], _count: { _all: true } }),
+      this.prisma.product.groupBy({ by: ['status'], where: canManage ? {} : { status: { not: ProductStatus.DRAFT } }, _count: { _all: true } }),
       this.prisma.$queryRaw<Array<{ judgeId: string; fullName: string; assigned: number; submitted: number }>>(Prisma.sql`
         SELECT u."id" AS "judgeId", u."fullName",
           COUNT(DISTINCT p."id")::int AS "assigned",
@@ -30,7 +32,9 @@ export class AdminRepository {
         LEFT JOIN ${databaseObject('products')} p ON p."categoryId" = ja."categoryId"
           AND p."status" IN (${ProductStatus.SUBMITTED}::${databaseObject('ProductStatus')}, ${ProductStatus.SCORING}::${databaseObject('ProductStatus')})
         LEFT JOIN ${databaseObject('evaluations')} e ON e."judgeId" = u."id" AND e."productId" = p."id"
-        WHERE u."role" = ${Role.JUDGE}::${databaseObject('Role')} AND u."isActive" = true
+        WHERE u."role" <> ${Role.REGISTRANT}::${databaseObject('Role')}
+          AND ${StaffPermission.SCORE}::${databaseObject('StaffPermission')} = ANY(u."staffPermissions")
+          AND u."isActive" = true AND u."verified" = true
         GROUP BY u."id", u."fullName"
         ORDER BY u."fullName" ASC, u."id" ASC
       `),
@@ -47,7 +51,7 @@ export class AdminRepository {
               name: true,
               groupName: true,
               assignments: {
-                where: { judge: { is: { role: Role.JUDGE, isActive: true } } },
+                where: { judge: { is: { role: { not: Role.REGISTRANT }, staffPermissions: { has: StaffPermission.SCORE }, isActive: true, verified: true } } },
                 select: { judgeId: true },
               },
             },
@@ -64,7 +68,7 @@ export class AdminRepository {
   createJudge(input: { email: string; fullName: string; phone: string | null; password: string }, actorId: string, meta: AdminRequestMeta) {
     return this.prisma.$transaction(async (tx) => {
       const judge = await tx.user.create({
-        data: { ...input, role: Role.JUDGE, verified: true },
+        data: { ...input, role: Role.JUDGE, staffPermissions: [StaffPermission.SCORE], verified: true },
         select: { id: true, email: true, fullName: true, phone: true, verified: true, isActive: true, createdAt: true },
       });
       await this.audit(tx, { actorId, action: 'judge.create', entityType: 'User', entityId: judge.id, afterData: judge, ...meta });
@@ -80,7 +84,7 @@ export class AdminRepository {
   }) {
     const { id, input, actorId, meta } = args;
     return this.prisma.$transaction(async (tx) => {
-      const before = await tx.user.findFirst({ where: { id, role: Role.JUDGE }, select: { id: true, email: true, fullName: true, phone: true, isActive: true } });
+      const before = await tx.user.findFirst({ where: { id, role: { not: Role.REGISTRANT }, staffPermissions: { has: StaffPermission.SCORE } }, select: { id: true, email: true, fullName: true, phone: true, isActive: true } });
       if (!before) return null;
       const { reason, ...changes } = input;
       const after = await tx.user.update({
@@ -99,11 +103,13 @@ export class AdminRepository {
         SELECT "id" FROM ${databaseObject('product_categories')}
         ORDER BY "id" FOR UPDATE
       `);
+      await this.lockStaffAccess(tx);
       const before = await tx.user.findFirst({
-        where: { id, role: Role.JUDGE },
-        select: { id: true, email: true, fullName: true, isActive: true },
+        where: { id, role: { not: Role.REGISTRANT }, staffPermissions: { has: StaffPermission.SCORE } },
+        select: { id: true, email: true, fullName: true, isActive: true, verified: true, staffPermissions: true },
       });
       if (!before) return null;
+      await this.assertManageRemains(tx, before, false, before.staffPermissions);
       const assignments = await tx.judgeAssignment.findMany({
         where: { judgeId: id },
         select: { categoryId: true },
@@ -120,7 +126,7 @@ export class AdminRepository {
       }
       const after = await tx.user.update({
         where: { id },
-        data: { isActive: false },
+        data: { isActive: false, tokenVersion: { increment: 1 } },
         select: { id: true, email: true, fullName: true, isActive: true },
       });
       await this.audit(tx, {
@@ -138,7 +144,7 @@ export class AdminRepository {
 
   async resetJudgePassword(id: string, password: string, reason: string | undefined, actorId: string, meta: AdminRequestMeta) {
     return this.prisma.$transaction(async (tx) => {
-      const judge = await tx.user.findFirst({ where: { id, role: Role.JUDGE }, select: { id: true, email: true } });
+      const judge = await tx.user.findFirst({ where: { id, role: { not: Role.REGISTRANT }, staffPermissions: { has: StaffPermission.SCORE } }, select: { id: true, email: true } });
       if (!judge) return false;
       await tx.user.update({ where: { id }, data: { password, tokenVersion: { increment: 1 } } });
       await this.audit(tx, { actorId, action: 'judge.password_reset', entityType: 'User', entityId: id, afterData: { email: judge.email }, reason, ...meta });
@@ -177,7 +183,7 @@ export class AdminRepository {
       ];
       const [judges, categories] = await Promise.all([
         tx.user.findMany({
-          where: { id: { in: judgeIds }, role: Role.JUDGE, isActive: true },
+          where: { id: { in: judgeIds }, role: { not: Role.REGISTRANT }, staffPermissions: { has: StaffPermission.SCORE }, isActive: true, verified: true },
           select: { id: true },
         }),
         tx.productCategory.findMany({
@@ -397,8 +403,8 @@ export class AdminRepository {
     }, { timeout: 15000, maxWait: 10000 });
   }
 
-  listProducts(page: number, limit: number) {
-    const where: Prisma.ProductWhereInput = {};
+  listProducts(page: number, limit: number, canManage = true) {
+    const where: Prisma.ProductWhereInput = canManage ? {} : { status: { not: ProductStatus.DRAFT } };
     return Promise.all([
       this.prisma.product.findMany({
         where,
@@ -406,7 +412,7 @@ export class AdminRepository {
           id: true, name: true, status: true, finalScore: true, starRating: true, createdAt: true,
           category: { select: { id: true, name: true, groupName: true } },
           registrant: { select: { id: true, fullName: true, email: true } },
-          evaluations: { select: { judgeId: true, status: true, total: true } },
+          evaluations: { where: canManage ? {} : { status: EvaluationStatus.SUBMITTED }, select: { judgeId: true, status: true, total: true } },
         },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         skip: (page - 1) * limit,
@@ -416,13 +422,14 @@ export class AdminRepository {
     ]).then(([data, total]) => ({ data, total }));
   }
 
-  productResults(productId: string) {
-    return this.prisma.product.findUnique({
-      where: { id: productId },
+  productResults(productId: string, canManage = true) {
+    return this.prisma.product.findFirst({
+      where: { id: productId, ...(canManage ? {} : { status: { not: ProductStatus.DRAFT } }) },
       select: {
         id: true, name: true, status: true, finalScore: true, starRating: true,
         category: { select: { id: true, name: true, groupName: true } },
         evaluations: {
+          where: canManage ? {} : { status: EvaluationStatus.SUBMITTED },
           orderBy: [{ createdAt: 'asc' }, { judgeId: 'asc' }],
           include: {
             judge: { select: { id: true, fullName: true, email: true } },
@@ -437,6 +444,64 @@ export class AdminRepository {
         },
       },
     });
+  }
+
+  async updateStaffAccess(id: string, input: UpdateStaffAccessDto, actorId: string, meta: AdminRequestMeta) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM ${databaseObject('product_categories')} ORDER BY "id" FOR UPDATE`);
+      await this.lockStaffAccess(tx);
+      const actor = await tx.user.findUnique({ where: { id: actorId } });
+      if (!actor?.isActive || !actor.verified || !effectiveStaffPermissions(actor).includes(StaffPermission.MANAGE)) {
+        throw new ForbiddenException('Insufficient permission');
+      }
+      const select = { id: true, role: true, staffPermissions: true, organizationUnitId: true, isActive: true, verified: true } as const;
+      const before = await tx.user.findFirst({ where: { id, role: { not: Role.REGISTRANT } }, select });
+      if (!before) return null;
+      const permissions = effectiveStaffPermissions({ role: before.role, staffPermissions: input.staffPermissions });
+      if (input.isActive && !permissions.length) throw new BadRequestException('Active staff must have at least one permission');
+      if (input.organizationUnitId !== null && input.organizationUnitId !== before.organizationUnitId) {
+        const unit = await tx.organizationUnit.findFirst({ where: { id: input.organizationUnitId, isActive: true }, select: { id: true } });
+        if (!unit) throw new BadRequestException('Organization unit must be active');
+      }
+      await this.assertManageRemains(tx, before, input.isActive, permissions);
+      const changed = before.isActive !== input.isActive || before.organizationUnitId !== input.organizationUnitId ||
+        before.staffPermissions.length !== permissions.length || before.staffPermissions.some((permission) => !permissions.includes(permission));
+      if (!changed) return before;
+      if (before.staffPermissions.includes(StaffPermission.SCORE) && (!input.isActive || !permissions.includes(StaffPermission.SCORE))) {
+        const openProducts = await tx.product.count({ where: {
+          status: { in: [ProductStatus.SUBMITTED, ProductStatus.SCORING] },
+          category: { assignments: { some: { judgeId: id } } },
+        } });
+        if (openProducts) throw new ConflictException('Reassign open products before removing scoring access');
+        await tx.judgeAssignment.deleteMany({ where: { judgeId: id } });
+      }
+      const role = permissions.includes(StaffPermission.MANAGE) ? Role.ADMIN :
+        permissions.includes(StaffPermission.SCORE) ? Role.JUDGE : permissions.includes(StaffPermission.VIEW) ? Role.VIEWER : before.role;
+      const after = await tx.user.update({ where: { id }, data: {
+        role, staffPermissions: permissions, organizationUnitId: input.organizationUnitId, isActive: input.isActive,
+        tokenVersion: { increment: 1 },
+      }, select });
+      await this.audit(tx, { actorId, action: 'user.staff_access_update', entityType: 'User', entityId: id,
+        beforeData: before, afterData: after, reason: input.reason, ...meta });
+      return after;
+    }, { timeout: 15000, maxWait: 10000 });
+  }
+
+  private lockStaffAccess(tx: Prisma.TransactionClient) {
+    // shortcut: serialize staff access changes; use a dedicated lock row if staff volume causes contention
+    return tx.$queryRaw(Prisma.sql`SELECT "id" FROM ${databaseObject('users')}
+      WHERE "role" <> ${Role.REGISTRANT}::${databaseObject('Role')} ORDER BY "id" FOR UPDATE`);
+  }
+
+  private async assertManageRemains(tx: Prisma.TransactionClient,
+    before: { id: string; isActive: boolean; verified: boolean; staffPermissions: StaffPermission[] },
+    isActive: boolean, permissions: StaffPermission[]) {
+    if (before.isActive && before.verified && before.staffPermissions.includes(StaffPermission.MANAGE) &&
+      (!isActive || !permissions.includes(StaffPermission.MANAGE))) {
+      const others = await tx.user.count({ where: { id: { not: before.id }, role: { not: Role.REGISTRANT },
+        isActive: true, verified: true, staffPermissions: { has: StaffPermission.MANAGE } } });
+      if (!others) throw new ConflictException('Cannot remove the last active verified MANAGE account');
+    }
   }
 
   private audit(

@@ -1,5 +1,5 @@
 import { ConflictException } from '@nestjs/common';
-import { EvaluationStatus, Prisma, ProductStatus } from '@prisma/client';
+import { EvaluationStatus, Prisma, ProductStatus, Role, StaffPermission } from '@prisma/client';
 import { databaseObject } from '../prisma/sql';
 import { calculateFinalScore, calculateStars } from './scoring';
 
@@ -44,7 +44,7 @@ export async function recomputeProductResult(
 
   const criteria = product.category.criteriaSet?.criteria ?? [];
   const assignments = await tx.judgeAssignment.findMany({
-    where: { categoryId: product.categoryId, judge: { is: { isActive: true } } },
+    where: { categoryId: product.categoryId, judge: { is: { role: { not: Role.REGISTRANT }, staffPermissions: { has: StaffPermission.SCORE }, isActive: true, verified: true } } },
     select: { judgeId: true, criterionIds: true },
   });
   const existingEvaluationCount = await tx.evaluation.count({

@@ -44,6 +44,7 @@ async function createFixture(prisma: PrismaService) {
           password: 'unused',
           fullName: `Test Judge ${n}`,
           role: Role.JUDGE,
+          staffPermissions: ['SCORE'],
           verified: true,
           isActive: true,
         },

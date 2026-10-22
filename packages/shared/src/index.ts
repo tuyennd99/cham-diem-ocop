@@ -1,4 +1,10 @@
-export type Role = 'REGISTRANT' | 'JUDGE' | 'ADMIN';
+export type Role = 'REGISTRANT' | 'JUDGE' | 'ADMIN' | 'VIEWER';
+export type StaffPermission = 'MANAGE' | 'VIEW' | 'SCORE';
+export interface OrganizationUnitSummary {
+  id: string;
+  code: string;
+  name: string;
+}
 export type ProductStatus = 'DRAFT' | 'SUBMITTED' | 'SCORING' | 'COMPLETED';
 export const productRegistrationTypes = ['FIRST', 'UPGRADE', 'REASSESSMENT'] as const;
 export type ProductRegistrationType = (typeof productRegistrationTypes)[number];

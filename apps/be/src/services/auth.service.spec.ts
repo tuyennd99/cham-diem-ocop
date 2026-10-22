@@ -45,6 +45,7 @@ describe('AuthService', () => {
     repository.findUserByEmail.mockResolvedValue({
       id: 'user-1', email: 'person@example.com', password: await bcrypt.hash('ValidPassword1!', 4),
       fullName: 'Person', phone: null, role: Role.REGISTRANT, verified: true, isActive: true, tokenVersion: 2,
+      staffPermissions: [], organizationUnitId: null, organizationUnit: null,
     });
 
     try {

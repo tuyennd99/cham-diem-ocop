@@ -16,6 +16,7 @@ async function createUser(prisma: PrismaService, email: string, role: Role = Rol
       password: await bcrypt.hash(currentPassword, 4),
       fullName: 'Auth test user',
       role,
+      staffPermissions: role === Role.ADMIN ? ['MANAGE', 'VIEW'] : role === Role.JUDGE ? ['SCORE'] : [],
       verified: true,
     },
   });
