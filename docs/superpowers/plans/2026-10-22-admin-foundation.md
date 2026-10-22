@@ -36,12 +36,12 @@
 
 ### Task 1: Schema, migration, and catalog backfill
 
-**Files:** `apps/be/prisma/schema.prisma`, new `apps/be/prisma/migrations/0011_admin_foundation/migration.sql`, `apps/be/prisma/seed/seed.ts`, `apps/be/test/seed.db-spec.ts`, new migration DB test.
+**Files:** `apps/be/prisma/schema.prisma`, new `apps/be/prisma/migrations/0011_admin_foundation/migration.sql`, `apps/be/prisma/seed/seed.ts`, `apps/be/test/seed.db-spec.ts`, new `apps/be/test/admin-foundation-migration.db-spec.ts`.
 
-**Produces:** `StaffPermission` (`MANAGE`, `VIEW`, `SCORE`), compatibility `Role.VIEWER`, `OrganizationUnit`, six `ProductGroup` records, empty `Locality`, category/group and active-state relations, Product ownership/locality/completion columns, `ProductStatusEvent`, Evaluation submission snapshot columns, and the 0011 forward migration.
+**Produces:** `StaffPermission` (`MANAGE`, `VIEW`, `SCORE`), compatibility `Role.VIEWER`, `OrganizationUnit` (`code`, `name`, `description`, `order`, `isActive`, timestamps), six `ProductGroup` records, empty `Locality` (`code`, `name`, `type`, `provinceName`, effective dates, `isActive`), `ProductCategory.groupId/isActive`, `CriteriaSet.isActive/version/sourceHash`, optional Product `createdById/localityId/completedAt` and locality-at-submit fields, `ProductStatusEvent`, and Evaluation `submittedAt/submissionSnapshot`.
 
-- [ ] Add schema/migration assertions for the exact legacy mapping: ADMIN → MANAGE + VIEW, JUDGE → SCORE, REGISTRANT → no staff permission; preserve all IDs and records, and add no invented unit, locality, completion time, or history.
-- [ ] Run the migration test against an isolated schema containing one user of each legacy role, categories, product, attachment, assignment, evaluation, and score; assert unchanged IDs/counts and correct mapped values.
+- [ ] Add `admin-foundation-migration.db-spec.ts` that creates an isolated schema, installs the pre-0011 Prisma migrations there, inserts one user of each legacy role plus linked category/product/attachment/assignment/evaluation/score rows, then applies `0011_admin_foundation/migration.sql`.
+- [ ] Assert exact mapping ADMIN → MANAGE + VIEW, JUDGE → SCORE, REGISTRANT → no staff permission; preserve every inserted ID and row count; legacy `completedAt`, locality/unit and unprovable event times remain null/empty; existing submitted evaluations are labeled pre-upgrade and snapshot only values present in legacy rows.
 - [ ] Seed six ProductGroups from existing category codes/names and link all 26 existing categories without changing category IDs, names, group labels, or criteria IDs; make seed re-runnable.
 - [ ] Assert CAT-01’s six-group/26-category/criteria links and that the new locality/unit catalogs contain no fabricated rows.
 - [ ] Generate Prisma client and run focused migration/seed DB tests; commit the task.
@@ -52,7 +52,7 @@
 
 **Consumes:** Task 1’s User permission/unit fields and VIEWER role.
 
-**Produces:** A DB-derived authenticated principal with effective permissions and unit; MANAGE/VIEW/SCORE authorization; a MANAGE-only staff-access update that audits before/after, increments `tokenVersion`, and cannot deactivate/unverify/demote the last active verified MANAGE account under concurrent requests.
+**Produces:** A DB-derived authenticated principal with effective permissions and unit; MANAGE/VIEW/SCORE authorization; `PUT /admin/users/:id/staff-access` accepting `{ staffPermissions, organizationUnitId, isActive, reason }`, auditing before/after and incrementing `tokenVersion`; concurrent requests cannot deactivate or remove MANAGE from the last active verified MANAGE account.
 
 - [ ] Add tests for `MANAGE` implying VIEW only, `MANAGE` not implying SCORE, and token-version mismatch rejecting old sessions; then implement the shared permission decorator/guard and database principal hydration.
 - [ ] Apply MANAGE to admin writes/user data, VIEW to permitted read endpoints, and SCORE plus current DB assignment to judging routes; retain REGISTRANT role protection.
@@ -62,13 +62,13 @@
 
 ### Task 3: Transactional product/evaluation history and active-category rules
 
-**Files:** `apps/be/src/repositories/products.repository.ts`, `apps/be/src/repositories/evaluations.repository.ts`, `apps/be/src/utils/evaluation-result.ts`, category repository/service/controller as present, and corresponding unit/DB specs.
+**Files:** `apps/be/src/repositories/products.repository.ts`, `apps/be/src/repositories/evaluations.repository.ts`, `apps/be/src/repositories/admin.repository.ts`, `apps/be/src/utils/evaluation-result.ts`, category repository/service/controller as present, and corresponding unit/DB specs.
 
 **Consumes:** Task 1’s ProductStatusEvent and snapshot fields; Task 2’s current principal.
 
 - [ ] Add failing DB cases for one event per actual status transition, retry idempotency, `completedAt` set only on first COMPLETED transition, and actor attribution; implement shared transaction-local event writes for product creation/submission, first scoring, and completion.
 - [ ] Reject new submissions when category or its criteria set is inactive while leaving existing submitted products/evaluations readable and scoreable; exclude inactive categories from new-registration choices and allow existing drafts to load.
-- [ ] Snapshot the judge and organization-unit names and criteria/assignment scope on BE when an evaluation is submitted; prove changing the judge’s unit later does not change submitted history (ORG-01).
+- [ ] On BE evaluation submit, persist fixed version-1 snapshot data for product/category/group, criteria-set version/source hash, judge and unit-at-submit, assigned criterion IDs, and selected criterion/subcriterion/option labels, points, and notes; prove changing the judge’s unit later does not change submitted history (ORG-01).
 - [ ] Assert CAT-02’s inactive-category choice/submission behavior and ensure no historical product/category/evaluation row is deleted or rewritten.
 - [ ] Run focused repository and isolated DB tests; commit the task.
 
