@@ -211,6 +211,37 @@ describe('H4 organization units', () => {
     });
   });
 
+  it.each([
+    'page=1e308',
+    'page=9007199254740992&limit=1',
+    'page=9007199254740991&limit=100',
+  ])('rejects unsafe pagination with 400: %s', async (query) => {
+    await withTestApp(async ({ app, prisma, baseUrl }) => {
+      const f = await adminFixture(app, prisma, baseUrl);
+      expect((await f.call('manager', unitsPath + '?' + query)).status).toBe(
+        400,
+      );
+    });
+  });
+
+  it('accepts a safe offset at the page number boundary', async () => {
+    await withTestApp(async ({ app, prisma, baseUrl }) => {
+      const f = await adminFixture(app, prisma, baseUrl);
+      const result = await f.call(
+        'manager',
+        unitsPath + '?page=9007199254740991&limit=1',
+      );
+      expect(result.status).toBe(200);
+      expect(result.body.data).toEqual([]);
+      expect(result.body.meta).toEqual({
+        page: 9007199254740991,
+        limit: 1,
+        total: 1,
+        totalPages: 1,
+      });
+    });
+  });
+
   it('combines search and inactive filters with stable order/id pagination', async () => {
     await withTestApp(async ({ app, prisma, baseUrl }) => {
       const f = await adminFixture(app, prisma, baseUrl);

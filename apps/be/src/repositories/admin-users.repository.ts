@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type {
   CreateOrganizationUnitDto,
@@ -16,6 +20,12 @@ export class AdminUsersRepository {
 
   async listOrganizationUnits(query: OrganizationUnitsQueryDto) {
     const { page, limit, q, isActive } = query;
+    const skip = (page - 1) * limit;
+    if (!Number.isSafeInteger(page) || !Number.isSafeInteger(skip)) {
+      throw new BadRequestException(
+        'Pagination exceeds the safe integer range',
+      );
+    }
     const where: Prisma.OrganizationUnitWhereInput = {
       isActive,
       ...(q
@@ -32,7 +42,7 @@ export class AdminUsersRepository {
         this.prisma.organizationUnit.findMany({
           where,
           orderBy: [{ order: 'asc' }, { id: 'asc' }],
-          skip: (page - 1) * limit,
+          skip,
           take: limit,
         }),
         this.prisma.organizationUnit.count({ where }),
