@@ -98,3 +98,15 @@ Implemented H4-C2 on approved C1 baseline. Added filtered admin product list/cou
 | C2 PostgreSQL regressions | Added and typechecked, not run under the C2 execution constraint. |
 
 Database transaction/file behavior remains unverified against PostgreSQL. No DB auth retry, environment change, database/schema creation, or public-schema write occurred. See the detailed [C2 task report](../../.superpowers/sdd/2026-10-22-h4-products-and-registrations/task-2-report.md).
+
+### C2 independent review follow-up: upload cleanup on multipart validation
+
+Fixed the case where Nest's multipart `FileInterceptor` saved a valid upload before the global validation pipe rejected a missing/invalid `reason` or unknown field. An outer cleanup interceptor now removes only the exact UUID-keyed file under private storage, logs cleanup failures, and rethrows the original error. The global DTO validation and unknown-field rejection remain unchanged. Added DB regression cases asserting 400, no attachment/audit rows, and an empty storage directory; these regressions were not run because DB tests remain disallowed for this task.
+
+| Check | Result |
+|---|---|
+| Focused non-DB interceptor test | Passed: 2 tests. |
+| Isolated OpenAPI contract | Passed: 1 test, mocked providers only. |
+| API typecheck/build | Passed. |
+| Targeted Prettier and `git diff --check` | Passed for new interceptor/unit test and changed controller/DB spec. The pre-existing private-storage file has unrelated legacy formatting; the new helper follows Prettier. |
+| DB regressions | Added, not run. No DB test, auth retry, env edit, DB/schema creation, or public-schema write occurred. |

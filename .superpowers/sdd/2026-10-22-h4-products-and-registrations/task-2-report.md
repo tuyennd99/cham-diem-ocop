@@ -29,3 +29,23 @@ Implemented Task C2 only in the managed H4 worktree, on the approved C1 baseline
 | PostgreSQL regression specs | Added and typechecked, not run under the C2 execution constraint. No DB authentication attempt, environment edit, database/schema creation, or public-schema write was made. |
 
 The database behavior, including attachment serialization and filter semantics against PostgreSQL, remains unverified until the isolated DB regressions can be run. See the central H4 verification report for the accumulated workstream record.
+
+## Independent review follow-up: multipart validation cleanup
+
+Fixed the C2 P2 orphan-file case. In the installed Nest request pipeline, guards run before interceptors; the route interceptor array is nested in order; `FileInterceptor` awaits Multer's disk write before calling `next.handle()`; and the terminal handler applies parameter pipes before invoking the controller. Therefore a missing or invalid multipart `reason` fails validation after the file exists but before `ProductsService` can clean it up.
+
+Added an outer `CleanupRejectedUploadInterceptor` around `FileInterceptor`. On a downstream error it removes only a UUID-keyed file whose resolved path exactly matches the configured private-storage root, logs cleanup failures, and rethrows the original validation/service error. The existing `ValidationPipe` remains responsible for required reason validation, transformation, whitelist, and unknown-field rejection. The service's rejection cleanup remains safe because missing files are ignored.
+
+Added a DB regression for a valid file with a missing reason, an empty reason, and an unknown multipart field. Each case asserts HTTP 400, no Attachment/audit writes, and an empty upload directory. Also added focused interceptor unit coverage for cleanup/error identity and path mismatch protection.
+
+| Follow-up check | Result |
+|---|---|
+| Focused interceptor unit test | Passed: 1 suite, 2 tests. |
+| Isolated OpenAPI contract | Passed: 1 suite, 1 test; uses mocked providers and does not connect to PostgreSQL. |
+| API typecheck | Passed. |
+| API build | Passed. |
+| Prettier | Passed for the new interceptor, its unit spec, controller, and DB regression. The pre-existing `private-storage.ts` contains legacy formatting outside this change; the added helper is formatted. |
+| `git diff --check` | Passed; Git emitted only normal LF/CRLF normalization notices. |
+| Multipart DB regression | Added but not run, per the no-DB-execution constraint. |
+
+No database tests, authentication retries, environment edits, database/schema creation, or public-schema writes were performed.

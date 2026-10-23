@@ -27,6 +27,7 @@ import {
 } from '../dtos/admin-products.dto';
 import { AdminService } from '../services/admin.service';
 import { ProductsService } from '../services/products.service';
+import { CleanupRejectedUploadInterceptor } from '../interceptors/cleanup-rejected-upload.interceptor';
 import type { AuthenticatedPrincipal } from '../types/auth';
 import type { UploadedPrivateFile } from '../types/files';
 import { asDownload, productUploadOptions } from '../utils/private-storage';
@@ -115,7 +116,10 @@ export class AdminProductsController {
       },
     },
   })
-  @UseInterceptors(FileInterceptor('file', productUploadOptions()))
+  @UseInterceptors(
+    new CleanupRejectedUploadInterceptor(),
+    FileInterceptor('file', productUploadOptions()),
+  )
   upload(
     @Param('id') id: string,
     @Body() body: ProductMutationReasonDto,

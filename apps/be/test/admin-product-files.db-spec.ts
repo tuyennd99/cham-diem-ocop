@@ -9,7 +9,14 @@ async function upload(
   baseUrl: string,
   authorization: string,
   productId: string,
-  options: { field?: string; name?: string; mime?: string; data?: Buffer } = {},
+  options: {
+    field?: string;
+    name?: string;
+    mime?: string;
+    data?: Buffer;
+    reason?: string | null;
+    unexpectedField?: string;
+  } = {},
 ) {
   const form = new FormData();
   const data = options.data ?? png;
@@ -20,7 +27,14 @@ async function upload(
     new Blob([bytes], { type: options.mime ?? 'image/png' }),
     options.name ?? 'image.png',
   );
-  form.append('reason', 'Admin evidence update');
+  if (!Object.hasOwn(options, 'reason')) {
+    form.append('reason', 'Admin evidence update');
+  } else if (options.reason !== null) {
+    form.append('reason', options.reason ?? '');
+  }
+  if (options.unexpectedField !== undefined) {
+    form.append('unexpected', options.unexpectedField);
+  }
   return fetch(`${baseUrl}/api/admin/products/${productId}/attachments`, {
     method: 'POST',
     headers: { authorization },
@@ -273,6 +287,41 @@ describe('admin private product files', () => {
         await prisma.auditLog.count({ where: { entityId: product.id } }),
       ).toBe(0);
       expect(readdirSync(process.env.STORAGE_PATH!)).toEqual([]);
+    });
+  });
+
+  it('cleans uploaded files when multipart body validation rejects a reason or unknown field', async () => {
+    await withTestApp(async ({ app, prisma, baseUrl }) => {
+      const f = await adminFixture(app, prisma, baseUrl);
+      const category = await prisma.productCategory.findFirstOrThrow({
+        where: { isActive: true, group: { isActive: true } },
+      });
+      const product = await prisma.product.create({
+        data: {
+          registrantId: f.owner.id,
+          categoryId: category.id,
+          name: 'Multipart body validation',
+          formData: {},
+        },
+      });
+      const auth = f.headers('manager').authorization;
+      const rejectedRequests = [
+        { reason: null },
+        { reason: '' },
+        { unexpectedField: 'reject unknown multipart fields' },
+      ];
+
+      for (const options of rejectedRequests) {
+        const response = await upload(baseUrl, auth, product.id, options);
+        expect(response.status).toBe(400);
+        expect(
+          await prisma.attachment.count({ where: { productId: product.id } }),
+        ).toBe(0);
+        expect(
+          await prisma.auditLog.count({ where: { entityId: product.id } }),
+        ).toBe(0);
+        expect(readdirSync(process.env.STORAGE_PATH!)).toEqual([]);
+      }
     });
   });
 

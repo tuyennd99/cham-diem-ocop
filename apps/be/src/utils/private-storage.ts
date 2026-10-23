@@ -1,5 +1,5 @@
 import { createReadStream, mkdirSync, createWriteStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { stat, unlink } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { v7 as uuidv7 } from 'uuid';
 import { pipeline, Readable } from 'node:stream';
@@ -29,6 +29,21 @@ export function resolveStoredPath(storageKey: string, root = storageRoot()): str
     throw new ForbiddenException('Invalid storage key');
   }
   return path;
+}
+
+export async function removeUploadedPrivateFile(
+  file: { filename: string; path: string },
+  root = storageRoot(),
+) {
+  const storedPath = resolveStoredPath(file.filename, root);
+  if (resolve(file.path) !== storedPath) {
+    throw new ForbiddenException('Invalid uploaded file path');
+  }
+  try {
+    await unlink(storedPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
 }
 
 export async function openStoredFile(storageKey: string, originalName: string, root = storageRoot()) {
