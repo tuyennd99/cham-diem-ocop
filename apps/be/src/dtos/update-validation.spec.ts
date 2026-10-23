@@ -9,6 +9,7 @@ import {
   UpdateJudgeDto,
   ResetJudgePasswordDto,
   ReplaceAssignmentsDto,
+  UpdateStaffAccessDto,
 } from './admin.dto';
 import { ProductUpdateDto } from './products.dto';
 import { EvaluationScoreDto } from './evaluations.dto';
@@ -47,6 +48,15 @@ describe('update DTO validation', () => {
     [UpdateJudgeDto, { reason: null }],
     [ResetJudgePasswordDto, { password: 'long-password-value', reason: null }],
     [ReplaceAssignmentsDto, { assignments: [], reason: null }],
+    [
+      UpdateStaffAccessDto,
+      {
+        staffPermissions: ['VIEW'],
+        organizationUnitId: 'unit-1',
+        isActive: null,
+        reason: 'Access update',
+      },
+    ],
   ])('rejects null in non-nullable %p fields', async (metatype, body) => {
     await expect(validate(body, metatype)).rejects.toBeInstanceOf(
       BadRequestException,
@@ -58,6 +68,14 @@ describe('update DTO validation', () => {
     [UpdateJudgeDto, { reason: 'Profile update' }],
     [ResetJudgePasswordDto, { password: 'long-password-value', reason: 'Password reset' }],
     [ReplaceAssignmentsDto, { assignments: [] }],
+    [
+      UpdateStaffAccessDto,
+      {
+        staffPermissions: ['VIEW'],
+        organizationUnitId: 'unit-1',
+        reason: 'Access update',
+      },
+    ],
   ])('accepts omitted optional fields for %p', async (metatype, body) => {
     await expect(validate(body, metatype)).resolves.toBeDefined();
   });

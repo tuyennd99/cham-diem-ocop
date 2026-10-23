@@ -104,6 +104,5 @@ export interface ProductResults {
 export interface UpdateAdminUserStaffAccessInput {
   staffPermissions: StaffPermission[];
   organizationUnitId: string | null;
-  isActive: boolean;
   reason: string;
 }

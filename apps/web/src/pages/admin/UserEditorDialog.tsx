@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { staffPermissionsForForm } from '../../lib/admin-user-form';
+import { staffAccessPayloadForForm, staffPermissionsForForm } from '../../lib/admin-user-form';
 import { messageOf } from '../../lib/api-error';
 import { validatePasswordBytes } from '../../lib/auth';
 import type { UpdateAdminUserStaffAccessInput } from '../../types/admin';
@@ -55,7 +55,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
   );
   const [organizationUnitId, setOrganizationUnitId] = useState(user?.organizationUnitId ?? '');
   const [accessReason, setAccessReason] = useState('');
-  const [isActive, setIsActive] = useState(user?.isActive ?? true);
+  const [statusIsActive, setStatusIsActive] = useState(user?.isActive ?? true);
   const [statusReason, setStatusReason] = useState('');
   const [password, setPassword] = useState('');
   const [passwordReason, setPasswordReason] = useState('');
@@ -164,12 +164,14 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
           onSubmit={(event) => {
             event.preventDefault();
             void perform(() =>
-              props.onUpdateAccess(user.id, {
-                staffPermissions: staffPermissionsForForm(permissions),
-                organizationUnitId: organizationUnitId || null,
-                isActive,
-                reason: accessReason,
-              }),
+              props.onUpdateAccess(
+                user.id,
+                staffAccessPayloadForForm({
+                  staffPermissions: permissions,
+                  organizationUnitId: organizationUnitId || null,
+                  reason: accessReason,
+                }),
+              ),
             );
           }}
         >
@@ -232,9 +234,12 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
         className='account-form route-panel'
         onSubmit={(event) => {
           event.preventDefault();
-          if (!isActive && !window.confirm(`Khóa tài khoản ${user.email}?`)) return;
+          if (!statusIsActive && !window.confirm(`Khóa tài khoản ${user.email}?`)) return;
           void perform(async () => {
-            const ok = await props.onUpdateStatus(user.id, { isActive, reason: statusReason });
+            const ok = await props.onUpdateStatus(user.id, {
+              isActive: statusIsActive,
+              reason: statusReason,
+            });
             if (ok) setStatusReason('');
           });
         }}
@@ -243,8 +248,8 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
         <label>
           <input
             type='checkbox'
-            checked={isActive}
-            onChange={(event) => setIsActive(event.target.checked)}
+            checked={statusIsActive}
+            onChange={(event) => setStatusIsActive(event.target.checked)}
             disabled={busy}
           />{' '}
           Đang hoạt động

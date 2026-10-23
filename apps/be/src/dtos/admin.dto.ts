@@ -39,9 +39,10 @@ export class UpdateStaffAccessDto {
   @MaxLength(100)
   organizationUnitId!: string | null;
 
-  @ApiProperty()
+  @ApiPropertyOptional()
+  @ValidateIf((_object, value) => value !== undefined)
   @IsBoolean()
-  isActive!: boolean;
+  isActive?: boolean;
 
   @ApiProperty({ minLength: 1, maxLength: 255 })
   @Transform(trimString)

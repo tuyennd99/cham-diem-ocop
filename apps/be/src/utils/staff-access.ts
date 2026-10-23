@@ -160,12 +160,13 @@ export async function applyStaffAccess(
     select: accessSelect,
   });
   if (!before) return null;
+  const isActive = input.isActive ?? before.isActive;
   const permissions = effectiveStaffPermissions({
     role: before.role,
     staffPermissions: input.staffPermissions,
   });
   const currentPermissions = effectiveStaffPermissions(before);
-  if (input.isActive && !permissions.length) {
+  if (isActive && !permissions.length) {
     throw new BadRequestException(
       'Active staff must have at least one permission',
     );
@@ -183,7 +184,7 @@ export async function applyStaffAccess(
     before.isActive &&
     before.verified &&
     before.staffPermissions.includes(StaffPermission.MANAGE) &&
-    (!input.isActive || !permissions.includes(StaffPermission.MANAGE))
+    (!isActive || !permissions.includes(StaffPermission.MANAGE))
   ) {
     const others = await tx.user.count({
       where: {
@@ -203,7 +204,7 @@ export async function applyStaffAccess(
   const role = permissions.length ? staffRole(permissions) : before.role;
   const changed =
     before.role !== role ||
-    before.isActive !== input.isActive ||
+    before.isActive !== isActive ||
     before.organizationUnitId !== input.organizationUnitId ||
     currentPermissions.length !== permissions.length ||
     currentPermissions.some(
@@ -212,7 +213,7 @@ export async function applyStaffAccess(
   if (!changed) return before;
   if (
     before.staffPermissions.includes(StaffPermission.SCORE) &&
-    (!input.isActive || !permissions.includes(StaffPermission.SCORE))
+    (!isActive || !permissions.includes(StaffPermission.SCORE))
   ) {
     const openProducts = await tx.product.count({
       where: {
@@ -233,7 +234,7 @@ export async function applyStaffAccess(
       role,
       staffPermissions: permissions,
       organizationUnitId: input.organizationUnitId,
-      isActive: input.isActive,
+      isActive,
       tokenVersion: { increment: 1 },
     },
     select: accessSelect,

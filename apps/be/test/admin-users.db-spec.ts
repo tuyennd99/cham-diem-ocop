@@ -789,6 +789,52 @@ describe('H4 users', () => {
     });
   });
 
+  it('preserves current status when staff access omits isActive', async () => {
+    await withTestApp(async ({ app, prisma, baseUrl }) => {
+      const f = await adminFixture(app, prisma, baseUrl);
+      const statusPath = usersPath + '/' + f.viewer.id + '/status';
+      const accessPath = usersPath + '/' + f.viewer.id + '/staff-access';
+      const locked = await f.call('manager', statusPath, 'PUT', {
+        isActive: false,
+        reason: 'Lock account',
+      });
+      expect(locked.status).toBe(200);
+
+      const inactiveAccess = await f.call('manager', accessPath, 'PUT', {
+        staffPermissions: ['VIEW', 'SCORE'],
+        organizationUnitId: f.unit.id,
+        reason: 'Change access while locked',
+      });
+      expect(inactiveAccess.status).toBe(200);
+      expect(inactiveAccess.body.data).toMatchObject({
+        isActive: false,
+        staffPermissions: ['VIEW', 'SCORE'],
+      });
+      expect(
+        await prisma.user.findUniqueOrThrow({ where: { id: f.viewer.id } }),
+      ).toMatchObject({ isActive: false, staffPermissions: ['VIEW', 'SCORE'] });
+
+      const active = await f.call('manager', statusPath, 'PUT', {
+        isActive: true,
+        reason: 'Unlock account',
+      });
+      expect(active.status).toBe(200);
+      const activeAccess = await f.call('manager', accessPath, 'PUT', {
+        staffPermissions: ['VIEW'],
+        organizationUnitId: f.unit.id,
+        reason: 'Change access while active',
+      });
+      expect(activeAccess.status).toBe(200);
+      expect(activeAccess.body.data).toMatchObject({
+        isActive: true,
+        staffPermissions: ['VIEW'],
+      });
+      expect(
+        await prisma.user.findUniqueOrThrow({ where: { id: f.viewer.id } }),
+      ).toMatchObject({ isActive: true, staffPermissions: ['VIEW'] });
+    });
+  });
+
   it('serializes status and access updates without losing permission changes', async () => {
     await withTestApp(async ({ app, prisma, baseUrl }) => {
       const f = await adminFixture(app, prisma, baseUrl);

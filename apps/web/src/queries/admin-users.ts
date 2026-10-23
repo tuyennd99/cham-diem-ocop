@@ -4,8 +4,8 @@ import { useNavigate } from '@tanstack/react-router';
 import { adminUsersApi } from '../api/admin-users';
 import { authApi } from '../api/auth';
 import { queryKeys } from '../constants/query-key';
+import { staffAccessWouldRevokeSession } from '../lib/admin-user-form';
 import { getSession, setSession } from '../lib/auth';
-import { hasStaffPermission } from '../lib/session-contract';
 
 export function useAdminUsers(query: AdminUserQuery) {
   return useQuery({
@@ -125,21 +125,7 @@ export function useAdminUserMutations() {
     updateAccess: async (id: string, data: Parameters<typeof adminUsersApi.access>[1]) => {
       const result = await access.mutateAsync({ id, data });
       const current = getSession();
-      const next = current
-        ? { role: current.user.role, staffPermissions: data.staffPermissions }
-        : null;
-      const permissionChanged = (['MANAGE', 'VIEW', 'SCORE'] as const).some(
-        (permission) =>
-          hasStaffPermission(current?.user, permission) !== hasStaffPermission(next, permission),
-      );
-      if (
-        !finishRevokingSelf(
-          id,
-          !data.isActive ||
-            data.organizationUnitId !== current?.user.organizationUnitId ||
-            permissionChanged,
-        )
-      )
+      if (!finishRevokingSelf(id, staffAccessWouldRevokeSession(current?.user, data)))
         invalidateStaffViews();
       return result;
     },
