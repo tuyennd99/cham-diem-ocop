@@ -128,6 +128,7 @@ export class AdminRepository {
         },
         actorId,
         meta,
+        'judge.deactivate',
       );
       if (!changed) return null;
       return tx.user.findUnique({

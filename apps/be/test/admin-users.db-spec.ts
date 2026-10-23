@@ -520,6 +520,17 @@ describe('H4 users', () => {
           organizationUnitId: f.unit.id,
         },
       });
+      const staleRegistrant = await prisma.user.create({
+        data: {
+          email: 'stale-permissions@example.invalid',
+          password: 'unused',
+          fullName: 'Stale permission registrant',
+          role: 'REGISTRANT',
+          staffPermissions: ['VIEW', 'MANAGE'],
+          verified: true,
+          organizationUnitId: f.unit.id,
+        },
+      });
       const view = await f.call(
         'manager',
         usersPath + '?permission=VIEW&kind=STAFF&limit=2&page=1',
@@ -539,6 +550,17 @@ describe('H4 users', () => {
       );
       expect(viewIds).not.toContain(f.scorer.id);
       expect(view.body.meta).toMatchObject({ page: 1, limit: 2, total: 3 });
+
+      for (const permission of ['VIEW', 'MANAGE']) {
+        const filtered = await f.call(
+          'manager',
+          usersPath + `?permission=${permission}&limit=100`,
+        );
+        expect(filtered.status).toBe(200);
+        expect(
+          filtered.body.data.map((user: any) => user.id),
+        ).not.toContain(staleRegistrant.id);
+      }
 
       const registrants = await f.call(
         'manager',

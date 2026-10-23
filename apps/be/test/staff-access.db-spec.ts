@@ -205,6 +205,12 @@ describe('H3 database permissions and staff access', () => {
       expect((await apiRequest(baseUrl, `/admin/judges/${scorer.id}`, { method: 'DELETE', headers: bearer(managerToken), body: JSON.stringify({ reason: 'Retire scorer' }) })).status).toBe(200);
       expect((await prisma.user.findUniqueOrThrow({ where: { id: scorer.id } })).tokenVersion).toBe(1);
       expect((await apiRequest(baseUrl, '/auth/me', { headers: bearer(oldToken) })).status).toBe(401);
+      expect(await prisma.auditLog.findFirstOrThrow({ where: { entityId: scorer.id } })).toMatchObject({
+        actorId: manager.id,
+        action: 'judge.deactivate',
+        reason: 'Retire scorer',
+      });
+      expect(await prisma.auditLog.count({ where: { entityId: scorer.id, action: 'user.staff_access_update' } })).toBe(0);
     });
   });
 });

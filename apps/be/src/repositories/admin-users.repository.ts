@@ -48,9 +48,12 @@ export class AdminUsersRepository {
       conditions.push({ OR: [
         { staffPermissions: { has: StaffPermission.VIEW } },
         { staffPermissions: { has: StaffPermission.MANAGE } },
-      ] });
+      ], role: { not: Role.REGISTRANT } });
     } else if (permission) {
-      conditions.push({ staffPermissions: { has: permission } });
+      conditions.push({
+        staffPermissions: { has: permission },
+        role: { not: Role.REGISTRANT },
+      });
     }
     const where: Prisma.UserWhereInput = {
       ...(kind ? { role: kind === 'STAFF' ? { not: Role.REGISTRANT } : Role.REGISTRANT } : {}),
