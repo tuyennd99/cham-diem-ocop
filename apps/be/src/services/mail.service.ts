@@ -1,10 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import nodemailer from 'nodemailer';
 import { env } from '../config/env';
 import { OTP_TTL_MS } from '../constants/auth';
 
 @Injectable()
 export class MailService {
+  private readonly logger = new Logger(MailService.name);
   private transporter?: ReturnType<typeof nodemailer.createTransport>;
 
   private getTransporter() {
@@ -22,6 +23,11 @@ export class MailService {
 
   async sendOtp(email: string, code: string, purpose: 'REGISTER' | 'RESET_PASSWORD') {
     const config = env(process.env);
+    if (config.smtpHost === 'smtp.example.com' && process.env.NODE_ENV !== 'production') {
+      // shortcut: log OTP in local dev when placeholder SMTP_HOST is set; configure real SMTP in production
+      this.logger.log(`[DEV OTP] ${purpose} for ${email}: ${code}`);
+      return;
+    }
     const action = purpose === 'REGISTER' ? 'xác thực tài khoản' : 'đặt lại mật khẩu';
     await this.getTransporter().sendMail({
       from: config.smtpFrom,

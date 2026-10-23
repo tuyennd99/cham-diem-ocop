@@ -15,6 +15,7 @@ import {
 } from '../dtos/admin.dto';
 import { AdminService } from '../services/admin.service';
 import type { AccessTokenPayload, AuthenticatedPrincipal } from '../types/auth';
+import { requestMeta } from '../utils/request-meta';
 
 @ApiTags('Admin')
 @ApiBearerAuth()
@@ -37,25 +38,25 @@ export class AdminController {
   @Post('judges')
   @ResponseMessage('Tạo tài khoản giám khảo thành công')
   createJudge(@Body() body: CreateJudgeDto, @CurrentUser() principal: AccessTokenPayload, @Req() request: Request) {
-    return this.admin.createJudge(body, principal.sub, this.requestMeta(request));
+    return this.admin.createJudge(body, principal.sub, requestMeta(request));
   }
 
   @Put('judges/:id')
   @ResponseMessage('Cập nhật giám khảo thành công')
   updateJudge(@Param('id') id: string, @Body() body: UpdateJudgeDto, @CurrentUser() principal: AccessTokenPayload, @Req() request: Request) {
-    return this.admin.updateJudge(id, body, principal.sub, this.requestMeta(request));
+    return this.admin.updateJudge(id, body, principal.sub, requestMeta(request));
   }
 
   @Delete('judges/:id')
   @ResponseMessage('Ngừng hoạt động tài khoản giám khảo thành công')
   deactivateJudge(@Param('id') id: string, @CurrentUser() principal: AccessTokenPayload, @Req() request: Request) {
-    return this.admin.deactivateJudge(id, principal.sub, this.requestMeta(request));
+    return this.admin.deactivateJudge(id, principal.sub, requestMeta(request));
   }
 
   @Post('judges/:id/reset-password')
   @ResponseMessage('Đặt lại mật khẩu giám khảo thành công')
   resetPassword(@Param('id') id: string, @Body() body: ResetJudgePasswordDto, @CurrentUser() principal: AccessTokenPayload, @Req() request: Request) {
-    return this.admin.resetJudgePassword(id, body, principal.sub, this.requestMeta(request));
+    return this.admin.resetJudgePassword(id, body, principal.sub, requestMeta(request));
   }
 
   @Get('assignments')
@@ -67,7 +68,7 @@ export class AdminController {
   @Put('assignments')
   @ResponseMessage('Cập nhật phân công thành công')
   replaceAssignments(@Body() body: ReplaceAssignmentsDto, @CurrentUser() principal: AccessTokenPayload, @Req() request: Request) {
-    return this.admin.replaceAssignments(body, principal.sub, this.requestMeta(request));
+    return this.admin.replaceAssignments(body, principal.sub, requestMeta(request));
   }
 
   @Get('products')
@@ -84,14 +85,7 @@ export class AdminController {
 
   @Put('users/:id/staff-access')
   updateStaffAccess(@Param('id') id: string, @Body() body: UpdateStaffAccessDto, @CurrentUser() principal: AccessTokenPayload, @Req() request: Request) {
-    return this.admin.updateStaffAccess(id, body, principal.sub, this.requestMeta(request));
+    return this.admin.updateStaffAccess(id, body, principal.sub, requestMeta(request));
   }
 
-  private requestMeta(request: Request) {
-    return {
-      ipAddress: request.ip,
-      userAgent: request.get('user-agent')?.slice(0, 500),
-      requestId: request.get('x-request-id')?.slice(0, 100),
-    };
-  }
 }

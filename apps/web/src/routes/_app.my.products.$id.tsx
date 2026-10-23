@@ -1,9 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { MyProductDetailPage } from "../pages/registrant/MyProductDetailPage";
-import { requireRole } from "../lib/route-guards";
+import { createFileRoute } from '@tanstack/react-router';
+import { requireRole } from '../lib/route-guards';
+import { MyProductDetailPage } from '../pages/registrant/MyProductDetailPage';
 
-export const Route = createFileRoute("/_app/my/products/$id")({
-  beforeLoad: requireRole("REGISTRANT"),
+export const Route = createFileRoute('/_app/my/products/$id')({
+  beforeLoad: requireRole('REGISTRANT'),
   component: ProductDetailRoute,
 });
 

@@ -33,6 +33,8 @@ The original API and web Git histories are retained as ancestors of the monorepo
 
 The current FE/BE API integration specification is [docs/superpowers/specs/2026-10-15-fe-be-api-integration.md](docs/superpowers/specs/2026-10-15-fe-be-api-integration.md).
 
+The proposed registration flow creates accounts only after OTP verification; see [the registration update specification](docs/superpowers/specs/2026-10-23-registration-after-otp-spec.md). This flow is documented for implementation and is not yet applied to the application.
+
 The specification for the seven admin modules is [docs/superpowers/specs/2026-10-17-admin-modules-spec.md](docs/superpowers/specs/2026-10-17-admin-modules-spec.md).
 
 The frontend uses a shared Axios transport and OCOP domain request functions in `apps/web/src/api/`; shared endpoints and values live in `apps/web/src/constants/`. Pages and query hooks consume domain functions instead of issuing HTTP requests directly. See the [frontend API and constants convention](apps/web/README.md#frontend-api-and-constants-convention).

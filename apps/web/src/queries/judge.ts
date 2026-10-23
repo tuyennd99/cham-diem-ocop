@@ -1,6 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
-import { judgeApi } from "../api";
-import { queryKeys } from "../constants/query-key";
+import { useQuery } from '@tanstack/react-query';
+import { judgeApi } from '../api';
+import { queryKeys } from '../constants/query-key';
 
 export function useJudgeQueue() {
   return useQuery({

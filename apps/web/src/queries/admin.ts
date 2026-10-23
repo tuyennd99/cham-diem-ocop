@@ -1,6 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
-import { adminApi } from "../api";
-import { queryKeys } from "../constants/query-key";
+import { useQuery } from '@tanstack/react-query';
+import { adminApi } from '../api';
+import { queryKeys } from '../constants/query-key';
 
 export function useAdminDashboard() {
   return useQuery({

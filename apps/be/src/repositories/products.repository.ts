@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { databaseObject } from '../prisma/sql';
 import { lockEvaluationCategory } from '../utils/evaluation-result';
-import { productRegistrationTypes } from '../constants/products';
+import { productRegistrationTypes, MAX_ATTACHMENTS_PER_PRODUCT } from '../constants/products';
 import { recordProductStatusEvent } from '../utils/product-status';
 
 const publicProductSelect = {
@@ -257,6 +257,10 @@ export class ProductsRepository {
         select: { id: true },
       });
       if (!product) return null;
+      const count = await tx.attachment.count({ where: { productId } });
+      if (count >= MAX_ATTACHMENTS_PER_PRODUCT) {
+        throw new ConflictException(`Tối đa ${MAX_ATTACHMENTS_PER_PRODUCT} tệp đính kèm cho mỗi sản phẩm`);
+      }
       return tx.attachment.create({
         data: { productId, ...input },
         select: { id: true, type: true, fileName: true, createdAt: true },

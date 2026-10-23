@@ -1,5 +1,5 @@
-import type { Criterion as SharedCriterion, Product as SharedProduct } from "@ocop/shared";
-import type { Category as ProductCategoryView } from "./product";
+import type { Criterion as SharedCriterion, Product as SharedProduct } from '@ocop/shared';
+import type { Category as ProductCategoryView } from './product';
 
 export interface AdminJudge {
   id: string;
@@ -12,26 +12,42 @@ export interface AdminJudge {
 }
 
 export interface CreateJudgeInput {
-  email: string; fullName: string; password: string; phone?: string;
+  email: string;
+  fullName: string;
+  password: string;
+  phone?: string;
 }
-export interface UpdateJudgeInput { fullName?: string; phone?: string | null }
-export interface ResetJudgePasswordInput { password: string }
-export type DeactivatedJudge = Pick<AdminJudge, "id" | "email" | "fullName" | "isActive">;
+export interface UpdateJudgeInput {
+  fullName?: string;
+  phone?: string | null;
+}
+export interface ResetJudgePasswordInput {
+  password: string;
+}
+export type DeactivatedJudge = Pick<AdminJudge, 'id' | 'email' | 'fullName' | 'isActive'>;
 export interface AssignmentInput {
-  judgeId: string; categoryId: string; criterionIds: string[];
+  judgeId: string;
+  categoryId: string;
+  criterionIds: string[];
 }
 
-export type AdminCategory = ProductCategoryView & { groupCode: string; criteriaSet?: { criteria: SharedCriterion[] } | null };
+export type AdminCategory = ProductCategoryView & {
+  groupCode: string;
+  criteriaSet?: { criteria: SharedCriterion[] } | null;
+};
 
 export interface Assignment {
   judgeId: string;
   categoryId: string;
   criterionIds: string[];
-  judge: Pick<AdminJudge, "id" | "email" | "fullName" | "isActive">;
-  category: Pick<AdminCategory, "id" | "name" | "groupCode" | "groupName">;
+  judge: Pick<AdminJudge, 'id' | 'email' | 'fullName' | 'isActive'>;
+  category: Pick<AdminCategory, 'id' | 'name' | 'groupCode' | 'groupName'>;
 }
 
-export type AdminProduct = Pick<SharedProduct, "id" | "name" | "status" | "finalScore" | "starRating" | "createdAt" | "category"> & {
+export type AdminProduct = Pick<
+  SharedProduct,
+  'id' | 'name' | 'status' | 'finalScore' | 'starRating' | 'createdAt' | 'category'
+> & {
   status: string;
   finalScore: number | null;
   starRating: number | null;
@@ -42,9 +58,24 @@ export type AdminProduct = Pick<SharedProduct, "id" | "name" | "status" | "final
 };
 
 export interface AdminDashboard {
-  productsByStatus: Record<"DRAFT" | "SUBMITTED" | "SCORING" | "COMPLETED", number>;
-  judges: { judgeId: string; fullName: string; assigned: number; submitted: number; pending: number }[];
-  needsAttention: { id: string; name: string; status: "SUBMITTED" | "SCORING"; submittedAt: string | null; category: { id: string; name: string; groupName: string }; assignedJudgeCount: number; submittedEvaluationCount: number; pendingEvaluationCount: number }[];
+  productsByStatus: Record<'DRAFT' | 'SUBMITTED' | 'SCORING' | 'COMPLETED', number>;
+  judges: {
+    judgeId: string;
+    fullName: string;
+    assigned: number;
+    submitted: number;
+    pending: number;
+  }[];
+  needsAttention: {
+    id: string;
+    name: string;
+    status: 'SUBMITTED' | 'SCORING';
+    submittedAt: string | null;
+    category: { id: string; name: string; groupName: string };
+    assignedJudgeCount: number;
+    submittedEvaluationCount: number;
+    pendingEvaluationCount: number;
+  }[];
 }
 
 export interface ProductResults {

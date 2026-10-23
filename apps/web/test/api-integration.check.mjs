@@ -5,7 +5,7 @@ import { createServer } from 'vite';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const server = await createServer({
   root, configFile: false, envDir: false, appType: 'custom',
-  ssr: { optimizeDeps: { include: ['react', 'react-dom', 'zustand', '@tanstack/react-query', 'axios'] } },
+  ssr: { optimizeDeps: { include: ['react', 'react-dom', 'zustand', '@tanstack/react-query', '@tanstack/react-form', 'axios', 'lodash'] } },
   server: { middlewareMode: true, watch: null, hmr: false },
 });
 const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');

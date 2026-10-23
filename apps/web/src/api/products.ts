@@ -1,7 +1,7 @@
-import { API } from "../constants/api";
-import type { CategoryRecord } from "../types/product";
-import type { PublicProduct, PublicProductParams } from "../types/public";
-import { requestJson } from "./base-request";
+import { API } from '../constants/api';
+import type { CategoryRecord } from '../types/product';
+import type { PublicProduct, PublicProductParams } from '../types/public';
+import { requestJson } from './base-request';
 
 export const productsApi = {
   categories: () => requestJson<CategoryRecord[]>({ url: API.categories }),

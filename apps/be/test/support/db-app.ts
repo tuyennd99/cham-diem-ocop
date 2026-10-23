@@ -81,20 +81,17 @@ export async function withTestApp(
     baseUrl: string;
   }) => Promise<void>,
 ): Promise<void> {
-  const message = 'TEST_DATABASE_URL must point to a local *_test database';
-  const hasExplicitTestUrl = Object.prototype.hasOwnProperty.call(process.env, 'TEST_DATABASE_URL');
-  const rawTestUrl = process.env.TEST_DATABASE_URL;
-  const usingDatabaseUrl = !hasExplicitTestUrl;
+  const message = 'DATABASE_URL must point to a local database (localhost/127.0.0.1)';
+  const rawDbUrl = process.env.DATABASE_URL;
   let testUrl: URL;
   try {
-    testUrl = new URL(usingDatabaseUrl ? (process.env.DATABASE_URL ?? '') : (rawTestUrl ?? ''));
+    testUrl = new URL(rawDbUrl ?? '');
   } catch {
     throw new Error(message);
   }
   if (
     !['postgresql:', 'postgres:'].includes(testUrl.protocol) ||
     !['localhost', '127.0.0.1', '[::1]'].includes(testUrl.hostname) ||
-    (!usingDatabaseUrl && !testUrl.pathname.endsWith('_test')) ||
     testUrl.searchParams.has('host') ||
     testUrl.searchParams.has('hostaddr')
   ) {

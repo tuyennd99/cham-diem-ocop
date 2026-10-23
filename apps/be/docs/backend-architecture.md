@@ -4,7 +4,8 @@ API NestJS quản lý đăng ký sản phẩm OCOP, chấm điểm, phân công 
 
 ## Luồng nghiệp vụ
 
-- Người đăng ký tạo sản phẩm ở `DRAFT`, cập nhật hồ sơ và tải minh chứng ảnh/PDF lên private storage, rồi gửi để chấm (`SUBMITTED`).
+- Người đăng ký tạo sản phẩm ở `DRAFT`, cập nhật hồ sơ và tải minh chứng ảnh/PDF lên private storage, rồi gửi để chấm (`SUBMITTED`). Việc nộp hồ sơ không bắt buộc phải có sẵn ảnh/minh chứng.
+- Sản phẩm ở trạng thái `SUBMITTED` và `SCORING` được hiển thị công khai trên danh sách sản phẩm OCOP dù chưa có điểm hoặc kết quả xếp sao chính thức.
 - Admin duy trì danh mục và phân công giám khảo. Giám khảo lưu và gửi phiếu chấm theo tiêu chí đã seed từ Quyết định 26/2026/QĐ-TTg cùng phụ lục.
 - Sản phẩm đi theo trạng thái `DRAFT` → `SUBMITTED` → `SCORING` → `COMPLETED`. Kết quả cuối được tính từ đánh giá hợp lệ và ngưỡng sao 90/70/50/30.
 - Criteria và lựa chọn điểm là dữ liệu chính thức; không thêm nội dung hoặc điểm tiêu chí tùy ý.
@@ -47,6 +48,6 @@ Migration có thứ tự trong `prisma/migrations`; giữ nguyên migration đã
 
 - Unit tests: `pnpm --filter @ocop/api test -- --runInBand`.
 - Typecheck/build: `pnpm --filter @ocop/api typecheck` và `pnpm --filter @ocop/api build`.
-- PostgreSQL tests: `pnpm --filter @ocop/api test:db`, chỉ với `TEST_DATABASE_URL` local trỏ tới database `_test`; harness cô lập mỗi run trong schema riêng. Không chạy test DB bằng `DATABASE_URL`.
+- PostgreSQL tests: `pnpm --filter @ocop/api test:db`, chạy trực tiếp bằng `DATABASE_URL` local; harness cô lập mỗi run trong schema tạm riêng (`ocop_test_<uuid>`) và xóa schema sau khi chạy xong.
 - Build production rồi chạy `pnpm --filter @ocop/api start:prod`, khởi chạy `dist/src/main.js`.
 - Hướng dẫn bootstrap, migration, token rollout, health checks và backup nằm tại [operations.md](operations.md).

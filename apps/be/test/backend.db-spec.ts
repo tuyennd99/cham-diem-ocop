@@ -49,14 +49,12 @@ describe('test database safety', () => {
     undefined,
     '',
     'invalid',
-    'postgresql://example.invalid/ocop_test',
-    'postgresql://localhost/ocop',
-    'postgresql://127.0.0.1/ocop_test_backup',
-    'postgresql://127.0.0.1/ocop_test?host=example.invalid',
-    'postgresql://127.0.0.1/ocop_test?hostaddr=192.0.2.1',
-    'https://localhost/ocop_test',
+    'postgresql://example.invalid/ocop',
+    'postgresql://127.0.0.1/ocop?host=example.invalid',
+    'postgresql://127.0.0.1/ocop?hostaddr=192.0.2.1',
+    'https://localhost/ocop',
   ])('rejects unsafe test database configuration (case %#)', async (value) => {
-    const previous = process.env.TEST_DATABASE_URL;
+    const previous = process.env.DATABASE_URL;
     const before = { ...process.env };
     const connect = jest
       .spyOn(Client.prototype, 'connect')
@@ -66,13 +64,16 @@ describe('test database safety', () => {
         ),
       );
     try {
-      process.env.TEST_DATABASE_URL = (value ?? '') as string;
+      if (value === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = value;
       const run = jest.fn();
       await expect(withTestApp(run)).rejects.toThrow(
-        'TEST_DATABASE_URL must point to a local *_test database',
+        'DATABASE_URL must point to a local database (localhost/127.0.0.1)',
       );
       expect(run).not.toHaveBeenCalled();
-      const expected = { ...before, TEST_DATABASE_URL: (value ?? '') as string };
+      const expected = { ...before };
+      if (value === undefined) delete expected.DATABASE_URL;
+      else expected.DATABASE_URL = value;
       expect(
         Object.keys(process.env).length === Object.keys(expected).length &&
           Object.entries(expected).every(
@@ -81,14 +82,14 @@ describe('test database safety', () => {
       ).toBe(true);
     } finally {
       connect.mockRestore();
-      if (previous === undefined) delete process.env.TEST_DATABASE_URL;
-      else process.env.TEST_DATABASE_URL = previous;
+      if (previous === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = previous;
     }
   });
 
   it('restores environment and removes storage when connection setup fails', async () => {
-    const previous = process.env.TEST_DATABASE_URL;
-    process.env.TEST_DATABASE_URL = 'postgresql://127.0.0.1/ocop_test';
+    const previous = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = 'postgresql://127.0.0.1/ocop';
     const before = { ...process.env };
     let storage: string;
     const connect = jest
@@ -110,8 +111,8 @@ describe('test database safety', () => {
       expect(existsSync(storage!)).toBe(false);
     } finally {
       connect.mockRestore();
-      if (previous === undefined) delete process.env.TEST_DATABASE_URL;
-      else process.env.TEST_DATABASE_URL = previous;
+      if (previous === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = previous;
     }
   });
 });
@@ -215,7 +216,7 @@ it('migrates and serves the isolated database with seed data', async () => {
   expect(existsSync(storage!)).toBe(false);
   {
     const connectionUrl = new URL(
-      process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL!,
+      process.env.DATABASE_URL!,
     );
     connectionUrl.searchParams.delete('schema');
     if (connectionUrl.searchParams.get('sslmode') === 'require')

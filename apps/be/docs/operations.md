@@ -33,4 +33,4 @@ Giữ nguyên lịch sử migration đã commit. Với database đã ở schema 
 
 ## Kiểm thử database
 
-`pnpm --filter @ocop/api test:db` chỉ chạy khi `TEST_DATABASE_URL` trỏ tới PostgreSQL local (`localhost`, `127.0.0.1` hoặc `::1`) và database có hậu tố `_test`. Harness tạo schema ngẫu nhiên riêng cho mỗi lần chạy rồi xóa schema đó. Không dùng `DATABASE_URL`, database dùng chung hoặc production để chạy test.
+`pnpm --filter @ocop/api test:db` chạy trực tiếp trên `DATABASE_URL` local (`localhost`, `127.0.0.1` hoặc `::1`). Harness tạo schema ngẫu nhiên riêng (`ocop_test_<uuid>`) cho mỗi lần chạy rồi xóa schema đó sau khi xong. Không trỏ test vào database production từ xa.

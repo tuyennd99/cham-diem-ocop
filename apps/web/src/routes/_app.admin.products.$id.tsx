@@ -1,9 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { AdminProductResultsPage } from "../pages/admin/AdminProductResultsPage";
-import { requirePermission } from "../lib/route-guards";
+import { createFileRoute } from '@tanstack/react-router';
+import { requirePermission } from '../lib/route-guards';
+import { AdminProductResultsPage } from '../pages/admin/AdminProductResultsPage';
 
-export const Route = createFileRoute("/_app/admin/products/$id")({
-  beforeLoad: requirePermission("VIEW"),
+export const Route = createFileRoute('/_app/admin/products/$id')({
+  beforeLoad: requirePermission('VIEW'),
   component: ResultsRoute,
 });
 

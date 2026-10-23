@@ -1,10 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
-import { authApi, productsApi } from "../api";
-import { queryKeys } from "../constants/query-key";
-import type { PublicProductParams } from "../types/public";
+import { useQuery } from '@tanstack/react-query';
+import { authApi, productsApi } from '../api';
+import { queryKeys } from '../constants/query-key';
+import type { PublicProductParams } from '../types/public';
 
-export type { CategoryRecord } from "../types/product";
-export type { PublicProductParams } from "../types/public";
+export type { CategoryRecord } from '../types/product';
+export type { PublicProductParams } from '../types/public';
 
 // `/categories` returns the full shape (classification + criteria set); views pick what they need.
 

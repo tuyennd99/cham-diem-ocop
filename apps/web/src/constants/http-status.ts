@@ -17,4 +17,6 @@ export type HttpStatus = (typeof HTTP_STATUS)[keyof typeof HTTP_STATUS];
 
 /** Lỗi nghiệp vụ (4xx): retry vô nghĩa. */
 export const isClientError = (status?: number) =>
-  status !== undefined && status >= HTTP_STATUS.BAD_REQUEST && status < HTTP_STATUS.INTERNAL_SERVER_ERROR;
+  status !== undefined &&
+  status >= HTTP_STATUS.BAD_REQUEST &&
+  status < HTTP_STATUS.INTERNAL_SERVER_ERROR;

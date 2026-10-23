@@ -1,4 +1,4 @@
-import type { PublicProductParams } from "../types/public";
+import type { PublicProductParams } from '../types/public';
 
 export const queryKeys = {
   me: ['auth', 'me'] as const,

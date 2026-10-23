@@ -1,8 +1,8 @@
-import { createStore } from "zustand/vanilla";
-import { useStore } from "zustand";
-import { SESSION_STORAGE_KEY } from "../constants/auth";
-import type { Session } from "../types/auth";
-import { normalizeSession, parseStoredSession, serializeSession } from "../lib/session-contract";
+import { useStore } from 'zustand';
+import { createStore } from 'zustand/vanilla';
+import { SESSION_STORAGE_KEY } from '../constants/auth';
+import { normalizeSession, parseStoredSession, serializeSession } from '../lib/session-contract';
+import type { Session } from '../types/auth';
 
 export { SESSION_STORAGE_KEY };
 
@@ -20,7 +20,7 @@ interface SessionState {
 
 // Vanilla store so non-React code (API client, router guards) can read it synchronously.
 export const sessionStore = createStore<SessionState>(() => ({
-  session: typeof window === "undefined" ? null : readSession(),
+  session: typeof window === 'undefined' ? null : readSession(),
 }));
 
 export function getSession(): Session | null {
@@ -39,8 +39,9 @@ export function useSession(): Session | null {
 }
 
 // Keep tabs in sync: login/logout in another tab updates this one.
-if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-  window.addEventListener("storage", (event) => {
-    if (event.key === SESSION_STORAGE_KEY || event.key === null) sessionStore.setState({ session: readSession() });
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  window.addEventListener('storage', (event) => {
+    if (event.key === SESSION_STORAGE_KEY || event.key === null)
+      sessionStore.setState({ session: readSession() });
   });
 }

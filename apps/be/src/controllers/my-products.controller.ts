@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { Roles } from '../decorators/roles.decorator';
@@ -70,6 +71,7 @@ export class MyProductsController {
     return this.products.submit(id, principal);
   }
 
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post(':id/attachments')
   @ApiConsumes('multipart/form-data')
   @ApiBody({

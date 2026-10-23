@@ -1,50 +1,168 @@
-import { Link } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
-import { authApi } from "../../api";
-import { messageOf } from "../../lib/api-error";
-import { validatePasswordBytes } from "../../lib/auth";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { AuthFrame } from "./AuthFrame";
+import { useState } from 'react';
+import { useForm } from '@tanstack/react-form';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { authApi } from '../../api';
+import { messageOf } from '../../lib/api-error';
+import { validatePasswordBytes } from '../../lib/auth';
+import { normalizeEmail } from '../../lib/utils';
+import { AuthFrame } from './AuthFrame';
 
 export function ForgotPasswordPage() {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
-  const [notice, setNotice] = useState("");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  async function sendCode(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setError(""); setBusy(true);
-    const value = String(new FormData(event.currentTarget).get("email") ?? "").trim().toLowerCase();
-    try {
-      const { data } = await authApi.forgotPassword(value);
-      setEmail(value); setNotice(data.message); setSent(true);
-    } catch (error) { setError(messageOf(error)); }
-    finally { setBusy(false); }
-  }
-  async function reset(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setError(""); setBusy(true);
-    const form = new FormData(event.currentTarget);
-    const newPassword = String(form.get("password") ?? "");
-    try {
-      validatePasswordBytes(newPassword);
-      await authApi.resetPassword({ email, code: String(form.get("code") ?? ""), newPassword });
-      setNotice("Đã đổi mật khẩu. Bạn có thể đăng nhập.");
-      setSent(false);
-    } catch (error) { setError(messageOf(error)); }
-    finally { setBusy(false); }
-  }
-  return <AuthFrame eyebrow="KHÔI PHỤC TÀI KHOẢN" title="Quên mật khẩu" intro={sent ? `Nhập mã trong email gửi tới ${email} và đặt mật khẩu mới.` : "Nhận mã xác thực qua email để đặt lại mật khẩu."}>
-    {!sent ? <form className="account-form" onSubmit={sendCode}>
-      <label>Email<Input name="email" type="email" autoComplete="email" required /></label>
-      {notice && <p className="form-note" role="status">{notice}</p>}{error && <p className="form-note" role="alert">{error}</p>}
-      <Button type="submit" disabled={busy}>{busy ? "Đang gửi…" : "Gửi mã xác thực"}</Button>
-    </form> : <form className="account-form" onSubmit={reset}>
-      <label>Mã OTP<Input name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required /></label>
-      <label>Mật khẩu mới<Input name="password" type="password" autoComplete="new-password" minLength={8} maxLength={72} required /></label>
-      {error && <p className="form-note" role="alert">{error}</p>}
-      <Button type="submit" disabled={busy}>{busy ? "Đang lưu…" : "Đặt lại mật khẩu"}</Button>
-    </form>}
-    <p><Link className="text-link" to="/login">Quay lại đăng nhập</Link></p>
-  </AuthFrame>;
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+
+  const sendCodeForm = useForm({
+    defaultValues: { email: '' },
+    onSubmit: async ({ value }) => {
+      setError('');
+      const normalized = normalizeEmail(value.email);
+      try {
+        const { data } = await authApi.forgotPassword(normalized);
+        setEmail(normalized);
+        setNotice(data.message);
+        setSent(true);
+      } catch (cause) {
+        setError(messageOf(cause));
+      }
+    },
+  });
+
+  const resetForm = useForm({
+    defaultValues: { code: '', password: '' },
+    onSubmit: async ({ value }) => {
+      setError('');
+      try {
+        validatePasswordBytes(value.password);
+        await authApi.resetPassword({
+          email,
+          code: value.code,
+          newPassword: value.password,
+        });
+        setNotice('Đã đổi mật khẩu. Bạn có thể đăng nhập.');
+        setSent(false);
+        resetForm.reset();
+      } catch (cause) {
+        setError(messageOf(cause));
+      }
+    },
+  });
+
+  return (
+    <AuthFrame
+      eyebrow='KHÔI PHỤC TÀI KHOẢN'
+      title='Quên mật khẩu'
+      intro={
+        sent
+          ? `Nhập mã trong email gửi tới ${email} và đặt mật khẩu mới.`
+          : 'Nhận mã xác thực qua email để đặt lại mật khẩu.'
+      }
+      backTo='/login'
+      backLabel='Quay lại trang đăng nhập'
+    >
+      {!sent ? (
+        <form
+          className='account-form'
+          onSubmit={(event) => {
+            event.preventDefault();
+            void sendCodeForm.handleSubmit();
+          }}
+        >
+          <sendCodeForm.Field name='email'>
+            {(field) => (
+              <label>
+                Email
+                <Input
+                  name={field.name}
+                  type='email'
+                  autoComplete='email'
+                  value={field.state.value}
+                  onBlur={field.handleBlur}
+                  onChange={(event) => field.handleChange(event.target.value)}
+                  required
+                />
+              </label>
+            )}
+          </sendCodeForm.Field>
+          {notice && (
+            <p className='form-note' role='status'>
+              {notice}
+            </p>
+          )}
+          {error && (
+            <p className='form-note' role='alert'>
+              {error}
+            </p>
+          )}
+          <sendCodeForm.Subscribe selector={(state) => state.isSubmitting}>
+            {(busy) => (
+              <Button type='submit' className='auth-submit-btn' disabled={busy}>
+                {busy ? 'Đang gửi…' : 'Gửi mã xác thực'}
+              </Button>
+            )}
+          </sendCodeForm.Subscribe>
+        </form>
+      ) : (
+        <form
+          className='account-form'
+          onSubmit={(event) => {
+            event.preventDefault();
+            void resetForm.handleSubmit();
+          }}
+        >
+          <resetForm.Field name='code'>
+            {(field) => (
+              <label>
+                Mã OTP
+                <Input
+                  name={field.name}
+                  className='otp-code-input'
+                  inputMode='numeric'
+                  autoComplete='one-time-code'
+                  pattern='[0-9]{6}'
+                  maxLength={6}
+                  value={field.state.value}
+                  onBlur={field.handleBlur}
+                  onChange={(event) => field.handleChange(event.target.value)}
+                  required
+                />
+              </label>
+            )}
+          </resetForm.Field>
+          <resetForm.Field name='password'>
+            {(field) => (
+              <label>
+                Mật khẩu mới
+                <Input
+                  name={field.name}
+                  type='password'
+                  autoComplete='new-password'
+                  minLength={8}
+                  maxLength={72}
+                  value={field.state.value}
+                  onBlur={field.handleBlur}
+                  onChange={(event) => field.handleChange(event.target.value)}
+                  required
+                />
+              </label>
+            )}
+          </resetForm.Field>
+          {error && (
+            <p className='form-note' role='alert'>
+              {error}
+            </p>
+          )}
+          <resetForm.Subscribe selector={(state) => state.isSubmitting}>
+            {(busy) => (
+              <Button type='submit' className='auth-submit-btn' disabled={busy}>
+                {busy ? 'Đang lưu…' : 'Đặt lại mật khẩu'}
+              </Button>
+            )}
+          </resetForm.Subscribe>
+        </form>
+      )}
+    </AuthFrame>
+  );
 }

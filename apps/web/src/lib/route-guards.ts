@@ -1,14 +1,14 @@
-import { redirect } from "@tanstack/react-router";
-import type { Role, StaffPermission } from "@ocop/shared";
-import type { RouterContext } from "../types/router-context";
-import { hasStaffPermission } from "./session-contract";
+import type { Role, StaffPermission } from '@ocop/shared';
+import { redirect } from '@tanstack/react-router';
+import type { RouterContext } from '../types/router-context';
+import { hasStaffPermission } from './session-contract';
 
 export function requireRole(role: Role) {
   return ({ context }: { context: RouterContext }) => {
     const session = context.getSession();
-    if (!session) throw redirect({ to: "/login" });
+    if (!session) throw redirect({ to: '/login' });
     if (session.user.role !== role) {
-      throw redirect({ to: "/403" });
+      throw redirect({ to: '/403' });
     }
   };
 }
@@ -16,7 +16,7 @@ export function requireRole(role: Role) {
 export function requirePermission(permission: StaffPermission) {
   return ({ context }: { context: RouterContext }) => {
     const session = context.getSession();
-    if (!session) throw redirect({ to: "/login" });
-    if (!hasStaffPermission(session.user, permission)) throw redirect({ to: "/403" });
+    if (!session) throw redirect({ to: '/login' });
+    if (!hasStaffPermission(session.user, permission)) throw redirect({ to: '/403' });
   };
 }

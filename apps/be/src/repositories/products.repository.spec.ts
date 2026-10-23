@@ -49,3 +49,38 @@ describe('ProductsRepository history and category availability', () => {
     await expect(repository.updateDraft('product', 'registrant', { categoryId: 'inactive-category' })).rejects.toThrow(ConflictException);
   });
 });
+
+describe('ProductsRepository.addAttachment', () => {
+  it('rejects upload when maximum attachment count is reached', async () => {
+    const tx = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      product: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'prod-1' }),
+      },
+      attachment: {
+        count: jest.fn().mockResolvedValue(20),
+        create: jest.fn(),
+      },
+    };
+    const prisma = {
+      $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
+    };
+    const repository = new ProductsRepository(prisma as unknown as PrismaService);
+
+    const prevDb = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = 'postgresql://127.0.0.1/ocop_test?schema=public';
+    try {
+      await expect(
+        repository.addAttachment('prod-1', 'user-1', {
+          type: 'IMAGE',
+          fileName: 'test.png',
+          filePath: 'storage-1',
+        }),
+      ).rejects.toThrow(ConflictException);
+      expect(tx.attachment.create).not.toHaveBeenCalled();
+    } finally {
+      if (prevDb === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = prevDb;
+    }
+  });
+});
