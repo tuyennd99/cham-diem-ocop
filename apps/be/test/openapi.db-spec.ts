@@ -122,6 +122,58 @@ describe('built API OpenAPI document', () => {
         'properties.registrationSnapshot',
       );
       expect(document.paths['/api/admin/products']?.post).toBeDefined();
+      for (const path of [
+        '/api/admin/products',
+        '/api/admin/products/{id}',
+        '/api/admin/products/{id}/results',
+        '/api/admin/products/{id}/attachments',
+        '/api/admin/products/{id}/attachments/{attachmentId}',
+      ]) {
+        expect(document.paths[path]).toBeDefined();
+      }
+      const productQueryParameters = document.paths['/api/admin/products'].get
+        ?.parameters as { name?: string; in?: string }[];
+      expect(
+        productQueryParameters
+          .filter((parameter) => parameter.in === 'query')
+          .map((parameter) => parameter.name),
+      ).toEqual(
+        expect.arrayContaining([
+          'page',
+          'limit',
+          'q',
+          'groupId',
+          'categoryId',
+          'registrantId',
+          'registrantQ',
+          'localityId',
+          'unmappedLocality',
+          'status',
+          'registrationType',
+          'assessmentYear',
+          'dateBasis',
+          'from',
+          'toExclusive',
+          'starRating',
+          'sortBy',
+          'sortDirection',
+        ]),
+      );
+      const adminUpload = document.paths[
+        '/api/admin/products/{id}/attachments'
+      ].post?.requestBody as {
+        content: {
+          'multipart/form-data': {
+            schema: { properties: Record<string, unknown> };
+          };
+        };
+      };
+      expect(
+        adminUpload.content['multipart/form-data'].schema.properties.file,
+      ).toEqual({ type: 'string', format: 'binary' });
+      expect(
+        adminUpload.content['multipart/form-data'].schema.properties.reason,
+      ).toEqual({ type: 'string', maxLength: 255 });
       expect(schemas.ProductApplicationDto).toHaveProperty(
         'properties.entityName',
       );

@@ -562,6 +562,17 @@ export class ProductsRepository {
         data: { productId, ...input },
         select: { id: true, type: true, fileName: true, createdAt: true },
       });
+      if (actor.kind === 'MANAGER') {
+        await writeAudit(tx, {
+          actorId: actor.id,
+          action: 'product.attachment_add_on_behalf',
+          entityType: 'Product',
+          entityId: productId,
+          afterData: attachment,
+          reason: actor.reason,
+          ...actor.meta,
+        });
+      }
       return attachment;
     });
   }
@@ -586,7 +597,7 @@ export class ProductsRepository {
           productId,
           product: { ...this.actorWhere(actor), status: 'DRAFT' },
         },
-        select: { filePath: true, fileName: true, type: true },
+        select: { id: true, filePath: true, fileName: true, type: true, createdAt: true },
       });
       if (!attachment) return null;
       const deleted = await tx.attachment.deleteMany({
@@ -597,6 +608,22 @@ export class ProductsRepository {
         },
       });
       if (!deleted.count) return null;
+      if (actor.kind === 'MANAGER') {
+        await writeAudit(tx, {
+          actorId: actor.id,
+          action: 'product.attachment_delete_on_behalf',
+          entityType: 'Product',
+          entityId: productId,
+          beforeData: {
+            id: attachment.id,
+            type: attachment.type,
+            fileName: attachment.fileName,
+            createdAt: attachment.createdAt,
+          },
+          reason: actor.reason,
+          ...actor.meta,
+        });
+      }
       return attachment.filePath;
     });
   }
@@ -611,6 +638,20 @@ export class ProductsRepository {
         filePath: true,
         product: { select: { registrantId: true, status: true } },
       },
+    });
+  }
+
+  findAdminAttachment(productId: string, attachmentId: string, canManage: boolean) {
+    return this.prisma.attachment.findFirst({
+      where: {
+        id: attachmentId,
+        productId,
+        ...(canManage ? {} : {
+          type: 'EVIDENCE',
+          product: { is: { status: { not: ProductStatus.DRAFT } } },
+        }),
+      },
+      select: { filePath: true, fileName: true },
     });
   }
 

@@ -1,5 +1,8 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { EvaluationStatus, Prisma, ProductStatus, Role, StaffPermission } from '@prisma/client';
+import type { ProductApplicationForm } from '@ocop/shared';
+import { productRegistrationTypes } from '../constants/products';
+import type { AdminProductQueryDto } from '../dtos/admin-products.dto';
 import type { UpdateStaffAccessDto } from '../dtos/admin.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { databaseObject } from '../prisma/sql';
@@ -8,6 +11,84 @@ import { applyStaffAccess, createStaff, lockStaffMutation } from '../utils/staff
 import { writeAudit, type AuditInput } from '../utils/audit-log';
 
 export type AdminRequestMeta = { ipAddress?: string; userAgent?: string; requestId?: string };
+
+const adminProductSelect = {
+  id: true,
+  name: true,
+  description: true,
+  status: true,
+  finalScore: true,
+  starRating: true,
+  createdAt: true,
+  submittedAt: true,
+  completedAt: true,
+  localityId: true,
+  formData: true,
+  category: {
+    select: {
+      id: true,
+      name: true,
+      groupId: true,
+      groupCode: true,
+      groupName: true,
+      classificationGroup: true,
+      classificationSubgroup: true,
+      group: { select: { id: true, code: true, name: true } },
+    },
+  },
+  registrant: { select: { id: true, fullName: true, email: true } },
+  locality: {
+    select: { id: true, code: true, name: true, type: true, provinceName: true },
+  },
+  attachments: {
+    where: { type: 'IMAGE' as const },
+    select: { id: true, type: true, fileName: true, createdAt: true },
+    orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }],
+  },
+} satisfies Prisma.ProductSelect;
+
+const adminProductDetailSelect = {
+  ...adminProductSelect,
+  registrationSnapshot: true,
+  registrant: { select: { id: true, fullName: true, email: true, phone: true } },
+  createdBy: { select: { id: true, fullName: true } },
+  attachments: {
+    select: { id: true, type: true, fileName: true, createdAt: true },
+    orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }],
+  },
+  statusEvents: {
+    select: { fromStatus: true, toStatus: true, sequence: true, actorId: true, reason: true, createdAt: true },
+    orderBy: [{ sequence: 'asc' as const }],
+  },
+} satisfies Prisma.ProductSelect;
+
+function safeFormData(value: Prisma.JsonValue): Partial<ProductApplicationForm> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
+  const source = value as Record<string, Prisma.JsonValue>;
+  const result: Record<string, string | number | boolean> = {};
+  for (const field of [
+    'entityName', 'representativeName', 'representativeTitle', 'contactAddress',
+    'provinceName', 'phone', 'email',
+  ]) {
+    if (typeof source[field] === 'string') result[field] = source[field] as string;
+  }
+  if (typeof source.registrationType === 'string' &&
+      (productRegistrationTypes as readonly string[]).includes(source.registrationType)) {
+    result.registrationType = source.registrationType;
+  }
+  if (typeof source.sampleQuantity === 'number' && Number.isInteger(source.sampleQuantity) &&
+      source.sampleQuantity >= 0 && source.sampleQuantity <= 100000) {
+    result.sampleQuantity = source.sampleQuantity;
+  }
+  if (typeof source.assessmentYear === 'number' && Number.isInteger(source.assessmentYear) &&
+      source.assessmentYear >= 2020 && source.assessmentYear <= 2100) {
+    result.assessmentYear = source.assessmentYear;
+  }
+  if (typeof source.declarationAccepted === 'boolean') {
+    result.declarationAccepted = source.declarationAccepted;
+  }
+  return result as Partial<ProductApplicationForm>;
+}
 
 @Injectable()
 export class AdminRepository {
@@ -400,23 +481,92 @@ export class AdminRepository {
     }, { timeout: 15000, maxWait: 10000 });
   }
 
-  listProducts(page: number, limit: number, canManage = true) {
-    const where: Prisma.ProductWhereInput = canManage ? {} : { status: { not: ProductStatus.DRAFT } };
-    return Promise.all([
-      this.prisma.product.findMany({
-        where,
-        select: {
-          id: true, name: true, status: true, finalScore: true, starRating: true, createdAt: true,
-          category: { select: { id: true, name: true, groupName: true } },
-          registrant: { select: { id: true, fullName: true, email: true } },
-          evaluations: { where: canManage ? {} : { status: EvaluationStatus.SUBMITTED }, select: { judgeId: true, status: true, total: true } },
+  listProducts(query: AdminProductQueryDto, canManage = true) {
+    const where = this.adminProductWhere(query, canManage);
+    const direction = query.sortDirection ?? 'desc';
+    const orderBy: Prisma.ProductOrderByWithRelationInput[] =
+      query.sortBy === 'name'
+        ? [{ name: direction }, { id: direction }]
+        : query.sortBy === 'finalScore'
+          ? [{ finalScore: { sort: direction, nulls: 'last' } }, { id: direction }]
+          : [{ submittedAt: { sort: direction, nulls: 'last' } }, { id: direction }];
+
+    return this.prisma.$transaction(async (tx) => {
+      const [rows, total] = await Promise.all([
+        tx.product.findMany({
+          where,
+          select: adminProductSelect,
+          orderBy,
+          skip: (query.page - 1) * query.limit,
+          take: query.limit,
+        }),
+        tx.product.count({ where }),
+      ]);
+      return {
+        data: rows.map(({ formData, ...row }) => ({
+          ...row,
+          formData: safeFormData(formData),
+        })),
+        total,
+      };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+  }
+
+  findAdminProduct(id: string, canManage = true) {
+    return this.prisma.product.findFirst({
+      where: { id, ...(canManage ? {} : { status: { not: ProductStatus.DRAFT } }) },
+      select: adminProductDetailSelect,
+    }).then((product) => product && {
+      ...product,
+      formData: safeFormData(product.formData),
+    });
+  }
+
+  findAdminAttachments(productId: string, canManage = true) {
+    return this.prisma.product.findFirst({
+      where: { id: productId, ...(canManage ? {} : { status: { not: ProductStatus.DRAFT } }) },
+      select: {
+        attachments: {
+          select: { id: true, type: true, fileName: true, createdAt: true },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         },
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      this.prisma.product.count({ where }),
-    ]).then(([data, total]) => ({ data, total }));
+      },
+    }).then((product) => product?.attachments ?? null);
+  }
+
+  private adminProductWhere(query: AdminProductQueryDto, canManage: boolean): Prisma.ProductWhereInput {
+    const conditions: Prisma.ProductWhereInput[] = [];
+    if (!canManage) conditions.push({ status: { not: ProductStatus.DRAFT } });
+    if (query.status) conditions.push({ status: query.status });
+    if (query.groupId) conditions.push({ category: { is: { groupId: query.groupId } } });
+    if (query.categoryId) conditions.push({ categoryId: query.categoryId });
+    if (query.registrantId) conditions.push({ registrantId: query.registrantId });
+    if (query.registrantQ) {
+      conditions.push({ registrant: { is: { OR: [
+        { fullName: { contains: query.registrantQ, mode: 'insensitive' } },
+        { email: { contains: query.registrantQ, mode: 'insensitive' } },
+      ] } } });
+    }
+    if (query.localityId) conditions.push({ localityId: query.localityId });
+    else if (query.unmappedLocality) conditions.push({ localityId: null });
+    if (query.registrationType) conditions.push({ formData: {
+      path: ['registrationType'], equals: query.registrationType,
+    } });
+    if (query.assessmentYear !== undefined) conditions.push({ formData: {
+      path: ['assessmentYear'], equals: query.assessmentYear,
+    } });
+    if (query.starRating) conditions.push({ status: ProductStatus.COMPLETED, starRating: query.starRating });
+    if (query.from && query.toExclusive) {
+      conditions.push({ [query.dateBasis]: {
+        gte: new Date(query.from), lt: new Date(query.toExclusive),
+      } });
+    }
+    if (query.q) conditions.push({ OR: [
+      { name: { contains: query.q, mode: 'insensitive' } },
+      { id: { contains: query.q, mode: 'insensitive' } },
+      { formData: { path: ['entityName'], string_contains: query.q, mode: 'insensitive' } },
+    ] });
+    return { AND: conditions };
   }
 
   productResults(productId: string, canManage = true) {

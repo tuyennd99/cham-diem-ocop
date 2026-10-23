@@ -67,7 +67,7 @@ describe('H3 database permissions and staff access', () => {
       const listed = await request(viewToken, '/admin/products');
       expect(listed.status).toBe(200);
       expect(listed.body.data.map((item: any) => item.id)).not.toContain(draft.id);
-      expect(listed.body.data.find((item: any) => item.id === product.id).evaluations).toEqual([{ judgeId: combined.id, status: 'SUBMITTED', total: 0 }]);
+      expect(listed.body.data.find((item: any) => item.id === product.id)).not.toHaveProperty('evaluations');
       expect((await request(viewToken, `/admin/products/${draft.id}/results`)).status).toBe(404);
       const results = await request(viewToken, `/admin/products/${product.id}/results`);
       expect(results.body.data.evaluations.map((item: any) => item.id)).toEqual([submitted.id]);

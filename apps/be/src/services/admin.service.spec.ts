@@ -1,4 +1,6 @@
 import { EvaluationStatus, ProductStatus } from '@prisma/client';
+import { BadRequestException } from '@nestjs/common';
+import { AdminProductQueryDto } from '../dtos/admin-products.dto';
 import { AdminRepository } from '../repositories/admin.repository';
 import { AdminService } from './admin.service';
 
@@ -54,5 +56,40 @@ describe('AdminService dashboard', () => {
         pendingEvaluationCount: 1,
       }],
     });
+  });
+});
+
+describe('AdminService product filters', () => {
+  it('passes the complete query through and returns filtered page metadata', async () => {
+    const repository = {
+      listProducts: jest.fn().mockResolvedValue({ data: [{ id: 'p-1' }], total: 3 }),
+    };
+    const service = new AdminService(repository as unknown as AdminRepository);
+    const query = Object.assign(new AdminProductQueryDto(), {
+      page: 2,
+      limit: 1,
+      status: ProductStatus.SUBMITTED,
+      registrationType: 'FIRST',
+      from: '2026-10-01T00:00:00+07:00',
+      toExclusive: '2026-11-01T00:00:00+07:00',
+    });
+
+    await expect(service.listProducts(query, false)).resolves.toEqual({
+      data: [{ id: 'p-1' }],
+      meta: { page: 2, limit: 1, total: 3, totalPages: 3 },
+    });
+    expect(repository.listProducts).toHaveBeenCalledWith(query, false);
+  });
+
+  it.each([
+    Object.assign(new AdminProductQueryDto(), { localityId: 'locality-1', unmappedLocality: true }),
+    Object.assign(new AdminProductQueryDto(), { from: '2026-10-01T00:00:00Z' }),
+    Object.assign(new AdminProductQueryDto(), { from: '2026-11-01T00:00:00Z', toExclusive: '2026-10-01T00:00:00Z' }),
+    Object.assign(new AdminProductQueryDto(), { page: Number.MAX_SAFE_INTEGER, limit: 100 }),
+  ])('rejects inconsistent or unsafe filter input', async (query) => {
+    const repository = { listProducts: jest.fn() };
+    const service = new AdminService(repository as unknown as AdminRepository);
+    await expect(service.listProducts(query)).rejects.toBeInstanceOf(BadRequestException);
+    expect(repository.listProducts).not.toHaveBeenCalled();
   });
 });

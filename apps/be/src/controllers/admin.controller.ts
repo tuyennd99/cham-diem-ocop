@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Req } from '@nestjs/common';
 import { StaffPermission } from '@prisma/client';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
@@ -6,7 +6,6 @@ import { CurrentUser } from '../decorators/current-user.decorator';
 import { ResponseMessage } from '../decorators/response-message.decorator';
 import { Permissions } from '../decorators/permissions.decorator';
 import {
-  AdminProductsQueryDto,
   CreateJudgeDto,
   DeactivateJudgeDto,
   ReplaceAssignmentsDto,
@@ -70,18 +69,6 @@ export class AdminController {
   @ResponseMessage('Cập nhật phân công thành công')
   replaceAssignments(@Body() body: ReplaceAssignmentsDto, @CurrentUser() principal: AccessTokenPayload, @Req() request: Request) {
     return this.admin.replaceAssignments(body, principal.sub, requestMeta(request));
-  }
-
-  @Get('products')
-  @Permissions(StaffPermission.VIEW)
-  products(@Query() query: AdminProductsQueryDto, @CurrentUser() principal: AuthenticatedPrincipal) {
-    return this.admin.listProducts(query, principal.staffPermissions.includes(StaffPermission.MANAGE));
-  }
-
-  @Get('products/:id/results')
-  @Permissions(StaffPermission.VIEW)
-  results(@Param('id') id: string, @CurrentUser() principal: AuthenticatedPrincipal) {
-    return this.admin.productResults(id, principal.staffPermissions.includes(StaffPermission.MANAGE));
   }
 
   @Put('users/:id/staff-access')

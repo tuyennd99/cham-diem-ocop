@@ -2,13 +2,14 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
   PayloadTooLargeException,
   UnsupportedMediaTypeException,
 } from '@nestjs/common';
 import { unlink } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
-import { Prisma, ProductStatus } from '@prisma/client';
+import { Prisma, ProductStatus, StaffPermission } from '@prisma/client';
 import { ProductUpdateDto, ProductWriteDto } from '../dtos/products.dto';
 import {
   AdminProductCreateDto,
@@ -20,6 +21,7 @@ import type { UploadedPrivateFile } from '../types/files';
 import type { ProductMutationActor } from '../types/product-mutation';
 import { inspectProductUpload } from '../utils/product-files';
 import { MAX_IMAGE_BYTES, openStoredFile, resolveStoredPath, storageRoot, uuidStorageKeyPattern } from '../utils/private-storage';
+import { effectiveStaffPermissions } from '../utils/staff-permissions';
 
 const publicStatuses = new Set<ProductStatus>([
   ProductStatus.SUBMITTED,
@@ -30,6 +32,7 @@ const publicStatuses = new Set<ProductStatus>([
 @Injectable()
 export class ProductsService {
   private readonly root: string;
+  private readonly logger = new Logger(ProductsService.name);
 
   constructor(private readonly repository: ProductsRepository) {
     this.root = storageRoot();
@@ -146,29 +149,86 @@ export class ProductsService {
     file: UploadedPrivateFile | undefined,
     principal: AccessTokenPayload,
   ) {
+    return this.storeAttachment(id, file, { kind: 'OWNER', id: principal.sub });
+  }
+
+  async addAdminAttachment(
+    id: string,
+    file: UploadedPrivateFile | undefined,
+    reason: string,
+    principal: AuthenticatedPrincipal,
+    meta: RequestMeta,
+  ) {
+    return this.storeAttachment(id, file, {
+      kind: 'MANAGER', id: principal.sub, reason, meta,
+    });
+  }
+
+  private async storeAttachment(
+    id: string,
+    file: UploadedPrivateFile | undefined,
+    actor: ProductMutationActor,
+  ) {
     if (!file) throw new UnsupportedMediaTypeException('A file is required');
     try {
       this.assertStoredUpload(file);
       const inspected = await inspectProductUpload(file);
-      const attachment = await this.repository.addAttachment(id, { kind: 'OWNER', id: principal.sub }, {
+      const attachment = await this.repository.addAttachment(id, actor, {
         type: inspected.type,
         fileName: file.originalname,
         filePath: file.filename,
       });
-      if (!attachment) await this.assertDraftAvailable(id, { kind: 'OWNER', id: principal.sub });
+      if (!attachment) await this.assertDraftAvailable(id, actor);
       return attachment;
     } catch (error) {
-      await this.safeUnlink(file.path);
+      try {
+        await this.safeUnlink(file.path);
+      } catch (cleanupError) {
+        this.logger.error(
+          'Failed to remove rejected product upload',
+          cleanupError instanceof Error ? cleanupError.stack : String(cleanupError),
+        );
+      }
       throw error;
     }
   }
 
   async removeAttachment(id: string, attachmentId: string, principal: AccessTokenPayload) {
-    const actor = { kind: 'OWNER', id: principal.sub } as const;
+    return this.removeStoredAttachment(id, attachmentId, { kind: 'OWNER', id: principal.sub });
+  }
+
+  async removeAdminAttachment(
+    id: string,
+    attachmentId: string,
+    reason: string,
+    principal: AuthenticatedPrincipal,
+    meta: RequestMeta,
+  ) {
+    return this.removeStoredAttachment(id, attachmentId, {
+      kind: 'MANAGER', id: principal.sub, reason, meta,
+    });
+  }
+
+  private async removeStoredAttachment(
+    id: string,
+    attachmentId: string,
+    actor: ProductMutationActor,
+  ) {
     const path = await this.repository.removeAttachment(id, attachmentId, actor);
     if (!path) await this.assertDraftAvailable(id, actor);
     await this.safeUnlink(this.pathFor(path));
     return { id: attachmentId };
+  }
+
+  async getAdminAttachment(
+    id: string,
+    attachmentId: string,
+    principal: AuthenticatedPrincipal,
+  ) {
+    const canManage = effectiveStaffPermissions(principal).includes(StaffPermission.MANAGE);
+    const file = await this.repository.findAdminAttachment(id, attachmentId, canManage);
+    if (!file) throw new NotFoundException('Attachment not found');
+    return this.asFile(file.filePath, file.fileName);
   }
 
   async getMyAttachment(id: string, attachmentId: string, principal: AccessTokenPayload) {

@@ -283,6 +283,66 @@ export interface Product {
   attachments: ProductAttachment[];
 }
 
+export interface AdminProductQuery {
+  page?: number;
+  limit?: number;
+  q?: string;
+  groupId?: string;
+  categoryId?: string;
+  registrantId?: string;
+  registrantQ?: string;
+  localityId?: string;
+  unmappedLocality?: boolean;
+  status?: ProductStatus;
+  registrationType?: ProductRegistrationType;
+  assessmentYear?: number;
+  dateBasis?: "submittedAt" | "completedAt";
+  from?: string;
+  toExclusive?: string;
+  starRating?: 1 | 2 | 3 | 4 | 5;
+  sortBy?: "submittedAt" | "name" | "finalScore";
+  sortDirection?: "asc" | "desc";
+}
+
+export interface AdminProductCategory extends ProductCategory {
+  groupId: string;
+  classificationGroup: string;
+  classificationSubgroup: string | null;
+  group: { id: string; code: string; name: string };
+}
+
+export interface AdminProductListItem {
+  id: string;
+  name: string;
+  description: string | null;
+  status: ProductStatus;
+  finalScore: number | null;
+  starRating: number | null;
+  createdAt: string;
+  submittedAt: string | null;
+  completedAt: string | null;
+  localityId: string | null;
+  formData: Partial<ProductApplicationForm>;
+  category: AdminProductCategory;
+  registrant: { id: string; fullName: string; email: string };
+  locality: Pick<LocalityRecord, "id" | "code" | "name" | "type" | "provinceName"> | null;
+  attachments: ProductAttachment[];
+}
+
+export interface AdminProductDetail extends Omit<AdminProductListItem, "registrant"> {
+  registrationSnapshot: RegistrationSnapshotV1 | null;
+  registrant: { id: string; fullName: string; email: string; phone: string | null };
+  createdBy: { id: string; fullName: string } | null;
+  statusEvents: {
+    fromStatus: ProductStatus | null;
+    toStatus: ProductStatus;
+    sequence: number;
+    actorId: string | null;
+    reason: string | null;
+    createdAt: string;
+  }[];
+}
+
 export interface ScoreOption {
   id: string;
   label: string;

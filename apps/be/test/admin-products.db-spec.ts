@@ -523,4 +523,208 @@ describe('admin product mutations and registration snapshots', () => {
       }
     });
   });
+
+  it('filters before count and paging, hides drafts from VIEW, and returns allowlisted records', async () => {
+    await withTestApp(async ({ app, prisma, baseUrl }) => {
+      const f = await adminFixture(app, prisma, baseUrl);
+      const category = await prisma.productCategory.findFirstOrThrow({
+        where: { isActive: true, group: { isActive: true } },
+      });
+      const periodStart = new Date('2026-10-01T00:00:00+07:00');
+      const periodEnd = new Date('2026-10-02T00:00:00+07:00');
+      const make = (
+        id: string,
+        input: {
+          status?: 'DRAFT' | 'SUBMITTED' | 'COMPLETED';
+          submittedAt?: Date;
+          completedAt?: Date;
+          finalScore?: number | null;
+          starRating?: number | null;
+          localityId?: string | null;
+          entityName?: string;
+        } = {},
+      ) =>
+        prisma.product.create({
+          data: {
+            id,
+            registrantId: f.owner.id,
+            categoryId: category.id,
+            localityId:
+              input.localityId === undefined ? f.locality.id : input.localityId,
+            name: `Needle ${id}`,
+            status: input.status ?? 'SUBMITTED',
+            submittedAt: input.submittedAt ?? periodStart,
+            completedAt: input.completedAt,
+            finalScore: input.finalScore,
+            starRating: input.starRating,
+            formData: {
+              entityName: input.entityName ?? `Needle entity ${id}`,
+              registrationType: 'FIRST',
+              assessmentYear: 2026,
+              filePath: '/must-not-return',
+              password: 'must-not-return',
+              tokenVersion: 90,
+            },
+          },
+        });
+      const draft = await make('c2-draft', { status: 'DRAFT' });
+      const first = await make('c2-a');
+      const second = await make('c2-b');
+      await make('c2-upper-bound', { submittedAt: periodEnd });
+      await make('c2-unmapped', { localityId: null });
+      const scored = await make('c2-scored', {
+        status: 'COMPLETED',
+        finalScore: 88,
+        starRating: 3,
+        completedAt: periodStart,
+      });
+      await make('c2-null-score', {
+        status: 'COMPLETED',
+        finalScore: null,
+        starRating: null,
+      });
+
+      await prisma.attachment.createMany({
+        data: ['IMAGE', 'IMAGE', 'EVIDENCE'].map((type, index) => ({
+          productId: first.id,
+          type: type as 'IMAGE' | 'EVIDENCE',
+          fileName: `file-${index}.${type === 'EVIDENCE' ? 'pdf' : 'png'}`,
+          filePath: `private-${index}`,
+        })),
+      });
+      const judge2 = await prisma.user.create({
+        data: {
+          email: `${draft.id}@example.invalid`,
+          password: 'test-only',
+          fullName: 'Second judge',
+          role: 'JUDGE',
+          verified: true,
+          staffPermissions: ['SCORE'],
+        },
+      });
+      await prisma.evaluation.createMany({
+        data: [
+          { productId: first.id, judgeId: f.scorer.id },
+          { productId: first.id, judgeId: judge2.id },
+        ],
+      });
+
+      const viewerPage = await f.call(
+        'viewer',
+        '/admin/products?q=Needle&limit=1&page=1',
+      );
+      expect(viewerPage.status).toBe(200);
+      expect(viewerPage.body.meta).toMatchObject({
+        page: 1,
+        limit: 1,
+        total: 6,
+        totalPages: 6,
+      });
+      expect(viewerPage.body.data.map((row: { id: string }) => row.id)).toEqual(
+        ['c2-upper-bound'],
+      );
+      expect(viewerPage.body.data[0].attachments).toEqual([]);
+      expect(viewerPage.body.data[0]).not.toHaveProperty('evaluations');
+      expect(JSON.stringify(viewerPage.body)).not.toMatch(
+        /filePath|password|tokenVersion/,
+      );
+
+      const filters = new URLSearchParams({
+        q: 'Needle entity',
+        groupId: category.groupId,
+        categoryId: category.id,
+        registrantId: f.owner.id,
+        registrantQ: 'Test user',
+        localityId: f.locality.id,
+        status: 'SUBMITTED',
+        registrationType: 'FIRST',
+        assessmentYear: '2026',
+        dateBasis: 'submittedAt',
+        from: '2026-10-01T00:00:00+07:00',
+        toExclusive: '2026-10-02T00:00:00+07:00',
+        limit: '1',
+        page: '1',
+      });
+      const filteredFirst = await f.call(
+        'viewer',
+        `/admin/products?${filters}`,
+      );
+      expect(filteredFirst.status).toBe(200);
+      expect(filteredFirst.body.meta.total).toBe(2);
+      expect(
+        filteredFirst.body.data.map((row: { id: string }) => row.id),
+      ).toEqual([second.id]);
+      filters.set('page', '2');
+      const filteredLast = await f.call('viewer', `/admin/products?${filters}`);
+      expect(
+        filteredLast.body.data.map((row: { id: string }) => row.id),
+      ).toEqual([first.id]);
+      filters.set('page', '3');
+      const filteredEmpty = await f.call(
+        'viewer',
+        `/admin/products?${filters}`,
+      );
+      expect(filteredEmpty.body.data).toEqual([]);
+      expect(filteredEmpty.body.meta.total).toBe(2);
+
+      expect(
+        (
+          await f.call(
+            'viewer',
+            `/admin/products?localityId=${f.locality.id}&unmappedLocality=true`,
+          )
+        ).status,
+      ).toBe(400);
+      expect(
+        (
+          await f.call(
+            'viewer',
+            '/admin/products?from=2026-10-01T00%3A00%3A00Z',
+          )
+        ).status,
+      ).toBe(400);
+      expect(
+        (await f.call('viewer', '/admin/products?status=DRAFT')).body.meta
+          .total,
+      ).toBe(0);
+      expect(
+        (await f.call('manager', `/admin/products/${draft.id}`)).status,
+      ).toBe(200);
+      expect(
+        (await f.call('viewer', `/admin/products/${draft.id}`)).status,
+      ).toBe(404);
+
+      const detail = await f.call('viewer', `/admin/products/${first.id}`);
+      expect(detail.status).toBe(200);
+      expect(
+        detail.body.data.attachments.map(({ type }: { type: string }) => type),
+      ).toEqual(['IMAGE', 'IMAGE', 'EVIDENCE']);
+      expect(detail.body.data.formData).toMatchObject({
+        entityName: `Needle entity ${first.id}`,
+      });
+      expect(JSON.stringify(detail.body)).not.toMatch(
+        /filePath|password|tokenVersion/,
+      );
+
+      const nullLast = await f.call(
+        'manager',
+        '/admin/products?status=COMPLETED&sortBy=finalScore&sortDirection=asc',
+      );
+      expect(nullLast.body.data.map(({ id }: { id: string }) => id)).toEqual([
+        scored.id,
+        'c2-null-score',
+      ]);
+      const stars = await f.call('viewer', '/admin/products?starRating=3');
+      expect(stars.body.data.map(({ id }: { id: string }) => id)).toEqual([
+        scored.id,
+      ]);
+      const unmapped = await f.call(
+        'viewer',
+        '/admin/products?unmappedLocality=true',
+      );
+      expect(unmapped.body.data.map(({ id }: { id: string }) => id)).toEqual([
+        'c2-unmapped',
+      ]);
+    });
+  });
 });

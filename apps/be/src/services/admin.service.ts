@@ -7,13 +7,13 @@ import {
 import bcrypt from 'bcryptjs';
 import { EvaluationStatus, ProductStatus } from '@prisma/client';
 import {
-  AdminProductsQueryDto,
   CreateJudgeDto,
   ReplaceAssignmentsDto,
   ResetJudgePasswordDto,
   UpdateJudgeDto,
   UpdateStaffAccessDto,
 } from '../dtos/admin.dto';
+import { AdminProductQueryDto } from '../dtos/admin-products.dto';
 import { AdminRepository, type AdminRequestMeta } from '../repositories/admin.repository';
 import { PASSWORD_MAX_BYTES, PASSWORD_ROUNDS } from '../constants/auth';
 
@@ -129,9 +129,32 @@ export class AdminService {
     return this.repository.replaceAssignments(entries, actorId, input.reason, meta);
   }
 
-  async listProducts(query: AdminProductsQueryDto, canManage = true) {
-    const { data, total } = await this.repository.listProducts(query.page, query.limit, canManage);
+  async listProducts(query: AdminProductQueryDto, canManage = true) {
+    if (!Number.isSafeInteger((query.page - 1) * query.limit)) {
+      throw new BadRequestException('Page offset is too large');
+    }
+    if ((query.localityId && query.unmappedLocality) ||
+        (query.from === undefined) !== (query.toExclusive === undefined)) {
+      throw new BadRequestException('Invalid product filter combination');
+    }
+    if (query.from && query.toExclusive &&
+        new Date(query.from).getTime() >= new Date(query.toExclusive).getTime()) {
+      throw new BadRequestException('from must be before toExclusive');
+    }
+    const { data, total } = await this.repository.listProducts(query, canManage);
     return { data, meta: { page: query.page, limit: query.limit, total, totalPages: Math.ceil(total / query.limit) } };
+  }
+
+  async productDetail(id: string, canManage = true) {
+    const product = await this.repository.findAdminProduct(id, canManage);
+    if (!product) throw new NotFoundException('Product not found');
+    return product;
+  }
+
+  async productAttachments(id: string, canManage = true) {
+    const attachments = await this.repository.findAdminAttachments(id, canManage);
+    if (!attachments) throw new NotFoundException('Product not found');
+    return attachments;
   }
 
   async productResults(id: string, canManage = true) {

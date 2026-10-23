@@ -82,3 +82,19 @@ Implemented H4-C1 on reviewed B2 head `dccb779593d1adfa118e4fafdf19cc78a213f697`
 | C1 isolated PostgreSQL regressions | Added and typechecked, not run because the documented `/ocop` endpoint rejected authentication on port 15432 and port 5432 has no listener. No retry, environment edit, database creation, or public-schema write was made. |
 
 Transaction behavior and DB audit/snapshot assertions remain unverified against PostgreSQL. See the detailed [`C1 task report`](../../.superpowers/sdd/2026-10-22-h4-products-and-registrations/task-1-report.md).
+
+## C2 admin product search, detail, and private files
+
+Implemented H4-C2 on approved C1 baseline. Added filtered admin product list/count with a shared filter predicate and RepeatableRead snapshot, allowlisted detail data, and private attachment read/upload/delete routes. VIEW cannot discover drafts; VIEW binary access is limited to submitted evidence, while MANAGE uses the existing private storage checks and 20-file product lock. Public file behavior and separate results access remain intact. Added shared/web response types and removed evaluations from list rows.
+
+| Check | Result |
+|---|---|
+| API unit tests | Passed: 17 suites, 104 tests. |
+| API typecheck/build | Passed. |
+| OpenAPI contract | Passed: 1 suite, 1 test; isolated from database access. |
+| Web typecheck/production build | Passed. |
+| Prisma validation | Passed with a process-local placeholder URL; no connection. |
+| Targeted Prettier and diff check | Passed for clean-baseline changed files; existing legacy formatting was not rewritten. git diff --check passed. |
+| C2 PostgreSQL regressions | Added and typechecked, not run under the C2 execution constraint. |
+
+Database transaction/file behavior remains unverified against PostgreSQL. No DB auth retry, environment change, database/schema creation, or public-schema write occurred. See the detailed [C2 task report](../../.superpowers/sdd/2026-10-22-h4-products-and-registrations/task-2-report.md).

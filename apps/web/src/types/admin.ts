@@ -1,6 +1,8 @@
 import type {
+  AdminProductListItem,
+  AdminProductDetail as SharedAdminProductDetail,
+  AdminProductQuery as SharedAdminProductQuery,
   Criterion as SharedCriterion,
-  Product as SharedProduct,
   StaffPermission,
 } from '@ocop/shared';
 import type { Category as ProductCategoryView } from './product';
@@ -48,18 +50,9 @@ export interface Assignment {
   category: Pick<AdminCategory, 'id' | 'name' | 'groupCode' | 'groupName'>;
 }
 
-export type AdminProduct = Pick<
-  SharedProduct,
-  'id' | 'name' | 'status' | 'finalScore' | 'starRating' | 'createdAt' | 'category'
-> & {
-  status: string;
-  finalScore: number | null;
-  starRating: number | null;
-  createdAt: string;
-  category: AdminCategory;
-  registrant: { id: string; fullName: string; email: string };
-  evaluations: { judgeId: string; status: string; total: number | null }[];
-};
+export type AdminProduct = AdminProductListItem;
+export type AdminProductDetail = SharedAdminProductDetail;
+export type AdminProductQuery = SharedAdminProductQuery;
 
 export interface AdminDashboard {
   productsByStatus: Record<'DRAFT' | 'SUBMITTED' | 'SCORING' | 'COMPLETED', number>;

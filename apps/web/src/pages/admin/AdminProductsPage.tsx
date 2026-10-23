@@ -50,9 +50,6 @@ export function AdminProductsPage() {
                     </p>
                   </div>
                   <div className='record-result'>
-                    <span>
-                      {product.evaluations.filter((row) => row.status === 'SUBMITTED').length} phiếu
-                    </span>
                     <Link
                       className='button button-secondary'
                       to='/admin/products/$id'
