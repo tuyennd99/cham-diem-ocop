@@ -5,6 +5,34 @@ export interface OrganizationUnitSummary {
   code: string;
   name: string;
 }
+export interface OrganizationUnitRecord extends OrganizationUnitSummary {
+  description: string | null;
+  order: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface OrganizationUnitQuery {
+  page?: number;
+  limit?: number;
+  q?: string;
+  isActive?: boolean;
+}
+export interface CreateOrganizationUnitInput {
+  code: string;
+  name: string;
+  description?: string | null;
+  order: number;
+  isActive: boolean;
+  reason: string;
+}
+export interface UpdateOrganizationUnitInput {
+  name?: string;
+  description?: string | null;
+  order?: number;
+  isActive?: boolean;
+  reason: string;
+}
 export type ProductStatus = 'DRAFT' | 'SUBMITTED' | 'SCORING' | 'COMPLETED';
 export const productRegistrationTypes = ['FIRST', 'UPGRADE', 'REASSESSMENT'] as const;
 export type ProductRegistrationType = (typeof productRegistrationTypes)[number];

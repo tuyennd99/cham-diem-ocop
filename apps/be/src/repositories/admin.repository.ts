@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { databaseObject } from '../prisma/sql';
 import { recomputeProductResult } from '../utils/evaluation-result';
 import { effectiveStaffPermissions } from '../utils/staff-permissions';
+import { writeAudit, type AuditInput } from '../utils/audit-log';
 
 export type AdminRequestMeta = { ipAddress?: string; userAgent?: string; requestId?: string };
 
@@ -504,34 +505,7 @@ export class AdminRepository {
     }
   }
 
-  private audit(
-    tx: Prisma.TransactionClient,
-    input: {
-      actorId: string;
-      action: string;
-      entityType: string;
-      entityId?: string;
-      beforeData?: unknown;
-      afterData?: unknown;
-      reason?: string;
-      ipAddress?: string;
-      userAgent?: string;
-      requestId?: string;
-    },
-  ) {
-    return tx.auditLog.create({
-      data: {
-        actorId: input.actorId,
-        action: input.action,
-        entityType: input.entityType,
-        entityId: input.entityId,
-        beforeData: input.beforeData as Prisma.InputJsonValue | undefined,
-        afterData: input.afterData as Prisma.InputJsonValue | undefined,
-        reason: input.reason,
-        ipAddress: input.ipAddress,
-        userAgent: input.userAgent,
-        requestId: input.requestId,
-      },
-    });
+  private audit(tx: Prisma.TransactionClient, input: AuditInput) {
+    return writeAudit(tx, input);
   }
 }

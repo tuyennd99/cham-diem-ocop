@@ -1,3 +1,4 @@
+import { AdminUsersController } from './admin-users.controller';
 import { AdminController } from './admin.controller';
 import { AuthController } from './auth.controller';
 import { CategoriesController } from './categories.controller';
@@ -7,6 +8,7 @@ import { MyProductsController } from './my-products.controller';
 import { ProductsController } from './products.controller';
 
 export const appControllers = [
+  AdminUsersController,
   AdminController,
   AuthController,
   CategoriesController,
