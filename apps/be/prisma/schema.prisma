@@ -128,6 +128,7 @@ model ProductGroup {
   id         String            @id @default(cuid())
   code       String            @unique @db.VarChar(50)
   name       String            @db.VarChar(255)
+  description String?
   order      Int               @default(0)
   isActive   Boolean           @default(true)
   createdAt  DateTime          @default(now()) @db.Timestamptz(3)
@@ -158,6 +159,7 @@ model ProductCategory {
   groupId                String
   group                  ProductGroup      @relation(fields: [groupId], references: [id], onDelete: Restrict)
   isActive               Boolean           @default(true)
+  order                  Int               @default(0)
   groupCode              String            @db.VarChar(50)
   groupName              String            @db.VarChar(255)
   classificationGroup    String            @db.VarChar(255)

@@ -1,4 +1,5 @@
 import { AdminUsersController } from './admin-users.controller';
+import { AdminCatalogsController } from './admin-catalogs.controller';
 import { AdminController } from './admin.controller';
 import { AuthController } from './auth.controller';
 import { CategoriesController } from './categories.controller';
@@ -9,6 +10,7 @@ import { ProductsController } from './products.controller';
 
 export const appControllers = [
   AdminUsersController,
+  AdminCatalogsController,
   AdminController,
   AuthController,
   CategoriesController,

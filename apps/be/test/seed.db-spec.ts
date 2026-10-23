@@ -394,3 +394,95 @@ it('seeds six official groups and links all 26 classifications without fabricate
     ).toEqual(before);
   });
 });
+
+it('preserves admin-managed catalog metadata and extra categories when reseeding', async () => {
+  await withTestApp(async ({ prisma }) => {
+    const official = officialCategories[0];
+    const group = await prisma.productGroup.findUniqueOrThrow({
+      where: { code: 'FOOD' },
+    });
+    const extraGroup = await prisma.productGroup.create({
+      data: {
+        code: 'TEST-' + randomUUID(),
+        name: 'Admin destination group',
+        description: 'Keep this',
+        order: 80,
+        isActive: false,
+      },
+    });
+    await prisma.productGroup.update({
+      where: { id: group.id },
+      data: {
+        name: 'Admin renamed group',
+        description: 'Admin description',
+        order: 77,
+        isActive: false,
+      },
+    });
+    await prisma.productCategory.updateMany({
+      where: { groupId: group.id },
+      data: { groupName: 'Admin renamed group' },
+    });
+    await prisma.productCategory.update({
+      where: { id: official.id },
+      data: {
+        groupId: extraGroup.id,
+        groupCode: extraGroup.code,
+        groupName: extraGroup.name,
+        name: 'Admin renamed category',
+        classificationGroup: 'Admin classification',
+        classificationSubgroup: 'Admin subgroup',
+        description: 'Admin category description',
+        order: 66,
+        isActive: false,
+      },
+    });
+    const extraCategory = await prisma.productCategory.create({
+      data: {
+        id: 'test-extra-' + randomUUID(),
+        groupId: extraGroup.id,
+        groupCode: extraGroup.code,
+        groupName: extraGroup.name,
+        name: 'Extra category ' + randomUUID(),
+        classificationGroup: 'Extra classification',
+        order: 90,
+        isActive: false,
+      },
+    });
+    const sandbox = seedSandbox();
+    try {
+      expect(runSeed(sandbox.root).status).toBe(0);
+    } finally {
+      rmSync(sandbox.root, { recursive: true, force: true });
+    }
+    await expect(
+      prisma.productGroup.findUniqueOrThrow({ where: { id: group.id } }),
+    ).resolves.toMatchObject({
+      name: 'Admin renamed group',
+      description: 'Admin description',
+      order: 77,
+      isActive: false,
+    });
+    await expect(
+      prisma.productCategory.findUniqueOrThrow({ where: { id: official.id } }),
+    ).resolves.toMatchObject({
+      groupId: extraGroup.id,
+      groupCode: extraGroup.code,
+      groupName: extraGroup.name,
+      name: 'Admin renamed category',
+      classificationGroup: 'Admin classification',
+      classificationSubgroup: 'Admin subgroup',
+      description: 'Admin category description',
+      order: 66,
+      isActive: false,
+    });
+    await expect(
+      prisma.productCategory.findUniqueOrThrow({
+        where: { id: extraCategory.id },
+      }),
+    ).resolves.toMatchObject({
+      name: extraCategory.name,
+      groupId: extraGroup.id,
+    });
+  });
+});
