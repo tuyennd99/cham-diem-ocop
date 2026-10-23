@@ -24,7 +24,9 @@ export function AdminDashboardPage() {
         <Link to='/admin/products'>Tất cả hồ sơ</Link>
         {canManage && (
           <>
-            <Link to='/admin/judges'>Quản lý giám khảo</Link>
+            <Link to='/admin/users' search={{ permission: undefined }}>
+              Người dùng
+            </Link>
             <Link to='/admin/assignments'>Phân công</Link>
           </>
         )}
@@ -113,7 +115,11 @@ export function AdminDashboardPage() {
                 <div className='empty-state'>
                   <h3>Chưa có giám khảo hoạt động</h3>
                   <p>Dữ liệu tiến độ sẽ xuất hiện sau khi có phân công.</p>
-                  <Link to='/admin/judges'>Quản lý giám khảo</Link>
+                  {canManage && (
+                    <Link to='/admin/users' search={{ permission: 'SCORE' }}>
+                      Quản lý giám khảo
+                    </Link>
+                  )}
                 </div>
               )}
             </section>

@@ -14,6 +14,7 @@ The OCOP frontend uses the shared Axios transport in `src/api/base-request.ts`. 
 src/
 ├── api/
 │   ├── base-request.ts  # Shared Axios instance and HTTP handling
+│   ├── admin-users.ts   # MANAGE user and organization-unit operations
 │   └── <domain>.ts      # Reusable endpoint functions for each OCOP domain
 ├── constants/          # Shared endpoints, query keys, status codes and other constants
 ├── queries/            # TanStack Query hooks calling the domain API functions
@@ -39,7 +40,8 @@ src/
 - Email registration with OTP verification, login, password reset, and account profile
 - Registrant product drafts, editing, attachments, and submission
 - Judge queue, evaluation scoring, save, and submit
-- Admin judge accounts, category/criterion assignments, products, and results
+- MANAGE-only user and organization-unit administration at `/admin/users`; the legacy `/admin/judges` URL redirects to the SCORE-filtered user list, while assignment candidate lookup remains on the judge API
+- Admin category/criterion assignments, products, and results
 
 Authenticated requests use Bearer tokens stored in localStorage under `ocop-session`. The session persists across browser restarts until cleared or rejected by the API. JSON responses use `{ statusCode, data, meta?, message? }`; errors use `{ statusCode, message, requestId? }`. File downloads return binary data.
 

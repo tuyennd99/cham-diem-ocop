@@ -1,4 +1,8 @@
-import type { Criterion as SharedCriterion, Product as SharedProduct } from '@ocop/shared';
+import type {
+  Criterion as SharedCriterion,
+  Product as SharedProduct,
+  StaffPermission,
+} from '@ocop/shared';
 import type { Category as ProductCategoryView } from './product';
 
 export interface AdminJudge {
@@ -95,4 +99,11 @@ export interface ProductResults {
       subCriterion: { code: string; criterion: { code: string; name: string } };
     }[];
   }[];
+}
+
+export interface UpdateAdminUserStaffAccessInput {
+  staffPermissions: StaffPermission[];
+  organizationUnitId: string | null;
+  isActive: boolean;
+  reason: string;
 }

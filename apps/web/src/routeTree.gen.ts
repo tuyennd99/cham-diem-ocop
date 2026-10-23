@@ -24,6 +24,7 @@ import { Route as AppAccountPasswordRouteImport } from './routes/_app.account.pa
 import { Route as AppAdminIndexRouteImport } from './routes/_app.admin.index'
 import { Route as AppAdminAssignmentsRouteImport } from './routes/_app.admin.assignments'
 import { Route as AppAdminJudgesRouteImport } from './routes/_app.admin.judges'
+import { Route as AppAdminUsersRouteImport } from './routes/_app.admin.users'
 import { Route as AppJudgeIndexRouteImport } from './routes/_app.judge.index'
 import { Route as PublicProductsIndexRouteImport } from './routes/_public.products.index'
 import { Route as PublicProductsIdRouteImport } from './routes/_public.products.$id'
@@ -107,6 +108,11 @@ const AppAdminJudgesRoute = AppAdminJudgesRouteImport.update({
   path: '/admin/judges',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAdminUsersRoute = AppAdminUsersRouteImport.update({
+  id: '/admin/users',
+  path: '/admin/users',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppJudgeIndexRoute = AppJudgeIndexRouteImport.update({
   id: '/judge/',
   path: '/judge/',
@@ -170,6 +176,7 @@ export interface FileRoutesByFullPath {
   '/account/password': typeof AppAccountPasswordRoute
   '/admin/assignments': typeof AppAdminAssignmentsRoute
   '/admin/judges': typeof AppAdminJudgesRoute
+  '/admin/users': typeof AppAdminUsersRoute
   '/products/$id': typeof PublicProductsIdRoute
   '/admin/': typeof AppAdminIndexRoute
   '/judge/': typeof AppJudgeIndexRoute
@@ -194,6 +201,7 @@ export interface FileRoutesByTo {
   '/account/password': typeof AppAccountPasswordRoute
   '/admin/assignments': typeof AppAdminAssignmentsRoute
   '/admin/judges': typeof AppAdminJudgesRoute
+  '/admin/users': typeof AppAdminUsersRoute
   '/products/$id': typeof PublicProductsIdRoute
   '/admin': typeof AppAdminIndexRoute
   '/judge': typeof AppJudgeIndexRoute
@@ -222,6 +230,7 @@ export interface FileRoutesById {
   '/_app/account/password': typeof AppAccountPasswordRoute
   '/_app/admin/assignments': typeof AppAdminAssignmentsRoute
   '/_app/admin/judges': typeof AppAdminJudgesRoute
+  '/_app/admin/users': typeof AppAdminUsersRoute
   '/_public/products/$id': typeof PublicProductsIdRoute
   '/_app/admin/': typeof AppAdminIndexRoute
   '/_app/judge/': typeof AppJudgeIndexRoute
@@ -248,6 +257,7 @@ export interface FileRouteTypes {
     | '/account/password'
     | '/admin/assignments'
     | '/admin/judges'
+    | '/admin/users'
     | '/products/$id'
     | '/admin/'
     | '/judge/'
@@ -272,6 +282,7 @@ export interface FileRouteTypes {
     | '/account/password'
     | '/admin/assignments'
     | '/admin/judges'
+    | '/admin/users'
     | '/products/$id'
     | '/admin'
     | '/judge'
@@ -299,6 +310,7 @@ export interface FileRouteTypes {
     | '/_app/account/password'
     | '/_app/admin/assignments'
     | '/_app/admin/judges'
+    | '/_app/admin/users'
     | '/_public/products/$id'
     | '/_app/admin/'
     | '/_app/judge/'
@@ -427,6 +439,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminJudgesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/admin/users': {
+      id: '/_app/admin/users'
+      path: '/admin/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AppAdminUsersRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/judge/': {
       id: '/_app/judge/'
       path: '/judge'
@@ -528,6 +547,7 @@ interface AppRouteChildren {
   AppAccountRoute: typeof AppAccountRouteWithChildren
   AppAdminAssignmentsRoute: typeof AppAdminAssignmentsRoute
   AppAdminJudgesRoute: typeof AppAdminJudgesRoute
+  AppAdminUsersRoute: typeof AppAdminUsersRoute
   AppAdminIndexRoute: typeof AppAdminIndexRoute
   AppJudgeIndexRoute: typeof AppJudgeIndexRoute
   AppAdminProductsIdRoute: typeof AppAdminProductsIdRoute
@@ -542,6 +562,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAccountRoute: AppAccountRouteWithChildren,
   AppAdminAssignmentsRoute: AppAdminAssignmentsRoute,
   AppAdminJudgesRoute: AppAdminJudgesRoute,
+  AppAdminUsersRoute: AppAdminUsersRoute,
   AppAdminIndexRoute: AppAdminIndexRoute,
   AppJudgeIndexRoute: AppJudgeIndexRoute,
   AppAdminProductsIdRoute: AppAdminProductsIdRoute,

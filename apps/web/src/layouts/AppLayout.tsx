@@ -32,7 +32,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <Link to='/admin/assignments'>Phân công</Link>
             </>
           )}
-          {canManage && <Link to='/admin/judges'>Quản lý giám khảo</Link>}
+          {canManage && (
+            <Link to='/admin/users' search={{ permission: undefined }}>
+              Người dùng
+            </Link>
+          )}
           {canScore && <Link to='/judge'>Hàng chờ chấm</Link>}
           <Link to='/account'>Tài khoản</Link>
         </nav>

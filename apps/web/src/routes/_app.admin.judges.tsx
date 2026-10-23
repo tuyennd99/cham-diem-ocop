@@ -1,8 +1,9 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 import { requirePermission } from '../lib/route-guards';
-import { AdminJudgesPage } from '../pages/admin/AdminJudgesPage';
 
 export const Route = createFileRoute('/_app/admin/judges')({
-  beforeLoad: requirePermission('MANAGE'),
-  component: AdminJudgesPage,
+  beforeLoad: (args) => {
+    requirePermission('MANAGE')(args);
+    throw redirect({ to: '/admin/users', search: { permission: 'SCORE' }, replace: true });
+  },
 });
