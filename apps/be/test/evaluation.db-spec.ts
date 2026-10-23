@@ -21,6 +21,7 @@ async function withFixture(
     await prisma.product.deleteMany({
       where: { registrantId: fixture.registrantId },
     });
+    await prisma.locality.deleteMany({ where: { id: fixture.localityId } });
     await prisma.criteriaSet.deleteMany({ where: { categoryId: fixture.categoryId } });
     await prisma.productCategory.delete({ where: { id: fixture.categoryId } });
     await prisma.user.deleteMany({
@@ -37,6 +38,14 @@ async function createFixture(prisma: PrismaService) {
       password: 'unused',
       fullName: 'Test Registrant',
       role: Role.REGISTRANT,
+    },
+  });
+  const locality = await prisma.locality.create({
+    data: {
+      code: `TEST-EVAL-${suffix}`,
+      name: 'Evaluation locality',
+      type: 'COMMUNE',
+      provinceName: 'Test province',
     },
   });
   const judges = await Promise.all(
@@ -128,13 +137,14 @@ async function createFixture(prisma: PrismaService) {
   await prisma.judgeAssignment.createMany({
     data: judges.map(({ id }) => ({ judgeId: id, categoryId: category.id })),
   });
-  const product = await createProduct(prisma, registrant.id, category.id);
+  const product = await createProduct(prisma, registrant.id, category.id, locality.id);
   return {
     categoryId: category.id,
     criteria: category.criteriaSet!.criteria,
     judgeIds: judges.map(({ id }) => id),
     productId: product.id,
     registrantId: registrant.id,
+    localityId: locality.id,
   };
 }
 
@@ -142,6 +152,7 @@ async function createProduct(
   prisma: PrismaService,
   registrantId: string,
   categoryId: string,
+  localityId: string,
 ) {
   return prisma.product.create({
     data: {
@@ -149,6 +160,7 @@ async function createProduct(
       categoryId,
       name: 'Scoring fixture',
       formData: {},
+      localityId,
       status: ProductStatus.SUBMITTED,
     },
   });
@@ -208,13 +220,14 @@ describe('evaluation persistence', () => {
           registrantId: fixture.registrantId,
           categoryId: fixture.categoryId,
           name: 'Lifecycle fixture',
+          localityId: fixture.localityId,
           formData: {
             entityName: 'Entity', representativeName: 'Representative', representativeTitle: 'Title',
             contactAddress: 'Address', provinceName: 'Province', phone: '123', registrationType: 'FIRST',
             sampleQuantity: 1, assessmentYear: 2026, declarationAccepted: true,
           },
-        });
-        await products.submitDraft(product.id, fixture.registrantId);
+        }, { kind: 'OWNER', id: fixture.registrantId });
+        await products.submitDraft(product.id, { kind: 'OWNER', id: fixture.registrantId });
         await prisma.judgeAssignment.delete({ where: { judgeId_categoryId: { judgeId: fixture.judgeIds[1], categoryId: fixture.categoryId } } });
         await evaluations.saveDraft(fixture.judgeIds[0], product.id, scores(fixture, 60, 40));
         await evaluations.submit(fixture.judgeIds[0], product.id);
@@ -232,7 +245,7 @@ describe('evaluation persistence', () => {
         expect(completed).toMatchObject({ status: ProductStatus.COMPLETED, completedAt: expect.any(Date), submittedAt: expect.any(Date) });
         expect(events[3].createdAt).toEqual(completedAt);
 
-        await expect(products.submitDraft(product.id, fixture.registrantId)).resolves.toBeNull();
+        await expect(products.submitDraft(product.id, { kind: 'OWNER', id: fixture.registrantId })).resolves.toBeNull();
         await expect(prisma.$transaction((tx) => recomputeProductResult(tx, product.id, fixture.judgeIds[0]))).resolves.toBeUndefined();
         const retried = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
         expect(retried.submittedAt).toEqual(submittedAt);
@@ -247,17 +260,17 @@ describe('evaluation persistence', () => {
       withFixture(prisma, async (fixture) => {
         const products = new ProductsRepository(app.get(PrismaService));
         const evaluations = app.get(EvaluationsRepository);
-        const draft = await products.create({ registrantId: fixture.registrantId, categoryId: fixture.categoryId, name: 'Old draft', formData: {} });
-        await expect(products.submitDraft(draft.id, fixture.registrantId)).rejects.toThrow(BadRequestException);
+        const draft = await products.create({ registrantId: fixture.registrantId, categoryId: fixture.categoryId, name: 'Old draft', formData: {}, localityId: fixture.localityId }, { kind: 'OWNER', id: fixture.registrantId });
+        await expect(products.submitDraft(draft.id, { kind: 'OWNER', id: fixture.registrantId })).rejects.toThrow(BadRequestException);
         await expect(prisma.product.findUniqueOrThrow({ where: { id: draft.id } })).resolves.toMatchObject({ status: ProductStatus.DRAFT, submittedAt: null });
         await expect(prisma.productStatusEvent.count({ where: { productId: draft.id } })).resolves.toBe(1);
         await prisma.productCategory.update({ where: { id: fixture.categoryId }, data: { isActive: false } });
         await prisma.criteriaSet.update({ where: { categoryId: fixture.categoryId }, data: { isActive: false } });
 
         expect((await products.listCategories()).some(({ id }) => id === fixture.categoryId)).toBe(false);
-        await expect(products.create({ registrantId: fixture.registrantId, categoryId: fixture.categoryId, name: 'New draft', formData: {} })).rejects.toThrow(ConflictException);
-        await expect(products.updateDraft(draft.id, fixture.registrantId, { name: 'Edited old draft' })).resolves.toMatchObject({ name: 'Edited old draft', categoryId: fixture.categoryId });
-        await expect(products.submitDraft(draft.id, fixture.registrantId)).rejects.toThrow(ConflictException);
+        await expect(products.create({ registrantId: fixture.registrantId, categoryId: fixture.categoryId, name: 'New draft', formData: {}, localityId: fixture.localityId }, { kind: 'OWNER', id: fixture.registrantId })).rejects.toThrow(ConflictException);
+        await expect(products.updateDraft(draft.id, { kind: 'OWNER', id: fixture.registrantId }, { name: 'Edited old draft' })).resolves.toMatchObject({ name: 'Edited old draft', categoryId: fixture.categoryId });
+        await expect(products.submitDraft(draft.id, { kind: 'OWNER', id: fixture.registrantId })).rejects.toThrow(ConflictException);
         await expect(products.findMine(draft.id, fixture.registrantId)).resolves.toMatchObject({ id: draft.id, categoryId: fixture.categoryId });
         await expect(evaluations.getEvaluation(fixture.judgeIds[0], fixture.productId)).resolves.toMatchObject({ product: { id: fixture.productId } });
         await evaluations.saveDraft(fixture.judgeIds[0], fixture.productId, scores(fixture, 50, 30));
@@ -379,6 +392,7 @@ describe('evaluation persistence', () => {
           prisma,
           fixture.registrantId,
           fixture.categoryId,
+          fixture.localityId,
         );
         await repository.saveDraft(
           fixture.judgeIds[0],

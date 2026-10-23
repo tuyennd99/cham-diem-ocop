@@ -2,6 +2,8 @@ import type {
   ProductApplicationForm,
   ProductRegistrationType,
   Product as SharedProduct,
+  LocalityRecord,
+  RegistrationSnapshotV1,
 } from '@ocop/shared';
 import type { ProductAttachmentRecord, Category as ProductCategoryView } from './product';
 
@@ -19,7 +21,13 @@ export type RegistrantProduct = Omit<
   | 'updatedAt'
   | 'category'
   | 'attachments'
+  | 'createdAt'
 > & {
+  createdById: string | null;
+  completedAt: string | null;
+  localityId: string | null;
+  locality: LocalityRecord | null;
+  registrationSnapshot: RegistrationSnapshotV1 | null;
   formData: Record<string, unknown>;
   finalScore: number | null;
   starRating: number | null;
@@ -47,6 +55,7 @@ export type RegistrantFormData = Omit<
 export interface ProductWriteInput {
   name: string;
   categoryId: string;
+  localityId?: string | null;
   description?: string | null;
   formData: Partial<ProductApplicationForm>;
 }

@@ -26,4 +26,27 @@ describe('recordProductStatusEvent', () => {
       actorId: 'judge-1', createdAt, sequence: 3,
     } });
   });
+
+  it('keeps an optional manager reason on the transition event', async () => {
+    const tx = {
+      productStatusEvent: {
+        aggregate: jest.fn().mockResolvedValue({ _max: { sequence: 0 } }),
+        create: jest.fn(),
+      },
+    };
+
+    await recordProductStatusEvent(
+      tx as never,
+      'product-1',
+      'DRAFT',
+      'SUBMITTED',
+      'manager-1',
+      new Date('2026-10-22T00:00:00.000Z'),
+      'Submit on behalf',
+    );
+
+    expect(tx.productStatusEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ reason: 'Submit on behalf' }),
+    });
+  });
 });

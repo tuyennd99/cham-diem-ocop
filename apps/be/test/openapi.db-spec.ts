@@ -110,6 +110,18 @@ describe('built API OpenAPI document', () => {
         'properties.formData.$ref',
         '#/components/schemas/ProductApplicationDto',
       );
+      expect(schemas.ProductWriteDto).toHaveProperty('properties.localityId');
+      expect(schemas.ProductUpdateDto).toHaveProperty('properties.localityId');
+      expect(schemas.AdminProductCreateDto).toHaveProperty(
+        'properties.registrantId',
+      );
+      expect(schemas.AdminProductCreateDto).toHaveProperty('properties.reason');
+      expect(schemas.AdminProductCreateDto).not.toHaveProperty('properties.actor');
+      expect(schemas.AdminProductCreateDto).not.toHaveProperty('properties.canManage');
+      expect(schemas.AdminProductCreateDto).not.toHaveProperty(
+        'properties.registrationSnapshot',
+      );
+      expect(document.paths['/api/admin/products']?.post).toBeDefined();
       expect(schemas.ProductApplicationDto).toHaveProperty(
         'properties.entityName',
       );

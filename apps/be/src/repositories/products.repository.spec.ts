@@ -14,7 +14,12 @@ describe('ProductsRepository history and category availability', () => {
       $queryRaw: jest.fn().mockResolvedValue([]),
       productCategory: {
         count: jest.fn().mockResolvedValue(1),
-        findMany: jest.fn().mockResolvedValue([]),
+        findMany: jest.fn(
+          ({ where }: { where?: { id?: { in?: string[] } } }) =>
+            Promise.resolve(
+              where?.id?.in?.map((id) => ({ id, groupId: 'group' })) ?? [],
+            ),
+        ),
         findUnique: jest.fn().mockResolvedValue({
           isActive: true,
           group: { isActive: true },
@@ -58,7 +63,7 @@ describe('ProductsRepository history and category availability', () => {
       categoryId: 'category',
       name: 'Product',
       formData: {},
-    });
+    }, { kind: 'OWNER', id: 'registrant' });
     expect(tx.product.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ createdById: 'registrant' }),
@@ -156,21 +161,21 @@ describe('ProductsRepository history and category availability', () => {
         categoryId: 'category',
         name: 'Product',
         formData: {},
-      }),
+      }, { kind: 'OWNER', id: 'registrant' }),
     ).rejects.toThrow(ConflictException);
   });
 
   it('keeps an inactive category on an existing draft but rejects switching to another unavailable category', async () => {
     tx.productCategory.findUnique.mockResolvedValue(null);
     await expect(
-      repository.updateDraft('product', 'registrant', {
+      repository.updateDraft('product', { kind: 'OWNER', id: 'registrant' }, {
         categoryId: 'old-category',
         name: 'Edited',
       }),
     ).resolves.toEqual({ id: 'product' });
     expect(tx.productCategory.count).not.toHaveBeenCalled();
     await expect(
-      repository.updateDraft('product', 'registrant', {
+      repository.updateDraft('product', { kind: 'OWNER', id: 'registrant' }, {
         categoryId: 'inactive-category',
       }),
     ).rejects.toThrow(ConflictException);
@@ -202,7 +207,7 @@ describe('ProductsRepository.addAttachment', () => {
     process.env.DATABASE_URL = 'postgresql://127.0.0.1/ocop_test?schema=public';
     try {
       await expect(
-        repository.addAttachment('prod-1', 'user-1', {
+        repository.addAttachment('prod-1', { kind: 'OWNER', id: 'user-1' }, {
           type: 'IMAGE',
           fileName: 'test.png',
           filePath: 'storage-1',

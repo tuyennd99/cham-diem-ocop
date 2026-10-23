@@ -230,6 +230,28 @@ export interface ProductApplicationForm {
   declarationAccepted: boolean;
 }
 
+export interface RegistrationSnapshotV1 {
+  version: 1;
+  submittedAt: string;
+  product: { id: string; name: string; description: string | null };
+  registrant: { id: string; fullName: string; email: string; phone: string | null };
+  category: {
+    id: string;
+    name: string;
+    classificationGroup: string;
+    classificationSubgroup: string | null;
+    group: { id: string; code: string; name: string };
+  };
+  locality: {
+    id: string;
+    code: string;
+    name: string;
+    type: LocalityType;
+    provinceName: string;
+  };
+  formData: ProductApplicationForm;
+}
+
 export interface ProductCategory {
   id: string;
   name: string;

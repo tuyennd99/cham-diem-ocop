@@ -43,6 +43,7 @@ describe('update DTO validation', () => {
   it.each([
     [ProductUpdateDto, { name: null }],
     [ProductUpdateDto, { categoryId: null }],
+    [ProductUpdateDto, { localityId: '' }],
     [ProductUpdateDto, { formData: null }],
     [UpdateJudgeDto, { fullName: null }],
     [UpdateJudgeDto, { reason: null }],
@@ -84,6 +85,9 @@ describe('update DTO validation', () => {
     await expect(
       validate({ description: null }, ProductUpdateDto),
     ).resolves.toMatchObject({ description: null });
+    await expect(
+      validate({ localityId: null }, ProductUpdateDto),
+    ).resolves.toMatchObject({ localityId: null });
     await expect(
       validate({ phone: null, reason: 'Profile update' }, UpdateJudgeDto),
     ).resolves.toMatchObject({ phone: null });

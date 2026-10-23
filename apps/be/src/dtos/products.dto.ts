@@ -118,6 +118,13 @@ export class ProductWriteDto {
   @MaxLength(255)
   name!: string;
 
+  @ApiPropertyOptional({ maxLength: 100, nullable: true })
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  localityId?: string | null;
+
   @ApiPropertyOptional({ maxLength: 10000, nullable: true })
   @IsOptional()
   @IsString()
@@ -138,6 +145,13 @@ export class ProductUpdateDto {
   @IsString()
   @MaxLength(100)
   categoryId?: string;
+
+  @ApiPropertyOptional({ maxLength: 100, nullable: true })
+  @ValidateIf((_object, value) => value !== undefined && value !== null)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  localityId?: string | null;
 
   @ApiPropertyOptional({ maxLength: 255 })
   @ValidateIf((_object, value) => value !== undefined)

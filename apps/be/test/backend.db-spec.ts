@@ -291,6 +291,14 @@ describe('HTTP production journey', () => {
       const judgeUnit = await prisma.organizationUnit.create({
         data: { code: `TEST-JUDGE-${suffix}`, name: 'Test judge unit' },
       });
+      const locality = await prisma.locality.create({
+        data: {
+          code: `TEST-LOCALITY-${suffix}`,
+          name: 'Journey locality',
+          type: 'COMMUNE',
+          provinceName: 'Hà Nội',
+        },
+      });
       const categories = await apiRequest<{
         data: Array<{
           id: string;
@@ -304,6 +312,7 @@ describe('HTTP production journey', () => {
 
       const created = await post<{ data: { id: string } }>(baseUrl, '/my/products', registrantToken, {
         categoryId: category!.id,
+        localityId: locality.id,
         name: 'Journey product',
         description: 'End-to-end test',
         formData: {

@@ -65,4 +65,20 @@ Implemented H4-B2 on B1 head `c111859192775598526795cec954c37acb5e3c47`. Added u
 | Prettier and `git diff --check` | Passed. |
 | B2 isolated-DB regressions | Added, not run. Port 15432 has the previously documented `/ocop` authentication failure and port 5432 has no listener. No retry, environment change, database creation, or public-schema write was made. |
 
-The B2 suite typechecks, but PostgreSQL endpoint behavior, audit rollback, and snapshot preservation remain unverified until the isolated harness can connect. See the detailed [`B2 task report`](../../.superpowers/sdd/2026-10-22-h4-catalogs/task-2-report.md). C remains outside this implementation.
+The B2 suite typechecks, but PostgreSQL endpoint behavior, audit rollback, and snapshot preservation remain unverified until the isolated harness can connect. See the detailed [`B2 task report`](../../.superpowers/sdd/2026-10-22-h4-catalogs/task-2-report.md).
+
+## C1 Product mutations and registration snapshots
+
+Implemented H4-C1 on reviewed B2 head `dccb779593d1adfa118e4fafdf19cc78a213f697`. Added audited manager draft creation/update/submission/deletion and owner draft flows, optional locality selection, version-1 registration snapshots on submission, and shared B1 category readiness checks. The manager path validates an active verified registrant transactionally and records the actual manager as creator and audit actor. Registration snapshots are immutable after submission; historical snapshot data is not backfilled. C2/C3 remain outside this change.
+
+| Check | Result |
+|---|---|
+| Prisma Client generation and validation | Passed with a process-local placeholder URL; no database connection. |
+| API build and typecheck | Passed. |
+| API unit tests | Passed: 16 suites, 97 tests. |
+| OpenAPI spec | Passed: 1 suite, 1 test. |
+| Web typecheck | Passed. |
+| Prettier for new C1 sources and `git diff --check` | Passed. |
+| C1 isolated PostgreSQL regressions | Added and typechecked, not run because the documented `/ocop` endpoint rejected authentication on port 15432 and port 5432 has no listener. No retry, environment edit, database creation, or public-schema write was made. |
+
+Transaction behavior and DB audit/snapshot assertions remain unverified against PostgreSQL. See the detailed [`C1 task report`](../../.superpowers/sdd/2026-10-22-h4-products-and-registrations/task-1-report.md).

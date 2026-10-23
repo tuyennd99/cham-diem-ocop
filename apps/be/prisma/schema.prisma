@@ -259,6 +259,7 @@ model Product {
   name                 String               @db.VarChar(255)
   description          String?
   formData             Json
+  registrationSnapshot Json?
   status               ProductStatus        @default(DRAFT)
   finalScore           Float?
   starRating           Int?

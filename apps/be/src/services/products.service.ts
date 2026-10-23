@@ -10,9 +10,14 @@ import { unlink } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
 import { Prisma, ProductStatus } from '@prisma/client';
 import { ProductUpdateDto, ProductWriteDto } from '../dtos/products.dto';
+import {
+  AdminProductCreateDto,
+  AdminProductUpdateDto,
+} from '../dtos/admin-products.dto';
 import { ProductsRepository } from '../repositories/products.repository';
-import type { AccessTokenPayload } from '../types/auth';
+import type { AccessTokenPayload, AuthenticatedPrincipal, RequestMeta } from '../types/auth';
 import type { UploadedPrivateFile } from '../types/files';
+import type { ProductMutationActor } from '../types/product-mutation';
 import { inspectProductUpload } from '../utils/product-files';
 import { MAX_IMAGE_BYTES, openStoredFile, resolveStoredPath, storageRoot, uuidStorageKeyPattern } from '../utils/private-storage';
 
@@ -64,39 +69,76 @@ export class ProductsService {
   }
 
   create(input: ProductWriteDto, principal: AccessTokenPayload) {
-    return this.writeCreate(input, principal.sub);
+    return this.writeCreate(input, { kind: 'OWNER', id: principal.sub });
   }
 
   async update(id: string, input: ProductUpdateDto, principal: AccessTokenPayload) {
-    const changes: {
-      categoryId?: string;
-      name?: string;
-      description?: string | null;
-      formData?: Prisma.InputJsonValue;
-    } = {};
-    if (input.categoryId !== undefined) changes.categoryId = input.categoryId;
-    if (input.name !== undefined) changes.name = this.requiredText(input.name, 'Product name');
-    if (input.description !== undefined) changes.description = input.description?.trim() || null;
-    if (input.formData !== undefined) changes.formData = input.formData as Prisma.InputJsonValue;
-    if (input.categoryId && !(await this.repository.categoryExists(input.categoryId))) {
-      throw new NotFoundException('Product category not found');
-    }
-    const product = await this.repository.updateDraft(id, principal.sub, changes);
-    if (!product) await this.assertDraftOwnership(id, principal.sub);
-    return product;
+    return this.writeUpdate(id, input, { kind: 'OWNER', id: principal.sub });
   }
 
   async remove(id: string, principal: AccessTokenPayload) {
-    const paths = await this.repository.deleteDraft(id, principal.sub);
-    if (!paths) await this.assertDraftOwnership(id, principal.sub);
-    await Promise.all(paths.map((path) => this.safeUnlink(this.pathFor(path))));
-    return { id };
+    return this.removeDraft(id, { kind: 'OWNER', id: principal.sub });
   }
 
   async submit(id: string, principal: AccessTokenPayload) {
-    const product = await this.repository.submitDraft(id, principal.sub);
-    if (!product) await this.assertDraftOwnership(id, principal.sub);
-    return product;
+    return this.submitDraft(id, { kind: 'OWNER', id: principal.sub });
+  }
+
+  createForAdmin(
+    input: AdminProductCreateDto,
+    principal: AuthenticatedPrincipal,
+    meta: RequestMeta,
+  ) {
+    const { registrantId, reason, ...productInput } = input;
+    return this.writeCreate(productInput, {
+      kind: 'MANAGER',
+      id: principal.sub,
+      reason,
+      meta,
+    }, registrantId);
+  }
+
+  updateForAdmin(
+    id: string,
+    input: AdminProductUpdateDto,
+    principal: AuthenticatedPrincipal,
+    meta: RequestMeta,
+  ) {
+    const { reason, ...changes } = input;
+    return this.writeUpdate(id, changes, {
+      kind: 'MANAGER',
+      id: principal.sub,
+      reason,
+      meta,
+    });
+  }
+
+  removeForAdmin(
+    id: string,
+    reason: string,
+    principal: AuthenticatedPrincipal,
+    meta: RequestMeta,
+  ) {
+    return this.removeDraft(id, {
+      kind: 'MANAGER',
+      id: principal.sub,
+      reason,
+      meta,
+    });
+  }
+
+  submitForAdmin(
+    id: string,
+    reason: string,
+    principal: AuthenticatedPrincipal,
+    meta: RequestMeta,
+  ) {
+    return this.submitDraft(id, {
+      kind: 'MANAGER',
+      id: principal.sub,
+      reason,
+      meta,
+    });
   }
 
   async addAttachment(
@@ -108,12 +150,12 @@ export class ProductsService {
     try {
       this.assertStoredUpload(file);
       const inspected = await inspectProductUpload(file);
-      const attachment = await this.repository.addAttachment(id, principal.sub, {
+      const attachment = await this.repository.addAttachment(id, { kind: 'OWNER', id: principal.sub }, {
         type: inspected.type,
         fileName: file.originalname,
         filePath: file.filename,
       });
-      if (!attachment) await this.assertDraftOwnership(id, principal.sub);
+      if (!attachment) await this.assertDraftAvailable(id, { kind: 'OWNER', id: principal.sub });
       return attachment;
     } catch (error) {
       await this.safeUnlink(file.path);
@@ -122,8 +164,9 @@ export class ProductsService {
   }
 
   async removeAttachment(id: string, attachmentId: string, principal: AccessTokenPayload) {
-    const path = await this.repository.removeAttachment(id, attachmentId, principal.sub);
-    if (!path) await this.assertDraftOwnership(id, principal.sub);
+    const actor = { kind: 'OWNER', id: principal.sub } as const;
+    const path = await this.repository.removeAttachment(id, attachmentId, actor);
+    if (!path) await this.assertDraftAvailable(id, actor);
     await this.safeUnlink(this.pathFor(path));
     return { id: attachmentId };
   }
@@ -136,21 +179,67 @@ export class ProductsService {
     return this.asFile(file.filePath, file.fileName);
   }
 
-  private async writeCreate(input: ProductWriteDto, registrantId: string) {
+  private async writeCreate(
+    input: ProductWriteDto,
+    actor: ProductMutationActor,
+    managerRegistrantId?: string,
+  ) {
     if (!(await this.repository.categoryExists(input.categoryId))) {
       throw new NotFoundException('Product category not found');
     }
     return this.repository.create({
-      registrantId,
+      registrantId: actor.kind === 'OWNER' ? actor.id : managerRegistrantId!,
       categoryId: input.categoryId,
       name: this.requiredText(input.name, 'Product name'),
       description: input.description?.trim() || null,
       formData: input.formData as unknown as Prisma.InputJsonValue,
-    });
+      localityId: input.localityId ?? null,
+    }, actor);
   }
 
-  private async assertDraftOwnership(id: string, registrantId: string): Promise<never> {
-    const product = await this.repository.findMine(id, registrantId);
+  private async writeUpdate(
+    id: string,
+    input: ProductUpdateDto,
+    actor: ProductMutationActor,
+  ) {
+    const changes: {
+      categoryId?: string;
+      name?: string;
+      description?: string | null;
+      formData?: Prisma.InputJsonValue;
+      localityId?: string | null;
+    } = {};
+    if (input.categoryId !== undefined) changes.categoryId = input.categoryId;
+    if (input.localityId !== undefined) changes.localityId = input.localityId;
+    if (input.name !== undefined) changes.name = this.requiredText(input.name, 'Product name');
+    if (input.description !== undefined) changes.description = input.description?.trim() || null;
+    if (input.formData !== undefined) changes.formData = input.formData as Prisma.InputJsonValue;
+    if (input.categoryId && !(await this.repository.categoryExists(input.categoryId))) {
+      throw new NotFoundException('Product category not found');
+    }
+    const product = await this.repository.updateDraft(id, actor, changes);
+    if (!product) await this.assertDraftAvailable(id, actor);
+    return product;
+  }
+
+  private async removeDraft(id: string, actor: ProductMutationActor) {
+    const paths = await this.repository.deleteDraft(id, actor);
+    if (!paths) await this.assertDraftAvailable(id, actor);
+    await Promise.all(paths.map((path) => this.safeUnlink(this.pathFor(path))));
+    return { id };
+  }
+
+  private async submitDraft(id: string, actor: ProductMutationActor) {
+    const product = await this.repository.submitDraft(id, actor);
+    if (!product) await this.assertDraftAvailable(id, actor);
+    return product;
+  }
+
+  private async assertDraftAvailable(
+    id: string,
+    actor: ProductMutationActor,
+  ): Promise<never> {
+    const product = await this.repository.findForMutation(id, actor);
     if (!product) throw new NotFoundException('Product not found');
     if (product.status !== ProductStatus.DRAFT) {
       throw new ConflictException('Only draft products can be changed');
