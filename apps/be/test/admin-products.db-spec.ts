@@ -395,6 +395,59 @@ describe('admin product mutations and registration snapshots', () => {
         registrantId: f.owner.id,
         createdById: f.manager.id,
       });
+      const productBeforeNoOp = await prisma.product.findUniqueOrThrow({
+        where: { id },
+      });
+      const statusEventCountBeforeNoOp = await prisma.productStatusEvent.count({
+        where: { productId: id },
+      });
+      const updateAuditCountBeforeNoOp = await prisma.auditLog.count({
+        where: {
+          entityType: 'Product',
+          entityId: id,
+          action: 'product.update_on_behalf',
+        },
+      });
+      expect(
+        (
+          await f.call('manager', `/admin/products/${id}`, 'PUT', {
+            name: 'Updated draft',
+            reason: 'Confirm unchanged draft',
+          })
+        ).status,
+      ).toBe(200);
+      const noOpAudit = await prisma.auditLog.findFirstOrThrow({
+        where: {
+          entityType: 'Product',
+          entityId: id,
+          action: 'product.update_on_behalf',
+          reason: 'Confirm unchanged draft',
+        },
+      });
+      expect(noOpAudit).toMatchObject({
+        actorId: f.manager.id,
+        reason: 'Confirm unchanged draft',
+        requestId: expect.any(String),
+      });
+      expect(noOpAudit.beforeData).toEqual(noOpAudit.afterData);
+      expect(
+        await prisma.auditLog.count({
+          where: {
+            entityType: 'Product',
+            entityId: id,
+            action: 'product.update_on_behalf',
+          },
+        }),
+      ).toBe(updateAuditCountBeforeNoOp + 1);
+      expect(
+        await prisma.productStatusEvent.count({ where: { productId: id } }),
+      ).toBe(statusEventCountBeforeNoOp);
+      expect(
+        await prisma.product.findUniqueOrThrow({ where: { id } }),
+      ).toMatchObject({
+        status: productBeforeNoOp.status,
+        submittedAt: productBeforeNoOp.submittedAt,
+      });
       expect(
         (
           await f.call('manager', `/admin/products/${id}`, 'DELETE', {

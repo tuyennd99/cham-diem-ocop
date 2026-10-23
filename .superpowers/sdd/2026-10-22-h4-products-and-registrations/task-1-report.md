@@ -11,8 +11,8 @@ Implemented Task C1 only on reviewed B2 head `dccb779593d1adfa118e4fafdf19cc78a2
 - Added a trusted internal `OWNER | MANAGER` actor union. Owner writes use the authenticated registrant ID in their database predicates; manager create validates an active, verified REGISTRANT inside the transaction and stores the actual manager as creator. No actor, management flag, or principal is accepted through request DTOs.
 - Added MANAGE-only create, update, submit, and draft delete endpoints. Both actor paths share repository mutations, category readiness, form and locality validation. Existing retired locality/category selections remain visible and can be retained on drafts; changing to retired/out-of-effective values and submitting with unavailable selections is rejected.
 - Mutations lock sorted group rows, then evaluation category rows, then the verified registrant row when creating on behalf, the Product, and finally a changed/submitted locality. Reads and state checks are repeated after row locks. Product creation inserts without a locality FK before locking and attaching locality to preserve this order. Raw lock SQL uses `databaseObject`; category locks reuse `lockEvaluationCategory`.
-- Manager create/update/submit/delete write transactional audits with actual actor, reason, and request metadata. Audit values are allowlisted, including form fields; arbitrary form keys, storage paths, and tokens are omitted. Audit failures roll back mutations. Status events are recorded only for real status transitions and include the manager's reason; retries do not alter `submittedAt` or duplicate events.
-- Updated direct submission fixtures with locality IDs and added isolated-schema regressions for manager-to-owner visibility, frozen rename snapshot, empty drafts, locality retirement, unverified/inactive/non-registrant rejection, unauthorized mutation, post-submit guards, audit rollback, and audit data filtering.
+- Manager create/update/submit/delete write transactional audits with actual actor, reason, and request metadata. Audit values are allowlisted, including form fields; arbitrary form keys, storage paths, and tokens are omitted. Audit failures roll back mutations. Successful no-op manager draft updates also write an update audit with equal before/after data and do not add a status event. Status events are recorded only for real status transitions and include the manager's reason; retries do not alter `submittedAt` or duplicate events.
+- Updated direct submission fixtures with locality IDs and added isolated-schema regressions for manager-to-owner visibility, frozen rename snapshot, empty drafts, locality retirement, unverified/inactive/non-registrant rejection, unauthorized mutation, post-submit guards, audit rollback, audit data filtering, and a successful no-op manager PUT with no extra status event.
 
 ## TDD and checks
 
@@ -22,9 +22,9 @@ The isolated database regression file was written before the mutation implementa
 |---|---|
 | Prisma Client generation | Passed with a process-local placeholder `DATABASE_URL`; no database connection. |
 | Prisma schema validation | Passed with the same process-local placeholder URL. |
-| API unit tests | Passed: 16 suites, 97 tests. |
+| API unit tests | Passed after the no-op manager audit fix: 16 suites, 97 tests. |
 | API build | Passed. Compiled output was written only under this worktree's ignored `apps/be/dist`. |
-| API typecheck | Passed; this also typechecks the new isolated DB specs. |
+| API typecheck | Passed after the no-op manager audit fix; this also typechecks the new isolated DB specs. |
 | OpenAPI spec | Passed: 1 suite, 1 test; it loads the built API and does not connect to PostgreSQL. |
 | Web typecheck | Passed for the updated registrant response types. |
 | Prettier | Passed for the new controller, DTO, snapshot utility/spec, and C1 database spec. |

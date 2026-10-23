@@ -69,7 +69,7 @@ The B2 suite typechecks, but PostgreSQL endpoint behavior, audit rollback, and s
 
 ## C1 Product mutations and registration snapshots
 
-Implemented H4-C1 on reviewed B2 head `dccb779593d1adfa118e4fafdf19cc78a213f697`. Added audited manager draft creation/update/submission/deletion and owner draft flows, optional locality selection, version-1 registration snapshots on submission, and shared B1 category readiness checks. The manager path validates an active verified registrant transactionally and records the actual manager as creator and audit actor. Registration snapshots are immutable after submission; historical snapshot data is not backfilled. C2/C3 remain outside this change.
+Implemented H4-C1 on reviewed B2 head `dccb779593d1adfa118e4fafdf19cc78a213f697`. Added audited manager draft creation/update/submission/deletion and owner draft flows, optional locality selection, version-1 registration snapshots on submission, and shared B1 category readiness checks. The manager path validates an active verified registrant transactionally and records the actual manager as creator and audit actor. Successful no-op manager updates also write equal before/after audit data without adding a status event. Registration snapshots are immutable after submission; historical snapshot data is not backfilled. C2/C3 remain outside this change.
 
 | Check | Result |
 |---|---|

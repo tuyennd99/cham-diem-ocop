@@ -342,11 +342,25 @@ export class ProductsRepository {
           JSON.stringify(current[key as keyof typeof current]) !==
           JSON.stringify(value),
       );
-      if (!hasChanges)
-        return tx.product.findUniqueOrThrow({
+      if (!hasChanges) {
+        const product = await tx.product.findUniqueOrThrow({
           where: { id },
           include: registrantProductInclude,
         });
+        if (actor.kind === 'MANAGER') {
+          await writeAudit(tx, {
+            actorId: actor.id,
+            action: 'product.update_on_behalf',
+            entityType: 'Product',
+            entityId: id,
+            beforeData: this.auditProduct(current),
+            afterData: this.auditProduct(product),
+            reason: actor.reason,
+            ...actor.meta,
+          });
+        }
+        return product;
+      }
       const updated = await tx.product.updateMany({
         where: { ...this.actorWhere(actor), id, status: 'DRAFT' },
         data: input,
