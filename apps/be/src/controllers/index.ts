@@ -5,6 +5,7 @@ import { AuthController } from './auth.controller';
 import { CategoriesController } from './categories.controller';
 import { HealthController } from './health.controller';
 import { JudgeController } from './judge.controller';
+import { LocalitiesController } from './localities.controller';
 import { MyProductsController } from './my-products.controller';
 import { ProductsController } from './products.controller';
 
@@ -16,6 +17,7 @@ export const appControllers = [
   CategoriesController,
   HealthController,
   JudgeController,
+  LocalitiesController,
   MyProductsController,
   ProductsController,
 ];

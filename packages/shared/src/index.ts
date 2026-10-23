@@ -107,6 +107,45 @@ export interface UpdateProductGroupInput {
   isActive?: boolean;
   reason: string;
 }
+export type LocalityType = "COMMUNE" | "WARD";
+export interface LocalityRecord {
+  id: string;
+  code: string;
+  name: string;
+  type: LocalityType;
+  provinceName: string;
+  effectiveFrom: string | null;
+  effectiveTo: string | null;
+  isActive: boolean;
+}
+export interface LocalityQuery {
+  page?: number;
+  limit?: number;
+  q?: string;
+  type?: LocalityType;
+  provinceName?: string;
+  isActive?: boolean;
+}
+export type PublicLocalityQuery = Omit<LocalityQuery, "isActive">;
+export interface CreateLocalityInput {
+  code: string;
+  name: string;
+  type: LocalityType;
+  provinceName: string;
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
+  isActive: boolean;
+  reason: string;
+}
+export interface UpdateLocalityInput {
+  name?: string;
+  type?: LocalityType;
+  provinceName?: string;
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
+  isActive?: boolean;
+  reason: string;
+}
 export interface AdminCriteriaSetSummary {
   id: string;
   name: string | null;

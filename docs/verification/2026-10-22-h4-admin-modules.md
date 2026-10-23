@@ -1,6 +1,6 @@
 # H4 admin modules verification
 
-This report records the H4 A3 web verification, the B1 catalog API implementation, and the known DB handoff limit. It does not certify end-to-end DB or browser acceptance for all H4 work.
+This report records the H4 A3 web verification, the B1 catalog API implementation, the B2 locality API implementation, and the known DB handoff limit. It does not certify end-to-end DB or browser acceptance for all H4 work.
 
 ## A3 web scope
 
@@ -50,3 +50,19 @@ Seed now locks groups before categories, creates official defaults when missing,
 | B1 isolated-DB regressions | Added for catalog permissions, activation readiness (99/101/incomplete/inactive/100), snapshot preservation, move rejection, audit rollback, and seed preservation. Not run because the authorized local `/ocop` PostgreSQL target rejects authentication on port 15432 and port 5432 has no listener. No authentication retry, environment edit, database creation, or public-schema write was made. |
 
 The detailed implementation, TDD, check, and environment record is in [`B1 task report`](../../.superpowers/sdd/2026-10-22-h4-catalogs/task-1-report.md). B2 and C are outside this B1 implementation.
+
+## B2 locality API and effective dates
+
+Implemented H4-B2 on B1 head `c111859192775598526795cec954c37acb5e3c47`. Added unauthenticated public locality lookup and VIEW/MANAGE locality administration, with shared locality contracts, strict ISO timestamp/offset validation, effective interval filtering, transactional audit, row-locked idempotent updates, and submitted-history protection. The public interval is half-open: `effectiveFrom <= query time < effectiveTo`, with null bounds unbounded. Type/province changes are rejected when submitted products reference the locality; retirements and renames preserve Product references and submitted snapshots. No DELETE route, locality seed, or real locality data was added.
+
+| Check | Result |
+|---|---|
+| Locality DTO unit tests | Passed: 8 tests. |
+| API unit tests | Passed: 15 suites, 88 tests. |
+| API typecheck | Passed with incremental metadata in `%TEMP%`. |
+| API build | Passed with scoped access to the designated worktree's generated output directory. |
+| Prisma validation | Passed with a process-only placeholder localhost URL; no database connection. |
+| Prettier and `git diff --check` | Passed. |
+| B2 isolated-DB regressions | Added, not run. Port 15432 has the previously documented `/ocop` authentication failure and port 5432 has no listener. No retry, environment change, database creation, or public-schema write was made. |
+
+The B2 suite typechecks, but PostgreSQL endpoint behavior, audit rollback, and snapshot preservation remain unverified until the isolated harness can connect. See the detailed [`B2 task report`](../../.superpowers/sdd/2026-10-22-h4-catalogs/task-2-report.md). C remains outside this implementation.

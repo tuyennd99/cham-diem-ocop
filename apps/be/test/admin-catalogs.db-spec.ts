@@ -7,6 +7,7 @@ import { adminFixture } from './support/admin-fixture';
 
 const groupsPath = '/admin/product-groups';
 const categoriesPath = '/admin/categories';
+const localitiesPath = '/admin/localities';
 const categoryInput = (groupId: string) => ({
   groupId,
   name: 'Test leaf ' + randomUUID(),
@@ -14,8 +15,401 @@ const categoryInput = (groupId: string) => ({
   order: 1,
   reason: 'Catalog addition',
 });
+const localityInput = (overrides: Record<string, unknown> = {}) => ({
+  code: 'TEST-L-' + randomUUID(),
+  name: ' Test locality ',
+  type: 'COMMUNE',
+  provinceName: ' Test province ',
+  isActive: true,
+  reason: ' Catalog setup ',
+  ...overrides,
+});
 
 describe('H4 product catalogs', () => {
+  it('creates, filters, and retires localities through the correct permissions', async () => {
+    await withTestApp(async ({ app, prisma, baseUrl }) => {
+      const f = await adminFixture(app, prisma, baseUrl);
+      const input = localityInput();
+      const created = await f.call('manager', localitiesPath, 'POST', input);
+      expect(created.status).toBe(201);
+      expect(created.body.data).toMatchObject({
+        code: input.code,
+        name: 'Test locality',
+        type: 'COMMUNE',
+        provinceName: 'Test province',
+        effectiveFrom: null,
+        effectiveTo: null,
+        isActive: true,
+      });
+      const audit = await prisma.auditLog.findFirstOrThrow({
+        where: { entityId: created.body.data.id, action: 'locality.create' },
+      });
+      expect(audit).toMatchObject({
+        actorId: f.manager.id,
+        entityType: 'Locality',
+        reason: 'Catalog setup',
+        afterData: expect.objectContaining({ id: created.body.data.id }),
+      });
+
+      expect(
+        (
+          await f.call(
+            'manager',
+            localitiesPath,
+            'POST',
+            localityInput({ code: input.code }),
+          )
+        ).status,
+      ).toBe(409);
+      expect(
+        (await f.call('viewer', localitiesPath, 'POST', localityInput()))
+          .status,
+      ).toBe(403);
+      expect(
+        (
+          await f.call(
+            'viewer',
+            `${localitiesPath}/${created.body.data.id}`,
+            'PUT',
+            { name: 'Unauthorized update', reason: 'No permission' },
+          )
+        ).status,
+      ).toBe(403);
+      expect((await f.call('viewer', localitiesPath)).status).toBe(200);
+      expect((await f.call('scorer', localitiesPath)).status).toBe(403);
+
+      const adminList = await f.call(
+        'viewer',
+        `${localitiesPath}?q=${encodeURIComponent(input.code)}&type=COMMUNE&provinceName=TEST%20PROVINCE&isActive=true&page=1&limit=1`,
+      );
+      expect(adminList.status).toBe(200);
+      expect(adminList.body.data).toHaveLength(1);
+      expect(adminList.body.meta).toMatchObject({
+        page: 1,
+        limit: 1,
+        total: 1,
+        totalPages: 1,
+      });
+      expect(
+        (await f.call('viewer', `${localitiesPath}?isActive=1`)).status,
+      ).toBe(400);
+      expect(
+        (
+          await f.call(
+            'viewer',
+            `${localitiesPath}?isActive=true&isActive=false`,
+          )
+        ).status,
+      ).toBe(400);
+
+      const publicResult = await apiRequest<any>(
+        baseUrl,
+        `/localities?q=${encodeURIComponent(input.code)}`,
+      );
+      expect(publicResult.status).toBe(200);
+      expect(
+        publicResult.body.data.map(({ id }: { id: string }) => id),
+      ).toContain(created.body.data.id);
+
+      const retired = await f.call(
+        'manager',
+        `${localitiesPath}/${created.body.data.id}`,
+        'PUT',
+        { isActive: false, reason: 'Official retirement' },
+      );
+      expect(retired.status).toBe(200);
+      expect(
+        (
+          await f.call(
+            'viewer',
+            `${localitiesPath}?q=${encodeURIComponent(input.code)}&isActive=false`,
+          )
+        ).body.data,
+      ).toHaveLength(1);
+      expect(
+        (
+          await apiRequest<any>(
+            baseUrl,
+            `/localities?q=${encodeURIComponent(input.code)}`,
+          )
+        ).body.data,
+      ).toEqual([]);
+    });
+  });
+
+  it('returns only localities inside the active half-open effective interval', async () => {
+    await withTestApp(async ({ app, prisma, baseUrl }) => {
+      const f = await adminFixture(app, prisma, baseUrl);
+      const now = Date.now();
+      const future = localityInput({
+        code: 'TEST-FUTURE-' + randomUUID(),
+        effectiveFrom: new Date(now + 3_600_000).toISOString(),
+      });
+      const ended = localityInput({
+        code: 'TEST-END-' + randomUUID(),
+        effectiveTo: new Date(now).toISOString(),
+      });
+      const current = localityInput({
+        code: 'TEST-CURRENT-' + randomUUID(),
+        effectiveFrom: '2020-01-01T00:00:00Z',
+        effectiveTo: new Date(now + 3_600_000).toISOString(),
+      });
+      for (const input of [future, ended, current]) {
+        expect(
+          (await f.call('manager', localitiesPath, 'POST', input)).status,
+        ).toBe(201);
+      }
+      const lookup = (code: string) =>
+        apiRequest<any>(baseUrl, `/localities?q=${encodeURIComponent(code)}`);
+      expect((await lookup(future.code)).body.data).toEqual([]);
+      expect((await lookup(ended.code)).body.data).toEqual([]);
+      expect((await lookup(current.code)).body.data).toHaveLength(1);
+
+      expect(
+        (
+          await f.call(
+            'manager',
+            localitiesPath,
+            'POST',
+            localityInput({
+              effectiveFrom: '2027-01-01T00:00:00Z',
+              effectiveTo: '2026-01-01T00:00:00Z',
+            }),
+          )
+        ).status,
+      ).toBe(400);
+      expect(
+        (
+          await f.call(
+            'manager',
+            localitiesPath,
+            'POST',
+            localityInput({ effectiveFrom: '2026-01-01T00:00:00' }),
+          )
+        ).status,
+      ).toBe(400);
+
+      const futureRow = (
+        await f.call(
+          'viewer',
+          `${localitiesPath}?q=${encodeURIComponent(future.code)}`,
+        )
+      ).body.data[0];
+      const invalidUpdate = await f.call(
+        'manager',
+        `${localitiesPath}/${futureRow.id}`,
+        'PUT',
+        {
+          effectiveTo: new Date(now + 30_000).toISOString(),
+          reason: 'Invalid interval',
+        },
+      );
+      expect(invalidUpdate.status).toBe(400);
+    });
+  });
+
+  it('retires localities without losing submitted references and blocks identity changes', async () => {
+    await withTestApp(async ({ app, prisma, baseUrl }) => {
+      const f = await adminFixture(app, prisma, baseUrl);
+      const category = await prisma.productCategory.findFirstOrThrow();
+      const product = await prisma.product.create({
+        data: {
+          registrantId: f.owner.id,
+          categoryId: category.id,
+          localityId: f.locality.id,
+          localityCodeAtSubmit: f.locality.code,
+          localityNameAtSubmit: f.locality.name,
+          localityTypeAtSubmit: f.locality.type,
+          provinceNameAtSubmit: f.locality.provinceName,
+          name: 'Existing submitted product',
+          formData: {},
+          status: ProductStatus.SUBMITTED,
+        },
+      });
+      const originalUpdatedAt = (
+        await prisma.locality.findUniqueOrThrow({
+          where: { id: f.locality.id },
+        })
+      ).updatedAt;
+      const renamed = await f.call(
+        'manager',
+        `${localitiesPath}/${f.locality.id}`,
+        'PUT',
+        { name: 'Renamed locality', reason: 'Official rename' },
+      );
+      expect(renamed.status).toBe(200);
+      const snapshots = {
+        localityCodeAtSubmit: f.locality.code,
+        localityNameAtSubmit: f.locality.name,
+        localityTypeAtSubmit: f.locality.type,
+        provinceNameAtSubmit: f.locality.provinceName,
+      };
+      expect(
+        await prisma.product.findUniqueOrThrow({ where: { id: product.id } }),
+      ).toMatchObject({ localityId: f.locality.id, ...snapshots });
+
+      const auditCount = await prisma.auditLog.count({
+        where: { entityId: f.locality.id, action: 'locality.update' },
+      });
+      const afterRename = await prisma.locality.findUniqueOrThrow({
+        where: { id: f.locality.id },
+      });
+      const duplicate = await f.call(
+        'manager',
+        `${localitiesPath}/${f.locality.id}`,
+        'PUT',
+        { name: 'Renamed locality', reason: 'Retry' },
+      );
+      expect(duplicate.status).toBe(200);
+      expect(
+        await prisma.locality.findUniqueOrThrow({
+          where: { id: f.locality.id },
+        }),
+      ).toMatchObject({
+        updatedAt: afterRename.updatedAt,
+      });
+      expect(
+        await prisma.auditLog.count({
+          where: { entityId: f.locality.id, action: 'locality.update' },
+        }),
+      ).toBe(auditCount);
+      expect(afterRename.updatedAt.getTime()).toBeGreaterThanOrEqual(
+        originalUpdatedAt.getTime(),
+      );
+
+      for (const change of [
+        { type: 'WARD' },
+        { provinceName: 'Other province' },
+      ]) {
+        expect(
+          (
+            await f.call(
+              'manager',
+              `${localitiesPath}/${f.locality.id}`,
+              'PUT',
+              { ...change, reason: 'Attempt identity change' },
+            )
+          ).status,
+        ).toBe(409);
+      }
+      expect(
+        (
+          await f.call('manager', `${localitiesPath}/${f.locality.id}`, 'PUT', {
+            code: 'TEST-IMMUTABLE',
+            reason: 'Try changing code',
+          })
+        ).status,
+      ).toBe(400);
+
+      const draftLocality = await prisma.locality.create({
+        data: {
+          code: 'TEST-L-DRAFT-' + randomUUID(),
+          name: 'Draft locality',
+          type: 'COMMUNE',
+          provinceName: 'Test province',
+        },
+      });
+      await prisma.product.create({
+        data: {
+          registrantId: f.owner.id,
+          categoryId: category.id,
+          localityId: draftLocality.id,
+          name: 'Draft product',
+          formData: {},
+        },
+      });
+      expect(
+        (
+          await f.call(
+            'manager',
+            `${localitiesPath}/${draftLocality.id}`,
+            'PUT',
+            {
+              type: 'WARD',
+              provinceName: 'New province',
+              reason: 'Verified correction',
+            },
+          )
+        ).status,
+      ).toBe(200);
+
+      expect(
+        (
+          await f.call('manager', `${localitiesPath}/${f.locality.id}`, 'PUT', {
+            isActive: false,
+            reason: 'Official retirement',
+          })
+        ).status,
+      ).toBe(200);
+      expect(
+        (
+          await apiRequest<any>(
+            baseUrl,
+            `/localities?q=${encodeURIComponent(f.locality.code)}`,
+          )
+        ).body.data,
+      ).toEqual([]);
+      expect(
+        await prisma.product.findUniqueOrThrow({ where: { id: product.id } }),
+      ).toMatchObject({ localityId: f.locality.id, ...snapshots });
+    });
+  });
+
+  it('rolls locality create and update back when audit insertion fails', async () => {
+    await withTestApp(async ({ app, prisma, baseUrl }) => {
+      const f = await adminFixture(app, prisma, baseUrl);
+      const createConstraint = 'test_locality_create_audit_failure';
+      await prisma.$executeRaw(Prisma.sql`
+        ALTER TABLE ${databaseObject('audit_logs')}
+        ADD CONSTRAINT ${Prisma.raw('"' + createConstraint + '"')}
+        CHECK ("action" <> 'locality.create')
+      `);
+      try {
+        const input = localityInput();
+        expect(
+          (await f.call('manager', localitiesPath, 'POST', input)).status,
+        ).toBe(500);
+        expect(
+          await prisma.locality.count({ where: { code: input.code } }),
+        ).toBe(0);
+      } finally {
+        await prisma.$executeRaw(Prisma.sql`
+          ALTER TABLE ${databaseObject('audit_logs')}
+          DROP CONSTRAINT IF EXISTS ${Prisma.raw('"' + createConstraint + '"')}
+        `);
+      }
+
+      const updateConstraint = 'test_locality_update_audit_failure';
+      await prisma.$executeRaw(Prisma.sql`
+        ALTER TABLE ${databaseObject('audit_logs')}
+        ADD CONSTRAINT ${Prisma.raw('"' + updateConstraint + '"')}
+        CHECK ("action" <> 'locality.update')
+      `);
+      try {
+        expect(
+          (
+            await f.call(
+              'manager',
+              `${localitiesPath}/${f.locality.id}`,
+              'PUT',
+              { name: 'Must roll back', reason: 'Rollback check' },
+            )
+          ).status,
+        ).toBe(500);
+        await expect(
+          prisma.locality.findUniqueOrThrow({
+            where: { id: f.locality.id },
+          }),
+        ).resolves.toMatchObject({ name: f.locality.name });
+      } finally {
+        await prisma.$executeRaw(Prisma.sql`
+          ALTER TABLE ${databaseObject('audit_logs')}
+          DROP CONSTRAINT IF EXISTS ${Prisma.raw('"' + updateConstraint + '"')}
+        `);
+      }
+    });
+  });
+
   it('creates groups and inactive categories, and activates only the category with its own complete 100-point set', async () => {
     await withTestApp(async ({ app, prisma, baseUrl }) => {
       const f = await adminFixture(app, prisma, baseUrl);

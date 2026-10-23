@@ -14,10 +14,13 @@ import type { Request } from 'express';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { Permissions } from '../decorators/permissions.decorator';
 import {
+  AdminLocalitiesQueryDto,
   AdminCategoriesQueryDto,
+  CreateLocalityDto,
   CreateAdminCategoryDto,
   CreateProductGroupDto,
   ProductGroupsQueryDto,
+  UpdateLocalityDto,
   UpdateAdminCategoryDto,
   UpdateProductGroupDto,
 } from '../dtos/admin-catalogs.dto';
@@ -27,10 +30,50 @@ import { requestMeta } from '../utils/request-meta';
 
 @ApiTags('Admin catalogs')
 @ApiBearerAuth()
-@ApiExtraModels(ProductGroupsQueryDto, AdminCategoriesQueryDto)
+@ApiExtraModels(
+  ProductGroupsQueryDto,
+  AdminCategoriesQueryDto,
+  AdminLocalitiesQueryDto,
+)
 @Controller('admin')
 export class AdminCatalogsController {
   constructor(private readonly catalogs: AdminCatalogsService) {}
+
+  @Get('localities')
+  @Permissions(StaffPermission.VIEW)
+  listLocalities(@Query() query: AdminLocalitiesQueryDto) {
+    return this.catalogs.listAdminLocalities(query);
+  }
+
+  @Post('localities')
+  @Permissions(StaffPermission.MANAGE)
+  createLocality(
+    @Body() body: CreateLocalityDto,
+    @CurrentUser() principal: AccessTokenPayload,
+    @Req() request: Request,
+  ) {
+    return this.catalogs.createLocality(
+      body,
+      principal.sub,
+      requestMeta(request),
+    );
+  }
+
+  @Put('localities/:id')
+  @Permissions(StaffPermission.MANAGE)
+  updateLocality(
+    @Param('id') id: string,
+    @Body() body: UpdateLocalityDto,
+    @CurrentUser() principal: AccessTokenPayload,
+    @Req() request: Request,
+  ) {
+    return this.catalogs.updateLocality(
+      id,
+      body,
+      principal.sub,
+      requestMeta(request),
+    );
+  }
 
   @Get('product-groups')
   @Permissions(StaffPermission.VIEW)

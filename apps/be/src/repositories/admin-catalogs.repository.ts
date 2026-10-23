@@ -4,12 +4,19 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { Prisma, ProductStatus } from '@prisma/client';
-import type { AdminCategoryDetail, AdminCategoryRecord } from '@ocop/shared';
+import type {
+  AdminCategoryDetail,
+  AdminCategoryRecord,
+  LocalityQuery,
+  LocalityRecord,
+} from '@ocop/shared';
 import type {
   AdminCategoriesQueryDto,
+  CreateLocalityDto,
   CreateAdminCategoryDto,
   CreateProductGroupDto,
   ProductGroupsQueryDto,
+  UpdateLocalityDto,
   UpdateAdminCategoryDto,
   UpdateProductGroupDto,
 } from '../dtos/admin-catalogs.dto';
@@ -103,9 +110,213 @@ const submittedStatuses: ProductStatus[] = [
   ProductStatus.COMPLETED,
 ];
 
+const localitySelect = {
+  id: true,
+  code: true,
+  name: true,
+  type: true,
+  provinceName: true,
+  effectiveFrom: true,
+  effectiveTo: true,
+  isActive: true,
+} satisfies Prisma.LocalitySelect;
+
+type LocalityRow = Prisma.LocalityGetPayload<{
+  select: typeof localitySelect;
+}>;
+
+function localityRecord(row: LocalityRow): LocalityRecord {
+  return {
+    ...row,
+    effectiveFrom: row.effectiveFrom?.toISOString() ?? null,
+    effectiveTo: row.effectiveTo?.toISOString() ?? null,
+  };
+}
+
+function effectiveDate(value: string | null | undefined) {
+  return value == null ? null : new Date(value);
+}
+
+function assertEffectiveRange(
+  effectiveFrom: Date | null,
+  effectiveTo: Date | null,
+) {
+  if (effectiveFrom && effectiveTo && effectiveTo <= effectiveFrom) {
+    throw new BadRequestException(
+      'effectiveTo must be later than effectiveFrom',
+    );
+  }
+}
+
 @Injectable()
 export class AdminCatalogsRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  async listLocalities(query: LocalityQuery, publicOnly = false) {
+    const { page, limit, q, type, provinceName } = query;
+    const skip = (page - 1) * limit;
+    if (!Number.isSafeInteger(page) || !Number.isSafeInteger(skip)) {
+      throw new BadRequestException(
+        'Pagination exceeds the safe integer range',
+      );
+    }
+    const now = new Date();
+    const where: Prisma.LocalityWhereInput = {
+      ...(type ? { type } : {}),
+      ...(provinceName
+        ? { provinceName: { contains: provinceName, mode: 'insensitive' } }
+        : {}),
+      ...(q
+        ? {
+            OR: [
+              { code: { contains: q, mode: 'insensitive' } },
+              { name: { contains: q, mode: 'insensitive' } },
+              { provinceName: { contains: q, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+      ...(publicOnly
+        ? {
+            isActive: true,
+            AND: [
+              {
+                OR: [{ effectiveFrom: null }, { effectiveFrom: { lte: now } }],
+              },
+              {
+                OR: [{ effectiveTo: null }, { effectiveTo: { gt: now } }],
+              },
+            ],
+          }
+        : query.isActive === undefined
+          ? {}
+          : { isActive: query.isActive }),
+    };
+    const [rows, total] = await this.prisma.$transaction(
+      [
+        this.prisma.locality.findMany({
+          where,
+          select: localitySelect,
+          orderBy: [{ provinceName: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+          skip,
+          take: limit,
+        }),
+        this.prisma.locality.count({ where }),
+      ],
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
+    return { data: rows.map(localityRecord), total };
+  }
+
+  createLocality(input: CreateLocalityDto, actorId: string, meta: RequestMeta) {
+    const { reason, effectiveFrom, effectiveTo, ...fields } = input;
+    const from = effectiveDate(effectiveFrom);
+    const to = effectiveDate(effectiveTo);
+    assertEffectiveRange(from, to);
+    return this.prisma.$transaction(async (tx) => {
+      const row = await tx.locality.create({
+        data: { ...fields, effectiveFrom: from, effectiveTo: to },
+        select: localitySelect,
+      });
+      const record = localityRecord(row);
+      await writeAudit(tx, {
+        actorId,
+        action: 'locality.create',
+        entityType: 'Locality',
+        entityId: row.id,
+        afterData: record,
+        reason,
+        ...meta,
+      });
+      return record;
+    });
+  }
+
+  updateLocality(
+    id: string,
+    input: UpdateLocalityDto,
+    actorId: string,
+    meta: RequestMeta,
+  ) {
+    const { reason, ...requested } = input;
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw(
+        Prisma.sql`SELECT "id" FROM ${databaseObject('localities')} WHERE "id" = ${id} FOR UPDATE`,
+      );
+      const before = await tx.locality.findUnique({
+        where: { id },
+        select: localitySelect,
+      });
+      if (!before) return null;
+
+      const effectiveFrom =
+        requested.effectiveFrom === undefined
+          ? before.effectiveFrom
+          : effectiveDate(requested.effectiveFrom);
+      const effectiveTo =
+        requested.effectiveTo === undefined
+          ? before.effectiveTo
+          : effectiveDate(requested.effectiveTo);
+      assertEffectiveRange(effectiveFrom, effectiveTo);
+
+      const data: Prisma.LocalityUpdateInput = {
+        ...(requested.name === undefined || requested.name === before.name
+          ? {}
+          : { name: requested.name }),
+        ...(requested.type === undefined || requested.type === before.type
+          ? {}
+          : { type: requested.type }),
+        ...(requested.provinceName === undefined ||
+        requested.provinceName === before.provinceName
+          ? {}
+          : { provinceName: requested.provinceName }),
+        ...(requested.isActive === undefined ||
+        requested.isActive === before.isActive
+          ? {}
+          : { isActive: requested.isActive }),
+        ...(effectiveFrom?.getTime() === before.effectiveFrom?.getTime()
+          ? {}
+          : { effectiveFrom }),
+        ...(effectiveTo?.getTime() === before.effectiveTo?.getTime()
+          ? {}
+          : { effectiveTo }),
+      };
+      if (!Object.keys(data).length) return localityRecord(before);
+
+      const identityChanged =
+        (requested.type !== undefined && requested.type !== before.type) ||
+        (requested.provinceName !== undefined &&
+          requested.provinceName !== before.provinceName);
+      if (
+        identityChanged &&
+        (await tx.product.count({
+          where: { localityId: id, status: { in: submittedStatuses } },
+        }))
+      ) {
+        throw new ConflictException(
+          'A locality referenced by submitted products cannot change type or province',
+        );
+      }
+
+      const after = localityRecord(
+        await tx.locality.update({
+          where: { id },
+          data,
+          select: localitySelect,
+        }),
+      );
+      await writeAudit(tx, {
+        actorId,
+        action: 'locality.update',
+        entityType: 'Locality',
+        entityId: id,
+        beforeData: localityRecord(before),
+        afterData: after,
+        reason,
+        ...meta,
+      });
+      return after;
+    });
+  }
 
   async listProductGroups(query: ProductGroupsQueryDto) {
     const { page, limit, q, isActive } = query;
