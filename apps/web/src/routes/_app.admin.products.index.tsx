@@ -4,5 +4,5 @@ import { AdminProductsPage } from '../pages/admin/AdminProductsPage';
 
 export const Route = createFileRoute('/_app/admin/products/')({
   beforeLoad: requirePermission('VIEW'),
-  component: AdminProductsPage,
+  component: () => <AdminProductsPage mode='products' />,
 });

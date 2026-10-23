@@ -1,3 +1,4 @@
+import type { PublicLocalityQuery } from '@ocop/shared';
 import { useQuery } from '@tanstack/react-query';
 import { authApi, productsApi } from '../api';
 import { queryKeys } from '../constants/query-key';
@@ -20,6 +21,17 @@ export function useCategories() {
     queryKey: queryKeys.categories,
     queryFn: async () => (await productsApi.categories()).data,
     staleTime: 5 * 60_000,
+  });
+}
+
+export function useLocalities(
+  query: Pick<PublicLocalityQuery, 'page' | 'limit' | 'q'>,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: queryKeys.localities.list(query),
+    queryFn: () => productsApi.localities(query),
+    enabled,
   });
 }
 

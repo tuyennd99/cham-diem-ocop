@@ -1,9 +1,19 @@
 import { Link } from '@tanstack/react-router';
 import { errorText } from '../../lib/api-error';
-import { useAdminProductResults } from '../../queries/admin';
+import { useSession } from '../../lib/auth';
+import { hasStaffPermission } from '../../lib/session-contract';
+import { useAdminProductResults, type AdminProductMode } from '../../queries/admin-products';
 
-export function AdminProductResultsPage({ productId }: { productId: string }) {
-  const { data: product = null, error: loadError } = useAdminProductResults(productId);
+export function AdminProductResultsPage({
+  productId,
+  mode = 'products',
+}: {
+  productId: string;
+  mode?: AdminProductMode;
+}) {
+  const session = useSession();
+  const canManage = hasStaffPermission(session?.user, 'MANAGE');
+  const { data: product = null, error: loadError } = useAdminProductResults(productId, canManage);
   const error = errorText(loadError);
   if (error)
     return (
@@ -11,13 +21,16 @@ export function AdminProductResultsPage({ productId }: { productId: string }) {
         <p role='alert' className='form-note'>
           {error}
         </p>
-        <Link to='/admin/products'>Quay lại</Link>
+        <Link to={mode === 'products' ? '/admin/products' : '/admin/registrations'}>Quay lại</Link>
       </section>
     );
   if (!product) return <p>Đang tải kết quả…</p>;
   return (
     <section>
-      <Link className='text-link' to='/admin/products'>
+      <Link
+        className='text-link'
+        to={mode === 'products' ? '/admin/products' : '/admin/registrations'}
+      >
         ← Tất cả hồ sơ
       </Link>
       <p className='eyebrow'>

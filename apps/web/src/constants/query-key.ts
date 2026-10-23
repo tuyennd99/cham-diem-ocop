@@ -1,4 +1,9 @@
-import type { AdminUserQuery, OrganizationUnitQuery } from '@ocop/shared';
+import type {
+  AdminProductQuery,
+  AdminUserQuery,
+  OrganizationUnitQuery,
+  PublicLocalityQuery,
+} from '@ocop/shared';
 import type { PublicProductParams } from '../types/public';
 
 export const queryKeys = {
@@ -25,7 +30,20 @@ export const queryKeys = {
     judges: ['admin', 'judges'] as const,
     assignments: ['admin', 'assignments'] as const,
     products: (page: number) => ['admin', 'products', page] as const,
-    productResults: (id: string) => ['admin', 'product-results', id] as const,
+  },
+  adminProducts: {
+    all: ['admin-products'] as const,
+    list: (mode: 'products' | 'registrations', canManage: boolean, query: AdminProductQuery) =>
+      ['admin-products', mode, canManage, 'list', query] as const,
+    detail: (mode: 'products' | 'registrations', canManage: boolean, id: string) =>
+      ['admin-products', mode, canManage, 'detail', id] as const,
+    results: (canManage: boolean, id: string) =>
+      ['admin-products', 'results', canManage, id] as const,
+  },
+  localities: {
+    all: ['localities'] as const,
+    list: (query: Pick<PublicLocalityQuery, 'page' | 'limit' | 'q'>) =>
+      ['localities', 'list', query] as const,
   },
   adminUsers: {
     users: {

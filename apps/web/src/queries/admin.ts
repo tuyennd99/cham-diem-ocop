@@ -32,10 +32,3 @@ export function useAdminProducts(page: number) {
     queryFn: () => adminApi.products(page),
   });
 }
-
-export function useAdminProductResults(id: string) {
-  return useQuery({
-    queryKey: queryKeys.admin.productResults(id),
-    queryFn: async () => (await adminApi.productResults(id)).data,
-  });
-}

@@ -110,3 +110,21 @@ Fixed the case where Nest's multipart `FileInterceptor` saved a valid upload bef
 | API typecheck/build | Passed. |
 | Targeted Prettier and `git diff --check` | Passed for new interceptor/unit test and changed controller/DB spec. The pre-existing private-storage file has unrelated legacy formatting; the new helper follows Prettier. |
 | DB regressions | Added, not run. No DB test, auth retry, env edit, DB/schema creation, or public-schema write occurred. |
+
+## C3 admin products and registration editor
+
+Implemented the C3 web workflows on the approved C1/C2 contracts. `/admin/products` and `/admin/registrations` now use server-side filtering, paging and response metadata; both routes share product IDs, detail tabs and the owner/admin draft editor. MANAGE-only routes/actions and active, verified server-paged registrant lookup are enforced in the UI, while VIEW uses product search only. Private thumbnails/files use authorized Blob requests and object URLs.
+
+`saveProductDraft` validates all selected files before writing, enforces the 20-file cap against the existing record, preserves the existing product ID and full form data, then uploads sequentially. A deterministic 4xx keeps only the remaining files available for an explicit retry; network/5xx outcomes refetch detail and require review without retrying uncertain files. The owner URL/flow remains in place. Session cache is cleared when user ID, access token or staff permissions change.
+
+| Check | Result |
+|---|---|
+| Draft orchestration, session contract and editor-category Node tests | Passed: 18 tests. |
+| Web typecheck | Passed. |
+| API boundary, API integration/file contract and proxy checks | Passed. |
+| Web production build | Passed. |
+| `git diff --check` | Passed; Git emitted only Windows LF/CRLF normalization notices. |
+| Browser acceptance | Not run: no safe populated API fixture was available under the task constraint prohibiting database connections, seeding and writes. |
+| PostgreSQL tests | Not run by instruction; no database connection attempt was made. |
+
+See the detailed [C3 task report](../../.superpowers/sdd/2026-10-22-h4-products-and-registrations/task-3-report.md) for implementation and verification details.

@@ -14,6 +14,7 @@ export const API = {
     me: '/auth/me',
   },
   categories: '/categories',
+  localities: '/localities',
   products: {
     list: '/products',
     detail: (id: string) => `/products/${seg(id)}`,
@@ -49,6 +50,11 @@ export const API = {
     organizationUnit: (id: string) => `/admin/organization-units/${seg(id)}`,
     assignments: '/admin/assignments',
     products: '/admin/products',
+    product: (id: string) => `/admin/products/${seg(id)}`,
+    productSubmit: (id: string) => `/admin/products/${seg(id)}/submit`,
+    productAttachments: (id: string) => `/admin/products/${seg(id)}/attachments`,
+    productAttachment: (id: string, attachmentId: string) =>
+      `/admin/products/${seg(id)}/attachments/${seg(attachmentId)}`,
     productResults: (id: string) => `/admin/products/${seg(id)}/results`,
   },
 } as const;

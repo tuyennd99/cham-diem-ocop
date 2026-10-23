@@ -15,7 +15,16 @@ export const queryClient = new QueryClient({
   },
 });
 
-// Cached data belongs to one user: drop it whenever the signed-in user changes.
+function sessionScope(session: ReturnType<typeof sessionStore.getState>['session']) {
+  if (!session) return '';
+  return [
+    session.user.id,
+    session.accessToken,
+    [...session.user.staffPermissions].sort().join(','),
+  ].join(':');
+}
+
+// Drafts and staff lookups are private to the current identity, token, and permissions.
 sessionStore.subscribe((state, previous) => {
-  if (state.session?.user.id !== previous.session?.user.id) queryClient.clear();
+  if (sessionScope(state.session) !== sessionScope(previous.session)) queryClient.clear();
 });

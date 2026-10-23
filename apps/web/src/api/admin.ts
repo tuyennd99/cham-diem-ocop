@@ -8,7 +8,6 @@ import type {
   AssignmentInput,
   CreateJudgeInput,
   DeactivatedJudge,
-  ProductResults,
   ResetJudgePasswordInput,
   UpdateJudgeInput,
 } from '../types/admin';
@@ -33,6 +32,4 @@ export const adminApi = {
       url: API.admin.products,
       params: { page, limit: DEFAULT_PAGE_SIZE },
     }),
-  productResults: (id: string) =>
-    requestJson<ProductResults>({ url: API.admin.productResults(id) }),
 };

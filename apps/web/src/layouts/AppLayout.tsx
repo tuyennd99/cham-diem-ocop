@@ -28,7 +28,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
           {canView && (
             <>
               <Link to='/admin'>Tổng quan</Link>
-              <Link to='/admin/products'>Tất cả hồ sơ</Link>
+              <Link to='/admin/products'>Sản phẩm</Link>
+              <Link to='/admin/registrations'>Phiếu đăng ký</Link>
               <Link to='/admin/assignments'>Phân công</Link>
             </>
           )}

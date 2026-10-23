@@ -29,10 +29,14 @@ export function useOrganizationUnits(query: OrganizationUnitQuery) {
   });
 }
 
-export function useRegistrantOwners(query: Pick<AdminUserQuery, 'page' | 'limit' | 'q'> = {}) {
+export function useRegistrantOwners(
+  query: Pick<AdminUserQuery, 'page' | 'limit' | 'q'> = {},
+  enabled = true,
+) {
   return useQuery({
     queryKey: queryKeys.adminUsers.owners(query),
     queryFn: () => adminUsersApi.listRegistrantOwners(query),
+    enabled,
   });
 }
 

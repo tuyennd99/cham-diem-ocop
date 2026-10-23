@@ -30,10 +30,14 @@ import { Route as PublicProductsIndexRouteImport } from './routes/_public.produc
 import { Route as PublicProductsIdRouteImport } from './routes/_public.products.$id'
 import { Route as AppAdminProductsIndexRouteImport } from './routes/_app.admin.products.index'
 import { Route as AppAdminProductsIdRouteImport } from './routes/_app.admin.products.$id'
+import { Route as AppAdminRegistrationsIndexRouteImport } from './routes/_app.admin.registrations.index'
+import { Route as AppAdminRegistrationsIdRouteImport } from './routes/_app.admin.registrations.$id'
+import { Route as AppAdminRegistrationsNewRouteImport } from './routes/_app.admin.registrations.new'
 import { Route as AppJudgeProductsIdRouteImport } from './routes/_app.judge.products.$id'
 import { Route as AppMyProductsIndexRouteImport } from './routes/_app.my.products.index'
 import { Route as AppMyProductsIdRouteImport } from './routes/_app.my.products.$id'
 import { Route as AppMyProductsNewRouteImport } from './routes/_app.my.products.new'
+import { Route as AppAdminRegistrationsIdEditRouteImport } from './routes/_app.admin.registrations.$id.edit'
 import { Route as AppMyProductsIdEditRouteImport } from './routes/_app.my.products.$id.edit'
 
 const R403Route = R403RouteImport.update({
@@ -138,6 +142,23 @@ const AppAdminProductsIdRoute = AppAdminProductsIdRouteImport.update({
   path: '/admin/products/$id',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAdminRegistrationsIndexRoute =
+  AppAdminRegistrationsIndexRouteImport.update({
+    id: '/admin/registrations/',
+    path: '/admin/registrations/',
+    getParentRoute: () => AppRoute,
+  } as any)
+const AppAdminRegistrationsIdRoute = AppAdminRegistrationsIdRouteImport.update({
+  id: '/admin/registrations/$id',
+  path: '/admin/registrations/$id',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminRegistrationsNewRoute =
+  AppAdminRegistrationsNewRouteImport.update({
+    id: '/admin/registrations/new',
+    path: '/admin/registrations/new',
+    getParentRoute: () => AppRoute,
+  } as any)
 const AppJudgeProductsIdRoute = AppJudgeProductsIdRouteImport.update({
   id: '/judge/products/$id',
   path: '/judge/products/$id',
@@ -158,6 +179,12 @@ const AppMyProductsNewRoute = AppMyProductsNewRouteImport.update({
   path: '/my/products/new',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAdminRegistrationsIdEditRoute =
+  AppAdminRegistrationsIdEditRouteImport.update({
+    id: '/edit',
+    path: '/edit',
+    getParentRoute: () => AppAdminRegistrationsIdRoute,
+  } as any)
 const AppMyProductsIdEditRoute = AppMyProductsIdEditRouteImport.update({
   id: '/edit',
   path: '/edit',
@@ -182,11 +209,15 @@ export interface FileRoutesByFullPath {
   '/judge/': typeof AppJudgeIndexRoute
   '/products/': typeof PublicProductsIndexRoute
   '/admin/products/$id': typeof AppAdminProductsIdRoute
+  '/admin/registrations/$id': typeof AppAdminRegistrationsIdRouteWithChildren
+  '/admin/registrations/new': typeof AppAdminRegistrationsNewRoute
   '/judge/products/$id': typeof AppJudgeProductsIdRoute
   '/my/products/$id': typeof AppMyProductsIdRouteWithChildren
   '/my/products/new': typeof AppMyProductsNewRoute
   '/admin/products/': typeof AppAdminProductsIndexRoute
+  '/admin/registrations/': typeof AppAdminRegistrationsIndexRoute
   '/my/products/': typeof AppMyProductsIndexRoute
+  '/admin/registrations/$id/edit': typeof AppAdminRegistrationsIdEditRoute
   '/my/products/$id/edit': typeof AppMyProductsIdEditRoute
 }
 export interface FileRoutesByTo {
@@ -207,11 +238,15 @@ export interface FileRoutesByTo {
   '/judge': typeof AppJudgeIndexRoute
   '/products': typeof PublicProductsIndexRoute
   '/admin/products/$id': typeof AppAdminProductsIdRoute
+  '/admin/registrations/$id': typeof AppAdminRegistrationsIdRouteWithChildren
+  '/admin/registrations/new': typeof AppAdminRegistrationsNewRoute
   '/judge/products/$id': typeof AppJudgeProductsIdRoute
   '/my/products/$id': typeof AppMyProductsIdRouteWithChildren
   '/my/products/new': typeof AppMyProductsNewRoute
   '/admin/products': typeof AppAdminProductsIndexRoute
+  '/admin/registrations': typeof AppAdminRegistrationsIndexRoute
   '/my/products': typeof AppMyProductsIndexRoute
+  '/admin/registrations/$id/edit': typeof AppAdminRegistrationsIdEditRoute
   '/my/products/$id/edit': typeof AppMyProductsIdEditRoute
 }
 export interface FileRoutesById {
@@ -236,11 +271,15 @@ export interface FileRoutesById {
   '/_app/judge/': typeof AppJudgeIndexRoute
   '/_public/products/': typeof PublicProductsIndexRoute
   '/_app/admin/products/$id': typeof AppAdminProductsIdRoute
+  '/_app/admin/registrations/$id': typeof AppAdminRegistrationsIdRouteWithChildren
+  '/_app/admin/registrations/new': typeof AppAdminRegistrationsNewRoute
   '/_app/judge/products/$id': typeof AppJudgeProductsIdRoute
   '/_app/my/products/$id': typeof AppMyProductsIdRouteWithChildren
   '/_app/my/products/new': typeof AppMyProductsNewRoute
   '/_app/admin/products/': typeof AppAdminProductsIndexRoute
+  '/_app/admin/registrations/': typeof AppAdminRegistrationsIndexRoute
   '/_app/my/products/': typeof AppMyProductsIndexRoute
+  '/_app/admin/registrations/$id/edit': typeof AppAdminRegistrationsIdEditRoute
   '/_app/my/products/$id/edit': typeof AppMyProductsIdEditRoute
 }
 export interface FileRouteTypes {
@@ -263,11 +302,15 @@ export interface FileRouteTypes {
     | '/judge/'
     | '/products/'
     | '/admin/products/$id'
+    | '/admin/registrations/$id'
+    | '/admin/registrations/new'
     | '/judge/products/$id'
     | '/my/products/$id'
     | '/my/products/new'
     | '/admin/products/'
+    | '/admin/registrations/'
     | '/my/products/'
+    | '/admin/registrations/$id/edit'
     | '/my/products/$id/edit'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -288,11 +331,15 @@ export interface FileRouteTypes {
     | '/judge'
     | '/products'
     | '/admin/products/$id'
+    | '/admin/registrations/$id'
+    | '/admin/registrations/new'
     | '/judge/products/$id'
     | '/my/products/$id'
     | '/my/products/new'
     | '/admin/products'
+    | '/admin/registrations'
     | '/my/products'
+    | '/admin/registrations/$id/edit'
     | '/my/products/$id/edit'
   id:
     | '__root__'
@@ -316,11 +363,15 @@ export interface FileRouteTypes {
     | '/_app/judge/'
     | '/_public/products/'
     | '/_app/admin/products/$id'
+    | '/_app/admin/registrations/$id'
+    | '/_app/admin/registrations/new'
     | '/_app/judge/products/$id'
     | '/_app/my/products/$id'
     | '/_app/my/products/new'
     | '/_app/admin/products/'
+    | '/_app/admin/registrations/'
     | '/_app/my/products/'
+    | '/_app/admin/registrations/$id/edit'
     | '/_app/my/products/$id/edit'
   fileRoutesById: FileRoutesById
 }
@@ -481,6 +532,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminProductsIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/admin/registrations/': {
+      id: '/_app/admin/registrations/'
+      path: '/admin/registrations'
+      fullPath: '/admin/registrations/'
+      preLoaderRoute: typeof AppAdminRegistrationsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin/registrations/$id': {
+      id: '/_app/admin/registrations/$id'
+      path: '/admin/registrations/$id'
+      fullPath: '/admin/registrations/$id'
+      preLoaderRoute: typeof AppAdminRegistrationsIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin/registrations/new': {
+      id: '/_app/admin/registrations/new'
+      path: '/admin/registrations/new'
+      fullPath: '/admin/registrations/new'
+      preLoaderRoute: typeof AppAdminRegistrationsNewRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/judge/products/$id': {
       id: '/_app/judge/products/$id'
       path: '/judge/products/$id'
@@ -509,6 +581,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppMyProductsNewRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/admin/registrations/$id/edit': {
+      id: '/_app/admin/registrations/$id/edit'
+      path: '/edit'
+      fullPath: '/admin/registrations/$id/edit'
+      preLoaderRoute: typeof AppAdminRegistrationsIdEditRouteImport
+      parentRoute: typeof AppAdminRegistrationsIdRoute
+    }
     '/_app/my/products/$id/edit': {
       id: '/_app/my/products/$id/edit'
       path: '/edit'
@@ -531,6 +610,20 @@ const AppAccountRouteWithChildren = AppAccountRoute._addFileChildren(
   AppAccountRouteChildren,
 )
 
+interface AppAdminRegistrationsIdRouteChildren {
+  AppAdminRegistrationsIdEditRoute: typeof AppAdminRegistrationsIdEditRoute
+}
+
+const AppAdminRegistrationsIdRouteChildren: AppAdminRegistrationsIdRouteChildren =
+  {
+    AppAdminRegistrationsIdEditRoute: AppAdminRegistrationsIdEditRoute,
+  }
+
+const AppAdminRegistrationsIdRouteWithChildren =
+  AppAdminRegistrationsIdRoute._addFileChildren(
+    AppAdminRegistrationsIdRouteChildren,
+  )
+
 interface AppMyProductsIdRouteChildren {
   AppMyProductsIdEditRoute: typeof AppMyProductsIdEditRoute
 }
@@ -551,10 +644,13 @@ interface AppRouteChildren {
   AppAdminIndexRoute: typeof AppAdminIndexRoute
   AppJudgeIndexRoute: typeof AppJudgeIndexRoute
   AppAdminProductsIdRoute: typeof AppAdminProductsIdRoute
+  AppAdminRegistrationsIdRoute: typeof AppAdminRegistrationsIdRouteWithChildren
+  AppAdminRegistrationsNewRoute: typeof AppAdminRegistrationsNewRoute
   AppJudgeProductsIdRoute: typeof AppJudgeProductsIdRoute
   AppMyProductsIdRoute: typeof AppMyProductsIdRouteWithChildren
   AppMyProductsNewRoute: typeof AppMyProductsNewRoute
   AppAdminProductsIndexRoute: typeof AppAdminProductsIndexRoute
+  AppAdminRegistrationsIndexRoute: typeof AppAdminRegistrationsIndexRoute
   AppMyProductsIndexRoute: typeof AppMyProductsIndexRoute
 }
 
@@ -566,10 +662,13 @@ const AppRouteChildren: AppRouteChildren = {
   AppAdminIndexRoute: AppAdminIndexRoute,
   AppJudgeIndexRoute: AppJudgeIndexRoute,
   AppAdminProductsIdRoute: AppAdminProductsIdRoute,
+  AppAdminRegistrationsIdRoute: AppAdminRegistrationsIdRouteWithChildren,
+  AppAdminRegistrationsNewRoute: AppAdminRegistrationsNewRoute,
   AppJudgeProductsIdRoute: AppJudgeProductsIdRoute,
   AppMyProductsIdRoute: AppMyProductsIdRouteWithChildren,
   AppMyProductsNewRoute: AppMyProductsNewRoute,
   AppAdminProductsIndexRoute: AppAdminProductsIndexRoute,
+  AppAdminRegistrationsIndexRoute: AppAdminRegistrationsIndexRoute,
   AppMyProductsIndexRoute: AppMyProductsIndexRoute,
 }
 
