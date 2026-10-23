@@ -55,8 +55,8 @@ describe('update DTO validation', () => {
 
   it.each([
     [ProductUpdateDto, {}],
-    [UpdateJudgeDto, {}],
-    [ResetJudgePasswordDto, { password: 'long-password-value' }],
+    [UpdateJudgeDto, { reason: 'Profile update' }],
+    [ResetJudgePasswordDto, { password: 'long-password-value', reason: 'Password reset' }],
     [ReplaceAssignmentsDto, { assignments: [] }],
   ])('accepts omitted optional fields for %p', async (metatype, body) => {
     await expect(validate(body, metatype)).resolves.toBeDefined();
@@ -67,7 +67,7 @@ describe('update DTO validation', () => {
       validate({ description: null }, ProductUpdateDto),
     ).resolves.toMatchObject({ description: null });
     await expect(
-      validate({ phone: null }, UpdateJudgeDto),
+      validate({ phone: null, reason: 'Profile update' }, UpdateJudgeDto),
     ).resolves.toMatchObject({ phone: null });
     await expect(
       validate(

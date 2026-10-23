@@ -1,10 +1,10 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { EvaluationStatus, Prisma, ProductStatus, Role, StaffPermission } from '@prisma/client';
 import type { UpdateStaffAccessDto } from '../dtos/admin.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { databaseObject } from '../prisma/sql';
 import { recomputeProductResult } from '../utils/evaluation-result';
-import { effectiveStaffPermissions } from '../utils/staff-permissions';
+import { applyStaffAccess, createStaff, lockStaffMutation } from '../utils/staff-access';
 import { writeAudit, type AuditInput } from '../utils/audit-log';
 
 export type AdminRequestMeta = { ipAddress?: string; userAgent?: string; requestId?: string };
@@ -66,25 +66,36 @@ export class AdminRepository {
     return { productStatuses, judgeProgress, nextProducts };
   }
 
-  createJudge(input: { email: string; fullName: string; phone: string | null; password: string }, actorId: string, meta: AdminRequestMeta) {
+  createJudge(input: { email: string; fullName: string; phone: string | null; password: string; organizationUnitId: string; reason: string }, actorId: string, meta: AdminRequestMeta) {
     return this.prisma.$transaction(async (tx) => {
-      const judge = await tx.user.create({
-        data: { ...input, role: Role.JUDGE, staffPermissions: [StaffPermission.SCORE], verified: true },
-        select: { id: true, email: true, fullName: true, phone: true, verified: true, isActive: true, createdAt: true },
-      });
-      await this.audit(tx, { actorId, action: 'judge.create', entityType: 'User', entityId: judge.id, afterData: judge, ...meta });
-      return judge;
+      const judge = await createStaff(
+        tx,
+        { ...input, staffPermissions: [StaffPermission.SCORE] },
+        actorId,
+        meta,
+        'judge.create',
+      );
+      return {
+        id: judge.id,
+        email: judge.email,
+        fullName: judge.fullName,
+        phone: judge.phone,
+        verified: judge.verified,
+        isActive: judge.isActive,
+        createdAt: judge.createdAt,
+      };
     });
   }
 
   async updateJudge(args: {
     id: string;
-    input: { fullName?: string; phone?: string | null; reason?: string };
+    input: { fullName?: string; phone?: string | null; reason: string };
     actorId: string;
     meta: AdminRequestMeta;
   }) {
     const { id, input, actorId, meta } = args;
     return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM ${databaseObject('users')} WHERE "id" = ${id} FOR UPDATE`);
       const before = await tx.user.findFirst({ where: { id, role: { not: Role.REGISTRANT }, staffPermissions: { has: StaffPermission.SCORE } }, select: { id: true, email: true, fullName: true, phone: true, isActive: true } });
       if (!before) return null;
       const { reason, ...changes } = input;
@@ -98,57 +109,41 @@ export class AdminRepository {
     });
   }
 
-  async deactivateJudge(id: string, actorId: string, meta: AdminRequestMeta) {
+  async deactivateJudge(id: string, reason: string, actorId: string, meta: AdminRequestMeta) {
     return this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw(Prisma.sql`
-        SELECT "id" FROM ${databaseObject('product_categories')}
-        ORDER BY "id" FOR UPDATE
-      `);
-      await this.lockStaffAccess(tx);
+      await lockStaffMutation(tx);
       const before = await tx.user.findFirst({
         where: { id, role: { not: Role.REGISTRANT }, staffPermissions: { has: StaffPermission.SCORE } },
         select: { id: true, email: true, fullName: true, isActive: true, verified: true, staffPermissions: true },
       });
       if (!before) return null;
-      await this.assertManageRemains(tx, before, false, before.staffPermissions);
-      const assignments = await tx.judgeAssignment.findMany({
-        where: { judgeId: id },
-        select: { categoryId: true },
-      });
-      if (assignments.length) {
-        const openProducts = await tx.product.count({
-          where: {
-            categoryId: { in: assignments.map((row) => row.categoryId) },
-            status: { in: [ProductStatus.SUBMITTED, ProductStatus.SCORING] },
-          },
-        });
-        if (openProducts) return { blocked: true as const };
-        await tx.judgeAssignment.deleteMany({ where: { judgeId: id } });
-      }
-      const after = await tx.user.update({
+      const changed = await applyStaffAccess(
+        tx,
+        id,
+        {
+          staffPermissions: before.staffPermissions,
+          organizationUnitId: (await tx.user.findUniqueOrThrow({ where: { id }, select: { organizationUnitId: true } })).organizationUnitId,
+          isActive: false,
+          reason,
+        },
+        actorId,
+        meta,
+      );
+      if (!changed) return null;
+      return tx.user.findUnique({
         where: { id },
-        data: { isActive: false, tokenVersion: { increment: 1 } },
         select: { id: true, email: true, fullName: true, isActive: true },
       });
-      await this.audit(tx, {
-        actorId,
-        action: 'judge.deactivate',
-        entityType: 'User',
-        entityId: id,
-        beforeData: before,
-        afterData: after,
-        ...meta,
-      });
-      return { blocked: false as const, judge: after };
     });
   }
 
-  async resetJudgePassword(id: string, password: string, reason: string | undefined, actorId: string, meta: AdminRequestMeta) {
+  async resetJudgePassword(id: string, password: string, reason: string, actorId: string, meta: AdminRequestMeta) {
     return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM ${databaseObject('users')} WHERE "id" = ${id} FOR UPDATE`);
       const judge = await tx.user.findFirst({ where: { id, role: { not: Role.REGISTRANT }, staffPermissions: { has: StaffPermission.SCORE } }, select: { id: true, email: true } });
       if (!judge) return false;
-      await tx.user.update({ where: { id }, data: { password, tokenVersion: { increment: 1 } } });
-      await this.audit(tx, { actorId, action: 'judge.password_reset', entityType: 'User', entityId: id, afterData: { email: judge.email }, reason, ...meta });
+      const after = await tx.user.update({ where: { id }, data: { password, tokenVersion: { increment: 1 } }, select: { email: true, verified: true } });
+      await this.audit(tx, { actorId, action: 'judge.password_reset', entityType: 'User', entityId: id, beforeData: { email: judge.email }, afterData: { email: after.email, verified: after.verified, passwordReset: true }, reason, ...meta });
       return true;
     });
   }
@@ -449,60 +444,9 @@ export class AdminRepository {
 
   async updateStaffAccess(id: string, input: UpdateStaffAccessDto, actorId: string, meta: AdminRequestMeta) {
     return this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM ${databaseObject('product_categories')} ORDER BY "id" FOR UPDATE`);
-      await this.lockStaffAccess(tx);
-      const actor = await tx.user.findUnique({ where: { id: actorId } });
-      if (!actor?.isActive || !actor.verified || !effectiveStaffPermissions(actor).includes(StaffPermission.MANAGE)) {
-        throw new ForbiddenException('Insufficient permission');
-      }
-      const select = { id: true, role: true, staffPermissions: true, organizationUnitId: true, isActive: true, verified: true } as const;
-      const before = await tx.user.findFirst({ where: { id, role: { not: Role.REGISTRANT } }, select });
-      if (!before) return null;
-      const permissions = effectiveStaffPermissions({ role: before.role, staffPermissions: input.staffPermissions });
-      if (input.isActive && !permissions.length) throw new BadRequestException('Active staff must have at least one permission');
-      if (input.organizationUnitId !== null && input.organizationUnitId !== before.organizationUnitId) {
-        const unit = await tx.organizationUnit.findFirst({ where: { id: input.organizationUnitId, isActive: true }, select: { id: true } });
-        if (!unit) throw new BadRequestException('Organization unit must be active');
-      }
-      await this.assertManageRemains(tx, before, input.isActive, permissions);
-      const changed = before.isActive !== input.isActive || before.organizationUnitId !== input.organizationUnitId ||
-        before.staffPermissions.length !== permissions.length || before.staffPermissions.some((permission) => !permissions.includes(permission));
-      if (!changed) return before;
-      if (before.staffPermissions.includes(StaffPermission.SCORE) && (!input.isActive || !permissions.includes(StaffPermission.SCORE))) {
-        const openProducts = await tx.product.count({ where: {
-          status: { in: [ProductStatus.SUBMITTED, ProductStatus.SCORING] },
-          category: { assignments: { some: { judgeId: id } } },
-        } });
-        if (openProducts) throw new ConflictException('Reassign open products before removing scoring access');
-        await tx.judgeAssignment.deleteMany({ where: { judgeId: id } });
-      }
-      const role = permissions.includes(StaffPermission.MANAGE) ? Role.ADMIN :
-        permissions.includes(StaffPermission.SCORE) ? Role.JUDGE : permissions.includes(StaffPermission.VIEW) ? Role.VIEWER : before.role;
-      const after = await tx.user.update({ where: { id }, data: {
-        role, staffPermissions: permissions, organizationUnitId: input.organizationUnitId, isActive: input.isActive,
-        tokenVersion: { increment: 1 },
-      }, select });
-      await this.audit(tx, { actorId, action: 'user.staff_access_update', entityType: 'User', entityId: id,
-        beforeData: before, afterData: after, reason: input.reason, ...meta });
-      return after;
+      await lockStaffMutation(tx);
+      return applyStaffAccess(tx, id, input, actorId, meta);
     }, { timeout: 15000, maxWait: 10000 });
-  }
-
-  private lockStaffAccess(tx: Prisma.TransactionClient) {
-    // shortcut: serialize staff access changes; use a dedicated lock row if staff volume causes contention
-    return tx.$queryRaw(Prisma.sql`SELECT "id" FROM ${databaseObject('users')}
-      WHERE "role" <> ${Role.REGISTRANT}::${databaseObject('Role')} ORDER BY "id" FOR UPDATE`);
-  }
-
-  private async assertManageRemains(tx: Prisma.TransactionClient,
-    before: { id: string; isActive: boolean; verified: boolean; staffPermissions: StaffPermission[] },
-    isActive: boolean, permissions: StaffPermission[]) {
-    if (before.isActive && before.verified && before.staffPermissions.includes(StaffPermission.MANAGE) &&
-      (!isActive || !permissions.includes(StaffPermission.MANAGE))) {
-      const others = await tx.user.count({ where: { id: { not: before.id }, role: { not: Role.REGISTRANT },
-        isActive: true, verified: true, staffPermissions: { has: StaffPermission.MANAGE } } });
-      if (!others) throw new ConflictException('Cannot remove the last active verified MANAGE account');
-    }
   }
 
   private audit(tx: Prisma.TransactionClient, input: AuditInput) {

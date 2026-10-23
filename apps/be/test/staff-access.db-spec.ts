@@ -1,5 +1,5 @@
 import { JwtService } from '@nestjs/jwt';
-import { Role, StaffPermission } from '@prisma/client';
+import { Prisma, Role, StaffPermission } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { JWT_AUDIENCE, JWT_ISSUER } from '../src/constants/auth';
 import { AdminRepository } from '../src/repositories/admin.repository';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { databaseObject } from '../src/prisma/sql';
 import { apiRequest, withTestApp } from './support/db-app';
 
 const password = 'StaffPassword1!';
@@ -141,10 +142,13 @@ describe('H3 database permissions and staff access', () => {
       const before = await prisma.user.findUniqueOrThrow({ where: { id: target.id } });
       const auditCount = await prisma.auditLog.count();
       const repository = app.get(AdminRepository);
-      const failure = jest.spyOn(repository as any, 'audit').mockRejectedValueOnce(new Error('Audit unavailable'));
+      await prisma.$executeRaw(Prisma.sql`ALTER TABLE ${databaseObject('audit_logs')}
+        ADD CONSTRAINT test_reject_staff_access_audit CHECK ("action" <> 'user.staff_access_update')`);
       try {
-        await expect(repository.updateStaffAccess(target.id, access(['VIEW'], null), manager.id, {})).rejects.toThrow('Audit unavailable');
-      } finally { failure.mockRestore(); }
+        await expect(repository.updateStaffAccess(target.id, access(['VIEW'], null), manager.id, {})).rejects.toThrow();
+      } finally {
+        await prisma.$executeRaw(Prisma.sql`ALTER TABLE ${databaseObject('audit_logs')} DROP CONSTRAINT test_reject_staff_access_audit`);
+      }
       expect(await prisma.user.findUniqueOrThrow({ where: { id: target.id } })).toEqual(before);
       expect(await prisma.auditLog.count()).toBe(auditCount);
     });
@@ -169,7 +173,7 @@ describe('H3 database permissions and staff access', () => {
       expect((await apiRequest(baseUrl, `/admin/users/${last.id}/staff-access`, {
         method: 'PUT', headers: bearer(lastToken), body: JSON.stringify(access(['MANAGE', 'SCORE'], null, false)),
       })).status).toBe(409);
-      expect((await apiRequest(baseUrl, `/admin/judges/${last.id}`, { method: 'DELETE', headers: bearer(lastToken) })).status).toBe(409);
+      expect((await apiRequest(baseUrl, `/admin/judges/${last.id}`, { method: 'DELETE', headers: bearer(lastToken), body: JSON.stringify({ reason: 'Suspend final manager' }) })).status).toBe(409);
       expect((await prisma.user.findUniqueOrThrow({ where: { id: last.id } })).tokenVersion).toBe(0);
       expect(await prisma.auditLog.count({ where: { entityId: last.id } })).toBe(0);
     });
@@ -198,7 +202,7 @@ describe('H3 database permissions and staff access', () => {
       expect(await prisma.auditLog.count({ where: { action: 'user.staff_access_update' } })).toBe(0);
       await prisma.product.update({ where: { id: product.id }, data: { status: 'COMPLETED' } });
       const oldToken = await token(app.get(JwtService), scorer);
-      expect((await apiRequest(baseUrl, `/admin/judges/${scorer.id}`, { method: 'DELETE', headers: bearer(managerToken) })).status).toBe(200);
+      expect((await apiRequest(baseUrl, `/admin/judges/${scorer.id}`, { method: 'DELETE', headers: bearer(managerToken), body: JSON.stringify({ reason: 'Retire scorer' }) })).status).toBe(200);
       expect((await prisma.user.findUniqueOrThrow({ where: { id: scorer.id } })).tokenVersion).toBe(1);
       expect((await apiRequest(baseUrl, '/auth/me', { headers: bearer(oldToken) })).status).toBe(401);
     });

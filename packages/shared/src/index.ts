@@ -33,6 +33,51 @@ export interface UpdateOrganizationUnitInput {
   isActive?: boolean;
   reason: string;
 }
+export interface AdminUserRecord {
+  id: string;
+  email: string;
+  fullName: string;
+  phone: string | null;
+  role: Role;
+  staffPermissions: StaffPermission[];
+  organizationUnitId: string | null;
+  organizationUnit: OrganizationUnitSummary | null;
+  verified: boolean;
+  isActive: boolean;
+  createdAt: string;
+}
+export interface AdminUserQuery {
+  page?: number;
+  limit?: number;
+  q?: string;
+  permission?: StaffPermission;
+  organizationUnitId?: string;
+  isActive?: boolean;
+  verified?: boolean;
+  kind?: 'STAFF' | 'REGISTRANT';
+}
+export interface CreateAdminUserInput {
+  email: string;
+  fullName: string;
+  phone?: string | null;
+  password: string;
+  organizationUnitId: string;
+  staffPermissions: StaffPermission[];
+  reason: string;
+}
+export interface UpdateAdminUserProfileInput {
+  fullName?: string;
+  phone?: string | null;
+  reason: string;
+}
+export interface UpdateAdminUserStatusInput {
+  isActive: boolean;
+  reason: string;
+}
+export interface ResetAdminUserPasswordInput {
+  password: string;
+  reason: string;
+}
 export type ProductStatus = 'DRAFT' | 'SUBMITTED' | 'SCORING' | 'COMPLETED';
 export const productRegistrationTypes = ['FIRST', 'UPGRADE', 'REASSESSMENT'] as const;
 export type ProductRegistrationType = (typeof productRegistrationTypes)[number];

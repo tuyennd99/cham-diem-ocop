@@ -288,6 +288,9 @@ describe('HTTP production journey', () => {
         },
       });
       const adminToken = await tokenFor(baseUrl, admin.email, 'AdminPassword1!');
+      const judgeUnit = await prisma.organizationUnit.create({
+        data: { code: `TEST-JUDGE-${suffix}`, name: 'Test judge unit' },
+      });
       const categories = await apiRequest<{
         data: Array<{
           id: string;
@@ -346,6 +349,8 @@ describe('HTTP production journey', () => {
             email: `journey-judge-${n}-${suffix}@example.invalid`,
             fullName: `Journey Judge ${n}`,
             password: `JudgePassword${n}!`,
+            organizationUnitId: judgeUnit.id,
+            reason: 'Journey setup',
           }),
         ),
       );

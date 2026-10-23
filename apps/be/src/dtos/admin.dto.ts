@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { StaffPermission } from '@prisma/client';
 import {
@@ -18,6 +18,11 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
+
+const trimString = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim() : value;
+const normalizedEmail = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim().toLowerCase() : value;
 
 export class UpdateStaffAccessDto {
   @ApiProperty({ enum: StaffPermission, isArray: true, uniqueItems: true, maxItems: 3 })
@@ -39,6 +44,7 @@ export class UpdateStaffAccessDto {
   isActive!: boolean;
 
   @ApiProperty({ minLength: 1, maxLength: 255 })
+  @Transform(trimString)
   @IsString()
   @MinLength(1)
   @MaxLength(255)
@@ -47,6 +53,7 @@ export class UpdateStaffAccessDto {
 
 export class CreateJudgeDto {
   @ApiProperty({ format: 'email', maxLength: 320 })
+  @Transform(normalizedEmail)
   @IsEmail()
   @MaxLength(320)
   email!: string;
@@ -68,6 +75,19 @@ export class CreateJudgeDto {
   @MinLength(12)
   @MaxLength(72)
   password!: string;
+
+  @ApiProperty({ maxLength: 100 })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  organizationUnitId!: string;
+
+  @ApiProperty({ minLength: 1, maxLength: 255 })
+  @Transform(trimString)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(255)
+  reason!: string;
 }
 
 export class UpdateJudgeDto {
@@ -84,11 +104,12 @@ export class UpdateJudgeDto {
   @MaxLength(30)
   phone?: string | null;
 
-  @ApiPropertyOptional({ maxLength: 255 })
-  @ValidateIf((_object, value) => value !== undefined)
+  @ApiProperty({ minLength: 1, maxLength: 255 })
+  @Transform(trimString)
   @IsString()
+  @MinLength(1)
   @MaxLength(255)
-  reason?: string;
+  reason!: string;
 }
 
 export class ResetJudgePasswordDto {
@@ -98,11 +119,21 @@ export class ResetJudgePasswordDto {
   @MaxLength(72)
   password!: string;
 
-  @ApiPropertyOptional({ maxLength: 255 })
-  @ValidateIf((_object, value) => value !== undefined)
+  @ApiProperty({ minLength: 1, maxLength: 255 })
+  @Transform(trimString)
   @IsString()
+  @MinLength(1)
   @MaxLength(255)
-  reason?: string;
+  reason!: string;
+}
+
+export class DeactivateJudgeDto {
+  @ApiProperty({ minLength: 1, maxLength: 255 })
+  @Transform(trimString)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(255)
+  reason!: string;
 }
 
 export class AssignmentInputDto {

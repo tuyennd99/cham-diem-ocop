@@ -76,6 +76,8 @@ export class AdminService {
         fullName,
         phone: input.phone?.trim() || null,
         password,
+        organizationUnitId: input.organizationUnitId,
+        reason: input.reason.trim(),
       }, actorId, meta);
     } catch (error) {
       if (this.isUniqueConstraint(error)) throw new ConflictException('Email is already registered');
@@ -84,6 +86,7 @@ export class AdminService {
   }
 
   async updateJudge(id: string, input: UpdateJudgeDto, actorId: string, meta: AdminRequestMeta) {
+    if (!input.reason.trim()) throw new BadRequestException('Reason is required');
     if (input.fullName !== undefined && !input.fullName.trim()) {
       throw new BadRequestException('Full name is required');
     }
@@ -93,7 +96,7 @@ export class AdminService {
         ...input,
         ...(input.fullName === undefined ? {} : { fullName: input.fullName.trim() }),
         ...(input.phone === undefined ? {} : { phone: input.phone?.trim() || null }),
-        ...(input.reason === undefined ? {} : { reason: input.reason.trim() || undefined }),
+        reason: input.reason.trim(),
       },
       actorId,
       meta,
@@ -102,18 +105,17 @@ export class AdminService {
     return judge;
   }
 
-  async deactivateJudge(id: string, actorId: string, meta: AdminRequestMeta) {
-    const result = await this.repository.deactivateJudge(id, actorId, meta);
-    if (!result) throw new NotFoundException('Judge not found');
-    if (result.blocked) {
-      throw new ConflictException('Reassign open products before deactivating this judge');
-    }
-    return result.judge;
+  async deactivateJudge(id: string, reason: string, actorId: string, meta: AdminRequestMeta) {
+    if (!reason.trim()) throw new BadRequestException('Reason is required');
+    const judge = await this.repository.deactivateJudge(id, reason.trim(), actorId, meta);
+    if (!judge) throw new NotFoundException('Judge not found');
+    return judge;
   }
 
   async resetJudgePassword(id: string, input: ResetJudgePasswordDto, actorId: string, meta: AdminRequestMeta) {
+    if (!input.reason.trim()) throw new BadRequestException('Reason is required');
     const password = await this.hashPassword(input.password);
-    const found = await this.repository.resetJudgePassword(id, password, input.reason, actorId, meta);
+    const found = await this.repository.resetJudgePassword(id, password, input.reason.trim(), actorId, meta);
     if (!found) throw new NotFoundException('Judge not found');
     return { id };
   }

@@ -56,6 +56,56 @@ describe('built API OpenAPI document', () => {
         'properties.phone.nullable',
         true,
       );
+      expect(schemas.CreateJudgeDto).toHaveProperty(
+        'properties.organizationUnitId',
+      );
+      expect(schemas.CreateJudgeDto).toHaveProperty('properties.reason');
+      expect(
+        (schemas.CreateJudgeDto as { required?: string[] }).required ?? [],
+      ).toEqual(expect.arrayContaining(['organizationUnitId', 'reason']));
+      expect(schemas.UpdateJudgeDto).toHaveProperty('properties.reason');
+      expect(schemas.ResetJudgePasswordDto).toHaveProperty('properties.reason');
+      expect(schemas.DeactivateJudgeDto).toHaveProperty('properties.reason');
+
+      const usersCreate = schemas.CreateAdminUserDto as {
+        properties: Record<string, unknown>;
+        required?: string[];
+      };
+      expect(usersCreate.properties).toHaveProperty('staffPermissions');
+      expect(usersCreate.properties).toHaveProperty('organizationUnitId');
+      expect(usersCreate.properties).toHaveProperty('reason');
+      expect(usersCreate.properties).not.toHaveProperty('role');
+      expect(usersCreate.required ?? []).toEqual(
+        expect.arrayContaining([
+          'email',
+          'fullName',
+          'password',
+          'organizationUnitId',
+          'staffPermissions',
+          'reason',
+        ]),
+      );
+      expect(schemas.AdminUsersQueryDto).toHaveProperty(
+        'properties.permission.enum',
+      );
+      expect(schemas.AdminUsersQueryDto).toHaveProperty('properties.kind.enum');
+      expect(schemas.UpdateAdminUserProfileDto).toHaveProperty(
+        'properties.reason',
+      );
+      expect(schemas.UpdateAdminUserStatusDto).toHaveProperty(
+        'properties.reason',
+      );
+      expect(schemas.ResetAdminUserPasswordDto).toHaveProperty(
+        'properties.reason',
+      );
+      for (const path of [
+        '/api/admin/users',
+        '/api/admin/users/{id}',
+        '/api/admin/users/{id}/status',
+        '/api/admin/users/{id}/reset-password',
+      ]) {
+        expect(document.paths[path]).toBeDefined();
+      }
       expect(schemas.ProductWriteDto).toHaveProperty(
         'properties.formData.$ref',
         '#/components/schemas/ProductApplicationDto',

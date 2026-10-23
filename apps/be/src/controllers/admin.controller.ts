@@ -8,6 +8,7 @@ import { Permissions } from '../decorators/permissions.decorator';
 import {
   AdminProductsQueryDto,
   CreateJudgeDto,
+  DeactivateJudgeDto,
   ReplaceAssignmentsDto,
   ResetJudgePasswordDto,
   UpdateJudgeDto,
@@ -49,8 +50,8 @@ export class AdminController {
 
   @Delete('judges/:id')
   @ResponseMessage('Ngừng hoạt động tài khoản giám khảo thành công')
-  deactivateJudge(@Param('id') id: string, @CurrentUser() principal: AccessTokenPayload, @Req() request: Request) {
-    return this.admin.deactivateJudge(id, principal.sub, requestMeta(request));
+  deactivateJudge(@Param('id') id: string, @Body() body: DeactivateJudgeDto, @CurrentUser() principal: AccessTokenPayload, @Req() request: Request) {
+    return this.admin.deactivateJudge(id, body.reason, principal.sub, requestMeta(request));
   }
 
   @Post('judges/:id/reset-password')

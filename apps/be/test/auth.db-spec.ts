@@ -164,7 +164,7 @@ describe('password changes revoke all earlier access tokens', () => {
         const reset = await apiRequest(baseUrl, `/admin/judges/${judge.id}/reset-password`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: 'AdminSetPassword3!' }),
+          body: JSON.stringify({ password: 'AdminSetPassword3!', reason: 'Account recovery' }),
         });
         expect(reset.status).toBe(201);
         await expect(prisma.user.findUniqueOrThrow({ where: { id: judge.id } })).resolves.toMatchObject({ tokenVersion: 1 });
