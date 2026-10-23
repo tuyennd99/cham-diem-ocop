@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { ApiError } from '../src/lib/api-error';
-import { saveProductDraft, type ProductDraftCommands } from '../src/lib/save-product-draft';
+import {
+  canStartProductDraftSave,
+  saveProductDraft,
+  type ProductDraftCommands,
+} from '../src/lib/save-product-draft';
 import type { ProductAttachmentRecord } from '../src/types/product';
 import type { ProductWriteInput, RegistrantProduct } from '../src/types/registrant';
 
@@ -38,6 +42,22 @@ function commands(overrides: Partial<ProductDraftCommands> = {}): ProductDraftCo
   };
 }
 
+describe('product draft save availability', () => {
+  it('blocks another save while an upload or create outcome is unresolved', () => {
+    assert.equal(
+      canStartProductDraftSave({ reviewRequired: false, createOutcomeUnknown: true }),
+      false,
+    );
+    assert.equal(
+      canStartProductDraftSave({ reviewRequired: true, createOutcomeUnknown: false }),
+      false,
+    );
+    assert.equal(
+      canStartProductDraftSave({ reviewRequired: false, createOutcomeUnknown: false }),
+      true,
+    );
+  });
+});
 describe('saveProductDraft', () => {
   it('validates every selected file before creating or updating', async () => {
     let writes = 0;

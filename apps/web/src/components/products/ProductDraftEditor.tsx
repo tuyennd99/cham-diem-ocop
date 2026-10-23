@@ -14,7 +14,7 @@ import {
 } from '../../lib/product-editor-categories';
 import { formatCategoryPath } from '../../lib/utils';
 import { hasStaffPermission } from '../../lib/session-contract';
-import { saveProductDraft } from '../../lib/save-product-draft';
+import { canStartProductDraftSave, saveProductDraft } from '../../lib/save-product-draft';
 import { useCategories, useLocalities } from '../../queries/common';
 import { useAdminProductDetail, useProductDraftCommands } from '../../queries/admin-products';
 import { useRegistrantOwners } from '../../queries/admin-users';
@@ -153,6 +153,7 @@ export function ProductDraftEditor({ mode, productId }: ProductDraftEditorProps)
   const form = useForm({
     defaultValues: emptyEditorValues,
     onSubmit: async ({ value }) => {
+      if (!canStartProductDraftSave({ reviewRequired, createOutcomeUnknown })) return;
       setError('');
       createStarted.current = false;
       setCreateOutcomeUnknown(false);
@@ -663,7 +664,11 @@ export function ProductDraftEditor({ mode, productId }: ProductDraftEditorProps)
                   Tiếp tục
                 </Button>
               )}
-              <Button type='submit' variant='secondary' disabled={busy || reviewRequired}>
+              <Button
+                type='submit'
+                variant='secondary'
+                disabled={busy || !canStartProductDraftSave({ reviewRequired, createOutcomeUnknown })}
+              >
                 {busy ? 'Đang lưu…' : 'Lưu bản nháp'}
               </Button>
             </div>

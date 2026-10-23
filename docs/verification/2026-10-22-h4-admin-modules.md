@@ -119,7 +119,7 @@ Implemented the C3 web workflows on the approved C1/C2 contracts. `/admin/produc
 
 | Check | Result |
 |---|---|
-| Draft orchestration, session contract and editor-category Node tests | Passed: 18 tests. |
+| Draft orchestration, session contract and editor-category Node tests | Passed: 19 tests. |
 | Web typecheck | Passed. |
 | API boundary, API integration/file contract and proxy checks | Passed. |
 | Web production build | Passed. |
@@ -128,3 +128,7 @@ Implemented the C3 web workflows on the approved C1/C2 contracts. `/admin/produc
 | PostgreSQL tests | Not run by instruction; no database connection attempt was made. |
 
 See the detailed [C3 task report](../../.superpowers/sdd/2026-10-22-h4-products-and-registrations/task-3-report.md) for implementation and verification details.
+
+### C3 independent review follow-up: unresolved create outcome
+
+Closed a P2 review finding: after a create network/5xx error, the editor now disables save and guards the submit handler, so keyboard submission cannot clear the unknown-outcome state and issue a duplicate create. The existing draft-list link and explanation remain available. Added a pure regression for save availability while upload review or create outcome is unresolved. Focused Node tests passed (19 total), as did web typecheck/build and `git diff --check`. No DB or browser fixture was used.

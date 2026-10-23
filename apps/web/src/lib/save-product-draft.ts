@@ -6,6 +6,13 @@ import { validateProductFile } from './attachments';
 
 const MAX_PRODUCT_ATTACHMENTS = 20;
 
+export function canStartProductDraftSave(state: {
+  reviewRequired: boolean;
+  createOutcomeUnknown: boolean;
+}) {
+  return !state.reviewRequired && !state.createOutcomeUnknown;
+}
+
 export interface ProductDraftCommands {
   create(payload: ProductWriteInput): Promise<ApiResult<RegistrantProduct>>;
   update(id: string, payload: ProductWriteInput): Promise<ApiResult<RegistrantProduct>>;

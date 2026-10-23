@@ -14,7 +14,7 @@
 
 | Check | Result |
 |---|---|
-| `pnpm --filter @ocop/api exec node --import tsx --test ../web/test/product-draft-save.test.ts ../web/test/session-contract.test.ts ../web/test/product-editor-categories.test.ts` | Passed: 18 tests. |
+| `pnpm --filter @ocop/api exec node --import tsx --test ../web/test/product-draft-save.test.ts ../web/test/session-contract.test.ts ../web/test/product-editor-categories.test.ts` | Passed: 19 tests. |
 | `pnpm --filter @ocop/web typecheck` | Passed. |
 | Web API boundary check | Passed. |
 | Web API integration/file contract check | Passed. |
@@ -25,3 +25,9 @@
 ## Limitations
 
 Browser acceptance was not run. The C3 task explicitly prohibited database access, seed operations and database writes; no populated API fixture was available that could exercise the required owner/admin permission, upload-failure and snapshot flows safely. PostgreSQL tests were not run and no DB connection was attempted. No BE implementation was changed for C3.
+
+## Independent review follow-up
+
+A P2 review found that the editor left “Lưu bản nháp” enabled after a create request had an unknown network/5xx outcome. Added `canStartProductDraftSave` and used it both in the button's disabled state and before the submit handler resets state. This prevents keyboard submission from clearing the guard and creating a possible duplicate, while preserving the inspection-list link and explanation. The added pure regression covers unknown create and upload-review states.
+
+Follow-up verification: 19 targeted Node tests passed; web typecheck, production build and `git diff --check` passed. No database access or browser fixture was used.
