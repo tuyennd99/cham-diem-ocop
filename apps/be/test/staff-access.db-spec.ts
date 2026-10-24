@@ -143,7 +143,7 @@ describe('H3 database permissions and staff access', () => {
       const auditCount = await prisma.auditLog.count();
       const repository = app.get(AdminRepository);
       await prisma.$executeRaw(Prisma.sql`ALTER TABLE ${databaseObject('audit_logs')}
-        ADD CONSTRAINT test_reject_staff_access_audit CHECK ("action" <> 'user.staff_access_update')`);
+        ADD CONSTRAINT test_reject_staff_access_audit CHECK ("action" <> 'user.staff_access_update') NOT VALID`);
       try {
         await expect(repository.updateStaffAccess(target.id, access(['VIEW'], null), manager.id, {})).rejects.toThrow();
       } finally {

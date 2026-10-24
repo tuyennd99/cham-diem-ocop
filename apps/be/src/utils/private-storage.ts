@@ -60,6 +60,7 @@ export async function openStoredFile(storageKey: string, originalName: string, r
 
 interface IncomingFile {
   stream: Readable;
+  path?: string;
 }
 
 interface StoredUpload {
@@ -70,6 +71,7 @@ interface StoredUpload {
 }
 
 type StorageCallback = (error: Error | null, file?: StoredUpload) => void;
+const openStreams = new Map<string, ReturnType<typeof createWriteStream>>();
 
 class PrivateStorage {
   _handleFile(_request: unknown, file: IncomingFile, callback: StorageCallback) {
@@ -77,20 +79,40 @@ class PrivateStorage {
     mkdirSync(root, { recursive: true });
     const filename = uuidv7();
     const path = join(root, filename);
+    file.path = path;
     let size = 0;
+    const output = createWriteStream(path);
+    openStreams.set(path, output);
+    output.once('close', () => openStreams.delete(path));
     file.stream.on('data', (chunk: Buffer) => { size += chunk.length; });
-    pipeline(file.stream, createWriteStream(path), (error) => {
-      if (error) return callback(error);
+    pipeline(file.stream, output, (error) => {
+      if (error)
+        return this._removeFile(_request, file, (cleanupError) =>
+          callback(cleanupError ?? error),
+        );
       callback(null, { destination: root, filename, path, size });
     });
   }
 
   _removeFile(_request: unknown, file: { path?: string }, callback: (error: Error | null) => void) {
     if (!file.path) return callback(null);
-    void import('node:fs/promises')
-      .then(({ unlink }) => unlink(file.path!))
-      .then(() => callback(null))
-      .catch((error: NodeJS.ErrnoException) => callback(error.code === 'ENOENT' ? null : error));
+    const path = file.path;
+    const output = openStreams.get(path);
+    const remove = () => {
+      void unlink(path).then(
+        () => callback(null),
+        (error: NodeJS.ErrnoException) => callback(error.code === 'ENOENT' ? null : error),
+      );
+    };
+    if (!output || output.closed) return remove();
+    const onReleased = () => {
+      output.removeListener('close', onReleased);
+      output.removeListener('error', onReleased);
+      remove();
+    };
+    output.once('close', onReleased);
+    output.once('error', onReleased);
+    output.destroy();
   }
 }
 

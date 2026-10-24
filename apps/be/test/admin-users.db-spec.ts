@@ -699,7 +699,7 @@ describe('H4 users', () => {
         { organizationUnitId: f.unit.id },
         { isActive: false },
         { fullName: '   ' },
-        { fullName: 'Updated' },
+        { fullName: 123 },
       ]) {
         expect(
           (

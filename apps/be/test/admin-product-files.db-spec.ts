@@ -243,34 +243,30 @@ describe('admin private product files', () => {
         },
       });
       const auth = f.headers('manager').authorization;
-      expect(
-        (
-          await upload(baseUrl, auth, product.id, {
-            name: 'fake.png',
-            mime: 'image/png',
-            data: Buffer.from('%PDF-not-png'),
-          })
-        ).status,
-      ).toBe(415);
-      expect(
-        (
-          await upload(baseUrl, auth, product.id, {
-            field: 'wrong',
-            name: 'image.png',
-            mime: 'image/png',
-            data: png,
-          })
-        ).status,
-      ).toBe(400);
-      expect(
-        (
-          await upload(baseUrl, auth, product.id, {
-            name: 'large.png',
-            mime: 'image/png',
-            data: Buffer.alloc(10 * 1024 * 1024 + 1, 1),
-          })
-        ).status,
-      ).toBe(413);
+      const invalidImage = await upload(baseUrl, auth, product.id, {
+        name: 'fake.png',
+        mime: 'image/png',
+        data: Buffer.from('%PDF-not-png'),
+      });
+      expect(invalidImage.status).toBe(415);
+      expect(readdirSync(process.env.STORAGE_PATH!)).toEqual([]);
+
+      const invalidField = await upload(baseUrl, auth, product.id, {
+        field: 'wrong',
+        name: 'image.png',
+        mime: 'image/png',
+        data: png,
+      });
+      expect(invalidField.status).toBe(400);
+      expect(readdirSync(process.env.STORAGE_PATH!)).toEqual([]);
+
+      const oversizedImage = await upload(baseUrl, auth, product.id, {
+        name: 'large.png',
+        mime: 'image/png',
+        data: Buffer.alloc(10 * 1024 * 1024 + 1, 1),
+      });
+      expect(oversizedImage.status).toBe(413);
+      expect(readdirSync(process.env.STORAGE_PATH!)).toEqual([]);
       await prisma.attachment.createMany({
         data: Array.from({ length: 20 }, (_, index) => ({
           productId: product.id,
@@ -280,13 +276,13 @@ describe('admin private product files', () => {
         })),
       });
       expect((await upload(baseUrl, auth, product.id)).status).toBe(409);
+      expect(readdirSync(process.env.STORAGE_PATH!)).toEqual([]);
       expect(
         await prisma.attachment.count({ where: { productId: product.id } }),
       ).toBe(20);
       expect(
         await prisma.auditLog.count({ where: { entityId: product.id } }),
       ).toBe(0);
-      expect(readdirSync(process.env.STORAGE_PATH!)).toEqual([]);
     });
   });
 

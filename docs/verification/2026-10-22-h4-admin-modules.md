@@ -132,3 +132,19 @@ See the detailed [C3 task report](../../.superpowers/sdd/2026-10-22-h4-products-
 ### C3 independent review follow-up: unresolved create outcome
 
 Closed a P2 review finding: after a create network/5xx error, the editor now disables save and guards the submit handler, so keyboard submission cannot clear the unknown-outcome state and issue a duplicate create. The existing draft-list link and explanation remain available. Added a pure regression for save availability while upload review or create outcome is unresolved. Focused Node tests passed (19 total), as did web typecheck/build and `git diff --check`. No DB or browser fixture was used.
+
+## PostgreSQL verification follow-up — 2026-10-24
+
+After the local PostgreSQL listener was restored, reran the six DB specs that had failed or timed out earlier against `chamdiemocop_dev` on `127.0.0.1:15432`. All API tests used the isolated-schema harness; no public-schema writes were made.
+
+| Check | Result |
+|---|---|
+| Initial focused run of the six specs | 5/6 suites passed, 38/40 tests. The two failures isolated to upload cleanup assertions: the harness `.env` file shared the upload directory, and an oversized upload left a partial file. |
+| Upload cleanup fix and regression | The harness now stores uploads in a child directory. Private storage records the path before streaming and waits for the output stream to close before removing aborted/failed uploads. `admin-product-files.db-spec.ts` passed: 4 tests. |
+| Storage-harness recheck | `staff-access.db-spec.ts` and `backend.db-spec.ts` passed: 2 suites, 16 tests. |
+| Other specs in the focused run | `admin-users`, `admin-products`, `auth`, and `admin-foundation-migration` passed. |
+| API typecheck | Passed. |
+| DB cleanup | Test-created schemas were dropped. Removed one pre-existing random `ocop_test_...` schema after confirming it had no active sessions or relation locks. Final check found 0 `ocop_test_...` and 0 `ocop_migration_test_...` schemas. |
+| `git diff --check` | Passed; Git only reported standard Windows LF/CRLF normalization notices. |
+
+The full 12-suite DB command was not rerun after the upload fix; this follow-up reran the previously failing specs and the specs affected by the harness storage-path change. Browser acceptance remains unrun. The PostgreSQL client emitted a deprecation warning about overlapping `client.query()` calls in some specs; it did not fail the tests and was not diagnosed in this follow-up.

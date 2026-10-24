@@ -3,7 +3,7 @@ import type { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { Client } from 'pg';
@@ -114,7 +114,7 @@ export async function withTestApp(
     SMTP_USER: 'test',
     SMTP_PASSWORD: 'test',
     SMTP_FROM: 'test@example.invalid',
-    STORAGE_PATH: storage,
+    STORAGE_PATH: resolve(storage, 'files'),
     DOTENV_CONFIG_PATH: resolve(storage, '.env'),
     BOOTSTRAP_ADMIN_EMAIL: undefined,
     BOOTSTRAP_ADMIN_PASSWORD: undefined,
@@ -129,6 +129,7 @@ export async function withTestApp(
   let app: INestApplication | undefined;
   let schemaCreated = false;
   try {
+    mkdirSync(overrides.STORAGE_PATH!, { recursive: true });
     writeFileSync(overrides.DOTENV_CONFIG_PATH!, '');
     for (const [key, value] of Object.entries(overrides)) {
       if (value === undefined) delete process.env[key];

@@ -281,6 +281,13 @@ describe('admin product mutations and registration snapshots', () => {
             reason: 'Unauthorized update',
           })
         ).status,
+      ).toBe(403);
+      expect(
+        (
+          await f.call('otherOwner', `/my/products/${id}`, 'PUT', {
+            name: 'Different owner cannot update',
+          })
+        ).status,
       ).toBe(404);
       const submitted = await f.call(
         'manager',
@@ -501,7 +508,7 @@ describe('admin product mutations and registration snapshots', () => {
       await prisma.$executeRaw(Prisma.sql`
         ALTER TABLE ${databaseObject('audit_logs')}
         ADD CONSTRAINT "test_reject_product_create_audit"
-        CHECK ("action" <> 'product.create_on_behalf')
+        CHECK ("action" <> 'product.create_on_behalf') NOT VALID
       `);
       try {
         const failed = await f.call('manager', '/admin/products', 'POST', {
