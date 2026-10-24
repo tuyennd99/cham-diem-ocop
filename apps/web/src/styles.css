@@ -3243,6 +3243,21 @@ h3 {
   background: var(--surface);
 }
 
+[data-admin-ui='true'] .admin-assignment-sticky-bar {
+  position: sticky;
+  bottom: 16px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 16px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
 .admin-dialog {
   max-height: calc(100dvh - 32px);
   overflow-y: auto;

@@ -373,3 +373,22 @@ export function toAdminEvaluationsApiQuery(
   if (search.status !== undefined) query.status = search.status;
   return query;
 }
+
+export interface AdminAssignmentSearch {
+  groupId?: string;
+  categoryId?: string;
+  uncoveredOnly?: boolean;
+}
+
+export function parseAdminAssignmentSearch(
+  search: Record<string, unknown>,
+): AdminAssignmentSearch {
+  const result: AdminAssignmentSearch = {};
+  const groupId = parseScalarString(search.groupId, 100);
+  if (groupId !== undefined) result.groupId = groupId;
+  const categoryId = parseScalarString(search.categoryId, 100);
+  if (categoryId !== undefined) result.categoryId = categoryId;
+  const uncoveredOnly = parseScalarBoolean(search.uncoveredOnly);
+  if (uncoveredOnly !== undefined) result.uncoveredOnly = uncoveredOnly;
+  return result;
+}

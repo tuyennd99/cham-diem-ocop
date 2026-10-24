@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
 import {
+  parseAdminAssignmentSearch,
   parseAdminCatalogSearch,
   parseAdminProductSearch,
   parseAdminScoringSearch,
@@ -81,4 +82,17 @@ it('keeps evaluation identifiers and ignores invalid evaluation status', () => {
   assert.equal(query.judgeId, 'j1');
   assert.equal(query.page, 3);
   assert.equal(parseAdminScoringSearch({ status: 'COMPLETED' }).status, undefined);
+});
+
+it('parses assignment matrix filters without carrying unknown keys', () => {
+  const query = parseAdminAssignmentSearch({
+    groupId: 'g1',
+    categoryId: 'c1',
+    uncoveredOnly: 'true',
+    unknown: 'x',
+  });
+  assert.equal(query.groupId, 'g1');
+  assert.equal(query.categoryId, 'c1');
+  assert.equal(query.uncoveredOnly, true);
+  assert.equal(Object.hasOwn(query, 'unknown'), false);
 });
