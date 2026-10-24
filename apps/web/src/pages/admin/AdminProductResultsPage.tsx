@@ -5,92 +5,126 @@ import { formatExactScore, formatStarRatingLabel } from '../../lib/print-format'
 import { hasStaffPermission } from '../../lib/session-contract';
 import { useAdminProductResults, type AdminProductMode } from '../../queries/admin-products';
 
+const EVALUATION_STATUS_LABEL: Record<string, string> = {
+  IN_PROGRESS: 'Đang chấm (nháp)',
+  SUBMITTED: 'Đã nộp phiếu chấm',
+};
+
 export function AdminProductResultsPage({
   productId,
-  mode = 'products',
+  mode: _mode = 'products',
 }: {
   productId: string;
   mode?: AdminProductMode;
 }) {
   const session = useSession();
   const canManage = hasStaffPermission(session?.user, 'MANAGE');
-  const { data: product = null, error: loadError } = useAdminProductResults(productId, canManage);
+  const {
+    data: product = null,
+    error: loadError,
+    isPending,
+    refetch,
+  } = useAdminProductResults(productId, canManage);
   const error = errorText(loadError);
-  if (error)
+
+  if (error) {
     return (
-      <section>
-        <p role='alert' className='form-note'>
-          {error}
-        </p>
-        <Link to={mode === 'products' ? '/admin/products' : '/admin/registrations'}>Quay lại</Link>
+      <section className='admin-table-region p-4' role='alert'>
+        <p className='form-note'>{error}</p>
+        <button
+          type='button'
+          className='button button-secondary button-sm'
+          onClick={() => void refetch()}
+        >
+          Thử lại
+        </button>
       </section>
     );
-  if (!product) return <p>Đang tải kết quả…</p>;
+  }
+
+  if (isPending || !product) {
+    return (
+      <p role='status' aria-busy='true'>
+        Đang tải kết quả chấm…
+      </p>
+    );
+  }
+
   return (
-    <section>
-      <Link
-        className='text-link'
-        to={mode === 'products' ? '/admin/products' : '/admin/registrations'}
-      >
-        ← Tất cả hồ sơ
-      </Link>
-      <p className='eyebrow'>
-        {product.category.groupName} · {product.category.name} · {product.status}
-      </p>
-      <h1>{product.name}</h1>
-      <div className='hero-actions'>
-        <Link
-          className='button button-secondary'
-          to='/print/products/$id/results'
-          params={{ id: product.id }}
-        >
-          In bảng tổng hợp kết quả (A4)
-        </Link>
-      </div>
-      <p>
-        <strong>
-          {product.status === 'COMPLETED' && product.finalScore !== null
-            ? `${formatExactScore(product.finalScore)} điểm · ${formatStarRatingLabel(product.starRating)}`
-            : 'Chưa tổng hợp kết quả cuối'}
-        </strong>
-      </p>
-      {product.evaluations.map((evaluation) => (
-        <article className='route-panel' key={evaluation.judge.id}>
-          <div className='section-heading'>
-            <h2>
-              {evaluation.judge.fullName} · {evaluation.status}
-            </h2>
-            {evaluation.id && (
-              <Link
-                className='button button-secondary'
-                to='/print/evaluations/$id'
-                params={{ id: evaluation.id }}
-              >
-                In phiếu chấm
-              </Link>
-            )}
-          </div>
-          <p>
-            {evaluation.judge.email} · {evaluation.total ?? 'Chưa có tổng điểm'}
+    <section className='admin-page'>
+      <div className='admin-page-heading'>
+        <div>
+          <h2>Kết quả chấm</h2>
+          <p className='route-intro'>
+            {product.status === 'COMPLETED' && product.finalScore !== null
+              ? `Tổng điểm cuối: ${formatExactScore(product.finalScore)} điểm · ${formatStarRatingLabel(product.starRating)}`
+              : 'Hồ sơ chưa hoàn tất tổng hợp điểm cuối. Điểm từng giám khảo dưới đây là điểm trong phạm vi được phân công.'}
           </p>
-          <div className='record-list'>
-            {evaluation.scores.map((score, index) => (
-              <div className='record-row' key={`${score.subCriterion.code}-${index}`}>
-                <div className='record-main'>
-                  <strong>
-                    {score.subCriterion.criterion.code} · {score.subCriterion.criterion.name}
+        </div>
+        <div className='admin-actions'>
+          <Link
+            className='button button-secondary'
+            to='/print/products/$id/results'
+            params={{ id: product.id }}
+          >
+            In bảng tổng hợp kết quả (A4)
+          </Link>
+        </div>
+      </div>
+
+      {product.evaluations.length === 0 ? (
+        <div className='admin-table-region p-6'>
+          <p className='text-sm text-muted'>
+            Chưa có phiếu chấm nào được ghi nhận cho hồ sơ này.
+          </p>
+        </div>
+      ) : (
+        product.evaluations.map((evaluation) => (
+          <article className='admin-table-region p-5' key={evaluation.judge.id}>
+            <div className='admin-page-heading' style={{ marginBottom: '12px' }}>
+              <div>
+                <h3>
+                  {evaluation.judge.fullName} ·{' '}
+                  {EVALUATION_STATUS_LABEL[evaluation.status] ?? evaluation.status}
+                </h3>
+                <p className='text-sm text-muted'>
+                  {evaluation.judge.email} · Điểm trong phạm vi:{' '}
+                  <strong style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    {evaluation.total !== null ? `${formatExactScore(evaluation.total)} điểm` : 'Chưa có tổng điểm'}
                   </strong>
-                  <p>
-                    {score.subCriterion.code} · {score.option.label}
-                  </p>
-                  {score.note && <p>{score.note}</p>}
-                </div>
-                <strong>{score.option.points} điểm</strong>
+                </p>
               </div>
-            ))}
-          </div>
-        </article>
-      ))}
+              {evaluation.id && (
+                <Link
+                  className='button button-secondary button-sm'
+                  to='/print/evaluations/$id'
+                  params={{ id: evaluation.id }}
+                >
+                  In phiếu chấm
+                </Link>
+              )}
+            </div>
+            <div className='record-list'>
+              {evaluation.scores.map((score, index) => (
+                <div className='record-row' key={`${score.subCriterion.code}-${index}`}>
+                  <div className='record-main'>
+                    <strong>
+                      {score.subCriterion.criterion.code} · {score.subCriterion.criterion.name}
+                    </strong>
+                    <p>
+                      {score.subCriterion.code} · {score.option.label}
+                    </p>
+                    {score.note && <p>{score.note}</p>}
+                  </div>
+                  <strong style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    {score.option.points} điểm
+                  </strong>
+                </div>
+              ))}
+            </div>
+          </article>
+        ))
+      )}
     </section>
   );
 }

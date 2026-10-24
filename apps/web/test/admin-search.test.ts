@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
-import { parseAdminProductSearch } from '../src/lib/admin-search';
+import {
+  parseAdminProductSearch,
+  toAdminProductApiQuery,
+} from '../src/lib/admin-search';
 
 it('retains report filters, page and explicit boolean without carrying unknown keys', () => {
   const input = {
@@ -27,4 +30,15 @@ it('retains report filters, page and explicit boolean without carrying unknown k
   assert.equal(parseAdminProductSearch({ from: input.from }).from, input.from);
   assert.throws(() => parseAdminProductSearch({ from: 'khong-phai-ngay' }));
   assert.throws(() => parseAdminProductSearch({ localityId: 'l1', unmappedLocality: true }));
+});
+
+it('preserves detail tab in URL search and strips tab before API query', () => {
+  const parsed = parseAdminProductSearch({ page: '3', status: 'SCORING', tab: 'results' });
+  assert.equal(parsed.tab, 'results');
+  assert.equal(parsed.page, 3);
+  assert.equal(parseAdminProductSearch({ tab: 'invalid-tab' }).tab, undefined);
+  const apiQuery = toAdminProductApiQuery(parsed);
+  assert.equal(Object.hasOwn(apiQuery, 'tab'), false);
+  assert.equal(apiQuery.page, 3);
+  assert.equal(apiQuery.status, 'SCORING');
 });
