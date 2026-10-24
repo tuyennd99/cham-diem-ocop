@@ -26,6 +26,14 @@ export class JudgeController {
     return this.evaluations.getEvaluation(principal.sub, id);
   }
 
+  @Get('products/:id/evaluation/print-data')
+  printData(
+    @Param('id') id: string,
+    @CurrentUser() principal: AccessTokenPayload,
+  ) {
+    return this.evaluations.getEvaluationPrintData(principal.sub, id);
+  }
+
   @Get('products/:id/attachments/:attachmentId')
   async attachment(
     @Param('id') id: string,

@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EvaluationScoreDto } from '../dtos/evaluations.dto';
 import { databaseObject } from '../prisma/sql';
 import { lockEvaluationCategory, recomputeProductResult } from '../utils/evaluation-result';
+import { buildEvaluationPrintData } from '../utils/print-data';
 import { recordProductStatusEvent } from '../utils/product-status';
 
 @Injectable()
@@ -77,6 +78,91 @@ export class EvaluationsRepository {
         ? { id: evaluation.id, status: evaluation.status, total: evaluation.total, scores: evaluation.scores }
         : { id: null, status: EvaluationStatus.IN_PROGRESS, total: null, scores: [] },
     };
+  }
+
+  async getEvaluationPrintData(judgeId: string, productId: string) {
+    const context = await this.getAssignedProduct(
+      this.prisma,
+      judgeId,
+      productId,
+      true,
+    );
+    const evaluation = await this.prisma.evaluation.findUnique({
+      where: { judgeId_productId: { judgeId, productId } },
+      include: {
+        scores: {
+          select: {
+            subCriterionId: true,
+            optionId: true,
+            note: true,
+            option: { select: { id: true, label: true, points: true } },
+          },
+        },
+      },
+    });
+    if (
+      context.product.status === ProductStatus.COMPLETED &&
+      evaluation?.status !== EvaluationStatus.SUBMITTED
+    ) {
+      throw new NotFoundException('Evaluation not found');
+    }
+    return buildEvaluationPrintData({
+      evaluationId: evaluation?.id ?? null,
+      status: evaluation?.status ?? EvaluationStatus.IN_PROGRESS,
+      submittedAt: evaluation?.submittedAt ?? null,
+      total: evaluation?.total ?? null,
+      assignedCriterionIds: context.assignment.criterionIds,
+      submissionSnapshot: evaluation?.submissionSnapshot ?? null,
+      currentProduct: {
+        id: context.product.id,
+        name: context.product.name,
+        formData: context.product.formData,
+        category: {
+          id: context.product.category.id,
+          name: context.product.category.name,
+          groupName: context.product.category.groupName,
+          criteriaSet: context.product.category.criteriaSet
+            ? {
+                id: context.product.category.criteriaSet.id,
+                name: context.product.category.criteriaSet.name,
+                source: context.product.category.criteriaSet.source,
+                version: context.product.category.criteriaSet.version,
+                sourceHash: context.product.category.criteriaSet.sourceHash,
+                criteria: context.product.category.criteriaSet.criteria.map(
+                  (c) => ({
+                    id: c.id,
+                    code: c.code,
+                    name: c.name,
+                    maxScore: c.maxScore,
+                    order: c.order,
+                    sectionCode: c.sectionCode,
+                    sectionName: c.sectionName,
+                    subCriteria: c.subCriteria.map((sub) => ({
+                      id: sub.id,
+                      code: sub.code,
+                      content: sub.content,
+                      order: sub.order,
+                      options: sub.options.map((opt) => ({
+                        id: opt.id,
+                        label: opt.label,
+                        points: opt.points,
+                      })),
+                    })),
+                  }),
+                ),
+              }
+            : null,
+        },
+      },
+      currentJudge: {
+        id: context.assignment.judge.id,
+        fullName: context.assignment.judge.fullName,
+        organizationUnit: context.assignment.judge.organizationUnit
+          ? { name: context.assignment.judge.organizationUnit.name }
+          : null,
+      },
+      liveScores: evaluation?.scores ?? [],
+    });
   }
 
   async findAttachment(judgeId: string, productId: string, attachmentId: string) {

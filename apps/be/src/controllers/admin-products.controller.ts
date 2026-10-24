@@ -79,6 +79,24 @@ export class AdminProductsController {
     );
   }
 
+  @Get(':id/registration-print-data')
+  @Permissions(StaffPermission.VIEW)
+  registrationPrintData(
+    @Param('id') id: string,
+    @CurrentUser() principal: AuthenticatedPrincipal,
+  ) {
+    return this.admin.productRegistrationPrintData(id, principal);
+  }
+
+  @Get(':id/results/print-data')
+  @Permissions(StaffPermission.VIEW)
+  resultsPrintData(
+    @Param('id') id: string,
+    @CurrentUser() principal: AuthenticatedPrincipal,
+  ) {
+    return this.admin.productResultsPrintData(id, principal);
+  }
+
   @Get(':id/attachments')
   @Permissions(StaffPermission.VIEW)
   attachments(

@@ -15,6 +15,10 @@ export class EvaluationsService {
     return this.repository.getEvaluation(judgeId, productId);
   }
 
+  getEvaluationPrintData(judgeId: string, productId: string) {
+    return this.repository.getEvaluationPrintData(judgeId, productId);
+  }
+
   saveDraft(judgeId: string, productId: string, input: SaveEvaluationDto) {
     return this.repository.saveDraft(judgeId, productId, input.scores);
   }

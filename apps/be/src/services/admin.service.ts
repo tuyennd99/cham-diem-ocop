@@ -1,11 +1,12 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import bcrypt from 'bcryptjs';
-import { EvaluationStatus, ProductStatus } from '@prisma/client';
+import { EvaluationStatus, ProductStatus, StaffPermission } from '@prisma/client';
 import {
   CreateJudgeDto,
   ReplaceAssignmentsDto,
@@ -14,8 +15,14 @@ import {
   UpdateStaffAccessDto,
 } from '../dtos/admin.dto';
 import { AdminProductQueryDto } from '../dtos/admin-products.dto';
+import {
+  AdminCriteriaSetsQueryDto,
+  AdminEvaluationsQueryDto,
+} from '../dtos/admin-scoring.dto';
 import { AdminRepository, type AdminRequestMeta } from '../repositories/admin.repository';
 import { PASSWORD_MAX_BYTES, PASSWORD_ROUNDS } from '../constants/auth';
+import type { AuthenticatedPrincipal } from '../types/auth';
+import { effectiveStaffPermissions } from '../utils/staff-permissions';
 
 @Injectable()
 export class AdminService {
@@ -161,6 +168,147 @@ export class AdminService {
     const result = await this.repository.productResults(id, canManage);
     if (!result) throw new NotFoundException('Product not found');
     return result;
+  }
+
+  async listCriteriaSets(
+    query: AdminCriteriaSetsQueryDto,
+    principal: AuthenticatedPrincipal,
+  ) {
+    const access = this.resolveStaffAccess(principal);
+    const { data, total } = await this.repository.listCriteriaSets(query, {
+      canViewAll: access.canView,
+      scorerUserId: access.scorerUserId,
+    });
+    return {
+      data,
+      meta: {
+        page: query.page,
+        limit: query.limit,
+        total,
+        totalPages: Math.ceil(total / query.limit),
+      },
+    };
+  }
+
+  async getCriteriaSet(id: string, principal: AuthenticatedPrincipal) {
+    const access = this.resolveStaffAccess(principal);
+    const set = await this.repository.findCriteriaSetDetail(id, {
+      canViewAll: access.canView,
+      scorerUserId: access.scorerUserId,
+    });
+    if (!set) throw new NotFoundException('Criteria set not found');
+    return set;
+  }
+
+  async getCriteriaSetPrintData(id: string, principal: AuthenticatedPrincipal) {
+    const access = this.resolveStaffAccess(principal);
+    const data = await this.repository.findCriteriaSetPrintData(id, {
+      canViewAll: access.canView,
+      scorerUserId: access.scorerUserId,
+    });
+    if (!data) throw new NotFoundException('Criteria set not found');
+    return data;
+  }
+
+  async listEvaluations(
+    query: AdminEvaluationsQueryDto,
+    principal: AuthenticatedPrincipal,
+  ) {
+    const access = this.resolveStaffAccess(principal);
+    const { data, total } = await this.repository.listEvaluations(query, access);
+    return {
+      data,
+      meta: {
+        page: query.page,
+        limit: query.limit,
+        total,
+        totalPages: Math.ceil(total / query.limit),
+      },
+    };
+  }
+
+  async getEvaluationPrintData(
+    evaluationId: string,
+    principal: AuthenticatedPrincipal,
+  ) {
+    const access = this.resolveStaffAccess(principal);
+    const data = await this.repository.findEvaluationPrintData(
+      evaluationId,
+      access,
+    );
+    if (!data) throw new NotFoundException('Evaluation not found');
+    return data;
+  }
+
+  async productRegistrationPrintData(
+    productId: string,
+    principal: AuthenticatedPrincipal,
+  ) {
+    const perms = effectiveStaffPermissions(principal);
+    const canManage = perms.includes(StaffPermission.MANAGE);
+    const canView = perms.includes(StaffPermission.VIEW);
+    if (!canManage && !canView) {
+      throw new ForbiddenException('Insufficient role');
+    }
+    const data = await this.repository.findProductRegistrationPrintData(
+      productId,
+      { canManage, canView },
+    );
+    if (!data) throw new NotFoundException('Product not found');
+    return data;
+  }
+
+  async productResultsPrintData(
+    productId: string,
+    principal: AuthenticatedPrincipal,
+  ) {
+    const perms = effectiveStaffPermissions(principal);
+    const canManage = perms.includes(StaffPermission.MANAGE);
+    const canView = perms.includes(StaffPermission.VIEW);
+    if (!canManage && !canView) {
+      throw new ForbiddenException('Insufficient role');
+    }
+    const data = await this.repository.findProductResultsPrintData(productId, {
+      canManage,
+      canView,
+    });
+    if (!data) throw new NotFoundException('Product not found');
+    return data;
+  }
+
+  async myProductRegistrationPrintData(productId: string, registrantId: string) {
+    const data = await this.repository.findProductRegistrationPrintData(
+      productId,
+      { canManage: false, canView: false, registrantId },
+    );
+    if (!data) throw new NotFoundException('Product not found');
+    return data;
+  }
+
+  async myProductResultsPrintData(productId: string, registrantId: string) {
+    const data = await this.repository.findProductResultsPrintData(productId, {
+      canManage: false,
+      canView: false,
+      registrantId,
+    });
+    if (!data) throw new NotFoundException('Product not found');
+    return data;
+  }
+
+  private resolveStaffAccess(principal: AuthenticatedPrincipal) {
+    const perms = effectiveStaffPermissions(principal);
+    const canManage = perms.includes(StaffPermission.MANAGE);
+    const canView = perms.includes(StaffPermission.VIEW);
+    const canScore = perms.includes(StaffPermission.SCORE);
+    if (!canManage && !canView && !canScore) {
+      throw new ForbiddenException('Insufficient role');
+    }
+    return {
+      canManage,
+      canView,
+      canScore,
+      scorerUserId: principal.sub,
+    };
   }
 
   private async hashPassword(password: string) {

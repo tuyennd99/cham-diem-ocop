@@ -21,6 +21,7 @@ import {
   ProductUpdateDto,
   ProductWriteDto,
 } from '../dtos/products.dto';
+import { AdminService } from '../services/admin.service';
 import { ProductsService } from '../services/products.service';
 import type { AccessTokenPayload } from '../types/auth';
 import type { UploadedPrivateFile } from '../types/files';
@@ -31,7 +32,10 @@ import { asDownload, productUploadOptions } from '../utils/private-storage';
 @Roles(Role.REGISTRANT)
 @Controller('my/products')
 export class MyProductsController {
-  constructor(private readonly products: ProductsService) {}
+  constructor(
+    private readonly products: ProductsService,
+    private readonly admin: AdminService,
+  ) {}
 
   @Get()
   list(@CurrentUser() principal: AccessTokenPayload) {
@@ -41,6 +45,22 @@ export class MyProductsController {
   @Get(':id')
   detail(@Param('id') id: string, @CurrentUser() principal: AccessTokenPayload) {
     return this.products.getMine(id, principal);
+  }
+
+  @Get(':id/registration-print-data')
+  registrationPrintData(
+    @Param('id') id: string,
+    @CurrentUser() principal: AccessTokenPayload,
+  ) {
+    return this.admin.myProductRegistrationPrintData(id, principal.sub);
+  }
+
+  @Get(':id/results/print-data')
+  resultsPrintData(
+    @Param('id') id: string,
+    @CurrentUser() principal: AccessTokenPayload,
+  ) {
+    return this.admin.myProductResultsPrintData(id, principal.sub);
   }
 
   @Post()

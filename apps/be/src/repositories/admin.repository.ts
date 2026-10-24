@@ -1,12 +1,27 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { EvaluationStatus, Prisma, ProductStatus, Role, StaffPermission } from '@prisma/client';
-import type { ProductApplicationForm } from '@ocop/shared';
+import type {
+  AdminCriteriaSetDetail,
+  AdminCriteriaSetRecord,
+  AdminEvaluationRecord,
+  ProductApplicationForm,
+} from '@ocop/shared';
 import { productRegistrationTypes } from '../constants/products';
 import type { AdminProductQueryDto } from '../dtos/admin-products.dto';
+import type {
+  AdminCriteriaSetsQueryDto,
+  AdminEvaluationsQueryDto,
+} from '../dtos/admin-scoring.dto';
 import type { UpdateStaffAccessDto } from '../dtos/admin.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { databaseObject } from '../prisma/sql';
 import { recomputeProductResult } from '../utils/evaluation-result';
+import {
+  buildBlankCriteriaPrintData,
+  buildEvaluationPrintData,
+  buildProductResultsPrintData,
+  buildRegistrationPrintData,
+} from '../utils/print-data';
 import { applyStaffAccess, createStaff, lockStaffMutation } from '../utils/staff-access';
 import { writeAudit, type AuditInput } from '../utils/audit-log';
 
@@ -589,6 +604,667 @@ export class AdminRepository {
             },
           },
         },
+      },
+    });
+  }
+
+  async listCriteriaSets(
+    query: AdminCriteriaSetsQueryDto,
+    access: { canViewAll: boolean; scorerUserId?: string },
+  ) {
+    const { page, limit, q, groupId, isActive } = query;
+    const skip = (page - 1) * limit;
+    if (!Number.isSafeInteger(page) || !Number.isSafeInteger(skip)) {
+      throw new BadRequestException('Pagination exceeds the safe integer range');
+    }
+    const where: Prisma.CriteriaSetWhereInput = {
+      ...(isActive === undefined ? {} : { isActive }),
+      category: {
+        is: {
+          ...(groupId ? { groupId } : {}),
+          ...(!access.canViewAll && access.scorerUserId
+            ? {
+                assignments: {
+                  some: {
+                    judgeId: access.scorerUserId,
+                    judge: {
+                      is: {
+                        role: { not: Role.REGISTRANT },
+                        staffPermissions: { has: StaffPermission.SCORE },
+                        isActive: true,
+                        verified: true,
+                      },
+                    },
+                  },
+                },
+              }
+            : {}),
+        },
+      },
+      ...(q
+        ? {
+            OR: [
+              { id: { contains: q, mode: 'insensitive' } },
+              { name: { contains: q, mode: 'insensitive' } },
+              { source: { contains: q, mode: 'insensitive' } },
+              {
+                category: {
+                  is: {
+                    OR: [
+                      { id: { contains: q, mode: 'insensitive' } },
+                      { name: { contains: q, mode: 'insensitive' } },
+                      { groupCode: { contains: q, mode: 'insensitive' } },
+                      { groupName: { contains: q, mode: 'insensitive' } },
+                      { classificationGroup: { contains: q, mode: 'insensitive' } },
+                    ],
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
+
+    const [rows, total] = await this.prisma.$transaction(
+      [
+        this.prisma.criteriaSet.findMany({
+          where,
+          select: {
+            id: true,
+            name: true,
+            source: true,
+            version: true,
+            sourceHash: true,
+            isActive: true,
+            category: {
+              select: {
+                id: true,
+                name: true,
+                groupId: true,
+                groupCode: true,
+                groupName: true,
+                classificationGroup: true,
+                classificationSubgroup: true,
+                order: true,
+              },
+            },
+            criteria: { select: { maxScore: true } },
+            _count: { select: { criteria: true } },
+          },
+          orderBy: [
+            { category: { order: 'asc' } },
+            { category: { id: 'asc' } },
+            { id: 'asc' },
+          ],
+          skip,
+          take: limit,
+        }),
+        this.prisma.criteriaSet.count({ where }),
+      ],
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
+
+    const data: AdminCriteriaSetRecord[] = rows.map((row) => ({
+      id: row.id,
+      categoryId: row.category.id,
+      categoryName: row.category.name,
+      groupId: row.category.groupId,
+      groupCode: row.category.groupCode,
+      groupName: row.category.groupName,
+      classificationGroup: row.category.classificationGroup,
+      classificationSubgroup: row.category.classificationSubgroup,
+      name: row.name,
+      source: row.source,
+      version: row.version,
+      sourceHash: row.sourceHash,
+      isActive: row.isActive,
+      criterionCount: row._count.criteria,
+      maxScore: row.criteria.reduce((sum, item) => sum + item.maxScore, 0),
+    }));
+
+    return { data, total };
+  }
+
+  async findCriteriaSetDetail(
+    id: string,
+    access: { canViewAll: boolean; scorerUserId?: string },
+  ): Promise<AdminCriteriaSetDetail | null> {
+    const row = await this.prisma.criteriaSet.findFirst({
+      where: {
+        OR: [{ id }, { categoryId: id }],
+        ...(!access.canViewAll && access.scorerUserId
+          ? {
+              category: {
+                is: {
+                  assignments: {
+                    some: {
+                      judgeId: access.scorerUserId,
+                      judge: {
+                        is: {
+                          role: { not: Role.REGISTRANT },
+                          staffPermissions: { has: StaffPermission.SCORE },
+                          isActive: true,
+                          verified: true,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            }
+          : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        source: true,
+        version: true,
+        sourceHash: true,
+        isActive: true,
+        category: {
+          select: {
+            id: true,
+            name: true,
+            groupId: true,
+            groupCode: true,
+            groupName: true,
+            classificationGroup: true,
+            classificationSubgroup: true,
+          },
+        },
+        criteria: {
+          orderBy: { order: 'asc' },
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            maxScore: true,
+            order: true,
+            sectionCode: true,
+            sectionName: true,
+            subCriteria: {
+              orderBy: { order: 'asc' },
+              select: {
+                id: true,
+                code: true,
+                content: true,
+                order: true,
+                options: {
+                  orderBy: { order: 'asc' },
+                  select: { id: true, label: true, points: true },
+                },
+              },
+            },
+          },
+        },
+        _count: { select: { criteria: true } },
+      },
+    });
+    if (!row) return null;
+    return {
+      id: row.id,
+      categoryId: row.category.id,
+      categoryName: row.category.name,
+      groupId: row.category.groupId,
+      groupCode: row.category.groupCode,
+      groupName: row.category.groupName,
+      classificationGroup: row.category.classificationGroup,
+      classificationSubgroup: row.category.classificationSubgroup,
+      name: row.name,
+      source: row.source,
+      version: row.version,
+      sourceHash: row.sourceHash,
+      isActive: row.isActive,
+      criterionCount: row._count.criteria,
+      maxScore: row.criteria.reduce((sum, item) => sum + item.maxScore, 0),
+      criteria: row.criteria,
+    };
+  }
+
+  async findCriteriaSetPrintData(
+    id: string,
+    access: { canViewAll: boolean; scorerUserId?: string },
+  ) {
+    const detail = await this.findCriteriaSetDetail(id, access);
+    if (!detail) return null;
+    return buildBlankCriteriaPrintData(detail);
+  }
+
+  async listEvaluations(
+    query: AdminEvaluationsQueryDto,
+    access: { canManage: boolean; canView: boolean; scorerUserId: string },
+  ) {
+    const { page, limit, q, productId, groupId, categoryId, judgeId, status } = query;
+    const skip = (page - 1) * limit;
+    if (!Number.isSafeInteger(page) || !Number.isSafeInteger(skip)) {
+      throw new BadRequestException('Pagination exceeds the safe integer range');
+    }
+
+    const conditions: Prisma.EvaluationWhereInput[] = [];
+    if (!access.canManage) {
+      if (access.canView) {
+        conditions.push({
+          status: EvaluationStatus.SUBMITTED,
+          product: { is: { status: { not: ProductStatus.DRAFT } } },
+        });
+      } else {
+        conditions.push({ judgeId: access.scorerUserId });
+      }
+    }
+    if (status) conditions.push({ status });
+    if (productId) conditions.push({ productId });
+    if (judgeId) conditions.push({ judgeId });
+    if (categoryId) conditions.push({ product: { is: { categoryId } } });
+    if (groupId) conditions.push({ product: { is: { category: { is: { groupId } } } } });
+    if (q) {
+      conditions.push({
+        OR: [
+          { id: { contains: q, mode: 'insensitive' } },
+          { product: { is: { name: { contains: q, mode: 'insensitive' } } } },
+          { product: { is: { id: { contains: q, mode: 'insensitive' } } } },
+          { judge: { is: { fullName: { contains: q, mode: 'insensitive' } } } },
+          { judge: { is: { email: { contains: q, mode: 'insensitive' } } } },
+        ],
+      });
+    }
+    const where: Prisma.EvaluationWhereInput = { AND: conditions };
+
+    const [rows, total] = await this.prisma.$transaction(
+      [
+        this.prisma.evaluation.findMany({
+          where,
+          select: {
+            id: true,
+            status: true,
+            total: true,
+            submittedAt: true,
+            updatedAt: true,
+            submissionSnapshot: true,
+            judgeId: true,
+            judge: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                organizationUnit: { select: { name: true } },
+              },
+            },
+            product: {
+              select: {
+                id: true,
+                name: true,
+                status: true,
+                categoryId: true,
+                category: {
+                  select: {
+                    id: true,
+                    name: true,
+                    groupId: true,
+                    groupName: true,
+                    assignments: {
+                      select: { judgeId: true, criterionIds: true },
+                    },
+                    criteriaSet: {
+                      select: {
+                        criteria: { select: { id: true, maxScore: true } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            scores: {
+              select: { option: { select: { points: true } } },
+            },
+          },
+          orderBy: [
+            { submittedAt: { sort: 'desc', nulls: 'last' } },
+            { updatedAt: 'desc' },
+            { id: 'desc' },
+          ],
+          skip,
+          take: limit,
+        }),
+        this.prisma.evaluation.count({ where }),
+      ],
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
+
+    const data: AdminEvaluationRecord[] = rows.map((row) => {
+      const criteria = row.product.category.criteriaSet?.criteria ?? [];
+      const allIds = criteria.map((c) => c.id);
+      const snap =
+        row.status === EvaluationStatus.SUBMITTED &&
+        row.submissionSnapshot &&
+        typeof row.submissionSnapshot === 'object' &&
+        !Array.isArray(row.submissionSnapshot)
+          ? (row.submissionSnapshot as Record<string, unknown>)
+          : null;
+      const snapAssigned = Array.isArray(snap?.assignedCriterionIds)
+        ? (snap.assignedCriterionIds as string[])
+        : Array.isArray((snap?.scope as { criterionIds?: unknown })?.criterionIds)
+          ? ((snap?.scope as { criterionIds: string[] }).criterionIds)
+          : null;
+      const assignment = row.product.category.assignments.find(
+        (a) => a.judgeId === row.judgeId,
+      );
+      const assignedIds = snapAssigned
+        ? snapAssigned.length > 0
+          ? snapAssigned
+          : allIds
+        : assignment?.criterionIds.length
+          ? assignment.criterionIds
+          : allIds;
+      const assignedSet = new Set(assignedIds);
+      const inScopeCriteria = criteria.filter(
+        (c) => assignedSet.size === 0 || assignedSet.has(c.id),
+      );
+      const scopeMaxScore = inScopeCriteria.reduce((sum, c) => sum + c.maxScore, 0);
+      const isPartialScope =
+        criteria.length > 0 && inScopeCriteria.length < criteria.length;
+
+      const snapJudge =
+        snap?.judge && typeof snap.judge === 'object'
+          ? (snap.judge as { fullName?: string; organizationUnit?: { name?: string } | null })
+          : null;
+      const computedDraftTotal = row.scores.reduce(
+        (sum, s) => sum + s.option.points,
+        0,
+      );
+
+      return {
+        id: row.id,
+        status: row.status,
+        total:
+          typeof row.total === 'number'
+            ? row.total
+            : row.scores.length > 0
+              ? computedDraftTotal
+              : null,
+        scopeMaxScore,
+        assignedCriterionCount: inScopeCriteria.length,
+        totalCriterionCount: criteria.length,
+        isPartialScope,
+        submittedAt: row.submittedAt?.toISOString() ?? null,
+        updatedAt: row.updatedAt.toISOString(),
+        product: {
+          id: row.product.id,
+          name: row.product.name,
+          status: row.product.status,
+          categoryId: row.product.category.id,
+          categoryName: row.product.category.name,
+          groupId: row.product.category.groupId,
+          groupName: row.product.category.groupName,
+        },
+        judge: {
+          id: row.judge.id,
+          fullName: snapJudge?.fullName ?? row.judge.fullName,
+          email: row.judge.email,
+          organizationUnitName:
+            snapJudge !== null
+              ? (snapJudge.organizationUnit?.name ?? null)
+              : (row.judge.organizationUnit?.name ?? null),
+        },
+      };
+    });
+
+    return { data, total };
+  }
+
+  async findEvaluationPrintData(
+    evaluationId: string,
+    access: { canManage: boolean; canView: boolean; scorerUserId: string },
+  ) {
+    const evaluation = await this.prisma.evaluation.findUnique({
+      where: { id: evaluationId },
+      include: {
+        judge: {
+          select: {
+            id: true,
+            fullName: true,
+            organizationUnit: { select: { name: true } },
+          },
+        },
+        product: {
+          select: {
+            id: true,
+            name: true,
+            status: true,
+            formData: true,
+            categoryId: true,
+            category: {
+              select: {
+                id: true,
+                name: true,
+                groupName: true,
+                criteriaSet: {
+                  select: {
+                    id: true,
+                    name: true,
+                    source: true,
+                    version: true,
+                    sourceHash: true,
+                    criteria: {
+                      orderBy: { order: 'asc' },
+                      select: {
+                        id: true,
+                        code: true,
+                        name: true,
+                        maxScore: true,
+                        order: true,
+                        sectionCode: true,
+                        sectionName: true,
+                        subCriteria: {
+                          orderBy: { order: 'asc' },
+                          select: {
+                            id: true,
+                            code: true,
+                            content: true,
+                            order: true,
+                            options: {
+                              orderBy: { order: 'asc' },
+                              select: { id: true, label: true, points: true },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        scores: {
+          select: {
+            subCriterionId: true,
+            optionId: true,
+            note: true,
+            option: { select: { id: true, label: true, points: true } },
+          },
+        },
+      },
+    });
+    if (!evaluation) return null;
+    const isAuthor = evaluation.judgeId === access.scorerUserId;
+    if (!access.canManage) {
+      if (isAuthor) {
+        // Author can print own evaluation (draft or submitted)
+      } else if (access.canView) {
+        if (
+          evaluation.status !== EvaluationStatus.SUBMITTED ||
+          evaluation.product.status === ProductStatus.DRAFT
+        ) {
+          return null;
+        }
+      } else {
+        return null;
+      }
+    }
+
+    const assignment = await this.prisma.judgeAssignment.findUnique({
+      where: {
+        judgeId_categoryId: {
+          judgeId: evaluation.judgeId,
+          categoryId: evaluation.product.categoryId,
+        },
+      },
+      select: { criterionIds: true },
+    });
+
+    return buildEvaluationPrintData({
+      evaluationId: evaluation.id,
+      status: evaluation.status,
+      submittedAt: evaluation.submittedAt,
+      total: evaluation.total,
+      assignedCriterionIds: assignment?.criterionIds ?? [],
+      submissionSnapshot: evaluation.submissionSnapshot,
+      currentProduct: evaluation.product,
+      currentJudge: evaluation.judge,
+      liveScores: evaluation.scores,
+    });
+  }
+
+  async findProductRegistrationPrintData(
+    productId: string,
+    access: { canManage: boolean; canView: boolean; registrantId?: string },
+  ) {
+    const product = await this.prisma.product.findFirst({
+      where: {
+        id: productId,
+        ...(access.registrantId
+          ? { registrantId: access.registrantId }
+          : access.canManage
+            ? {}
+            : { status: { not: ProductStatus.DRAFT } }),
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        status: true,
+        submittedAt: true,
+        createdAt: true,
+        localityCodeAtSubmit: true,
+        localityNameAtSubmit: true,
+        localityTypeAtSubmit: true,
+        provinceNameAtSubmit: true,
+        formData: true,
+        registrationSnapshot: true,
+        registrant: {
+          select: { id: true, fullName: true, email: true, phone: true },
+        },
+        category: {
+          select: {
+            id: true,
+            name: true,
+            groupName: true,
+            classificationGroup: true,
+            classificationSubgroup: true,
+          },
+        },
+        locality: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            type: true,
+            provinceName: true,
+          },
+        },
+        attachments: {
+          select: { id: true, type: true, fileName: true, createdAt: true },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        },
+      },
+    });
+    if (!product) return null;
+    return buildRegistrationPrintData({ product });
+  }
+
+  async findProductResultsPrintData(
+    productId: string,
+    access: { canManage: boolean; canView: boolean; registrantId?: string },
+  ) {
+    const product = await this.prisma.product.findFirst({
+      where: {
+        id: productId,
+        ...(access.registrantId
+          ? { registrantId: access.registrantId }
+          : access.canManage
+            ? {}
+            : { status: { not: ProductStatus.DRAFT } }),
+      },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        submittedAt: true,
+        completedAt: true,
+        finalScore: true,
+        starRating: true,
+        localityNameAtSubmit: true,
+        provinceNameAtSubmit: true,
+        formData: true,
+        registrationSnapshot: true,
+        locality: { select: { name: true, provinceName: true } },
+        category: {
+          select: {
+            id: true,
+            name: true,
+            groupName: true,
+            assignments: {
+              select: { judgeId: true, criterionIds: true },
+            },
+            criteriaSet: {
+              select: {
+                id: true,
+                name: true,
+                source: true,
+                version: true,
+                criteria: {
+                  orderBy: { order: 'asc' },
+                  select: { id: true, code: true, name: true, maxScore: true },
+                },
+              },
+            },
+          },
+        },
+        evaluations: {
+          where:
+            access.canManage && !access.registrantId
+              ? {}
+              : { status: EvaluationStatus.SUBMITTED },
+          orderBy: [{ createdAt: 'asc' }, { judgeId: 'asc' }],
+          select: {
+            id: true,
+            judgeId: true,
+            status: true,
+            total: true,
+            submittedAt: true,
+            submissionSnapshot: true,
+            judge: {
+              select: {
+                id: true,
+                fullName: true,
+                organizationUnit: { select: { name: true } },
+              },
+            },
+            scores: {
+              select: {
+                subCriterion: { select: { criterionId: true } },
+                option: { select: { points: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!product) return null;
+    return buildProductResultsPrintData({
+      product: {
+        ...product,
+        assignments: product.category.assignments,
       },
     });
   }

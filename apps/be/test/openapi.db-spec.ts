@@ -126,8 +126,18 @@ describe('built API OpenAPI document', () => {
         '/api/admin/products',
         '/api/admin/products/{id}',
         '/api/admin/products/{id}/results',
+        '/api/admin/products/{id}/registration-print-data',
+        '/api/admin/products/{id}/results/print-data',
         '/api/admin/products/{id}/attachments',
         '/api/admin/products/{id}/attachments/{attachmentId}',
+        '/api/admin/criteria-sets',
+        '/api/admin/criteria-sets/{id}',
+        '/api/admin/criteria-sets/{id}/print-data',
+        '/api/admin/evaluations',
+        '/api/admin/evaluations/{id}/print-data',
+        '/api/judge/products/{id}/evaluation/print-data',
+        '/api/my/products/{id}/registration-print-data',
+        '/api/my/products/{id}/results/print-data',
       ]) {
         expect(document.paths[path]).toBeDefined();
       }
