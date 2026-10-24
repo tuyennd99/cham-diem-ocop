@@ -2891,6 +2891,350 @@ h3 {
   text-align: right;
 }
 
+/* Admin UI Scoped System (design.md) */
+[data-admin-ui='true'] {
+  --admin-sidebar-bg: var(--fg);
+  --admin-sidebar-fg: var(--surface);
+  --admin-focus: var(--gold-text);
+  --admin-space-1: 4px;
+  --admin-space-2: 8px;
+  --admin-space-3: 12px;
+  --admin-space-4: 16px;
+  --admin-space-6: 24px;
+  --admin-space-8: 32px;
+  --admin-space-12: 48px;
+}
+
+.application-shell[data-admin-ui='true'] {
+  min-height: 100dvh;
+  grid-template-columns: 248px minmax(0, 1fr);
+}
+
+.application-shell[data-admin-ui='true'] > .application-sidebar {
+  min-height: 100dvh;
+  padding: 24px 16px;
+  background: var(--admin-sidebar-bg);
+  color: var(--admin-sidebar-fg);
+  border-right: 1px solid oklch(1 0 0 / 12%);
+  overflow-y: auto;
+}
+
+.application-shell[data-admin-ui='true'] .application-brand {
+  margin: 0 0 24px;
+  padding-inline: 12px;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--admin-sidebar-fg);
+}
+
+.admin-nav-groups {
+  display: grid;
+  gap: 20px;
+}
+
+.admin-nav-group {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-nav-group-label {
+  padding: 0 12px 4px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  color: oklch(0.84 0.02 151);
+}
+
+.application-shell[data-admin-ui='true'] .application-sidebar nav a,
+.admin-mobile-nav-dialog nav a,
+.admin-nav-logout {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  color: oklch(0.92 0.01 151);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.application-shell[data-admin-ui='true'] .application-sidebar nav a:hover,
+.admin-nav-logout:hover {
+  background: oklch(1 0 0 / 10%);
+  color: var(--admin-sidebar-fg);
+}
+
+.application-shell[data-admin-ui='true'] .application-sidebar nav a[data-status='active'] {
+  background: var(--accent);
+  color: var(--surface);
+  font-weight: 600;
+}
+
+.admin-mobile-nav-dialog {
+  max-width: 360px;
+}
+
+.admin-mobile-nav-dialog .admin-nav-group-label {
+  color: var(--muted);
+}
+
+.admin-mobile-nav-dialog nav a,
+.admin-mobile-nav-dialog .admin-nav-logout {
+  width: 100%;
+  color: var(--fg);
+}
+
+.admin-mobile-nav-dialog nav a:hover,
+.admin-mobile-nav-dialog .admin-nav-logout:hover {
+  background: var(--surface-soft);
+  color: var(--fg);
+}
+
+.admin-mobile-nav-dialog nav a[data-status='active'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.admin-mobile-menu-trigger {
+  display: none;
+}
+
+.application-topbar-lead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.application-user-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.application-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.application-topbar-actions button {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--fg);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+[data-admin-ui='true'] .application-main,
+[data-admin-ui='true'] .application-content,
+[data-admin-ui='true'] .admin-page {
+  min-width: 0;
+}
+
+[data-admin-ui='true'] .application-topbar {
+  min-height: 64px;
+  padding: 10px 32px;
+}
+
+[data-admin-ui='true'] .application-content {
+  width: 100%;
+  max-width: 1600px;
+  margin-inline: auto;
+  padding: 24px 32px;
+}
+
+[data-admin-ui='true'] .admin-page {
+  width: 100%;
+  display: grid;
+  gap: 24px;
+}
+
+[data-admin-ui='true'] .admin-page-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+[data-admin-ui='true'] .admin-page-heading h1,
+[data-admin-ui='true'] .admin-page h1 {
+  margin-bottom: 4px;
+  font-family: var(--font-body);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+[data-admin-ui='true'] .admin-page h2 {
+  font-family: var(--font-body);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+[data-admin-ui='true'] .admin-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+[data-admin-ui='true'] .admin-filters {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+[data-admin-ui='true'] .admin-filters label,
+[data-admin-ui='true'] .admin-form label,
+.admin-dialog[data-admin-ui='true'] label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+[data-admin-ui='true'] .admin-filters input:not([type='checkbox']):not([type='radio']),
+[data-admin-ui='true'] .admin-filters select,
+[data-admin-ui='true'] .admin-form input:not([type='checkbox']):not([type='radio']),
+[data-admin-ui='true'] .admin-form select,
+[data-admin-ui='true'] .admin-form textarea,
+.admin-dialog[data-admin-ui='true'] input:not([type='checkbox']):not([type='radio']),
+.admin-dialog[data-admin-ui='true'] select,
+.admin-dialog[data-admin-ui='true'] textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+[data-admin-ui='true'] .admin-filters input:focus-visible,
+[data-admin-ui='true'] .admin-filters select:focus-visible,
+[data-admin-ui='true'] .admin-form input:focus-visible,
+[data-admin-ui='true'] .admin-form select:focus-visible,
+[data-admin-ui='true'] .admin-form textarea:focus-visible,
+.admin-dialog[data-admin-ui='true'] input:focus-visible,
+.admin-dialog[data-admin-ui='true'] select:focus-visible,
+.admin-dialog[data-admin-ui='true'] textarea:focus-visible {
+  outline: 2px solid var(--admin-focus);
+  outline-offset: 2px;
+  border-color: var(--accent);
+}
+
+[data-admin-ui='true'] .admin-filters input:disabled,
+[data-admin-ui='true'] .admin-filters select:disabled,
+[data-admin-ui='true'] .admin-form input:disabled,
+[data-admin-ui='true'] .admin-form select:disabled,
+[data-admin-ui='true'] .admin-form textarea:disabled,
+.admin-dialog[data-admin-ui='true'] input:disabled,
+.admin-dialog[data-admin-ui='true'] select:disabled,
+.admin-dialog[data-admin-ui='true'] textarea:disabled {
+  background: var(--surface-soft);
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+
+[data-admin-ui='true'] .admin-table-region {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.admin-dialog {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+
+.admin-dialog[data-admin-ui='true'] [data-slot='dialog-title'] {
+  font-family: var(--font-body);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+@media (max-width: 1023px) {
+  .application-shell[data-admin-ui='true'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .application-shell[data-admin-ui='true'] > .application-sidebar {
+    display: none;
+  }
+  [data-admin-ui='true'] .admin-mobile-menu-trigger {
+    display: inline-flex;
+  }
+}
+
+@media (max-width: 767px) {
+  [data-admin-ui='true'] .application-topbar {
+    padding: 8px 16px;
+  }
+  [data-admin-ui='true'] .application-user-email {
+    display: none;
+  }
+  [data-admin-ui='true'] .application-topbar-actions a {
+    display: none;
+  }
+  [data-admin-ui='true'] .application-content {
+    padding: 24px 16px;
+  }
+  [data-admin-ui='true'] .admin-page-heading {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  [data-admin-ui='true'] .admin-page-heading h1,
+  [data-admin-ui='true'] .admin-page h1 {
+    font-size: 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-admin-ui='true'] *,
+  .admin-dialog[data-admin-ui='true'] * {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
+}
+
 @page {
   size: A4 portrait;
   margin: 12mm;

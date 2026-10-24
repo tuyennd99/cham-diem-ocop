@@ -448,7 +448,12 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
-      <DialogContent className='max-h-[90vh] max-w-3xl overflow-y-auto'>{content}</DialogContent>
+      <DialogContent
+        className='admin-dialog max-h-[90vh] max-w-3xl overflow-y-auto'
+        data-admin-ui='true'
+      >
+        {content}
+      </DialogContent>
     </Dialog>
   );
 }

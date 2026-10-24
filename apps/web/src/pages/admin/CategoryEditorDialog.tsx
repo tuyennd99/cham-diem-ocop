@@ -90,7 +90,7 @@ export function CategoryEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className='admin-dialog' data-admin-ui='true'>
         <DialogHeader>
           <DialogTitle>
             {isEdit ? `Cập nhật phân loại: ${category.name}` : 'Thêm phân loại sản phẩm'}
