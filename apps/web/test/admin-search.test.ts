@@ -3,6 +3,7 @@ import { it } from 'node:test';
 import {
   parseAdminCatalogSearch,
   parseAdminProductSearch,
+  parseAdminScoringSearch,
   parseAdminUsersSearch,
   toAdminProductApiQuery,
 } from '../src/lib/admin-search';
@@ -65,4 +66,19 @@ it('preserves legacy judge filter and false user filters', () => {
   assert.equal(query.isActive, false);
   assert.equal(query.page, 2);
   assert.equal(parseAdminUsersSearch({ permission: 'ROOT' }).permission, undefined);
+});
+
+it('keeps evaluation identifiers and ignores invalid evaluation status', () => {
+  const query = parseAdminScoringSearch({
+    tab: 'evaluations',
+    productId: 'p1',
+    judgeId: 'j1',
+    status: 'SUBMITTED',
+    page: 3,
+  });
+  assert.equal(query.tab, 'evaluations');
+  assert.equal(query.productId, 'p1');
+  assert.equal(query.judgeId, 'j1');
+  assert.equal(query.page, 3);
+  assert.equal(parseAdminScoringSearch({ status: 'COMPLETED' }).status, undefined);
 });

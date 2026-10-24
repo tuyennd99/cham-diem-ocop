@@ -1,7 +1,10 @@
 import type {
   AdminCategoryQuery,
+  AdminCriteriaSetQuery,
+  AdminEvaluationQuery,
   AdminProductQuery,
   AdminUserQuery,
+  EvaluationRecordStatus,
   LocalityQuery,
   LocalityType,
   OrganizationUnitQuery,
@@ -294,5 +297,79 @@ export function toAdminUnitsApiQuery(search: AdminUsersSearch): OrganizationUnit
   };
   if (search.q !== undefined) query.q = search.q;
   if (search.isActive !== undefined) query.isActive = search.isActive;
+  return query;
+}
+
+export type AdminScoringTab = 'sets' | 'evaluations';
+
+export type AdminScoringSearch = AdminCriteriaSetQuery &
+  AdminEvaluationQuery & {
+    tab?: AdminScoringTab;
+  };
+
+const SCORING_TABS: readonly AdminScoringTab[] = ['sets', 'evaluations'];
+const EVALUATION_STATUSES: readonly EvaluationRecordStatus[] = ['IN_PROGRESS', 'SUBMITTED'];
+
+export function parseAdminScoringSearch(
+  search: Record<string, unknown>,
+): AdminScoringSearch {
+  const result: AdminScoringSearch = {
+    page: parseScalarInt(search.page, 1, 100000, 1) ?? 1,
+    limit: parseScalarInt(search.limit, 1, 100, 20) ?? 20,
+  };
+
+  const q = parseScalarString(search.q, 100);
+  if (q !== undefined) result.q = q;
+
+  const groupId = parseScalarString(search.groupId, 100);
+  if (groupId !== undefined) result.groupId = groupId;
+
+  const categoryId = parseScalarString(search.categoryId, 100);
+  if (categoryId !== undefined) result.categoryId = categoryId;
+
+  const isActive = parseScalarBoolean(search.isActive);
+  if (isActive !== undefined) result.isActive = isActive;
+
+  const productId = parseScalarString(search.productId, 100);
+  if (productId !== undefined) result.productId = productId;
+
+  const judgeId = parseScalarString(search.judgeId, 100);
+  if (judgeId !== undefined) result.judgeId = judgeId;
+
+  const status = parseEnum(search.status, EVALUATION_STATUSES);
+  if (status !== undefined) result.status = status;
+
+  const tab = parseEnum(search.tab, SCORING_TABS);
+  if (tab !== undefined) result.tab = tab;
+
+  return result;
+}
+
+export function toAdminCriteriaSetsApiQuery(
+  search: AdminScoringSearch,
+): AdminCriteriaSetQuery {
+  const query: AdminCriteriaSetQuery = {
+    page: search.page ?? 1,
+    limit: search.limit ?? 20,
+  };
+  if (search.q !== undefined) query.q = search.q;
+  if (search.groupId !== undefined) query.groupId = search.groupId;
+  if (search.isActive !== undefined) query.isActive = search.isActive;
+  return query;
+}
+
+export function toAdminEvaluationsApiQuery(
+  search: AdminScoringSearch,
+): AdminEvaluationQuery {
+  const query: AdminEvaluationQuery = {
+    page: search.page ?? 1,
+    limit: search.limit ?? 20,
+  };
+  if (search.q !== undefined) query.q = search.q;
+  if (search.productId !== undefined) query.productId = search.productId;
+  if (search.groupId !== undefined) query.groupId = search.groupId;
+  if (search.categoryId !== undefined) query.categoryId = search.categoryId;
+  if (search.judgeId !== undefined) query.judgeId = search.judgeId;
+  if (search.status !== undefined) query.status = search.status;
   return query;
 }
