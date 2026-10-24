@@ -203,6 +203,109 @@ async function seedBootstrapAdmin() {
   });
 }
 
+async function seedTestAccounts() {
+  const dbUrl = process.env.DATABASE_URL ?? '';
+  const isIsolatedTestSchema = /[?&]schema=ocop_test_/i.test(dbUrl);
+  if (
+    isIsolatedTestSchema &&
+    process.env.SEED_TEST_ACCOUNTS !== 'true' &&
+    !process.argv.includes('--seed-test-accounts')
+  ) {
+    return;
+  }
+  if (process.env.SEED_TEST_ACCOUNTS === 'false') {
+    return;
+  }
+
+  const defaultPassword =
+    process.env.SEED_TEST_PASSWORD &&
+    process.env.SEED_TEST_PASSWORD.length >= 12 &&
+    Buffer.byteLength(process.env.SEED_TEST_PASSWORD, 'utf8') <=
+      PASSWORD_MAX_BYTES
+      ? process.env.SEED_TEST_PASSWORD
+      : 'OcopTest@2026!';
+  const passwordHash = await bcrypt.hash(defaultPassword, PASSWORD_ROUNDS);
+
+  const accounts: Array<{
+    email: string;
+    fullName: string;
+    phone: string;
+    role: Role;
+    staffPermissions: StaffPermission[];
+  }> = [
+    {
+      email: 'admin@ocop.test',
+      fullName: 'Quản trị hệ thống (MANAGE + VIEW)',
+      phone: '0900000001',
+      role: Role.ADMIN,
+      staffPermissions: [StaffPermission.MANAGE, StaffPermission.VIEW],
+    },
+    {
+      email: 'admin.score@ocop.test',
+      fullName: 'Quản trị kiêm Giám khảo (MANAGE + VIEW + SCORE)',
+      phone: '0900000002',
+      role: Role.ADMIN,
+      staffPermissions: [
+        StaffPermission.MANAGE,
+        StaffPermission.VIEW,
+        StaffPermission.SCORE,
+      ],
+    },
+    {
+      email: 'viewer@ocop.test',
+      fullName: 'Cán bộ Tra cứu & Báo cáo (VIEW)',
+      phone: '0900000003',
+      role: Role.VIEWER,
+      staffPermissions: [StaffPermission.VIEW],
+    },
+    {
+      email: 'viewer.score@ocop.test',
+      fullName: 'Giám khảo kiêm Xem toàn hệ thống (VIEW + SCORE)',
+      phone: '0900000004',
+      role: Role.JUDGE,
+      staffPermissions: [StaffPermission.VIEW, StaffPermission.SCORE],
+    },
+    {
+      email: 'judge@ocop.test',
+      fullName: 'Giám khảo Hội đồng (SCORE)',
+      phone: '0900000005',
+      role: Role.JUDGE,
+      staffPermissions: [StaffPermission.SCORE],
+    },
+    {
+      email: 'registrant@ocop.test',
+      fullName: 'Chủ thể OCOP Mẫu (REGISTRANT)',
+      phone: '0900000006',
+      role: Role.REGISTRANT,
+      staffPermissions: [],
+    },
+  ];
+
+  for (const account of accounts) {
+    await prisma.user.upsert({
+      where: { email: account.email },
+      update: {
+        fullName: account.fullName,
+        phone: account.phone,
+        role: account.role,
+        staffPermissions: account.staffPermissions,
+        verified: true,
+        isActive: true,
+      },
+      create: {
+        email: account.email,
+        password: passwordHash,
+        fullName: account.fullName,
+        phone: account.phone,
+        role: account.role,
+        staffPermissions: account.staffPermissions,
+        verified: true,
+        isActive: true,
+      },
+    });
+  }
+}
+
 async function main() {
   const criteriaSets = loadCriteriaSets();
   validateCriteriaSets(criteriaSets);
@@ -441,6 +544,7 @@ async function main() {
     { timeout: 300000, maxWait: 10000 },
   );
   await seedBootstrapAdmin();
+  await seedTestAccounts();
 }
 main()
   .catch((error: unknown) => {
