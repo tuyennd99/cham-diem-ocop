@@ -1,14 +1,23 @@
-import type { StaffPermission } from '@ocop/shared';
 import { createFileRoute } from '@tanstack/react-router';
+import { parseAdminUsersSearch } from '../lib/admin-search';
 import { requirePermission } from '../lib/route-guards';
 import { AdminUsersPage } from '../pages/admin/AdminUsersPage';
 
 export const Route = createFileRoute('/_app/admin/users')({
-  validateSearch: (search: Record<string, unknown>) => ({
-    permission: ['MANAGE', 'VIEW', 'SCORE'].includes(String(search.permission))
-      ? (search.permission as StaffPermission)
-      : undefined,
-  }),
+  validateSearch: parseAdminUsersSearch,
   beforeLoad: requirePermission('MANAGE'),
-  component: AdminUsersPage,
+  component: UsersRoute,
 });
+
+function UsersRoute() {
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
+  return (
+    <AdminUsersPage
+      search={search}
+      onSearchChange={(next) => {
+        void navigate({ search: next });
+      }}
+    />
+  );
+}

@@ -3,6 +3,7 @@ import { it } from 'node:test';
 import {
   parseAdminCatalogSearch,
   parseAdminProductSearch,
+  parseAdminUsersSearch,
   toAdminProductApiQuery,
 } from '../src/lib/admin-search';
 
@@ -49,4 +50,19 @@ it('keeps inactive locality filters and selected catalog tab', () => {
   assert.equal(query.tab, 'localities');
   assert.equal(query.isActive, false);
   assert.equal(query.type, 'WARD');
+});
+
+it('preserves legacy judge filter and false user filters', () => {
+  const query = parseAdminUsersSearch({
+    permission: 'SCORE',
+    verified: false,
+    isActive: 'false',
+    page: '2',
+    tab: 'users',
+  });
+  assert.equal(query.permission, 'SCORE');
+  assert.equal(query.verified, false);
+  assert.equal(query.isActive, false);
+  assert.equal(query.page, 2);
+  assert.equal(parseAdminUsersSearch({ permission: 'ROOT' }).permission, undefined);
 });

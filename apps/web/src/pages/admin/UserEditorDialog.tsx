@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type {
   AdminUserRecord,
   CreateAdminUserInput,
@@ -7,6 +7,7 @@ import type {
   UpdateAdminUserProfileInput,
   UpdateAdminUserStatusInput,
 } from '@ocop/shared';
+import { useBlocker } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -18,14 +19,21 @@ import {
 import { Input } from '@/components/ui/input';
 import { staffAccessPayloadForForm, staffPermissionsForForm } from '../../lib/admin-user-form';
 import { messageOf } from '../../lib/api-error';
-import { validatePasswordBytes } from '../../lib/auth';
+import { getSession, validatePasswordBytes } from '../../lib/auth';
 import type { UpdateAdminUserStaffAccessInput } from '../../types/admin';
+
+export const STAFF_PERMISSION_LABELS: Record<StaffPermission, string> = {
+  MANAGE: 'Quản lý',
+  VIEW: 'Xem dữ liệu',
+  SCORE: 'Chấm điểm',
+};
 
 interface UserEditorDialogProps {
   open: boolean;
   user: AdminUserRecord | null;
   units: OrganizationUnitRecord[];
   onOpenChange: (open: boolean) => void;
+  onManageUnits?: () => void;
   onCreate: (input: CreateAdminUserInput) => Promise<unknown>;
   onUpdateProfile: (id: string, input: UpdateAdminUserProfileInput) => Promise<unknown>;
   onUpdateAccess: (id: string, input: UpdateAdminUserStaffAccessInput) => Promise<unknown>;
@@ -43,28 +51,103 @@ const emptyStaffForm = {
   reason: '',
 };
 
+function samePermissionSet(a: StaffPermission[], b: StaffPermission[]): boolean {
+  const normA = [...staffPermissionsForForm(a)].sort().join(',');
+  const normB = [...staffPermissionsForForm(b)].sort().join(',');
+  return normA === normB;
+}
+
+function formatPermissionsList(perms: StaffPermission[]): string {
+  const normalized = staffPermissionsForForm(perms);
+  if (normalized.length === 0) return 'Chưa cấp quyền';
+  return normalized.map((p) => `${STAFF_PERMISSION_LABELS[p]} (${p})`).join(', ');
+}
+
 export function UserEditorDialog(props: UserEditorDialogProps) {
   const { open, user } = props;
   const isStaff = Boolean(user && user.role !== 'REGISTRANT');
+
   const [createForm, setCreateForm] = useState(emptyStaffForm);
+  const [profileBaseline, setProfileBaseline] = useState(() => ({
+    fullName: user?.fullName ?? '',
+    phone: user?.phone ?? '',
+  }));
   const [fullName, setFullName] = useState(user?.fullName ?? '');
   const [phone, setPhone] = useState(user?.phone ?? '');
   const [profileReason, setProfileReason] = useState('');
+  const [profileNotice, setProfileNotice] = useState('');
+
+  const [accessBaseline, setAccessBaseline] = useState(() => ({
+    permissions: staffPermissionsForForm(user?.staffPermissions ?? []),
+    organizationUnitId: user?.organizationUnitId ?? '',
+  }));
   const [permissions, setPermissions] = useState<StaffPermission[]>(
     staffPermissionsForForm(user?.staffPermissions ?? []),
   );
   const [organizationUnitId, setOrganizationUnitId] = useState(user?.organizationUnitId ?? '');
   const [accessReason, setAccessReason] = useState('');
+  const [accessNotice, setAccessNotice] = useState('');
+
+  const [statusBaseline, setStatusBaseline] = useState(user?.isActive ?? true);
   const [statusIsActive, setStatusIsActive] = useState(user?.isActive ?? true);
   const [statusReason, setStatusReason] = useState('');
+  const [statusNotice, setStatusNotice] = useState('');
+
   const [password, setPassword] = useState('');
   const [passwordReason, setPasswordReason] = useState('');
+  const [passwordNotice, setPasswordNotice] = useState('');
+
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const bypassBlockerRef = useRef(false);
 
   useEffect(() => {
     if (!open) setPassword('');
   }, [open]);
+
+  const createDirty =
+    open &&
+    !user &&
+    (createForm.email.trim().length > 0 ||
+      createForm.fullName.trim().length > 0 ||
+      createForm.phone.trim().length > 0 ||
+      createForm.password.length > 0 ||
+      createForm.organizationUnitId.length > 0 ||
+      createForm.staffPermissions.length > 0 ||
+      createForm.reason.trim().length > 0);
+
+  const profileDirty =
+    open &&
+    Boolean(user) &&
+    (fullName !== profileBaseline.fullName ||
+      phone !== profileBaseline.phone ||
+      profileReason.trim().length > 0);
+
+  const accessDirty =
+    open &&
+    isStaff &&
+    (!samePermissionSet(permissions, accessBaseline.permissions) ||
+      organizationUnitId !== accessBaseline.organizationUnitId ||
+      accessReason.trim().length > 0);
+
+  const statusDirty =
+    open &&
+    Boolean(user) &&
+    (statusIsActive !== statusBaseline || statusReason.trim().length > 0);
+
+  const passwordDirty =
+    open && Boolean(user) && (password.length > 0 || passwordReason.trim().length > 0);
+
+  const dirty = createDirty || profileDirty || accessDirty || statusDirty || passwordDirty;
+
+  useBlocker({
+    shouldBlockFn: () =>
+      !bypassBlockerRef.current &&
+      getSession() !== null &&
+      dirty &&
+      !window.confirm('Biểu mẫu người dùng có thay đổi chưa lưu. Rời trang và bỏ thay đổi?'),
+    enableBeforeUnload: () => !bypassBlockerRef.current && getSession() !== null && dirty,
+  });
 
   async function perform(action: () => Promise<unknown>): Promise<boolean> {
     if (busy) return false;
@@ -72,6 +155,9 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
     setBusy(true);
     try {
       await action();
+      if (getSession() === null) {
+        bypassBlockerRef.current = true;
+      }
       return true;
     } catch (cause) {
       setError(messageOf(cause));
@@ -83,6 +169,14 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
 
   function changeOpen(nextOpen: boolean) {
     if (!nextOpen && busy) return;
+    if (
+      !nextOpen &&
+      !bypassBlockerRef.current &&
+      dirty &&
+      !window.confirm('Biểu mẫu người dùng có thay đổi chưa lưu. Đóng hộp thoại và bỏ thay đổi?')
+    ) {
+      return;
+    }
     if (!nextOpen) {
       setPassword('');
       setPasswordReason('');
@@ -90,6 +184,27 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
       setError('');
     }
     props.onOpenChange(nextOpen);
+  }
+
+  function handleManageUnitsClick() {
+    if (busy) return;
+    if (
+      dirty &&
+      !window.confirm(
+        'Bạn đã nhập thông tin tài khoản. Bỏ nội dung đang nhập để chuyển sang Quản lý đơn vị?',
+      )
+    ) {
+      return;
+    }
+    bypassBlockerRef.current = true;
+    setCreateForm(emptyStaffForm);
+    setPassword('');
+    setError('');
+    props.onOpenChange(false);
+    props.onManageUnits?.();
+    setTimeout(() => {
+      bypassBlockerRef.current = false;
+    }, 0);
   }
 
   function togglePermission(permission: StaffPermission, checked: boolean) {
@@ -100,12 +215,15 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
     );
   }
 
+  const noActiveUnit = props.units.every((unit) => !unit.isActive);
+
   const content = user ? (
     <>
       <DialogHeader>
-        <DialogTitle>Thông tin người dùng</DialogTitle>
+        <DialogTitle>Thông tin người dùng: {user.fullName}</DialogTitle>
         <DialogDescription>
-          {user.email} · {user.verified ? 'Đã xác thực' : 'Chưa xác thực'}
+          {user.email} · {user.role === 'REGISTRANT' ? 'Tài khoản chủ thể' : 'Tài khoản nội bộ'} ·{' '}
+          {user.verified ? 'Đã xác thực' : 'Chưa xác thực'}
         </DialogDescription>
       </DialogHeader>
       {error && (
@@ -114,23 +232,26 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
         </p>
       )}
       <form
-        className='account-form route-panel'
+        className='admin-form account-form filter-card'
         onSubmit={(event) => {
           event.preventDefault();
+          setProfileNotice('');
           void perform(async () => {
             await props.onUpdateProfile(user.id, {
               fullName,
               phone: phone || null,
               reason: profileReason,
             });
+            setProfileBaseline({ fullName, phone });
             setProfileReason('');
+            setProfileNotice('Đã lưu thông tin hồ sơ người dùng.');
           });
         }}
       >
         <h3>Hồ sơ</h3>
         <label>
           Email
-          <Input value={user.email} readOnly />
+          <Input value={user.email} readOnly disabled />
         </label>
         <label>
           Họ tên
@@ -146,7 +267,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
           <Input value={phone} onChange={(event) => setPhone(event.target.value)} maxLength={30} />
         </label>
         <label>
-          Lý do cập nhật
+          Lý do cập nhật hồ sơ
           <Input
             value={profileReason}
             onChange={(event) => setProfileReason(event.target.value)}
@@ -154,45 +275,74 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
             required
           />
         </label>
-        <Button type='submit' variant='secondary' disabled={busy}>
-          Lưu hồ sơ
-        </Button>
+        {profileNotice && (
+          <p className='form-message' role='status'>
+            {profileNotice}
+          </p>
+        )}
+        <div className='admin-actions'>
+          <Button type='submit' variant='secondary' disabled={busy}>
+            {busy ? 'Đang lưu…' : 'Lưu hồ sơ'}
+          </Button>
+        </div>
       </form>
+
       {isStaff && (
         <form
-          className='account-form route-panel'
+          className='admin-form account-form filter-card'
           onSubmit={(event) => {
             event.preventDefault();
-            void perform(() =>
-              props.onUpdateAccess(
-                user.id,
-                staffAccessPayloadForForm({
-                  staffPermissions: permissions,
-                  organizationUnitId: organizationUnitId || null,
-                  reason: accessReason,
-                }),
-              ),
-            );
+            setAccessNotice('');
+            const payload = staffAccessPayloadForForm({
+              staffPermissions: permissions,
+              organizationUnitId: organizationUnitId || null,
+              reason: accessReason,
+            });
+            const beforeText = formatPermissionsList(accessBaseline.permissions);
+            const afterText = formatPermissionsList(payload.staffPermissions);
+            if (
+              !window.confirm(
+                `Xác nhận cập nhật quyền cho ${user.email}?\nTrước: ${beforeText}\nSau: ${afterText}`,
+              )
+            ) {
+              return;
+            }
+            void perform(async () => {
+              await props.onUpdateAccess(user.id, payload);
+              setAccessBaseline({
+                permissions: payload.staffPermissions,
+                organizationUnitId: payload.organizationUnitId ?? '',
+              });
+              setAccessReason('');
+              setAccessNotice('Đã lưu quyền và đơn vị công tác.');
+            });
           }}
         >
           <h3>Quyền và đơn vị</h3>
-          <div role='group' aria-label='Quyền nội bộ' className='account-form'>
+          <p className='text-xs text-muted'>
+            Quyền Quản lý (MANAGE) tự bao hàm Xem dữ liệu (VIEW), không tự bao hàm Chấm điểm
+            (SCORE).
+          </p>
+          <div role='group' aria-label='Quyền nội bộ' className='grid gap-2'>
             {(['MANAGE', 'VIEW', 'SCORE'] as const).map((permission) => (
-              <label key={permission}>
+              <label key={permission} className='inline-flex items-center gap-2 cursor-pointer'>
                 <input
                   type='checkbox'
                   checked={permissions.includes(permission)}
                   disabled={busy || (permission === 'VIEW' && permissions.includes('MANAGE'))}
                   onChange={(event) => togglePermission(permission, event.target.checked)}
-                />{' '}
-                {permission === 'VIEW' && permissions.includes('MANAGE')
-                  ? 'VIEW (được bao hàm bởi MANAGE)'
-                  : permission}
+                />
+                <span>
+                  {STAFF_PERMISSION_LABELS[permission]} ({permission})
+                  {permission === 'VIEW' && permissions.includes('MANAGE')
+                    ? ' — được bao hàm bởi Quản lý'
+                    : ''}
+                </span>
               </label>
             ))}
           </div>
           <label>
-            Đơn vị
+            Đơn vị công tác
             <select
               value={organizationUnitId}
               onChange={(event) => setOrganizationUnitId(event.target.value)}
@@ -225,34 +375,47 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
               required
             />
           </label>
-          <Button type='submit' variant='secondary' disabled={busy}>
-            Lưu quyền và đơn vị
-          </Button>
+          {accessNotice && (
+            <p className='form-message' role='status'>
+              {accessNotice}
+            </p>
+          )}
+          <div className='admin-actions'>
+            <Button type='submit' variant='secondary' disabled={busy}>
+              {busy ? 'Đang lưu…' : 'Lưu quyền và đơn vị'}
+            </Button>
+          </div>
         </form>
       )}
+
       <form
-        className='account-form route-panel'
+        className='admin-form account-form filter-card'
         onSubmit={(event) => {
           event.preventDefault();
+          setStatusNotice('');
           if (!statusIsActive && !window.confirm(`Khóa tài khoản ${user.email}?`)) return;
           void perform(async () => {
             const ok = await props.onUpdateStatus(user.id, {
               isActive: statusIsActive,
               reason: statusReason,
             });
-            if (ok) setStatusReason('');
+            if (ok) {
+              setStatusBaseline(statusIsActive);
+              setStatusReason('');
+              setStatusNotice('Đã lưu trạng thái hoạt động của tài khoản.');
+            }
           });
         }}
       >
         <h3>Trạng thái</h3>
-        <label>
+        <label className='inline-flex items-center gap-2 cursor-pointer'>
           <input
             type='checkbox'
             checked={statusIsActive}
             onChange={(event) => setStatusIsActive(event.target.checked)}
             disabled={busy}
-          />{' '}
-          Đang hoạt động
+          />
+          <span>Đang hoạt động</span>
         </label>
         <label>
           Lý do thay đổi trạng thái
@@ -263,26 +426,36 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
             required
           />
         </label>
-        <Button type='submit' variant='secondary' disabled={busy}>
-          Lưu trạng thái
-        </Button>
+        {statusNotice && (
+          <p className='form-message' role='status'>
+            {statusNotice}
+          </p>
+        )}
+        <div className='admin-actions'>
+          <Button type='submit' variant='secondary' disabled={busy}>
+            {busy ? 'Đang lưu…' : 'Lưu trạng thái'}
+          </Button>
+        </div>
       </form>
+
       <form
-        className='account-form route-panel'
+        className='admin-form account-form filter-card'
         onSubmit={(event) => {
           event.preventDefault();
+          setPasswordNotice('');
           if (!window.confirm(`Đặt lại mật khẩu cho ${user.email}?`)) return;
           void perform(async () => {
             validatePasswordBytes(password);
             await props.onResetPassword(user.id, { password, reason: passwordReason });
             setPassword('');
             setPasswordReason('');
+            setPasswordNotice('Đã đặt lại mật khẩu tài khoản.');
           });
         }}
       >
         <h3>Đặt lại mật khẩu</h3>
         <label>
-          Mật khẩu mới
+          Mật khẩu mới ({isStaff ? 'tối thiểu 12 ký tự' : 'tối thiểu 8 ký tự'})
           <Input
             type='password'
             value={password}
@@ -302,9 +475,16 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
             required
           />
         </label>
-        <Button type='submit' variant='secondary' disabled={busy}>
-          Đặt lại mật khẩu
-        </Button>
+        {passwordNotice && (
+          <p className='form-message' role='status'>
+            {passwordNotice}
+          </p>
+        )}
+        <div className='admin-actions'>
+          <Button type='submit' variant='secondary' disabled={busy}>
+            {busy ? 'Đang lưu…' : 'Đặt lại mật khẩu'}
+          </Button>
+        </div>
       </form>
     </>
   ) : (
@@ -319,7 +499,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
         </p>
       )}
       <form
-        className='account-form'
+        className='admin-form account-form'
         onSubmit={(event) => {
           event.preventDefault();
           void perform(async () => {
@@ -334,9 +514,13 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
               staffPermissions: staffPermissionsForForm(createForm.staffPermissions),
               reason: createForm.reason,
             });
+            bypassBlockerRef.current = true;
             setCreateForm(emptyStaffForm);
             setPassword('');
             props.onOpenChange(false);
+            setTimeout(() => {
+              bypassBlockerRef.current = false;
+            }, 0);
           });
         }}
       >
@@ -370,7 +554,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
           />
         </label>
         <label>
-          Mật khẩu tạm thời
+          Mật khẩu tạm thời (tối thiểu 12 ký tự)
           <Input
             type='password'
             value={createForm.password}
@@ -382,7 +566,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
           />
         </label>
         <label>
-          Đơn vị
+          Đơn vị công tác
           <select
             value={createForm.organizationUnitId}
             onChange={(event) =>
@@ -401,9 +585,9 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
           </select>
         </label>
         <fieldset className='account-form'>
-          <legend>Quyền</legend>
+          <legend className='font-semibold text-sm'>Quyền nội bộ</legend>
           {(['MANAGE', 'VIEW', 'SCORE'] as const).map((permission) => (
-            <label key={permission}>
+            <label key={permission} className='inline-flex items-center gap-2 cursor-pointer'>
               <input
                 type='checkbox'
                 checked={createForm.staffPermissions.includes(permission)}
@@ -420,10 +604,13 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
                     ),
                   })
                 }
-              />{' '}
-              {permission === 'VIEW' && createForm.staffPermissions.includes('MANAGE')
-                ? 'VIEW (được bao hàm bởi MANAGE)'
-                : permission}
+              />
+              <span>
+                {STAFF_PERMISSION_LABELS[permission]} ({permission})
+                {permission === 'VIEW' && createForm.staffPermissions.includes('MANAGE')
+                  ? ' — được bao hàm bởi Quản lý'
+                  : ''}
+              </span>
             </label>
           ))}
         </fieldset>
@@ -436,12 +623,35 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
             required
           />
         </label>
-        {props.units.every((unit) => !unit.isActive) && (
-          <p role='alert'>Cần có đơn vị đang hoạt động trước khi tạo tài khoản.</p>
+        {noActiveUnit && (
+          <div className='form-note' role='alert'>
+            <p>Cần có đơn vị đang hoạt động trước khi tạo tài khoản nội bộ.</p>
+            {props.onManageUnits && (
+              <Button
+                type='button'
+                variant='secondary'
+                size='sm'
+                className='mt-2'
+                onClick={handleManageUnitsClick}
+              >
+                Quản lý đơn vị
+              </Button>
+            )}
+          </div>
         )}
-        <Button type='submit' disabled={busy || props.units.every((unit) => !unit.isActive)}>
-          {busy ? 'Đang tạo…' : 'Tạo tài khoản'}
-        </Button>
+        <div className='admin-actions'>
+          <Button type='submit' disabled={busy || noActiveUnit}>
+            {busy ? 'Đang tạo…' : 'Tạo tài khoản'}
+          </Button>
+          <Button
+            type='button'
+            variant='secondary'
+            disabled={busy}
+            onClick={() => changeOpen(false)}
+          >
+            Đóng
+          </Button>
+        </div>
       </form>
     </>
   );

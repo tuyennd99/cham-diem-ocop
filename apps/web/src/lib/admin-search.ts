@@ -1,10 +1,13 @@
 import type {
   AdminCategoryQuery,
   AdminProductQuery,
+  AdminUserQuery,
   LocalityQuery,
   LocalityType,
+  OrganizationUnitQuery,
   ProductRegistrationType,
   ProductStatus,
+  StaffPermission,
 } from '@ocop/shared';
 import { isValidIsoWithOffset } from './admin-date';
 
@@ -224,5 +227,72 @@ export function toAdminLocalityApiQuery(search: AdminCatalogSearch): LocalityQue
   if (search.isActive !== undefined) query.isActive = search.isActive;
   if (search.type !== undefined) query.type = search.type;
   if (search.provinceName !== undefined) query.provinceName = search.provinceName;
+  return query;
+}
+
+export type AdminUsersTab = 'users' | 'units';
+
+export type AdminUsersSearch = AdminUserQuery & {
+  tab?: AdminUsersTab;
+};
+
+const STAFF_PERMISSIONS: readonly StaffPermission[] = ['MANAGE', 'VIEW', 'SCORE'];
+const USER_KINDS = ['STAFF', 'REGISTRANT'] as const;
+const USERS_TABS: readonly AdminUsersTab[] = ['users', 'units'];
+
+export function parseAdminUsersSearch(
+  search: Record<string, unknown>,
+): AdminUsersSearch {
+  const result: AdminUsersSearch = {
+    page: parseScalarInt(search.page, 1, 100000, 1) ?? 1,
+    limit: parseScalarInt(search.limit, 1, 100, 20) ?? 20,
+  };
+
+  const q = parseScalarString(search.q, 255);
+  if (q !== undefined) result.q = q;
+
+  const permission = parseEnum(search.permission, STAFF_PERMISSIONS);
+  if (permission !== undefined) result.permission = permission;
+
+  const organizationUnitId = parseScalarString(search.organizationUnitId, 100);
+  if (organizationUnitId !== undefined) result.organizationUnitId = organizationUnitId;
+
+  const isActive = parseScalarBoolean(search.isActive);
+  if (isActive !== undefined) result.isActive = isActive;
+
+  const verified = parseScalarBoolean(search.verified);
+  if (verified !== undefined) result.verified = verified;
+
+  const kind = parseEnum(search.kind, USER_KINDS);
+  if (kind !== undefined) result.kind = kind;
+
+  const tab = parseEnum(search.tab, USERS_TABS);
+  if (tab !== undefined) result.tab = tab;
+
+  return result;
+}
+
+export function toAdminUsersApiQuery(search: AdminUsersSearch): AdminUserQuery {
+  const query: AdminUserQuery = {
+    page: search.page ?? 1,
+    limit: search.limit ?? 20,
+  };
+  if (search.q !== undefined) query.q = search.q;
+  if (search.permission !== undefined) query.permission = search.permission;
+  if (search.organizationUnitId !== undefined)
+    query.organizationUnitId = search.organizationUnitId;
+  if (search.isActive !== undefined) query.isActive = search.isActive;
+  if (search.verified !== undefined) query.verified = search.verified;
+  if (search.kind !== undefined) query.kind = search.kind;
+  return query;
+}
+
+export function toAdminUnitsApiQuery(search: AdminUsersSearch): OrganizationUnitQuery {
+  const query: OrganizationUnitQuery = {
+    page: search.page ?? 1,
+    limit: search.limit ?? 20,
+  };
+  if (search.q !== undefined) query.q = search.q;
+  if (search.isActive !== undefined) query.isActive = search.isActive;
   return query;
 }

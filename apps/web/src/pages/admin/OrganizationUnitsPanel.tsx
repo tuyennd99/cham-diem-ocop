@@ -1,209 +1,179 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import type {
   CreateOrganizationUnitInput,
+  OrganizationUnitQuery,
   OrganizationUnitRecord,
   UpdateOrganizationUnitInput,
 } from '@ocop/shared';
+import { useBlocker } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { DEFAULT_PAGE_SIZE } from '../../constants/consts';
 import { errorText, messageOf } from '../../lib/api-error';
 import { useOrganizationUnits } from '../../queries/admin-users';
 
-interface OrganizationUnitsPanelProps {
+export interface OrganizationUnitsPanelProps {
+  query?: OrganizationUnitQuery;
+  onQueryChange?: (next: OrganizationUnitQuery) => void;
   onCreate: (input: CreateOrganizationUnitInput) => Promise<unknown>;
   onUpdate: (id: string, input: UpdateOrganizationUnitInput) => Promise<unknown>;
 }
 
-function UnitEditor({
-  unit,
-  onUpdate,
-}: {
-  unit: OrganizationUnitRecord;
+interface UnitFormDialogProps {
+  open: boolean;
+  unit: OrganizationUnitRecord | null;
+  defaultOrder: number;
+  onOpenChange: (open: boolean) => void;
+  onCreate: OrganizationUnitsPanelProps['onCreate'];
   onUpdate: OrganizationUnitsPanelProps['onUpdate'];
-}) {
-  const [name, setName] = useState(unit.name);
-  const [description, setDescription] = useState(unit.description ?? '');
-  const [order, setOrder] = useState(String(unit.order));
-  const [isActive, setIsActive] = useState(unit.isActive);
+  onSaved: (message: string) => void;
+}
+
+function UnitFormDialog({
+  open,
+  unit,
+  defaultOrder,
+  onOpenChange,
+  onCreate,
+  onUpdate,
+  onSaved,
+}: UnitFormDialogProps) {
+  const isEdit = unit !== null;
+  const initialCode = unit?.code ?? '';
+  const initialName = unit?.name ?? '';
+  const initialDescription = unit?.description ?? '';
+  const initialOrder = String(unit?.order ?? defaultOrder);
+  const initialIsActive = unit?.isActive ?? true;
+
+  const [code, setCode] = useState(initialCode);
+  const [name, setName] = useState(initialName);
+  const [description, setDescription] = useState(initialDescription);
+  const [order, setOrder] = useState(initialOrder);
+  const [isActive, setIsActive] = useState(initialIsActive);
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  return (
-    <form
-      className='route-panel account-form'
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (busy) return;
-        setBusy(true);
-        setError('');
-        void onUpdate(unit.id, {
-          name,
-          description: description || null,
-          order: Number(order),
-          isActive,
-          reason,
-        })
-          .then(
-            () => setReason(''),
-            (cause: unknown) => setError(messageOf(cause)),
-          )
-          .finally(() => setBusy(false));
-      }}
-    >
-      <h3>
-        {unit.name}{' '}
-        <small>
-          · {unit.code} · {unit.isActive ? 'Đang hoạt động' : 'Ngừng nhận tài khoản mới'}
-        </small>
-      </h3>
-      <label>
-        Tên đơn vị
-        <Input
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          maxLength={255}
-          required
-        />
-      </label>
-      <label>
-        Mô tả
-        <Input value={description} onChange={(event) => setDescription(event.target.value)} />
-      </label>
-      <label>
-        Thứ tự
-        <Input
-          type='number'
-          value={order}
-          onChange={(event) => setOrder(event.target.value)}
-          min={0}
-          step={1}
-          required
-        />
-      </label>
-      <label>
-        <input
-          type='checkbox'
-          checked={isActive}
-          onChange={(event) => setIsActive(event.target.checked)}
-          disabled={busy}
-        />{' '}
-        Nhận tài khoản mới
-      </label>
-      <label>
-        Lý do thay đổi
-        <Input
-          value={reason}
-          onChange={(event) => setReason(event.target.value)}
-          maxLength={255}
-          required
-        />
-      </label>
-      {error && (
-        <p className='form-note' role='alert'>
-          {error}
-        </p>
-      )}
-      <Button type='submit' variant='secondary' disabled={busy}>
-        {busy ? 'Đang lưu…' : 'Lưu đơn vị'}
-      </Button>
-    </form>
-  );
-}
+  const dirty =
+    open &&
+    (code !== initialCode ||
+      name !== initialName ||
+      description !== initialDescription ||
+      order !== initialOrder ||
+      isActive !== initialIsActive ||
+      reason.trim().length > 0);
 
-export function OrganizationUnitsPanel({ onCreate, onUpdate }: OrganizationUnitsPanelProps) {
-  const [page, setPage] = useState(1);
-  const [queryText, setQueryText] = useState('');
-  const [q, setQ] = useState<string | undefined>();
-  const [isActive, setIsActive] = useState<boolean | undefined>();
-  const [code, setCode] = useState('');
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [order, setOrder] = useState('0');
-  const [newIsActive, setNewIsActive] = useState(true);
-  const [reason, setReason] = useState('');
-  const [createError, setCreateError] = useState('');
-  const [notice, setNotice] = useState('');
-  const [busy, setBusy] = useState(false);
-  const {
-    data,
-    error: loadError,
-    isPending,
-    refetch,
-  } = useOrganizationUnits({
-    page,
-    limit: DEFAULT_PAGE_SIZE,
-    q,
-    isActive,
+  useBlocker({
+    shouldBlockFn: () =>
+      dirty && !window.confirm('Biểu mẫu đơn vị có thay đổi chưa lưu. Rời trang và bỏ thay đổi?'),
+    enableBeforeUnload: () => dirty,
   });
-  const units = data?.data ?? [];
 
-  async function createUnit(event: FormEvent<HTMLFormElement>) {
+  function requestOpenChange(nextOpen: boolean) {
+    if (nextOpen) {
+      onOpenChange(true);
+      return;
+    }
+    if (busy) return;
+    if (
+      dirty &&
+      !window.confirm('Biểu mẫu đơn vị có thay đổi chưa lưu. Đóng hộp thoại và bỏ thay đổi?')
+    ) {
+      return;
+    }
+    onOpenChange(false);
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
     setBusy(true);
-    setCreateError('');
-    setNotice('');
+    setError('');
     try {
-      const input: CreateOrganizationUnitInput = {
-        code,
-        name,
-        description: description || null,
-        order: Number(order),
-        isActive: newIsActive,
-        reason,
-      };
-      await onCreate(input);
-      setCode('');
-      setName('');
-      setDescription('');
-      setOrder('0');
-      setNewIsActive(true);
-      setReason('');
-      setNotice('Đã tạo đơn vị.');
-      setPage(1);
+      if (isEdit) {
+        await onUpdate(unit.id, {
+          name,
+          description: description.trim() || null,
+          order: Number(order),
+          isActive,
+          reason,
+        });
+        onSaved(`Đã cập nhật đơn vị ${name}.`);
+      } else {
+        await onCreate({
+          code,
+          name,
+          description: description.trim() || null,
+          order: Number(order),
+          isActive,
+          reason,
+        });
+        onSaved(`Đã tạo đơn vị ${name}.`);
+      }
+      onOpenChange(false);
     } catch (cause) {
-      setCreateError(messageOf(cause));
+      setError(messageOf(cause));
     } finally {
       setBusy(false);
     }
   }
 
-  const loadErrorText = errorText(loadError);
-  const pageCount = data?.meta?.totalPages ?? 1;
-
   return (
-    <section className='admin-units-panel' aria-label='Quản lý đơn vị'>
-      <section className='route-panel'>
-        <h2>Tạo đơn vị</h2>
-        <form className='account-form' onSubmit={(event) => void createUnit(event)}>
-          <label>
-            Mã đơn vị
-            <Input
-              value={code}
-              onChange={(event) => setCode(event.target.value)}
-              maxLength={50}
-              required
-            />
-          </label>
-          <label>
+    <Dialog open={open} onOpenChange={requestOpenChange}>
+      <DialogContent className='admin-dialog' data-admin-ui='true'>
+        <DialogHeader>
+          <DialogTitle>
+            {isEdit ? `Cập nhật đơn vị: ${unit.name}` : 'Tạo đơn vị quản lý'}
+          </DialogTitle>
+          <DialogDescription>
+            {isEdit
+              ? `Mã đơn vị cố định: ${unit.code}. Đơn vị ngừng nhận tài khoản mới vẫn hiển thị trên các tài khoản đã gán.`
+              : 'Nhập mã và tên đơn vị công tác của cán bộ/giám khảo.'}
+          </DialogDescription>
+        </DialogHeader>
+        <form className='admin-form account-form' onSubmit={(event) => void submit(event)}>
+          {!isEdit && (
+            <label htmlFor='unit-code'>
+              Mã đơn vị (bất biến)
+              <Input
+                id='unit-code'
+                value={code}
+                onChange={(event) => setCode(event.target.value)}
+                maxLength={50}
+                required
+              />
+            </label>
+          )}
+          <label htmlFor='unit-name'>
             Tên đơn vị
             <Input
+              id='unit-name'
               value={name}
               onChange={(event) => setName(event.target.value)}
               maxLength={255}
               required
             />
           </label>
-          <label>
-            Mô tả
-            <Input value={description} onChange={(event) => setDescription(event.target.value)} />
-          </label>
-          <label>
-            Thứ tự
+          <label htmlFor='unit-description'>
+            Mô tả (tùy chọn)
             <Input
+              id='unit-description'
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+            />
+          </label>
+          <label htmlFor='unit-order'>
+            Thứ tự hiển thị
+            <Input
+              id='unit-order'
               type='number'
               value={order}
               onChange={(event) => setOrder(event.target.value)}
@@ -212,42 +182,108 @@ export function OrganizationUnitsPanel({ onCreate, onUpdate }: OrganizationUnits
               required
             />
           </label>
-          <label>
+          <label className='inline-flex items-center gap-2 cursor-pointer'>
             <input
               type='checkbox'
-              checked={newIsActive}
-              onChange={(event) => setNewIsActive(event.target.checked)}
+              checked={isActive}
+              onChange={(event) => setIsActive(event.target.checked)}
               disabled={busy}
-            />{' '}
-            Nhận tài khoản mới
+            />
+            <span>Nhận tài khoản mới</span>
           </label>
-          <label>
-            Lý do tạo đơn vị
+          <label htmlFor='unit-reason'>
+            Lý do {isEdit ? 'thay đổi' : 'tạo đơn vị'}
             <Input
+              id='unit-reason'
               value={reason}
               onChange={(event) => setReason(event.target.value)}
               maxLength={255}
               required
             />
           </label>
-          {createError && (
+          {error && (
             <p className='form-note' role='alert'>
-              {createError}
+              {error}
             </p>
           )}
-          {notice && <p role='status'>{notice}</p>}
-          <Button type='submit' disabled={busy}>
-            {busy ? 'Đang tạo…' : 'Tạo đơn vị'}
-          </Button>
-        </form>
-      </section>
-
-      <section>
-        <div className='section-heading'>
-          <div>
-            <h2>Đơn vị</h2>
-            <p>{data?.meta?.total ?? units.length} đơn vị</p>
+          <div className='admin-actions'>
+            <Button type='submit' disabled={busy}>
+              {busy ? 'Đang lưu…' : isEdit ? 'Lưu đơn vị' : 'Tạo đơn vị'}
+            </Button>
+            <Button
+              type='button'
+              variant='secondary'
+              disabled={busy}
+              onClick={() => requestOpenChange(false)}
+            >
+              Đóng
+            </Button>
           </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function OrganizationUnitsPanel({
+  query: controlledQuery,
+  onQueryChange,
+  onCreate,
+  onUpdate,
+}: OrganizationUnitsPanelProps) {
+  const [fallbackQuery, setFallbackQuery] = useState<OrganizationUnitQuery>({
+    page: 1,
+    limit: DEFAULT_PAGE_SIZE,
+  });
+  const appliedQuery = controlledQuery ?? fallbackQuery;
+
+  function applyQuery(next: OrganizationUnitQuery) {
+    if (onQueryChange) {
+      onQueryChange(next);
+    } else {
+      setFallbackQuery(next);
+    }
+  }
+
+  const [draftQ, setDraftQ] = useState(appliedQuery.q ?? '');
+  const [draftIsActive, setDraftIsActive] = useState<boolean | undefined>(appliedQuery.isActive);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editingUnit, setEditingUnit] = useState<OrganizationUnitRecord | null>(null);
+  const [notice, setNotice] = useState('');
+
+  useEffect(() => {
+    setDraftQ(appliedQuery.q ?? '');
+    setDraftIsActive(appliedQuery.isActive);
+  }, [appliedQuery.q, appliedQuery.isActive]);
+
+  const {
+    data,
+    error: loadError,
+    isPending,
+    isFetching,
+    refetch,
+  } = useOrganizationUnits({
+    page: appliedQuery.page ?? 1,
+    limit: appliedQuery.limit ?? DEFAULT_PAGE_SIZE,
+    q: appliedQuery.q,
+    isActive: appliedQuery.isActive,
+  });
+
+  const units = data?.data ?? [];
+  const totalPages = data?.meta?.totalPages ?? 0;
+  const currentPage = data?.meta?.page ?? appliedQuery.page ?? 1;
+  const loadErrorText = errorText(loadError);
+
+  return (
+    <section className='admin-page' aria-label='Quản lý đơn vị'>
+      <div className='admin-page-heading'>
+        <div>
+          <h2>Đơn vị công tác</h2>
+          <p className='route-intro'>
+            {data?.meta?.total ?? units.length} đơn vị công tác dành cho tài khoản nội bộ.
+          </p>
+        </div>
+        <div className='admin-actions'>
           <Button
             type='button'
             variant='secondary'
@@ -256,85 +292,210 @@ export function OrganizationUnitsPanel({ onCreate, onUpdate }: OrganizationUnits
           >
             Tải lại
           </Button>
-        </div>
-        <form
-          className='hero-actions'
-          onSubmit={(event) => {
-            event.preventDefault();
-            setQ(queryText.trim() || undefined);
-            setPage(1);
-          }}
-        >
-          <label>
-            Tìm theo mã hoặc tên
-            <Input value={queryText} onChange={(event) => setQueryText(event.target.value)} />
-          </label>
-          <label>
-            Trạng thái
-            <select
-              value={isActive === undefined ? '' : String(isActive)}
-              onChange={(event) => {
-                setIsActive(event.target.value === '' ? undefined : event.target.value === 'true');
-                setPage(1);
-              }}
-            >
-              <option value=''>Tất cả</option>
-              <option value='true'>Đang hoạt động</option>
-              <option value='false'>Đã ngừng</option>
-            </select>
-          </label>
-          <Button type='submit' variant='secondary'>
-            Tìm kiếm
+          <Button
+            type='button'
+            onClick={() => {
+              setEditingUnit(null);
+              setCreateOpen(true);
+            }}
+          >
+            Tạo đơn vị
           </Button>
-        </form>
-        {loadErrorText && (
-          <div className='form-note' role='alert'>
-            <p>{loadErrorText}</p>
+        </div>
+      </div>
+
+      {notice && (
+        <p className='form-message' role='status'>
+          {notice}
+        </p>
+      )}
+
+      <form
+        className='admin-filters'
+        onSubmit={(event) => {
+          event.preventDefault();
+          applyQuery({
+            ...appliedQuery,
+            page: 1,
+            q: draftQ.trim() || undefined,
+            isActive: draftIsActive,
+          });
+        }}
+      >
+        <label htmlFor='units-filter-q'>
+          Tìm theo mã hoặc tên đơn vị
+          <Input
+            id='units-filter-q'
+            value={draftQ}
+            placeholder='Nhập mã hoặc tên đơn vị…'
+            onChange={(event) => setDraftQ(event.target.value)}
+          />
+        </label>
+        <label htmlFor='units-filter-active'>
+          Trạng thái
+          <select
+            id='units-filter-active'
+            value={draftIsActive === undefined ? '' : String(draftIsActive)}
+            onChange={(event) =>
+              setDraftIsActive(
+                event.target.value === '' ? undefined : event.target.value === 'true',
+              )
+            }
+          >
+            <option value=''>Tất cả</option>
+            <option value='true'>Đang hoạt động</option>
+            <option value='false'>Ngừng nhận tài khoản mới</option>
+          </select>
+        </label>
+        <div className='admin-actions items-end'>
+          <Button type='submit'>Áp dụng</Button>
+          {(appliedQuery.q !== undefined || appliedQuery.isActive !== undefined) && (
             <Button
               type='button'
               variant='secondary'
-              disabled={isPending}
-              onClick={() => void refetch()}
+              onClick={() =>
+                applyQuery({ page: 1, limit: appliedQuery.limit ?? DEFAULT_PAGE_SIZE })
+              }
             >
-              Thử lại
+              Xóa bộ lọc
             </Button>
-          </div>
-        )}
-        {isPending && <p aria-live='polite'>Đang tải đơn vị…</p>}
-        {!isPending && !loadError && units.length === 0 && (
-          <div className='empty-state'>
-            <h3>Chưa có đơn vị phù hợp</h3>
-          </div>
-        )}
-        {!isPending && !loadError && (
-          <div className='record-list'>
-            {units.map((unit) => (
-              <UnitEditor key={unit.id} unit={unit} onUpdate={onUpdate} />
-            ))}
-          </div>
-        )}
-        <div className='hero-actions'>
+          )}
+        </div>
+      </form>
+
+      {isFetching && !isPending && (
+        <p className='form-note' role='status'>
+          Đang cập nhật danh sách đơn vị…
+        </p>
+      )}
+
+      {loadErrorText && (
+        <div className='form-note' role='alert'>
+          <p>{loadErrorText}</p>
           <Button
             type='button'
             variant='secondary'
-            disabled={page <= 1}
-            onClick={() => setPage((current) => current - 1)}
+            disabled={isPending}
+            onClick={() => void refetch()}
           >
-            Trước
-          </Button>
-          <span>
-            Trang {page} / {pageCount}
-          </span>
-          <Button
-            type='button'
-            variant='secondary'
-            disabled={page >= pageCount}
-            onClick={() => setPage((current) => current + 1)}
-          >
-            Sau
+            Thử lại
           </Button>
         </div>
-      </section>
+      )}
+
+      {isPending && <p aria-live='polite'>Đang tải đơn vị…</p>}
+
+      {!isPending && !loadError && units.length === 0 && (
+        <div className='admin-table-region empty-card'>
+          <h3>Chưa có đơn vị phù hợp</h3>
+          <p className='text-sm text-muted'>
+            Tạo đơn vị hoạt động để gán cho tài khoản cán bộ và giám khảo nội bộ.
+          </p>
+        </div>
+      )}
+
+      {!isPending && !loadError && units.length > 0 && (
+        <div
+          className='admin-table-region'
+          role='region'
+          aria-label='Bảng đơn vị công tác'
+          tabIndex={0}
+        >
+          <table className='admin-data-table'>
+            <thead>
+              <tr>
+                <th scope='col'>Mã đơn vị</th>
+                <th scope='col'>Tên đơn vị</th>
+                <th scope='col'>Mô tả</th>
+                <th scope='col' style={{ textAlign: 'right' }}>
+                  Thứ tự
+                </th>
+                <th scope='col'>Trạng thái</th>
+                <th scope='col' style={{ textAlign: 'right' }}>
+                  Thao tác
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {units.map((unit) => (
+                <tr key={unit.id}>
+                  <td className='font-mono text-xs'>{unit.code}</td>
+                  <th scope='row' className='font-semibold'>
+                    {unit.name}
+                  </th>
+                  <td className='text-sm text-muted'>{unit.description ?? 'Không có mô tả.'}</td>
+                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                    {unit.order}
+                  </td>
+                  <td>
+                    <span className={`status-badge ${unit.isActive ? 'completed' : 'draft'}`}>
+                      {unit.isActive ? 'Đang hoạt động' : 'Ngừng nhận tài khoản mới'}
+                    </span>
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      size='sm'
+                      onClick={() => {
+                        setCreateOpen(false);
+                        setEditingUnit(unit);
+                      }}
+                    >
+                      Sửa
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div className='table-footer'>
+            <div className='page-info'>
+              Hiển thị <strong>{units.length}</strong> /{' '}
+              <strong>{data?.meta?.total ?? units.length}</strong> đơn vị
+            </div>
+            <div className='pagination-actions'>
+              <Button
+                type='button'
+                variant='secondary'
+                size='sm'
+                disabled={currentPage <= 1}
+                onClick={() => applyQuery({ ...appliedQuery, page: currentPage - 1 })}
+              >
+                Trước
+              </Button>
+              <span className='text-xs font-semibold px-2'>
+                {totalPages > 0 ? `Trang ${currentPage} / ${totalPages}` : 'Chưa có đơn vị phù hợp'}
+              </span>
+              <Button
+                type='button'
+                variant='secondary'
+                size='sm'
+                disabled={totalPages === 0 || currentPage >= totalPages}
+                onClick={() => applyQuery({ ...appliedQuery, page: currentPage + 1 })}
+              >
+                Sau
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <UnitFormDialog
+        key={editingUnit?.id ?? (createOpen ? 'create-unit' : 'closed-unit')}
+        open={createOpen || editingUnit !== null}
+        unit={editingUnit}
+        defaultOrder={units.length + 1}
+        onOpenChange={(open) => {
+          if (open) return;
+          setCreateOpen(false);
+          setEditingUnit(null);
+        }}
+        onCreate={onCreate}
+        onUpdate={onUpdate}
+        onSaved={(msg) => setNotice(msg)}
+      />
     </section>
   );
 }
