@@ -5,6 +5,7 @@ import {
   parseAdminCatalogSearch,
   parseAdminDashboardSearch,
   parseAdminProductSearch,
+  parseAdminReportsSearch,
   parseAdminScoringSearch,
   parseAdminUsersSearch,
   toAdminProductApiQuery,
@@ -110,4 +111,20 @@ it('parses dashboard period filters with Vietnamese default year', () => {
   assert.equal(query.localityType, 'WARD');
   assert.equal(query.registrationType, 'UPGRADE');
   assert.equal(query.assessmentYear, 2026);
+});
+
+it('restores result report tab and grouping after reload', () => {
+  const query = parseAdminReportsSearch({
+    tab: 'results',
+    year: '2026',
+    month: '10',
+    groupBy: 'locality',
+    localityType: 'COMMUNE',
+    assessmentYear: '2025',
+  });
+  assert.equal(query.tab, 'results');
+  assert.equal(query.year, 2026);
+  assert.equal(query.month, 10);
+  assert.equal(query.groupBy, 'locality');
+  assert.equal(query.assessmentYear, 2025);
 });

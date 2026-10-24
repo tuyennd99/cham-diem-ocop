@@ -4,6 +4,7 @@ import type {
   AdminEvaluationQuery,
   AdminProductQuery,
   AdminReportFilterQuery,
+  AdminReportQuery,
   AdminUserQuery,
   EvaluationRecordStatus,
   LocalityQuery,
@@ -11,6 +12,7 @@ import type {
   OrganizationUnitQuery,
   ProductRegistrationType,
   ProductStatus,
+  ReportGroupBy,
   StaffPermission,
 } from '@ocop/shared';
 import { currentVietnameseYear, isValidIsoWithOffset } from './admin-date';
@@ -424,4 +426,37 @@ export function parseAdminDashboardSearch(
   if (assessmentYear !== undefined) result.assessmentYear = assessmentYear;
 
   return result;
+}
+
+export type AdminReportTab = 'registrations' | 'results';
+
+export type AdminReportsSearch = AdminReportQuery & {
+  tab?: AdminReportTab;
+};
+
+const REPORT_GROUP_BYS: readonly ReportGroupBy[] = [
+  'month',
+  'year',
+  'locality',
+  'group',
+  'category',
+];
+const REPORT_TABS: readonly AdminReportTab[] = ['registrations', 'results'];
+
+export function parseAdminReportsSearch(
+  search: Record<string, unknown>,
+): AdminReportsSearch {
+  const base = parseAdminDashboardSearch(search);
+  const result: AdminReportsSearch = {
+    ...base,
+    groupBy: parseEnum(search.groupBy, REPORT_GROUP_BYS) ?? 'month',
+  };
+  const tab = parseEnum(search.tab, REPORT_TABS);
+  if (tab !== undefined) result.tab = tab;
+  return result;
+}
+
+export function toAdminReportApiQuery(search: AdminReportsSearch): AdminReportQuery {
+  const { tab: _tab, ...query } = search;
+  return query;
 }
