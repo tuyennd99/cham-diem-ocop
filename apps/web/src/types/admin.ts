@@ -83,6 +83,7 @@ export interface ProductResults {
   starRating: number | null;
   category: AdminCategory;
   evaluations: {
+    id?: string;
     judge: { id: string; fullName: string; email: string };
     status: string;
     total: number | null;

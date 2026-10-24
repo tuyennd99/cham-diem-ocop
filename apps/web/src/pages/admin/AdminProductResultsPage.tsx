@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { errorText } from '../../lib/api-error';
 import { useSession } from '../../lib/auth';
+import { formatExactScore, formatStarRatingLabel } from '../../lib/print-format';
 import { hasStaffPermission } from '../../lib/session-contract';
 import { useAdminProductResults, type AdminProductMode } from '../../queries/admin-products';
 
@@ -37,17 +38,38 @@ export function AdminProductResultsPage({
         {product.category.groupName} · {product.category.name} · {product.status}
       </p>
       <h1>{product.name}</h1>
+      <div className='hero-actions'>
+        <Link
+          className='button button-secondary'
+          to='/print/products/$id/results'
+          params={{ id: product.id }}
+        >
+          In bảng tổng hợp kết quả (A4)
+        </Link>
+      </div>
       <p>
         <strong>
-          {product.finalScore ?? 'Chưa tổng hợp'}{' '}
-          {product.finalScore !== null ? `điểm · ${product.starRating} sao` : ''}
+          {product.status === 'COMPLETED' && product.finalScore !== null
+            ? `${formatExactScore(product.finalScore)} điểm · ${formatStarRatingLabel(product.starRating)}`
+            : 'Chưa tổng hợp kết quả cuối'}
         </strong>
       </p>
       {product.evaluations.map((evaluation) => (
         <article className='route-panel' key={evaluation.judge.id}>
-          <h2>
-            {evaluation.judge.fullName} · {evaluation.status}
-          </h2>
+          <div className='section-heading'>
+            <h2>
+              {evaluation.judge.fullName} · {evaluation.status}
+            </h2>
+            {evaluation.id && (
+              <Link
+                className='button button-secondary'
+                to='/print/evaluations/$id'
+                params={{ id: evaluation.id }}
+              >
+                In phiếu chấm
+              </Link>
+            )}
+          </div>
           <p>
             {evaluation.judge.email} · {evaluation.total ?? 'Chưa có tổng điểm'}
           </p>

@@ -28,17 +28,20 @@ export function AppLayout({ children }: { children: ReactNode }) {
           {canView && (
             <>
               <Link to='/admin'>Tổng quan</Link>
+              <Link to='/admin/product-groups'>Nhóm sản phẩm</Link>
               <Link to='/admin/products'>Sản phẩm</Link>
               <Link to='/admin/registrations'>Phiếu đăng ký</Link>
+              <Link to='/admin/scoring-forms'>Phiếu chấm OCOP</Link>
               <Link to='/admin/assignments'>Phân công</Link>
             </>
           )}
+          {!canView && canScore && <Link to='/admin/scoring-forms'>Phiếu chấm OCOP</Link>}
           {canManage && (
             <Link to='/admin/users' search={{ permission: undefined }}>
               Người dùng
             </Link>
           )}
-          {canScore && <Link to='/judge'>Hàng chờ chấm</Link>}
+          {canScore && <Link to='/judge'>Hồ sơ được phân công</Link>}
           <Link to='/account'>Tài khoản</Link>
         </nav>
       </aside>

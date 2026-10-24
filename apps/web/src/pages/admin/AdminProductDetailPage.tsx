@@ -92,6 +92,24 @@ export function AdminProductDetailPage({
       <p>
         {product.registrant.fullName} · {product.registrant.email} · {product.registrant.id}
       </p>
+      <div className='hero-actions'>
+        <Link
+          className='button button-secondary'
+          to='/print/products/$id/registration'
+          params={{ id: product.id }}
+        >
+          In phiếu đăng ký (Mẫu 01)
+        </Link>
+        {!isDraft && (
+          <Link
+            className='button button-secondary'
+            to='/print/products/$id/results'
+            params={{ id: product.id }}
+          >
+            In bảng tổng hợp kết quả
+          </Link>
+        )}
+      </div>
       {canManage && isDraft && (
         <div className='hero-actions'>
           <Link

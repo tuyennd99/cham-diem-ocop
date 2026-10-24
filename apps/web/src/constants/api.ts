@@ -25,6 +25,8 @@ export const API = {
     products: '/my/products',
     product: (id: string) => `/my/products/${seg(id)}`,
     submit: (id: string) => `/my/products/${seg(id)}/submit`,
+    registrationPrintData: (id: string) => `/my/products/${seg(id)}/registration-print-data`,
+    resultsPrintData: (id: string) => `/my/products/${seg(id)}/results/print-data`,
     attachments: (id: string) => `/my/products/${seg(id)}/attachments`,
     attachment: (id: string, attachmentId: string) =>
       `/my/products/${seg(id)}/attachments/${seg(attachmentId)}`,
@@ -32,6 +34,7 @@ export const API = {
   judge: {
     products: '/judge/products',
     evaluation: (id: string) => `/judge/products/${seg(id)}/evaluation`,
+    evaluationPrintData: (id: string) => `/judge/products/${seg(id)}/evaluation/print-data`,
     submitEvaluation: (id: string) => `/judge/products/${seg(id)}/evaluation/submit`,
     attachment: (id: string, attachmentId: string) =>
       `/judge/products/${seg(id)}/attachments/${seg(attachmentId)}`,
@@ -48,10 +51,24 @@ export const API = {
     userResetPassword: (id: string) => `/admin/users/${seg(id)}/reset-password`,
     organizationUnits: '/admin/organization-units',
     organizationUnit: (id: string) => `/admin/organization-units/${seg(id)}`,
+    productGroups: '/admin/product-groups',
+    productGroup: (id: string) => `/admin/product-groups/${seg(id)}`,
+    categories: '/admin/categories',
+    category: (id: string) => `/admin/categories/${seg(id)}`,
+    localities: '/admin/localities',
+    locality: (id: string) => `/admin/localities/${seg(id)}`,
+    criteriaSets: '/admin/criteria-sets',
+    criteriaSet: (id: string) => `/admin/criteria-sets/${seg(id)}`,
+    criteriaSetPrintData: (id: string) => `/admin/criteria-sets/${seg(id)}/print-data`,
+    evaluations: '/admin/evaluations',
+    evaluationPrintData: (id: string) => `/admin/evaluations/${seg(id)}/print-data`,
     assignments: '/admin/assignments',
     products: '/admin/products',
     product: (id: string) => `/admin/products/${seg(id)}`,
     productSubmit: (id: string) => `/admin/products/${seg(id)}/submit`,
+    productRegistrationPrintData: (id: string) =>
+      `/admin/products/${seg(id)}/registration-print-data`,
+    productResultsPrintData: (id: string) => `/admin/products/${seg(id)}/results/print-data`,
     productAttachments: (id: string) => `/admin/products/${seg(id)}/attachments`,
     productAttachment: (id: string, attachmentId: string) =>
       `/admin/products/${seg(id)}/attachments/${seg(attachmentId)}`,

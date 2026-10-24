@@ -6,6 +6,7 @@ import { myProductsApi } from '../../api';
 import { REGISTRANT_PRODUCT_STATUS_LABEL } from '../../constants/product-status';
 import { queryKeys } from '../../constants/query-key';
 import { errorText, messageOf } from '../../lib/api-error';
+import { formatExactScore, formatStarRatingLabel } from '../../lib/print-format';
 import { formatFormEntries } from '../../lib/utils';
 import { useMyProduct } from '../../queries/registrant';
 import type { RegistrantProduct as Product } from '../../types/registrant';
@@ -101,8 +102,8 @@ export function MyProductDetailPage({ productId }: { productId: string }) {
         <h2 id='result-title'>Kết quả đánh giá</h2>
         {resultReady ? (
           <p className='result-score'>
-            <strong>{product.finalScore} điểm</strong>
-            <span>{product.starRating} sao</span>
+            <strong>{formatExactScore(product.finalScore)} điểm</strong>
+            <span>{formatStarRatingLabel(product.starRating)}</span>
           </p>
         ) : (
           <p role='status'>
@@ -123,6 +124,22 @@ export function MyProductDetailPage({ productId }: { productId: string }) {
           <Button type='button' variant='secondary' disabled={busy} onClick={retry}>
             Tải lại hồ sơ
           </Button>
+        )}
+        <Link
+          className='button button-secondary'
+          to='/print/products/$id/registration'
+          params={{ id: product.id }}
+        >
+          In phiếu đăng ký (Mẫu 01)
+        </Link>
+        {resultReady && (
+          <Link
+            className='button button-secondary'
+            to='/print/products/$id/results'
+            params={{ id: product.id }}
+          >
+            In kết quả đánh giá
+          </Link>
         )}
         {product.status === 'DRAFT' && (
           <>

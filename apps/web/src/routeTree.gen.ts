@@ -24,6 +24,8 @@ import { Route as AppAccountPasswordRouteImport } from './routes/_app.account.pa
 import { Route as AppAdminIndexRouteImport } from './routes/_app.admin.index'
 import { Route as AppAdminAssignmentsRouteImport } from './routes/_app.admin.assignments'
 import { Route as AppAdminJudgesRouteImport } from './routes/_app.admin.judges'
+import { Route as AppAdminProductGroupsRouteImport } from './routes/_app.admin.product-groups'
+import { Route as AppAdminScoringFormsRouteImport } from './routes/_app.admin.scoring-forms'
 import { Route as AppAdminUsersRouteImport } from './routes/_app.admin.users'
 import { Route as AppJudgeIndexRouteImport } from './routes/_app.judge.index'
 import { Route as PublicProductsIndexRouteImport } from './routes/_public.products.index'
@@ -37,8 +39,13 @@ import { Route as AppJudgeProductsIdRouteImport } from './routes/_app.judge.prod
 import { Route as AppMyProductsIndexRouteImport } from './routes/_app.my.products.index'
 import { Route as AppMyProductsIdRouteImport } from './routes/_app.my.products.$id'
 import { Route as AppMyProductsNewRouteImport } from './routes/_app.my.products.new'
+import { Route as AppPrintCriteriaSetsIdRouteImport } from './routes/_app.print.criteria-sets.$id'
+import { Route as AppPrintEvaluationsIdRouteImport } from './routes/_app.print.evaluations.$id'
 import { Route as AppAdminRegistrationsIdEditRouteImport } from './routes/_app.admin.registrations.$id.edit'
 import { Route as AppMyProductsIdEditRouteImport } from './routes/_app.my.products.$id.edit'
+import { Route as AppPrintJudgeProductsIdRouteImport } from './routes/_app.print.judge.products.$id'
+import { Route as AppPrintProductsIdRegistrationRouteImport } from './routes/_app.print.products.$id.registration'
+import { Route as AppPrintProductsIdResultsRouteImport } from './routes/_app.print.products.$id.results'
 
 const R403Route = R403RouteImport.update({
   id: '/403',
@@ -112,6 +119,16 @@ const AppAdminJudgesRoute = AppAdminJudgesRouteImport.update({
   path: '/admin/judges',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAdminProductGroupsRoute = AppAdminProductGroupsRouteImport.update({
+  id: '/admin/product-groups',
+  path: '/admin/product-groups',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminScoringFormsRoute = AppAdminScoringFormsRouteImport.update({
+  id: '/admin/scoring-forms',
+  path: '/admin/scoring-forms',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAdminUsersRoute = AppAdminUsersRouteImport.update({
   id: '/admin/users',
   path: '/admin/users',
@@ -179,6 +196,16 @@ const AppMyProductsNewRoute = AppMyProductsNewRouteImport.update({
   path: '/my/products/new',
   getParentRoute: () => AppRoute,
 } as any)
+const AppPrintCriteriaSetsIdRoute = AppPrintCriteriaSetsIdRouteImport.update({
+  id: '/print/criteria-sets/$id',
+  path: '/print/criteria-sets/$id',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPrintEvaluationsIdRoute = AppPrintEvaluationsIdRouteImport.update({
+  id: '/print/evaluations/$id',
+  path: '/print/evaluations/$id',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAdminRegistrationsIdEditRoute =
   AppAdminRegistrationsIdEditRouteImport.update({
     id: '/edit',
@@ -190,6 +217,23 @@ const AppMyProductsIdEditRoute = AppMyProductsIdEditRouteImport.update({
   path: '/edit',
   getParentRoute: () => AppMyProductsIdRoute,
 } as any)
+const AppPrintJudgeProductsIdRoute = AppPrintJudgeProductsIdRouteImport.update({
+  id: '/print/judge/products/$id',
+  path: '/print/judge/products/$id',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPrintProductsIdRegistrationRoute =
+  AppPrintProductsIdRegistrationRouteImport.update({
+    id: '/print/products/$id/registration',
+    path: '/print/products/$id/registration',
+    getParentRoute: () => AppRoute,
+  } as any)
+const AppPrintProductsIdResultsRoute =
+  AppPrintProductsIdResultsRouteImport.update({
+    id: '/print/products/$id/results',
+    path: '/print/products/$id/results',
+    getParentRoute: () => AppRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/403': typeof R403Route
@@ -203,6 +247,8 @@ export interface FileRoutesByFullPath {
   '/account/password': typeof AppAccountPasswordRoute
   '/admin/assignments': typeof AppAdminAssignmentsRoute
   '/admin/judges': typeof AppAdminJudgesRoute
+  '/admin/product-groups': typeof AppAdminProductGroupsRoute
+  '/admin/scoring-forms': typeof AppAdminScoringFormsRoute
   '/admin/users': typeof AppAdminUsersRoute
   '/products/$id': typeof PublicProductsIdRoute
   '/admin/': typeof AppAdminIndexRoute
@@ -214,11 +260,16 @@ export interface FileRoutesByFullPath {
   '/judge/products/$id': typeof AppJudgeProductsIdRoute
   '/my/products/$id': typeof AppMyProductsIdRouteWithChildren
   '/my/products/new': typeof AppMyProductsNewRoute
+  '/print/criteria-sets/$id': typeof AppPrintCriteriaSetsIdRoute
+  '/print/evaluations/$id': typeof AppPrintEvaluationsIdRoute
   '/admin/products/': typeof AppAdminProductsIndexRoute
   '/admin/registrations/': typeof AppAdminRegistrationsIndexRoute
   '/my/products/': typeof AppMyProductsIndexRoute
   '/admin/registrations/$id/edit': typeof AppAdminRegistrationsIdEditRoute
   '/my/products/$id/edit': typeof AppMyProductsIdEditRoute
+  '/print/judge/products/$id': typeof AppPrintJudgeProductsIdRoute
+  '/print/products/$id/registration': typeof AppPrintProductsIdRegistrationRoute
+  '/print/products/$id/results': typeof AppPrintProductsIdResultsRoute
 }
 export interface FileRoutesByTo {
   '/403': typeof R403Route
@@ -232,6 +283,8 @@ export interface FileRoutesByTo {
   '/account/password': typeof AppAccountPasswordRoute
   '/admin/assignments': typeof AppAdminAssignmentsRoute
   '/admin/judges': typeof AppAdminJudgesRoute
+  '/admin/product-groups': typeof AppAdminProductGroupsRoute
+  '/admin/scoring-forms': typeof AppAdminScoringFormsRoute
   '/admin/users': typeof AppAdminUsersRoute
   '/products/$id': typeof PublicProductsIdRoute
   '/admin': typeof AppAdminIndexRoute
@@ -243,11 +296,16 @@ export interface FileRoutesByTo {
   '/judge/products/$id': typeof AppJudgeProductsIdRoute
   '/my/products/$id': typeof AppMyProductsIdRouteWithChildren
   '/my/products/new': typeof AppMyProductsNewRoute
+  '/print/criteria-sets/$id': typeof AppPrintCriteriaSetsIdRoute
+  '/print/evaluations/$id': typeof AppPrintEvaluationsIdRoute
   '/admin/products': typeof AppAdminProductsIndexRoute
   '/admin/registrations': typeof AppAdminRegistrationsIndexRoute
   '/my/products': typeof AppMyProductsIndexRoute
   '/admin/registrations/$id/edit': typeof AppAdminRegistrationsIdEditRoute
   '/my/products/$id/edit': typeof AppMyProductsIdEditRoute
+  '/print/judge/products/$id': typeof AppPrintJudgeProductsIdRoute
+  '/print/products/$id/registration': typeof AppPrintProductsIdRegistrationRoute
+  '/print/products/$id/results': typeof AppPrintProductsIdResultsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -265,6 +323,8 @@ export interface FileRoutesById {
   '/_app/account/password': typeof AppAccountPasswordRoute
   '/_app/admin/assignments': typeof AppAdminAssignmentsRoute
   '/_app/admin/judges': typeof AppAdminJudgesRoute
+  '/_app/admin/product-groups': typeof AppAdminProductGroupsRoute
+  '/_app/admin/scoring-forms': typeof AppAdminScoringFormsRoute
   '/_app/admin/users': typeof AppAdminUsersRoute
   '/_public/products/$id': typeof PublicProductsIdRoute
   '/_app/admin/': typeof AppAdminIndexRoute
@@ -276,11 +336,16 @@ export interface FileRoutesById {
   '/_app/judge/products/$id': typeof AppJudgeProductsIdRoute
   '/_app/my/products/$id': typeof AppMyProductsIdRouteWithChildren
   '/_app/my/products/new': typeof AppMyProductsNewRoute
+  '/_app/print/criteria-sets/$id': typeof AppPrintCriteriaSetsIdRoute
+  '/_app/print/evaluations/$id': typeof AppPrintEvaluationsIdRoute
   '/_app/admin/products/': typeof AppAdminProductsIndexRoute
   '/_app/admin/registrations/': typeof AppAdminRegistrationsIndexRoute
   '/_app/my/products/': typeof AppMyProductsIndexRoute
   '/_app/admin/registrations/$id/edit': typeof AppAdminRegistrationsIdEditRoute
   '/_app/my/products/$id/edit': typeof AppMyProductsIdEditRoute
+  '/_app/print/judge/products/$id': typeof AppPrintJudgeProductsIdRoute
+  '/_app/print/products/$id/registration': typeof AppPrintProductsIdRegistrationRoute
+  '/_app/print/products/$id/results': typeof AppPrintProductsIdResultsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -296,6 +361,8 @@ export interface FileRouteTypes {
     | '/account/password'
     | '/admin/assignments'
     | '/admin/judges'
+    | '/admin/product-groups'
+    | '/admin/scoring-forms'
     | '/admin/users'
     | '/products/$id'
     | '/admin/'
@@ -307,11 +374,16 @@ export interface FileRouteTypes {
     | '/judge/products/$id'
     | '/my/products/$id'
     | '/my/products/new'
+    | '/print/criteria-sets/$id'
+    | '/print/evaluations/$id'
     | '/admin/products/'
     | '/admin/registrations/'
     | '/my/products/'
     | '/admin/registrations/$id/edit'
     | '/my/products/$id/edit'
+    | '/print/judge/products/$id'
+    | '/print/products/$id/registration'
+    | '/print/products/$id/results'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/403'
@@ -325,6 +397,8 @@ export interface FileRouteTypes {
     | '/account/password'
     | '/admin/assignments'
     | '/admin/judges'
+    | '/admin/product-groups'
+    | '/admin/scoring-forms'
     | '/admin/users'
     | '/products/$id'
     | '/admin'
@@ -336,11 +410,16 @@ export interface FileRouteTypes {
     | '/judge/products/$id'
     | '/my/products/$id'
     | '/my/products/new'
+    | '/print/criteria-sets/$id'
+    | '/print/evaluations/$id'
     | '/admin/products'
     | '/admin/registrations'
     | '/my/products'
     | '/admin/registrations/$id/edit'
     | '/my/products/$id/edit'
+    | '/print/judge/products/$id'
+    | '/print/products/$id/registration'
+    | '/print/products/$id/results'
   id:
     | '__root__'
     | '/403'
@@ -357,6 +436,8 @@ export interface FileRouteTypes {
     | '/_app/account/password'
     | '/_app/admin/assignments'
     | '/_app/admin/judges'
+    | '/_app/admin/product-groups'
+    | '/_app/admin/scoring-forms'
     | '/_app/admin/users'
     | '/_public/products/$id'
     | '/_app/admin/'
@@ -368,11 +449,16 @@ export interface FileRouteTypes {
     | '/_app/judge/products/$id'
     | '/_app/my/products/$id'
     | '/_app/my/products/new'
+    | '/_app/print/criteria-sets/$id'
+    | '/_app/print/evaluations/$id'
     | '/_app/admin/products/'
     | '/_app/admin/registrations/'
     | '/_app/my/products/'
     | '/_app/admin/registrations/$id/edit'
     | '/_app/my/products/$id/edit'
+    | '/_app/print/judge/products/$id'
+    | '/_app/print/products/$id/registration'
+    | '/_app/print/products/$id/results'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -490,6 +576,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminJudgesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/admin/product-groups': {
+      id: '/_app/admin/product-groups'
+      path: '/admin/product-groups'
+      fullPath: '/admin/product-groups'
+      preLoaderRoute: typeof AppAdminProductGroupsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin/scoring-forms': {
+      id: '/_app/admin/scoring-forms'
+      path: '/admin/scoring-forms'
+      fullPath: '/admin/scoring-forms'
+      preLoaderRoute: typeof AppAdminScoringFormsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/admin/users': {
       id: '/_app/admin/users'
       path: '/admin/users'
@@ -581,6 +681,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppMyProductsNewRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/print/criteria-sets/$id': {
+      id: '/_app/print/criteria-sets/$id'
+      path: '/print/criteria-sets/$id'
+      fullPath: '/print/criteria-sets/$id'
+      preLoaderRoute: typeof AppPrintCriteriaSetsIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/print/evaluations/$id': {
+      id: '/_app/print/evaluations/$id'
+      path: '/print/evaluations/$id'
+      fullPath: '/print/evaluations/$id'
+      preLoaderRoute: typeof AppPrintEvaluationsIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/admin/registrations/$id/edit': {
       id: '/_app/admin/registrations/$id/edit'
       path: '/edit'
@@ -594,6 +708,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/my/products/$id/edit'
       preLoaderRoute: typeof AppMyProductsIdEditRouteImport
       parentRoute: typeof AppMyProductsIdRoute
+    }
+    '/_app/print/judge/products/$id': {
+      id: '/_app/print/judge/products/$id'
+      path: '/print/judge/products/$id'
+      fullPath: '/print/judge/products/$id'
+      preLoaderRoute: typeof AppPrintJudgeProductsIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/print/products/$id/registration': {
+      id: '/_app/print/products/$id/registration'
+      path: '/print/products/$id/registration'
+      fullPath: '/print/products/$id/registration'
+      preLoaderRoute: typeof AppPrintProductsIdRegistrationRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/print/products/$id/results': {
+      id: '/_app/print/products/$id/results'
+      path: '/print/products/$id/results'
+      fullPath: '/print/products/$id/results'
+      preLoaderRoute: typeof AppPrintProductsIdResultsRouteImport
+      parentRoute: typeof AppRoute
     }
   }
 }
@@ -640,6 +775,8 @@ interface AppRouteChildren {
   AppAccountRoute: typeof AppAccountRouteWithChildren
   AppAdminAssignmentsRoute: typeof AppAdminAssignmentsRoute
   AppAdminJudgesRoute: typeof AppAdminJudgesRoute
+  AppAdminProductGroupsRoute: typeof AppAdminProductGroupsRoute
+  AppAdminScoringFormsRoute: typeof AppAdminScoringFormsRoute
   AppAdminUsersRoute: typeof AppAdminUsersRoute
   AppAdminIndexRoute: typeof AppAdminIndexRoute
   AppJudgeIndexRoute: typeof AppJudgeIndexRoute
@@ -649,15 +786,22 @@ interface AppRouteChildren {
   AppJudgeProductsIdRoute: typeof AppJudgeProductsIdRoute
   AppMyProductsIdRoute: typeof AppMyProductsIdRouteWithChildren
   AppMyProductsNewRoute: typeof AppMyProductsNewRoute
+  AppPrintCriteriaSetsIdRoute: typeof AppPrintCriteriaSetsIdRoute
+  AppPrintEvaluationsIdRoute: typeof AppPrintEvaluationsIdRoute
   AppAdminProductsIndexRoute: typeof AppAdminProductsIndexRoute
   AppAdminRegistrationsIndexRoute: typeof AppAdminRegistrationsIndexRoute
   AppMyProductsIndexRoute: typeof AppMyProductsIndexRoute
+  AppPrintJudgeProductsIdRoute: typeof AppPrintJudgeProductsIdRoute
+  AppPrintProductsIdRegistrationRoute: typeof AppPrintProductsIdRegistrationRoute
+  AppPrintProductsIdResultsRoute: typeof AppPrintProductsIdResultsRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppAccountRoute: AppAccountRouteWithChildren,
   AppAdminAssignmentsRoute: AppAdminAssignmentsRoute,
   AppAdminJudgesRoute: AppAdminJudgesRoute,
+  AppAdminProductGroupsRoute: AppAdminProductGroupsRoute,
+  AppAdminScoringFormsRoute: AppAdminScoringFormsRoute,
   AppAdminUsersRoute: AppAdminUsersRoute,
   AppAdminIndexRoute: AppAdminIndexRoute,
   AppJudgeIndexRoute: AppJudgeIndexRoute,
@@ -667,9 +811,14 @@ const AppRouteChildren: AppRouteChildren = {
   AppJudgeProductsIdRoute: AppJudgeProductsIdRoute,
   AppMyProductsIdRoute: AppMyProductsIdRouteWithChildren,
   AppMyProductsNewRoute: AppMyProductsNewRoute,
+  AppPrintCriteriaSetsIdRoute: AppPrintCriteriaSetsIdRoute,
+  AppPrintEvaluationsIdRoute: AppPrintEvaluationsIdRoute,
   AppAdminProductsIndexRoute: AppAdminProductsIndexRoute,
   AppAdminRegistrationsIndexRoute: AppAdminRegistrationsIndexRoute,
   AppMyProductsIndexRoute: AppMyProductsIndexRoute,
+  AppPrintJudgeProductsIdRoute: AppPrintJudgeProductsIdRoute,
+  AppPrintProductsIdRegistrationRoute: AppPrintProductsIdRegistrationRoute,
+  AppPrintProductsIdResultsRoute: AppPrintProductsIdResultsRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

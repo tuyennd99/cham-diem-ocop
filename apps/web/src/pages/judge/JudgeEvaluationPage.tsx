@@ -193,9 +193,18 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
             Mã hồ sơ <code>{data.product.id}</code>
           </p>
         </div>
-        <span className={`badge ${locked ? 'status-completed' : 'badge-category'}`}>
-          {locked ? 'Đã nộp · chỉ đọc' : 'Phiếu nháp'}
-        </span>
+        <div className='hero-actions'>
+          <Link
+            className='button button-secondary'
+            to='/print/judge/products/$id'
+            params={{ id: productId }}
+          >
+            In phiếu chấm A4
+          </Link>
+          <span className={`badge ${locked ? 'status-completed' : 'badge-category'}`}>
+            {locked ? 'Đã nộp · chỉ đọc' : 'Phiếu nháp'}
+          </span>
+        </div>
       </div>
       {locked && <p className='form-note'>Phiếu đã nộp và không thể chỉnh sửa.</p>}
       <div className='judge-workspace'>
