@@ -55,7 +55,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
       {canView && (
         <div className='admin-nav-group'>
           <span className='admin-nav-group-label'>Làm việc</span>
-          <Link to='/admin' activeOptions={{ exact: true }} onClick={closeMobileMenu}>
+          <Link
+            to='/admin'
+            activeOptions={{ exact: true, includeSearch: false }}
+            onClick={closeMobileMenu}
+          >
             <LayoutDashboard className='size-4' aria-hidden='true' />
             <span>Tổng quan</span>
           </Link>
@@ -106,7 +110,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
             </Link>
           )}
           {canManage && (
-            <Link to='/admin/users' search={{ permission: undefined }} onClick={closeMobileMenu}>
+            <Link
+              to='/admin/users'
+              search={{ permission: undefined }}
+              activeOptions={{ includeSearch: false }}
+              onClick={closeMobileMenu}
+            >
               <Users className='size-4' aria-hidden='true' />
               <span>Người dùng</span>
             </Link>
@@ -139,7 +148,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       )}
       {canView && (
         <>
-          <Link to='/admin' activeOptions={{ exact: true }}>
+          <Link to='/admin' activeOptions={{ exact: true, includeSearch: false }}>
             Tổng quan
           </Link>
           <Link to='/admin/product-groups'>Nhóm sản phẩm</Link>
