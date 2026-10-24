@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
 import {
+  parseAdminCatalogSearch,
   parseAdminProductSearch,
   toAdminProductApiQuery,
 } from '../src/lib/admin-search';
@@ -41,4 +42,11 @@ it('preserves detail tab in URL search and strips tab before API query', () => {
   assert.equal(Object.hasOwn(apiQuery, 'tab'), false);
   assert.equal(apiQuery.page, 3);
   assert.equal(apiQuery.status, 'SCORING');
+});
+
+it('keeps inactive locality filters and selected catalog tab', () => {
+  const query = parseAdminCatalogSearch({ tab: 'localities', isActive: 'false', type: 'WARD' });
+  assert.equal(query.tab, 'localities');
+  assert.equal(query.isActive, false);
+  assert.equal(query.type, 'WARD');
 });

@@ -98,3 +98,49 @@ export function vietnameseInclusiveEndInput(toExclusiveIso: string): string {
   }
   return shifted.toISOString().slice(0, 10);
 }
+
+const DATETIME_LOCAL_RE =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/;
+
+export function vietnameseDateTimeInput(iso: string | null | undefined): string {
+  if (!iso) return '';
+  if (!isValidIsoWithOffset(iso)) {
+    throw new Error(`Mốc thời gian không hợp lệ: ${iso}`);
+  }
+  const shifted = new Date(Date.parse(iso) + VN_OFFSET_MS);
+  const full = shifted.toISOString(); // YYYY-MM-DDTHH:mm:ss.sssZ
+  if (shifted.getUTCMilliseconds() !== 0) {
+    return full.slice(0, 23);
+  }
+  if (shifted.getUTCSeconds() !== 0) {
+    return full.slice(0, 19);
+  }
+  return full.slice(0, 16);
+}
+
+export function localityEffectiveValue(
+  input: string,
+  original?: string | null,
+): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  if (original && vietnameseDateTimeInput(original) === trimmed) {
+    return original;
+  }
+  const match = DATETIME_LOCAL_RE.exec(trimmed);
+  if (!match) {
+    throw new Error(`Ngày giờ hiệu lực không hợp lệ: ${input}`);
+  }
+  const dayPart = `${match[1]}-${match[2]}-${match[3]}`;
+  parseYmdStrict(dayPart);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = match[6] !== undefined ? Number(match[6]) : 0;
+  const msPart = match[7];
+  if (hour > 23 || minute > 59 || second > 59) {
+    throw new Error(`Giờ hiệu lực không hợp lệ: ${input}`);
+  }
+  const secStr = String(second).padStart(2, '0');
+  const fracStr = msPart ? `.${msPart.padEnd(3, '0')}` : '';
+  return `${dayPart}T${match[4]}:${match[5]}:${secStr}${fracStr}+07:00`;
+}

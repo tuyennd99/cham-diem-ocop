@@ -6,6 +6,7 @@ import type {
   ProductGroupRecord,
   UpdateAdminCategoryInput,
 } from '@ocop/shared';
+import { useBlocker } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -35,22 +36,59 @@ export function CategoryEditorDialog({
   onUpdate,
 }: CategoryEditorDialogProps) {
   const isEdit = category !== null;
-  const [groupId, setGroupId] = useState(category?.groupId ?? groups[0]?.id ?? '');
-  const [name, setName] = useState(category?.name ?? '');
-  const [classificationGroup, setClassificationGroup] = useState(
-    category?.classificationGroup ?? '',
-  );
+  const initialGroupId = category?.groupId ?? groups[0]?.id ?? '';
+  const initialName = category?.name ?? '';
+  const initialClassificationGroup = category?.classificationGroup ?? '';
+  const initialClassificationSubgroup = category?.classificationSubgroup ?? '';
+  const initialDescription = category?.description ?? '';
+  const initialOrder = String(category?.order ?? 0);
+  const initialIsActive = category?.isActive ?? false;
+
+  const [groupId, setGroupId] = useState(initialGroupId);
+  const [name, setName] = useState(initialName);
+  const [classificationGroup, setClassificationGroup] = useState(initialClassificationGroup);
   const [classificationSubgroup, setClassificationSubgroup] = useState(
-    category?.classificationSubgroup ?? '',
+    initialClassificationSubgroup,
   );
-  const [description, setDescription] = useState(category?.description ?? '');
-  const [order, setOrder] = useState(String(category?.order ?? 0));
-  const [isActive, setIsActive] = useState(category?.isActive ?? false);
+  const [description, setDescription] = useState(initialDescription);
+  const [order, setOrder] = useState(initialOrder);
+  const [isActive, setIsActive] = useState(initialIsActive);
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   const lockedGroupChange = isEdit && (category.submittedReferenceCount ?? 0) > 0;
+  const dirty =
+    open &&
+    (groupId !== initialGroupId ||
+      name !== initialName ||
+      classificationGroup !== initialClassificationGroup ||
+      classificationSubgroup !== initialClassificationSubgroup ||
+      description !== initialDescription ||
+      order !== initialOrder ||
+      isActive !== initialIsActive ||
+      reason.trim().length > 0);
+
+  useBlocker({
+    shouldBlockFn: () =>
+      dirty && !window.confirm('Biểu mẫu phân loại có thay đổi chưa lưu. Rời trang và bỏ thay đổi?'),
+    enableBeforeUnload: () => dirty,
+  });
+
+  function requestOpenChange(nextOpen: boolean) {
+    if (nextOpen) {
+      onOpenChange(true);
+      return;
+    }
+    if (busy) return;
+    if (
+      dirty &&
+      !window.confirm('Biểu mẫu phân loại có thay đổi chưa lưu. Đóng hộp thoại và bỏ thay đổi?')
+    ) {
+      return;
+    }
+    onOpenChange(false);
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -89,7 +127,7 @@ export function CategoryEditorDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={requestOpenChange}>
       <DialogContent className='admin-dialog' data-admin-ui='true'>
         <DialogHeader>
           <DialogTitle>
@@ -101,7 +139,7 @@ export function CategoryEditorDialog({
               : 'Phân loại mới được tạo ở trạng thái ngừng mở đăng ký cho tới khi nạp bộ tiêu chí hợp lệ đủ 100 điểm.'}
           </DialogDescription>
         </DialogHeader>
-        <form className='account-form' onSubmit={(event) => void submit(event)}>
+        <form className='admin-form account-form' onSubmit={(event) => void submit(event)}>
           <label>
             Nhóm sản phẩm lớn
             <select
@@ -119,7 +157,7 @@ export function CategoryEditorDialog({
               ))}
             </select>
             {lockedGroupChange && (
-              <small>
+              <small className='text-xs text-muted'>
                 Phân loại đã có {category.submittedReferenceCount} hồ sơ nộp nên không thể chuyển
                 nhóm.
               </small>
@@ -170,14 +208,17 @@ export function CategoryEditorDialog({
             />
           </label>
           {isEdit && (
-            <label>
+            <label className='inline-flex items-center gap-2 cursor-pointer'>
               <input
                 type='checkbox'
                 checked={isActive}
                 disabled={busy}
                 onChange={(event) => setIsActive(event.target.checked)}
-              />{' '}
-              Mở cho đăng ký mới (yêu cầu bộ tiêu chí riêng đang hoạt động và tổng điểm tối đa = 100)
+              />
+              <span>
+                Mở cho đăng ký mới (yêu cầu bộ tiêu chí riêng đang hoạt động và tổng điểm tối đa =
+                100)
+              </span>
             </label>
           )}
           <label>
@@ -194,7 +235,7 @@ export function CategoryEditorDialog({
               {error}
             </p>
           )}
-          <div className='hero-actions'>
+          <div className='admin-actions'>
             <Button type='submit' disabled={busy || !groupId}>
               {busy ? 'Đang lưu…' : isEdit ? 'Lưu phân loại' : 'Tạo phân loại'}
             </Button>
@@ -202,7 +243,7 @@ export function CategoryEditorDialog({
               type='button'
               variant='secondary'
               disabled={busy}
-              onClick={() => onOpenChange(false)}
+              onClick={() => requestOpenChange(false)}
             >
               Đóng
             </Button>

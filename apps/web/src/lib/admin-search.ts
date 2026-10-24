@@ -1,5 +1,8 @@
 import type {
+  AdminCategoryQuery,
   AdminProductQuery,
+  LocalityQuery,
+  LocalityType,
   ProductRegistrationType,
   ProductStatus,
 } from '@ocop/shared';
@@ -159,5 +162,67 @@ export function parseAdminProductSearch(
 
 export function toAdminProductApiQuery(search: AdminProductSearch): AdminProductQuery {
   const { tab: _tab, ...query } = search;
+  return query;
+}
+
+export type AdminCatalogTab = 'catalog' | 'groups' | 'localities';
+
+export type AdminCatalogSearch = AdminCategoryQuery &
+  Pick<LocalityQuery, 'type' | 'provinceName'> & {
+    tab?: AdminCatalogTab;
+  };
+
+const CATALOG_TABS: readonly AdminCatalogTab[] = ['catalog', 'groups', 'localities'];
+const LOCALITY_TYPES: readonly LocalityType[] = ['COMMUNE', 'WARD'];
+
+export function parseAdminCatalogSearch(
+  search: Record<string, unknown>,
+): AdminCatalogSearch {
+  const result: AdminCatalogSearch = {
+    page: parseScalarInt(search.page, 1, 100000, 1) ?? 1,
+    limit: parseScalarInt(search.limit, 1, 100, 20) ?? 20,
+  };
+
+  const q = parseScalarString(search.q, 255);
+  if (q !== undefined) result.q = q;
+
+  const isActive = parseScalarBoolean(search.isActive);
+  if (isActive !== undefined) result.isActive = isActive;
+
+  const groupId = parseScalarString(search.groupId, 100);
+  if (groupId !== undefined) result.groupId = groupId;
+
+  const type = parseEnum(search.type, LOCALITY_TYPES);
+  if (type !== undefined) result.type = type;
+
+  const provinceName = parseScalarString(search.provinceName, 255);
+  if (provinceName !== undefined) result.provinceName = provinceName;
+
+  const tab = parseEnum(search.tab, CATALOG_TABS);
+  if (tab !== undefined) result.tab = tab;
+
+  return result;
+}
+
+export function toAdminCategoryApiQuery(search: AdminCatalogSearch): AdminCategoryQuery {
+  const query: AdminCategoryQuery = {
+    page: search.page ?? 1,
+    limit: search.limit ?? 20,
+  };
+  if (search.q !== undefined) query.q = search.q;
+  if (search.isActive !== undefined) query.isActive = search.isActive;
+  if (search.groupId !== undefined) query.groupId = search.groupId;
+  return query;
+}
+
+export function toAdminLocalityApiQuery(search: AdminCatalogSearch): LocalityQuery {
+  const query: LocalityQuery = {
+    page: search.page ?? 1,
+    limit: search.limit ?? 20,
+  };
+  if (search.q !== undefined) query.q = search.q;
+  if (search.isActive !== undefined) query.isActive = search.isActive;
+  if (search.type !== undefined) query.type = search.type;
+  if (search.provinceName !== undefined) query.provinceName = search.provinceName;
   return query;
 }
