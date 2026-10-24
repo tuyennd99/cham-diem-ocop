@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { it } from 'node:test';
 import baseRequest from '../src/api/base-request';
 import { adminApi } from '../src/api/admin';
-import { formatComparisonDelta } from '../src/lib/report-format';
+import { dashboardKpiLinkLabel, formatComparisonDelta } from '../src/lib/report-format';
 
 it('calls registrations report, results report, and filtered dashboard through the shared transport', async () => {
   const previous = baseRequest.defaults.adapter;
@@ -93,4 +93,15 @@ it('formats period comparison deltas without infinite percentages when prior per
     }),
     '+5 (+50% so với kỳ trước: 10)',
   );
+});
+
+it('does not promise an exact list for KPI sets unavailable in product search', () => {
+  assert.equal(dashboardKpiLinkLabel('registeredInPeriod'), 'Xem hồ sơ đăng ký trong kỳ');
+  assert.equal(dashboardKpiLinkLabel('completedInPeriod'), 'Xem hồ sơ hoàn tất trong kỳ');
+  assert.equal(dashboardKpiLinkLabel('passedInPeriod'), null);
+  assert.equal(dashboardKpiLinkLabel('failedInPeriod'), null);
+  assert.equal(dashboardKpiLinkLabel('passRateInPeriod'), null);
+  assert.equal(dashboardKpiLinkLabel('openBacklogAtAsOf'), null);
+  assert.equal(dashboardKpiLinkLabel('underAssignedBacklogAtAsOf'), null);
+  assert.equal(dashboardKpiLinkLabel('fiveStarInPeriod'), 'Xem hồ sơ có mức điểm 5 sao');
 });

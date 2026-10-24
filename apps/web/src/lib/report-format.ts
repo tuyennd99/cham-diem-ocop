@@ -1,5 +1,27 @@
-import type { DashboardKpiItem, PeriodComparisonDelta } from '@ocop/shared';
+import type {
+  DashboardKpiId,
+  DashboardKpiItem,
+  PeriodComparisonDelta,
+} from '@ocop/shared';
 import { formatExactScore } from './print-format';
+
+export function dashboardKpiLinkLabel(id: DashboardKpiId): string | null {
+  switch (id) {
+    case 'registeredInPeriod':
+      return 'Xem hồ sơ đăng ký trong kỳ';
+    case 'completedInPeriod':
+      return 'Xem hồ sơ hoàn tất trong kỳ';
+    case 'fiveStarInPeriod':
+      return 'Xem hồ sơ có mức điểm 5 sao';
+    case 'passedInPeriod':
+    case 'failedInPeriod':
+    case 'passRateInPeriod':
+    case 'openBacklogAtAsOf':
+    case 'underAssignedBacklogAtAsOf':
+    default:
+      return null;
+  }
+}
 
 export function formatComparisonDelta(delta: PeriodComparisonDelta): string {
   if (delta.comparisonNote === 'INSUFFICIENT_HISTORY' || delta.current === null) {

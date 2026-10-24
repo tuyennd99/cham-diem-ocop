@@ -3,6 +3,7 @@ import { it } from 'node:test';
 import {
   parseAdminAssignmentSearch,
   parseAdminCatalogSearch,
+  parseAdminDashboardSearch,
   parseAdminProductSearch,
   parseAdminScoringSearch,
   parseAdminUsersSearch,
@@ -95,4 +96,18 @@ it('parses assignment matrix filters without carrying unknown keys', () => {
   assert.equal(query.categoryId, 'c1');
   assert.equal(query.uncoveredOnly, true);
   assert.equal(Object.hasOwn(query, 'unknown'), false);
+});
+
+it('parses dashboard period filters with Vietnamese default year', () => {
+  const query = parseAdminDashboardSearch({
+    month: '10',
+    localityType: 'WARD',
+    registrationType: 'UPGRADE',
+    assessmentYear: '2026',
+  });
+  assert.equal(typeof query.year, 'number');
+  assert.equal(query.month, 10);
+  assert.equal(query.localityType, 'WARD');
+  assert.equal(query.registrationType, 'UPGRADE');
+  assert.equal(query.assessmentYear, 2026);
 });

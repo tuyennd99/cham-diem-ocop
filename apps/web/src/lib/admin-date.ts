@@ -144,3 +144,8 @@ export function localityEffectiveValue(
   const fracStr = msPart ? `.${msPart.padEnd(3, '0')}` : '';
   return `${dayPart}T${match[4]}:${match[5]}:${secStr}${fracStr}+07:00`;
 }
+
+export function currentVietnameseYear(): number {
+  const shifted = new Date(Date.now() + VN_OFFSET_MS);
+  return shifted.getUTCFullYear();
+}

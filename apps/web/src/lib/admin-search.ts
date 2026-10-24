@@ -3,6 +3,7 @@ import type {
   AdminCriteriaSetQuery,
   AdminEvaluationQuery,
   AdminProductQuery,
+  AdminReportFilterQuery,
   AdminUserQuery,
   EvaluationRecordStatus,
   LocalityQuery,
@@ -12,7 +13,7 @@ import type {
   ProductStatus,
   StaffPermission,
 } from '@ocop/shared';
-import { isValidIsoWithOffset } from './admin-date';
+import { currentVietnameseYear, isValidIsoWithOffset } from './admin-date';
 
 export type AdminProductDetailTab =
   | 'information'
@@ -390,5 +391,37 @@ export function parseAdminAssignmentSearch(
   if (categoryId !== undefined) result.categoryId = categoryId;
   const uncoveredOnly = parseScalarBoolean(search.uncoveredOnly);
   if (uncoveredOnly !== undefined) result.uncoveredOnly = uncoveredOnly;
+  return result;
+}
+
+export function parseAdminDashboardSearch(
+  search: Record<string, unknown>,
+): AdminReportFilterQuery {
+  const defaultYear = currentVietnameseYear();
+  const result: AdminReportFilterQuery = {
+    year: parseScalarInt(search.year, 2020, 2100, defaultYear) ?? defaultYear,
+  };
+
+  const month = parseScalarInt(search.month, 1, 12);
+  if (month !== undefined) result.month = month;
+
+  const localityType = parseEnum(search.localityType, LOCALITY_TYPES);
+  if (localityType !== undefined) result.localityType = localityType;
+
+  const localityId = parseScalarString(search.localityId, 100);
+  if (localityId !== undefined) result.localityId = localityId;
+
+  const groupId = parseScalarString(search.groupId, 100);
+  if (groupId !== undefined) result.groupId = groupId;
+
+  const categoryId = parseScalarString(search.categoryId, 100);
+  if (categoryId !== undefined) result.categoryId = categoryId;
+
+  const registrationType = parseEnum(search.registrationType, REGISTRATION_TYPES);
+  if (registrationType !== undefined) result.registrationType = registrationType;
+
+  const assessmentYear = parseScalarInt(search.assessmentYear, 2020, 2100);
+  if (assessmentYear !== undefined) result.assessmentYear = assessmentYear;
+
   return result;
 }
