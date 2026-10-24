@@ -16,49 +16,125 @@ import {
 } from '../dtos/admin.dto';
 import { AdminProductQueryDto } from '../dtos/admin-products.dto';
 import {
+  AdminDashboardQueryDto,
+  AdminReportQueryDto,
+} from '../dtos/admin-reports.dto';
+import {
   AdminCriteriaSetsQueryDto,
   AdminEvaluationsQueryDto,
 } from '../dtos/admin-scoring.dto';
 import { AdminRepository, type AdminRequestMeta } from '../repositories/admin.repository';
 import { PASSWORD_MAX_BYTES, PASSWORD_ROUNDS } from '../constants/auth';
 import type { AuthenticatedPrincipal } from '../types/auth';
+import {
+  buildAnalyticsDashboard,
+  buildRegistrationReport,
+  buildResultsReport,
+} from '../utils/reporting';
 import { effectiveStaffPermissions } from '../utils/staff-permissions';
 
 @Injectable()
 export class AdminService {
   constructor(private readonly repository: AdminRepository) {}
 
-  async dashboard(canManage = true) {
+  async dashboard(canManage = true, query?: AdminDashboardQueryDto) {
     const { productStatuses, judgeProgress, nextProducts } = await this.repository.dashboardData(canManage);
     const productsByStatus = Object.fromEntries(
       Object.values(ProductStatus).map((status) => [status, 0]),
     ) as Record<ProductStatus, number>;
     for (const row of productStatuses) productsByStatus[row.status] = row._count._all;
 
-    return {
+    const judges = judgeProgress.map((judge) => ({ ...judge, pending: judge.assigned - judge.submitted }));
+    const needsAttention = nextProducts.map((product) => {
+      const assignedJudgeIds = new Set(product.category.assignments.map(({ judgeId }) => judgeId));
+      const submitted = new Set(product.evaluations
+        .filter((evaluation) => evaluation.status === EvaluationStatus.SUBMITTED && assignedJudgeIds.has(evaluation.judgeId))
+        .map(({ judgeId }) => judgeId));
+      return {
+        id: product.id,
+        name: product.name,
+        status: product.status as 'SUBMITTED' | 'SCORING',
+        submittedAt: product.submittedAt,
+        category: {
+          id: product.category.id,
+          name: product.category.name,
+          groupName: product.category.groupName,
+        },
+        assignedJudgeCount: assignedJudgeIds.size,
+        submittedEvaluationCount: submitted.size,
+        pendingEvaluationCount: assignedJudgeIds.size - submitted.size,
+      };
+    });
+
+    if (typeof this.repository.reportingSnapshot !== 'function') {
+      return {
+        productsByStatus,
+        judges,
+        needsAttention,
+      };
+    }
+
+    const snap = await this.repository.reportingSnapshot();
+    const analytics = buildAnalyticsDashboard({
+      query: query ?? {},
+      products: snap.products,
+      groups: snap.groups,
+      categories: snap.categories,
+      localities: snap.localities,
+      coveredCategoryIdsAtNow: snap.coveredCategoryIdsAtNow,
+      now: snap.generatedAt,
+      historyAvailableFrom: snap.historyAvailableFrom,
       productsByStatus,
-      judges: judgeProgress.map((judge) => ({ ...judge, pending: judge.assigned - judge.submitted })),
-      needsAttention: nextProducts.map((product) => {
-        const assignedJudgeIds = new Set(product.category.assignments.map(({ judgeId }) => judgeId));
-        const submitted = new Set(product.evaluations
-          .filter((evaluation) => evaluation.status === EvaluationStatus.SUBMITTED && assignedJudgeIds.has(evaluation.judgeId))
-          .map(({ judgeId }) => judgeId));
-        return {
-          id: product.id,
-          name: product.name,
-          status: product.status,
-          submittedAt: product.submittedAt,
-          category: {
-            id: product.category.id,
-            name: product.category.name,
-            groupName: product.category.groupName,
-          },
-          assignedJudgeCount: assignedJudgeIds.size,
-          submittedEvaluationCount: submitted.size,
-          pendingEvaluationCount: assignedJudgeIds.size - submitted.size,
-        };
-      }),
+      judges,
+      needsAttention: needsAttention.map((item) => ({
+        ...item,
+        submittedAt:
+          item.submittedAt instanceof Date
+            ? item.submittedAt.toISOString()
+            : (item.submittedAt as string | null),
+        missingCriteriaCount: snap.coveredCategoryIdsAtNow.has(item.category.id)
+          ? 0
+          : 1,
+      })),
+    });
+
+    return {
+      ...analytics,
+      needsAttention: needsAttention.map((item) => ({
+        ...item,
+        missingCriteriaCount: snap.coveredCategoryIdsAtNow.has(item.category.id)
+          ? 0
+          : 1,
+      })),
     };
+  }
+
+  async registrationsReport(query: AdminReportQueryDto) {
+    const snap = await this.repository.reportingSnapshot();
+    return buildRegistrationReport({
+      query,
+      products: snap.products,
+      groups: snap.groups,
+      categories: snap.categories,
+      localities: snap.localities,
+      now: snap.generatedAt,
+      historyAvailableFrom: snap.historyAvailableFrom,
+      assignmentHistoryAvailable: true,
+    });
+  }
+
+  async resultsReport(query: AdminReportQueryDto) {
+    const snap = await this.repository.reportingSnapshot();
+    return buildResultsReport({
+      query,
+      products: snap.products,
+      groups: snap.groups,
+      categories: snap.categories,
+      localities: snap.localities,
+      now: snap.generatedAt,
+      historyAvailableFrom: snap.historyAvailableFrom,
+      assignmentHistoryAvailable: true,
+    });
   }
 
   listJudges() {

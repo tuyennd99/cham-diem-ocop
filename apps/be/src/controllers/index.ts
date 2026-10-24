@@ -2,6 +2,7 @@ import { AdminUsersController } from './admin-users.controller';
 import { AdminCatalogsController } from './admin-catalogs.controller';
 import { AdminProductsController } from './admin-products.controller';
 import { AdminScoringController } from './admin-scoring.controller';
+import { AdminReportsController } from './admin-reports.controller';
 import { AdminController } from './admin.controller';
 import { AuthController } from './auth.controller';
 import { CategoriesController } from './categories.controller';
@@ -16,6 +17,7 @@ export const appControllers = [
   AdminCatalogsController,
   AdminProductsController,
   AdminScoringController,
+  AdminReportsController,
   AdminController,
   AuthController,
   CategoriesController,

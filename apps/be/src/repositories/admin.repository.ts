@@ -22,6 +22,7 @@ import {
   buildProductResultsPrintData,
   buildRegistrationPrintData,
 } from '../utils/print-data';
+import type { ReportingProductRecord } from '../utils/reporting';
 import { applyStaffAccess, createStaff, lockStaffMutation } from '../utils/staff-access';
 import { writeAudit, type AuditInput } from '../utils/audit-log';
 
@@ -1267,6 +1268,171 @@ export class AdminRepository {
         assignments: product.category.assignments,
       },
     });
+  }
+
+  async reportingSnapshot() {
+    return this.prisma.$transaction(
+      async (tx) => {
+        const [
+          rawProducts,
+          groups,
+          categories,
+          localities,
+          earliestEvent,
+        ] = await Promise.all([
+          tx.product.findMany({
+            select: {
+              id: true,
+              name: true,
+              registrantId: true,
+              status: true,
+              submittedAt: true,
+              completedAt: true,
+              finalScore: true,
+              starRating: true,
+              formData: true,
+              localityId: true,
+              localityCodeAtSubmit: true,
+              localityNameAtSubmit: true,
+              localityTypeAtSubmit: true,
+              provinceNameAtSubmit: true,
+              locality: {
+                select: {
+                  id: true,
+                  code: true,
+                  name: true,
+                  type: true,
+                  provinceName: true,
+                },
+              },
+              category: {
+                select: {
+                  id: true,
+                  name: true,
+                  groupId: true,
+                  groupCode: true,
+                  groupName: true,
+                },
+              },
+              statusEvents: {
+                select: {
+                  sequence: true,
+                  toStatus: true,
+                  createdAt: true,
+                },
+                orderBy: { sequence: 'asc' },
+              },
+            },
+            orderBy: { id: 'asc' },
+          }),
+          tx.productGroup.findMany({
+            select: { id: true, code: true, name: true },
+            orderBy: [{ order: 'asc' }, { id: 'asc' }],
+          }),
+          tx.productCategory.findMany({
+            select: {
+              id: true,
+              name: true,
+              groupId: true,
+              groupCode: true,
+              groupName: true,
+              criteriaSet: {
+                select: {
+                  criteria: { select: { id: true } },
+                },
+              },
+              assignments: {
+                where: {
+                  judge: {
+                    is: {
+                      role: { not: Role.REGISTRANT },
+                      staffPermissions: { has: StaffPermission.SCORE },
+                      isActive: true,
+                      verified: true,
+                    },
+                  },
+                },
+                select: { judgeId: true, criterionIds: true },
+              },
+            },
+            orderBy: [{ order: 'asc' }, { id: 'asc' }],
+          }),
+          tx.locality.findMany({
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              type: true,
+              provinceName: true,
+            },
+            orderBy: [{ provinceName: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+          }),
+          tx.productStatusEvent.findFirst({
+            orderBy: { createdAt: 'asc' },
+            select: { createdAt: true },
+          }),
+        ]);
+
+        const coveredCategoryIdsAtNow = new Set<string>();
+        for (const cat of categories) {
+          const allCriterionIds =
+            cat.criteriaSet?.criteria.map((c) => c.id) ?? [];
+          if (!allCriterionIds.length || !cat.assignments.length) continue;
+          const covered = new Set(
+            cat.assignments.flatMap((a) =>
+              a.criterionIds.length ? a.criterionIds : allCriterionIds,
+            ),
+          );
+          if (allCriterionIds.every((id) => covered.has(id))) {
+            coveredCategoryIdsAtNow.add(cat.id);
+          }
+        }
+
+        const products: ReportingProductRecord[] = rawProducts.map((p) => {
+          const safeForm = safeFormData(p.formData);
+          const locality =
+            p.status !== ProductStatus.DRAFT && p.localityNameAtSubmit
+              ? {
+                  id: p.localityId ?? p.localityCodeAtSubmit ?? 'SUBMITTED_LOC',
+                  code: p.localityCodeAtSubmit ?? p.locality?.code ?? '',
+                  name: p.localityNameAtSubmit,
+                  type:
+                    p.localityTypeAtSubmit ??
+                    p.locality?.type ??
+                    ('COMMUNE' as const),
+                  provinceName:
+                    p.provinceNameAtSubmit ?? p.locality?.provinceName ?? '',
+                }
+              : p.locality;
+          return {
+            id: p.id,
+            name: p.name,
+            registrantId: p.registrantId,
+            status: p.status,
+            submittedAt: p.submittedAt,
+            completedAt: p.completedAt,
+            finalScore: p.finalScore,
+            starRating: p.starRating,
+            registrationType: safeForm.registrationType ?? null,
+            assessmentYear: safeForm.assessmentYear ?? null,
+            category: p.category,
+            locality,
+            statusEvents: p.statusEvents,
+          };
+        });
+
+        return {
+          generatedAt: new Date(),
+          products,
+          groups,
+          categories: categories.map(({ criteriaSet: _cs, assignments: _as, ...cat }) => cat),
+          localities,
+          coveredCategoryIdsAtNow,
+          historyAvailableFrom: earliestEvent?.createdAt ?? null,
+        };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
   }
 
   async updateStaffAccess(id: string, input: UpdateStaffAccessDto, actorId: string, meta: AdminRequestMeta) {

@@ -135,6 +135,8 @@ describe('built API OpenAPI document', () => {
         '/api/admin/criteria-sets/{id}/print-data',
         '/api/admin/evaluations',
         '/api/admin/evaluations/{id}/print-data',
+        '/api/admin/reports/registrations',
+        '/api/admin/reports/results',
         '/api/judge/products/{id}/evaluation/print-data',
         '/api/my/products/{id}/registration-print-data',
         '/api/my/products/{id}/results/print-data',

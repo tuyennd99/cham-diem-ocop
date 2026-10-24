@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req } from '@nestjs/common';
 import { StaffPermission } from '@prisma/client';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
@@ -13,6 +13,7 @@ import {
   UpdateJudgeDto,
   UpdateStaffAccessDto,
 } from '../dtos/admin.dto';
+import { AdminDashboardQueryDto } from '../dtos/admin-reports.dto';
 import { AdminService } from '../services/admin.service';
 import type { AccessTokenPayload, AuthenticatedPrincipal } from '../types/auth';
 import { requestMeta } from '../utils/request-meta';
@@ -26,8 +27,14 @@ export class AdminController {
 
   @Get('dashboard')
   @Permissions(StaffPermission.VIEW)
-  dashboard(@CurrentUser() principal: AuthenticatedPrincipal) {
-    return this.admin.dashboard(principal.staffPermissions.includes(StaffPermission.MANAGE));
+  dashboard(
+    @Query() query: AdminDashboardQueryDto,
+    @CurrentUser() principal: AuthenticatedPrincipal,
+  ) {
+    return this.admin.dashboard(
+      principal.staffPermissions.includes(StaffPermission.MANAGE),
+      query,
+    );
   }
 
   @Get('judges')
