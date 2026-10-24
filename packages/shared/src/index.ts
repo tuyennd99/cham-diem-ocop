@@ -378,6 +378,225 @@ export interface Evaluation {
   scores: EvaluationScore[];
 }
 
+export interface AdminCriteriaSetQuery {
+  page?: number;
+  limit?: number;
+  q?: string;
+  groupId?: string;
+  isActive?: boolean;
+}
+
+export interface AdminCriteriaSetRecord {
+  id: string;
+  categoryId: string;
+  categoryName: string;
+  groupId: string;
+  groupCode: string;
+  groupName: string;
+  classificationGroup: string;
+  classificationSubgroup: string | null;
+  name: string | null;
+  source: string | null;
+  version: string;
+  sourceHash: string | null;
+  isActive: boolean;
+  criterionCount: number;
+  maxScore: number;
+}
+
+export interface AdminCriteriaSetDetail extends AdminCriteriaSetRecord {
+  criteria: CatalogCriterion[];
+}
+
+export type EvaluationRecordStatus = "IN_PROGRESS" | "SUBMITTED";
+
+export interface AdminEvaluationQuery {
+  page?: number;
+  limit?: number;
+  q?: string;
+  productId?: string;
+  groupId?: string;
+  categoryId?: string;
+  judgeId?: string;
+  status?: EvaluationRecordStatus;
+}
+
+export interface AdminEvaluationRecord {
+  id: string;
+  status: EvaluationRecordStatus;
+  total: number | null;
+  scopeMaxScore: number;
+  assignedCriterionCount: number;
+  totalCriterionCount: number;
+  isPartialScope: boolean;
+  submittedAt: string | null;
+  updatedAt: string;
+  product: {
+    id: string;
+    name: string;
+    status: ProductStatus;
+    categoryId: string;
+    categoryName: string;
+    groupId: string;
+    groupName: string;
+  };
+  judge: {
+    id: string;
+    fullName: string;
+    email: string;
+    organizationUnitName: string | null;
+  };
+}
+
+export interface BlankCriteriaPrintData {
+  kind: "BLANK_CRITERIA";
+  generatedAt: string;
+  criteriaSet: AdminCriteriaSetDetail;
+}
+
+export interface EvaluationPrintSubCriterionRow {
+  subCriterionId: string;
+  code: string;
+  content: string;
+  maxPoints: number;
+  selectedOptionId: string | null;
+  selectedLabel: string | null;
+  points: number | null;
+  note: string | null;
+  options: ScoreOption[];
+}
+
+export interface EvaluationPrintCriterionRow {
+  criterionId: string;
+  code: string;
+  name: string;
+  sectionCode: string;
+  sectionName: string;
+  maxScore: number;
+  inScope: boolean;
+  subCriteria: EvaluationPrintSubCriterionRow[];
+}
+
+export interface EvaluationPrintData {
+  kind: "EVALUATION";
+  generatedAt: string;
+  evaluationId: string | null;
+  status: EvaluationRecordStatus;
+  isDraft: boolean;
+  provenance: "SNAPSHOT_V1" | "PRE_UPGRADE" | "LIVE_DRAFT";
+  historicalValuesVerified: boolean;
+  submittedAt: string | null;
+  product: {
+    id: string;
+    name: string;
+    categoryName: string;
+    groupName: string;
+    entityName: string | null;
+  };
+  judge: {
+    id: string;
+    fullName: string;
+    organizationUnitName: string | null;
+  };
+  criteriaSet: {
+    id: string;
+    name: string | null;
+    source: string | null;
+    version: string | null;
+    sourceHash: string | null;
+  };
+  isPartialScope: boolean;
+  total: number;
+  scopeMaxScore: number;
+  criteria: EvaluationPrintCriterionRow[];
+}
+
+export interface ProductResultsPrintEvaluationRow {
+  id: string;
+  judgeId: string;
+  judgeName: string;
+  organizationUnitName: string | null;
+  status: EvaluationRecordStatus;
+  submittedAt: string | null;
+  isPartialScope: boolean;
+  total: number | null;
+  scopeMaxScore: number;
+  criterionScores: Record<string, number | null>;
+}
+
+export interface ProductResultsPrintCriterionSummary {
+  criterionId: string;
+  code: string;
+  name: string;
+  maxScore: number;
+  averageScore: number | null;
+}
+
+export interface ProductResultsPrintData {
+  kind: "PRODUCT_RESULTS";
+  generatedAt: string;
+  product: {
+    id: string;
+    name: string;
+    status: ProductStatus;
+    submittedAt: string | null;
+    completedAt: string | null;
+    entityName: string | null;
+    localityName: string | null;
+    provinceName: string | null;
+    categoryName: string;
+    groupName: string;
+    finalScore: number | null;
+    starRating: number | null;
+    starLabel: string | null;
+  };
+  criteriaSet: {
+    id: string;
+    name: string | null;
+    source: string | null;
+    version: string;
+  } | null;
+  evaluations: ProductResultsPrintEvaluationRow[];
+  criteriaSummary: ProductResultsPrintCriterionSummary[];
+}
+
+export interface RegistrationPrintData {
+  kind: "REGISTRATION";
+  generatedAt: string;
+  isDraft: boolean;
+  hasSubmissionSnapshot: boolean;
+  product: {
+    id: string;
+    name: string;
+    description: string | null;
+    status: ProductStatus;
+    submittedAt: string | null;
+    createdAt: string;
+  };
+  registrant: {
+    id: string;
+    fullName: string;
+    email: string;
+    phone: string | null;
+  };
+  category: {
+    id: string;
+    name: string;
+    groupName: string;
+    classificationGroup: string;
+    classificationSubgroup: string | null;
+  };
+  locality: {
+    id: string;
+    code: string;
+    name: string;
+    type: LocalityType;
+    provinceName: string;
+  } | null;
+  formData: Partial<ProductApplicationForm>;
+  attachments: ProductAttachment[];
+}
+
 export interface ApiSuccess<T> {
   statusCode: number;
   data: T;
