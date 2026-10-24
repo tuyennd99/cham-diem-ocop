@@ -597,6 +597,230 @@ export interface RegistrationPrintData {
   attachments: ProductAttachment[];
 }
 
+export const reportGroupByValues = [
+  "month",
+  "year",
+  "locality",
+  "group",
+  "category",
+] as const;
+export type ReportGroupBy = (typeof reportGroupByValues)[number];
+
+export interface AdminReportFilterQuery {
+  year?: number;
+  month?: number;
+  localityType?: LocalityType;
+  localityId?: string;
+  groupId?: string;
+  categoryId?: string;
+  registrationType?: ProductRegistrationType;
+  assessmentYear?: number;
+}
+
+export interface AdminReportQuery extends AdminReportFilterQuery {
+  groupBy?: ReportGroupBy;
+}
+
+export interface ReportPeriodMetadata {
+  timezone: "Asia/Ho_Chi_Minh";
+  year: number;
+  month: number | null;
+  label: string;
+  from: string;
+  toExclusive: string;
+  asOf: string;
+  generatedAt: string;
+  isPartialPeriod: boolean;
+  previousPeriod: {
+    label: string;
+    from: string;
+    toExclusive: string;
+    comparisonToExclusive: string;
+    asOf: string;
+  };
+  historyAvailableFrom: string | null;
+}
+
+export interface ReportDataQuality {
+  unmappedLocalityCount: number;
+  missingSubmittedAtCount: number;
+  missingCompletedAtCount: number;
+  missingStatusHistoryCount: number;
+  invalidResultCount: number;
+  assignmentHistoryAvailable: boolean;
+}
+
+export interface StarBreakdown {
+  1: number;
+  2: number;
+  3: number;
+  4: number;
+  5: number;
+}
+
+export interface PeriodComparisonDelta {
+  current: number | null;
+  previous: number | null;
+  deltaAbsolute: number | null;
+  deltaPercent: number | null;
+  comparisonNote: "OK" | "NO_PRIOR_DATA" | "INSUFFICIENT_HISTORY";
+}
+
+export interface RegistrationReportRow {
+  key: string;
+  label: string;
+  drillDown: Partial<AdminProductQuery>;
+  registeredCount: number;
+  waitingCount: number;
+  scoringCount: number;
+  completedCount: number;
+  completedValidCount: number;
+  passedCount: number;
+  failedCount: number;
+  passRate: number | null;
+  averageScore: number | null;
+  starCounts: StarBreakdown;
+  distinctRegistrantCount: number;
+  unmappedLocalityCount: number;
+  missingDataCount: number;
+}
+
+export interface RegistrationReportResponse {
+  kind: "REGISTRATIONS";
+  period: ReportPeriodMetadata;
+  filtersApplied: AdminReportQuery;
+  groupBy: ReportGroupBy;
+  totals: RegistrationReportRow;
+  previousTotals: RegistrationReportRow;
+  comparison: {
+    registeredCount: PeriodComparisonDelta;
+    completedCount: PeriodComparisonDelta;
+    passedCount: PeriodComparisonDelta;
+    failedCount: PeriodComparisonDelta;
+  };
+  rows: RegistrationReportRow[];
+  dataQuality: ReportDataQuality;
+}
+
+export interface ResultsReportRow {
+  key: string;
+  label: string;
+  drillDown: Partial<AdminProductQuery>;
+  completedCount: number;
+  completedValidCount: number;
+  passedCount: number;
+  failedCount: number;
+  passRate: number | null;
+  averageScore: number | null;
+  starCounts: StarBreakdown;
+  distinctRegistrantCount: number;
+  unmappedLocalityCount: number;
+  invalidResultCount: number;
+}
+
+export interface ResultsReportResponse {
+  kind: "RESULTS";
+  period: ReportPeriodMetadata;
+  filtersApplied: AdminReportQuery;
+  groupBy: ReportGroupBy;
+  totals: ResultsReportRow;
+  previousTotals: ResultsReportRow;
+  comparison: {
+    completedCount: PeriodComparisonDelta;
+    passedCount: PeriodComparisonDelta;
+    failedCount: PeriodComparisonDelta;
+    star5Count: PeriodComparisonDelta;
+  };
+  rows: ResultsReportRow[];
+  dataQuality: ReportDataQuality;
+}
+
+export type DashboardKpiId =
+  | "registeredInPeriod"
+  | "completedInPeriod"
+  | "passedInPeriod"
+  | "failedInPeriod"
+  | "passRateInPeriod"
+  | "fiveStarInPeriod"
+  | "openBacklogAtAsOf"
+  | "underAssignedBacklogAtAsOf";
+
+export interface DashboardKpiItem {
+  id: DashboardKpiId;
+  label: string;
+  basisLabel: string;
+  unit: "COUNT" | "PERCENT";
+  value: number | null;
+  previousValue: number | null;
+  deltaAbsolute: number | null;
+  deltaPercent: number | null;
+  availability: "AVAILABLE" | "NO_PRIOR_DATA" | "INSUFFICIENT_HISTORY";
+  drillDown: Partial<AdminProductQuery>;
+}
+
+export interface AdminAnalyticsDashboardResponse {
+  period: ReportPeriodMetadata;
+  filtersApplied: AdminReportFilterQuery;
+  dataQuality: ReportDataQuality;
+  kpis: DashboardKpiItem[];
+  charts: {
+    monthlyTrend: Array<{
+      month: number;
+      label: string;
+      registeredCount: number;
+      completedCount: number;
+      from: string;
+      toExclusive: string;
+    }>;
+    byProductGroup: Array<{
+      groupId: string;
+      groupCode: string;
+      groupName: string;
+      registeredCount: number;
+      completedCount: number;
+      categories: Array<{
+        categoryId: string;
+        categoryName: string;
+        registeredCount: number;
+        completedCount: number;
+      }>;
+    }>;
+    cohortProgress: {
+      registeredCount: number;
+      waitingCount: number;
+      scoringCount: number;
+      completedCount: number;
+      missingStatusHistoryCount: number;
+    };
+    starDistribution: Array<{
+      stars: 1 | 2 | 3 | 4 | 5;
+      label: string;
+      count: number;
+      percentage: number | null;
+    }>;
+  };
+  comparisonTable: DashboardKpiItem[];
+  productsByStatus: Record<ProductStatus, number>;
+  judges: Array<{
+    judgeId: string;
+    fullName: string;
+    assigned: number;
+    submitted: number;
+    pending: number;
+  }>;
+  needsAttention: Array<{
+    id: string;
+    name: string;
+    status: "SUBMITTED" | "SCORING";
+    submittedAt: string | null;
+    category: { id: string; name: string; groupName: string };
+    assignedJudgeCount: number;
+    submittedEvaluationCount: number;
+    pendingEvaluationCount: number;
+    missingCriteriaCount: number;
+  }>;
+}
+
 export interface ApiSuccess<T> {
   statusCode: number;
   data: T;
