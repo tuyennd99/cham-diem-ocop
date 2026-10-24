@@ -89,7 +89,7 @@ export function useAdminUserMutations() {
     invalidateUsers();
     void queryClient.invalidateQueries({ queryKey: queryKeys.admin.judges });
     void queryClient.invalidateQueries({ queryKey: queryKeys.admin.assignments });
-    void queryClient.invalidateQueries({ queryKey: queryKeys.admin.dashboard });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.admin.all });
   };
   const finishRevokingSelf = (id: string, tokenRevoked = true) => {
     if (!tokenRevoked || getSession()?.user.id !== id) return false;

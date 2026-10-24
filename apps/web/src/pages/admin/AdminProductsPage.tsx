@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { AdminProductQuery, LocalityRecord } from '@ocop/shared';
-import { Link } from '@tanstack/react-router';
+import { Link, useLocation } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { errorText } from '../../lib/api-error';
@@ -18,6 +18,42 @@ const initialQuery: AdminProductQuery = {
   sortDirection: 'desc',
 };
 
+function parseSearchDrillDown(searchStr: string): Partial<AdminProductQuery> {
+  const params = new URLSearchParams(searchStr);
+  const parsed: Partial<AdminProductQuery> = {};
+  const status = params.get('status');
+  if (
+    status === 'DRAFT' ||
+    status === 'SUBMITTED' ||
+    status === 'SCORING' ||
+    status === 'COMPLETED'
+  ) {
+    parsed.status = status;
+  }
+  const groupId = params.get('groupId');
+  if (groupId) parsed.groupId = groupId;
+  const categoryId = params.get('categoryId');
+  if (categoryId) parsed.categoryId = categoryId;
+  const localityId = params.get('localityId');
+  if (localityId) parsed.localityId = localityId;
+  if (params.get('unmappedLocality') === 'true') parsed.unmappedLocality = true;
+  const dateBasis = params.get('dateBasis');
+  if (dateBasis === 'submittedAt' || dateBasis === 'completedAt') {
+    parsed.dateBasis = dateBasis;
+  }
+  const from = params.get('from');
+  const toExclusive = params.get('toExclusive');
+  if (from && toExclusive) {
+    parsed.from = from;
+    parsed.toExclusive = toExclusive;
+  }
+  const starRating = Number(params.get('starRating'));
+  if ([1, 2, 3, 4, 5].includes(starRating)) {
+    parsed.starRating = starRating as 1 | 2 | 3 | 4 | 5;
+  }
+  return parsed;
+}
+
 function nextVietnameseDay(day: string) {
   const [year, month, date] = day.split('-').map(Number);
   const next = new Date(Date.UTC(year, month - 1, date + 1));
@@ -25,10 +61,21 @@ function nextVietnameseDay(day: string) {
 }
 
 export function AdminProductsPage({ mode = 'products' }: { mode?: AdminProductMode }) {
+  const location = useLocation();
   const session = useSession();
   const canManage = hasStaffPermission(session?.user, 'MANAGE');
-  const [query, setQuery] = useState(initialQuery);
+  const [query, setQuery] = useState<AdminProductQuery>(() => ({
+    ...initialQuery,
+    ...parseSearchDrillDown(location.searchStr),
+  }));
   const [dateRange, setDateRange] = useState({ from: '', to: '' });
+
+  useEffect(() => {
+    const drill = parseSearchDrillDown(location.searchStr);
+    if (Object.keys(drill).length > 0) {
+      setQuery((current) => ({ ...current, page: 1, ...drill }));
+    }
+  }, [location.searchStr]);
   const [localitySearch, setLocalitySearch] = useState('');
   const [localityPage, setLocalityPage] = useState(1);
   const [selectedLocality, setSelectedLocality] = useState<LocalityRecord | null>(null);

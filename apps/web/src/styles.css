@@ -2684,8 +2684,27 @@ h3 {
   align-items: start;
   gap: 20px;
 }
+.dashboard-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 28px;
+}
+.report-meta-banner {
+  margin: 12px 0 18px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+  font-size: 13px;
+}
+.report-landscape-page .ocop-print-sheet.report-print-landscape {
+  width: 100%;
+  max-width: none;
+}
 @media (max-width: 960px) {
-  .catalog-split-layout {
+  .catalog-split-layout,
+  .dashboard-charts-grid {
     grid-template-columns: 1fr;
   }
 }

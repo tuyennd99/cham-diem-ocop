@@ -3,6 +3,8 @@ import type {
   AdminCriteriaSetQuery,
   AdminEvaluationQuery,
   AdminProductQuery,
+  AdminReportFilterQuery,
+  AdminReportQuery,
   AdminUserQuery,
   LocalityQuery,
   OrganizationUnitQuery,
@@ -31,7 +33,13 @@ export const queryKeys = {
   },
   admin: {
     all: ['admin'] as const,
-    dashboard: ['admin', 'dashboard'] as const,
+    dashboard: (query: AdminReportFilterQuery = {}) => ['admin', 'dashboard', query] as const,
+    reports: {
+      all: ['admin', 'reports'] as const,
+      registrations: (query: AdminReportQuery) =>
+        ['admin', 'reports', 'registrations', query] as const,
+      results: (query: AdminReportQuery) => ['admin', 'reports', 'results', query] as const,
+    },
     judges: ['admin', 'judges'] as const,
     assignments: ['admin', 'assignments'] as const,
     products: (page: number) => ['admin', 'products', page] as const,

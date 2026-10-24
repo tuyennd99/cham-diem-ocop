@@ -1,11 +1,28 @@
+import type { AdminReportFilterQuery, AdminReportQuery } from '@ocop/shared';
 import { useQuery } from '@tanstack/react-query';
 import { adminApi } from '../api';
 import { queryKeys } from '../constants/query-key';
 
-export function useAdminDashboard() {
+export function useAdminDashboard(query: AdminReportFilterQuery = {}) {
   return useQuery({
-    queryKey: queryKeys.admin.dashboard,
-    queryFn: async () => (await adminApi.dashboard()).data,
+    queryKey: queryKeys.admin.dashboard(query),
+    queryFn: async () => (await adminApi.dashboard(query)).data,
+  });
+}
+
+export function useAdminRegistrationsReport(query: AdminReportQuery, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.admin.reports.registrations(query),
+    queryFn: async () => (await adminApi.registrationsReport(query)).data,
+    enabled,
+  });
+}
+
+export function useAdminResultsReport(query: AdminReportQuery, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.admin.reports.results(query),
+    queryFn: async () => (await adminApi.resultsReport(query)).data,
+    enabled,
   });
 }
 

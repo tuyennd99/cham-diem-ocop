@@ -1,4 +1,5 @@
 import type {
+  AdminAnalyticsDashboardResponse,
   AdminProductListItem,
   AdminProductDetail as SharedAdminProductDetail,
   AdminProductQuery as SharedAdminProductQuery,
@@ -54,26 +55,7 @@ export type AdminProduct = AdminProductListItem;
 export type AdminProductDetail = SharedAdminProductDetail;
 export type AdminProductQuery = SharedAdminProductQuery;
 
-export interface AdminDashboard {
-  productsByStatus: Record<'DRAFT' | 'SUBMITTED' | 'SCORING' | 'COMPLETED', number>;
-  judges: {
-    judgeId: string;
-    fullName: string;
-    assigned: number;
-    submitted: number;
-    pending: number;
-  }[];
-  needsAttention: {
-    id: string;
-    name: string;
-    status: 'SUBMITTED' | 'SCORING';
-    submittedAt: string | null;
-    category: { id: string; name: string; groupName: string };
-    assignedJudgeCount: number;
-    submittedEvaluationCount: number;
-    pendingEvaluationCount: number;
-  }[];
-}
+export type AdminDashboard = AdminAnalyticsDashboardResponse;
 
 export interface ProductResults {
   id: string;

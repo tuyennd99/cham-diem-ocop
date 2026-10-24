@@ -32,6 +32,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <Link to='/admin/products'>Sản phẩm</Link>
               <Link to='/admin/registrations'>Phiếu đăng ký</Link>
               <Link to='/admin/scoring-forms'>Phiếu chấm OCOP</Link>
+              <Link to='/admin/reports'>Báo cáo thống kê</Link>
               <Link to='/admin/assignments'>Phân công</Link>
             </>
           )}

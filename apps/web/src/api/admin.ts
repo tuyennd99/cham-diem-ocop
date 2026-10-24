@@ -1,3 +1,9 @@
+import type {
+  AdminReportFilterQuery,
+  AdminReportQuery,
+  RegistrationReportResponse,
+  ResultsReportResponse,
+} from '@ocop/shared';
 import { API } from '../constants/api';
 import { DEFAULT_PAGE_SIZE } from '../constants/consts';
 import type {
@@ -14,7 +20,18 @@ import type {
 import { requestJson } from './base-request';
 
 export const adminApi = {
-  dashboard: () => requestJson<AdminDashboard>({ url: API.admin.dashboard }),
+  dashboard: (query?: AdminReportFilterQuery) =>
+    requestJson<AdminDashboard>({ url: API.admin.dashboard, params: query }),
+  registrationsReport: (query: AdminReportQuery) =>
+    requestJson<RegistrationReportResponse>({
+      url: API.admin.reportsRegistrations,
+      params: query,
+    }),
+  resultsReport: (query: AdminReportQuery) =>
+    requestJson<ResultsReportResponse>({
+      url: API.admin.reportsResults,
+      params: query,
+    }),
   judges: () => requestJson<AdminJudge[]>({ url: API.admin.judges }),
   createJudge: (data: CreateJudgeInput) =>
     requestJson<AdminJudge>({ url: API.admin.judges, method: 'POST', data }),

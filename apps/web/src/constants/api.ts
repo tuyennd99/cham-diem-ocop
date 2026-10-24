@@ -62,6 +62,8 @@ export const API = {
     criteriaSetPrintData: (id: string) => `/admin/criteria-sets/${seg(id)}/print-data`,
     evaluations: '/admin/evaluations',
     evaluationPrintData: (id: string) => `/admin/evaluations/${seg(id)}/print-data`,
+    reportsRegistrations: '/admin/reports/registrations',
+    reportsResults: '/admin/reports/results',
     assignments: '/admin/assignments',
     products: '/admin/products',
     product: (id: string) => `/admin/products/${seg(id)}`,
