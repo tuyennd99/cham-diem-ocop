@@ -869,9 +869,55 @@ describe('H4 users', () => {
     });
   });
 
-  it('protects the final manager and open scoring work through user status', async () => {
+  it('protects the final manager and open scoring work through user status and staff-access (USR-01..04)', async () => {
     await withTestApp(async ({ app, prisma, baseUrl }) => {
       const f = await adminFixture(app, prisma, baseUrl);
+      // USR-01: Audit reason is required for profile, status, staff-access, and password-reset mutations
+      expect(
+        (
+          await f.call('manager', usersPath + '/' + f.viewer.id, 'PUT', {
+            fullName: 'Missing reason',
+            reason: '   ',
+          })
+        ).status,
+      ).toBe(400);
+      expect(
+        (
+          await f.call(
+            'manager',
+            usersPath + '/' + f.viewer.id + '/status',
+            'PUT',
+            { isActive: false, reason: '' },
+          )
+        ).status,
+      ).toBe(400);
+      expect(
+        (
+          await f.call(
+            'manager',
+            usersPath + '/' + f.viewer.id + '/staff-access',
+            'PUT',
+            {
+              staffPermissions: ['VIEW'],
+              organizationUnitId: f.unit.id,
+              isActive: true,
+              reason: '   ',
+            },
+          )
+        ).status,
+      ).toBe(400);
+      expect(
+        (
+          await f.call(
+            'manager',
+            usersPath + '/' + f.viewer.id + '/reset-password',
+            'POST',
+            { password: 'ValidResetPassword1!', reason: '' },
+          )
+        ).status,
+      ).toBe(400);
+
+      // USR-02: Protect the last active verified MANAGE account from status lock or MANAGE removal
       const blockedManager = await f.call(
         'manager',
         usersPath + '/' + f.manager.id + '/status',
@@ -879,6 +925,20 @@ describe('H4 users', () => {
         { isActive: false, reason: 'Suspend final manager' },
       );
       expect(blockedManager.status).toBe(409);
+      const blockedManagerDemote = await f.call(
+        'manager',
+        usersPath + '/' + f.manager.id + '/staff-access',
+        'PUT',
+        {
+          staffPermissions: ['VIEW'],
+          organizationUnitId: f.unit.id,
+          isActive: true,
+          reason: 'Remove MANAGE from final manager',
+        },
+      );
+      expect(blockedManagerDemote.status).toBe(409);
+
+      // USR-03: Block locking or removing SCORE when judge has open products, without revoking token
       const category = await prisma.productCategory.findFirstOrThrow();
       await prisma.judgeAssignment.create({
         data: {
@@ -887,7 +947,7 @@ describe('H4 users', () => {
           criterionIds: [],
         },
       });
-      await prisma.product.create({
+      const openProduct = await prisma.product.create({
         data: {
           registrantId: f.owner.id,
           categoryId: category.id,
@@ -903,10 +963,77 @@ describe('H4 users', () => {
         { isActive: false, reason: 'Suspend scorer' },
       );
       expect(blockedScorer.status).toBe(409);
+      expect(blockedScorer.body.message).toContain(
+        'Reassign open products before removing scoring access',
+      );
+      const blockedScorerAccess = await f.call(
+        'manager',
+        usersPath + '/' + f.scorer.id + '/staff-access',
+        'PUT',
+        {
+          staffPermissions: ['VIEW'],
+          organizationUnitId: f.unit.id,
+          isActive: true,
+          reason: 'Remove SCORE while open product exists',
+        },
+      );
+      expect(blockedScorerAccess.status).toBe(409);
+      expect(blockedScorerAccess.body.message).toContain(
+        'Reassign open products before removing scoring access',
+      );
       expect(
         await prisma.user.findUniqueOrThrow({ where: { id: f.scorer.id } }),
-      ).toMatchObject({ isActive: true, tokenVersion: 0 });
+      ).toMatchObject({
+        isActive: true,
+        staffPermissions: ['SCORE'],
+        tokenVersion: 0,
+      });
+      expect(
+        (
+          await apiRequest(baseUrl, '/auth/me', {
+            headers: f.headers('scorer'),
+          })
+        ).status,
+      ).toBe(200);
+      expect(
+        await prisma.judgeAssignment.count({ where: { judgeId: f.scorer.id } }),
+      ).toBe(1);
       expect(await prisma.auditLog.count()).toBe(0);
+
+      // USR-04: Once open products are completed, changing permissions to VIEW revokes old token and removes SCORE assignments
+      await prisma.product.update({
+        where: { id: openProduct.id },
+        data: { status: 'COMPLETED' },
+      });
+      const validAccessChange = await f.call(
+        'manager',
+        usersPath + '/' + f.scorer.id + '/staff-access',
+        'PUT',
+        {
+          staffPermissions: ['VIEW'],
+          organizationUnitId: f.unit.id,
+          isActive: true,
+          reason: 'Chuyển sang cán bộ chỉ xem sau khi hoàn tất chấm',
+        },
+      );
+      expect(validAccessChange.status).toBe(200);
+      expect(
+        await prisma.user.findUniqueOrThrow({ where: { id: f.scorer.id } }),
+      ).toMatchObject({
+        role: 'VIEWER',
+        staffPermissions: ['VIEW'],
+        tokenVersion: 1,
+      });
+      expect(
+        await prisma.judgeAssignment.count({ where: { judgeId: f.scorer.id } }),
+      ).toBe(0);
+      expect(
+        (
+          await apiRequest(baseUrl, '/auth/me', {
+            headers: f.headers('scorer'),
+          })
+        ).status,
+      ).toBe(401);
     });
   });
 

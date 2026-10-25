@@ -80,6 +80,17 @@ describe('H3 database permissions and staff access', () => {
       expect((await request(viewScoreToken, '/admin/dashboard')).status).toBe(200);
       expect((await request(viewScoreToken, `/judge/products/${product.id}/evaluation`)).status).toBe(200);
       expect((await request(viewScoreToken, `/judge/products/${product.id}/evaluation`, 'PUT', { scores: [] })).status).toBe(200);
+
+      // RBAC-05: VIEW + SCORE user unassigned from the product's category can read submitted product, PDF, and submitted evaluation print-data via /admin/*,
+      // is rejected on /judge/* (403), and cannot read another judge's draft evaluation print-data (403/404).
+      await prisma.judgeAssignment.delete({ where: { judgeId_categoryId: { judgeId: viewScore.id, categoryId: category.id } } });
+      expect((await request(viewScoreToken, `/admin/products/${product.id}`)).status).toBe(200);
+      expect((await fetch(`${baseUrl}/api/admin/products/${product.id}/attachments/${attachment.id}`, { headers: bearer(viewScoreToken) })).status).toBe(200);
+      expect((await request(viewScoreToken, `/admin/evaluations/${submitted.id}/print-data`)).status).toBe(200);
+      expect((await request(viewScoreToken, `/judge/products/${product.id}/evaluation`)).status).toBe(403);
+      expect((await fetch(`${baseUrl}/api/judge/products/${product.id}/attachments/${attachment.id}`, { headers: bearer(viewScoreToken) })).status).toBe(403);
+      expect([403, 404]).toContain((await request(viewScoreToken, `/admin/evaluations/${draftEvaluation.id}/print-data`)).status);
+
       expect((await request(registrantToken, '/my/products')).status).toBe(200);
       expect((await request(combinedToken, '/my/products')).status).toBe(403);
       const binaryPath = `/api/judge/products/${product.id}/attachments/${attachment.id}`;
@@ -195,16 +206,22 @@ describe('H3 database permissions and staff access', () => {
       }
       const product = await prisma.product.create({ data: { registrantId: registrant.id, categoryId: category.id, name: 'Open', status: 'SUBMITTED', formData: {} } });
       const before = await prisma.user.findUniqueOrThrow({ where: { id: scorer.id } });
+      const scorerActiveToken = await token(app.get(JwtService), scorer);
       for (const input of [access(['VIEW']), access(['MANAGE', 'SCORE'], null, false)]) {
-        expect((await apiRequest(baseUrl, `/admin/users/${scorer.id}/staff-access`, { method: 'PUT', headers: bearer(managerToken), body: JSON.stringify(input) })).status).toBe(409);
+        const blocked = await apiRequest<{ message: string }>(baseUrl, `/admin/users/${scorer.id}/staff-access`, { method: 'PUT', headers: bearer(managerToken), body: JSON.stringify(input) });
+        expect(blocked.status).toBe(409);
+        expect(blocked.body.message).toContain('Reassign open products before removing scoring access');
       }
       expect(await prisma.user.findUniqueOrThrow({ where: { id: scorer.id } })).toEqual(before);
+      expect((await apiRequest(baseUrl, '/auth/me', { headers: bearer(scorerActiveToken) })).status).toBe(200);
+      expect(await prisma.judgeAssignment.count({ where: { judgeId: scorer.id } })).toBe(1);
       expect(await prisma.auditLog.count({ where: { action: 'user.staff_access_update' } })).toBe(0);
       await prisma.product.update({ where: { id: product.id }, data: { status: 'COMPLETED' } });
       const oldToken = await token(app.get(JwtService), scorer);
       expect((await apiRequest(baseUrl, `/admin/judges/${scorer.id}`, { method: 'DELETE', headers: bearer(managerToken), body: JSON.stringify({ reason: 'Retire scorer' }) })).status).toBe(200);
       expect((await prisma.user.findUniqueOrThrow({ where: { id: scorer.id } })).tokenVersion).toBe(1);
       expect((await apiRequest(baseUrl, '/auth/me', { headers: bearer(oldToken) })).status).toBe(401);
+      expect(await prisma.judgeAssignment.count({ where: { judgeId: scorer.id } })).toBe(0);
       expect(await prisma.auditLog.findFirstOrThrow({ where: { entityId: scorer.id } })).toMatchObject({
         actorId: manager.id,
         action: 'judge.deactivate',
