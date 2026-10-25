@@ -717,6 +717,161 @@ describe('H4 product catalogs', () => {
     });
   });
 
+  it('blocks new drafts and draft submissions on a retired category or expired locality while allowing submitted products to finish scoring (CAT-02, LOC-01)', async () => {
+    await withTestApp(async ({ app, prisma, baseUrl }) => {
+      const f = await adminFixture(app, prisma, baseUrl);
+      const category = await prisma.productCategory.findFirstOrThrow({
+        where: { isActive: true, group: { isActive: true } },
+        include: {
+          criteriaSet: {
+            include: {
+              criteria: {
+                include: { subCriteria: { include: { options: true } } },
+              },
+            },
+          },
+        },
+      });
+      await prisma.judgeAssignment.create({
+        data: {
+          judgeId: f.scorer.id,
+          categoryId: category.id,
+          criterionIds: [],
+        },
+      });
+
+      const validFormData = {
+        entityName: 'HTX Kiểm thử CAT-02',
+        representativeName: 'Nguyễn Văn B',
+        representativeTitle: 'Giám đốc',
+        contactAddress: 'Xã Khánh An, Tỉnh Cà Mau',
+        provinceName: 'Tỉnh Cà Mau',
+        phone: '0912345678',
+        email: 'cat02@ocop.test',
+        registrationType: 'FIRST',
+        sampleQuantity: 6,
+        assessmentYear: 2026,
+        declarationAccepted: true,
+      };
+
+      const draftProduct = await prisma.product.create({
+        data: {
+          registrantId: f.owner.id,
+          categoryId: category.id,
+          localityId: f.locality.id,
+          name: 'Hồ sơ 1 (DRAFT trước khi ngừng phân loại)',
+          formData: validFormData,
+          status: ProductStatus.DRAFT,
+        },
+      });
+      const submittedProduct = await prisma.product.create({
+        data: {
+          registrantId: f.owner.id,
+          categoryId: category.id,
+          localityId: f.locality.id,
+          localityCodeAtSubmit: f.locality.code,
+          localityNameAtSubmit: f.locality.name,
+          localityTypeAtSubmit: f.locality.type,
+          provinceNameAtSubmit: f.locality.provinceName,
+          name: 'Hồ sơ 2 (SUBMITTED trước khi ngừng phân loại)',
+          formData: validFormData,
+          status: ProductStatus.SUBMITTED,
+          submittedAt: new Date(),
+        },
+      });
+
+      // Retire category (CAT-02 step 1)
+      const retired = await f.call(
+        'manager',
+        `${categoriesPath}/${category.id}`,
+        'PUT',
+        {
+          isActive: false,
+          reason: 'Ngừng sử dụng phân loại CAT-02',
+        },
+      );
+      expect(retired.status).toBe(200);
+
+      // CAT-02 step 2: Creating a new draft on the retired category is rejected with 409
+      const createOnRetired = await f.call('owner', '/my/products', 'POST', {
+        name: 'Hồ sơ tạo mới trên phân loại đã ngừng',
+        categoryId: category.id,
+        localityId: f.locality.id,
+        formData: validFormData,
+      });
+      expect(createOnRetired.status).toBe(409);
+
+      // CAT-02 step 3: Existing DRAFT can still be viewed/updated (if switched to active category), but submitting on retired category is blocked with 409
+      const submitOnRetired = await f.call(
+        'owner',
+        `/my/products/${draftProduct.id}/submit`,
+        'POST',
+      );
+      expect(submitOnRetired.status).toBe(409);
+
+      // CAT-02 step 4: Existing SUBMITTED product can still be scored and completed
+      const allScores = category.criteriaSet!.criteria.flatMap((criterion) =>
+        criterion.subCriteria.map((sub) => ({
+          subCriterionId: sub.id,
+          optionId: sub.options[sub.options.length - 1].id,
+        })),
+      );
+      expect(
+        (
+          await f.call(
+            'scorer',
+            `/judge/products/${submittedProduct.id}/evaluation`,
+            'PUT',
+            { scores: allScores },
+          )
+        ).status,
+      ).toBe(200);
+      expect(
+        (
+          await f.call(
+            'scorer',
+            `/judge/products/${submittedProduct.id}/evaluation/submit`,
+            'POST',
+          )
+        ).status,
+      ).toBe(201);
+      expect(
+        await prisma.product.findUniqueOrThrow({
+          where: { id: submittedProduct.id },
+        }),
+      ).toMatchObject({
+        status: ProductStatus.COMPLETED,
+        finalScore: 100,
+        starRating: 5,
+      });
+
+      // Re-activate category, then test LOC-01: draft attached to a locality whose effectiveTo is in the past cannot be submitted (409)
+      await f.call('manager', `${categoriesPath}/${category.id}`, 'PUT', {
+        isActive: true,
+        reason: 'Kích hoạt lại phân loại để kiểm tra LOC-01',
+      });
+      await f.call('manager', `${localitiesPath}/${f.locality.id}`, 'PUT', {
+        effectiveFrom: '2020-01-01T00:00:00+07:00',
+        effectiveTo: '2025-12-31T23:59:59+07:00',
+        reason: 'Đặt ngày hết hiệu lực trong quá khứ (LOC-01)',
+      });
+      expect(
+        (
+          await apiRequest<any>(
+            baseUrl,
+            `/localities?q=${encodeURIComponent(f.locality.code)}`,
+          )
+        ).body.data,
+      ).toEqual([]);
+      const submitExpiredLocality = await f.call(
+        'owner',
+        `/my/products/${draftProduct.id}/submit`,
+        'POST',
+      );
+      expect(submitExpiredLocality.status).toBe(409);
+    });
+  });
+
   it('does not move a category that has a submitted product', async () => {
     await withTestApp(async ({ app, prisma, baseUrl }) => {
       const f = await adminFixture(app, prisma, baseUrl);

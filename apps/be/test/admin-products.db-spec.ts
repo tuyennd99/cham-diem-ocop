@@ -734,4 +734,283 @@ describe('admin product mutations and registration snapshots', () => {
       ]);
     });
   });
+
+  it('covers registrant draft lifecycle, partial field updates, mandatory submit validation, post-submit immutability, and UPGRADE/REASSESSMENT independence (REG-01..06)', async () => {
+    await withTestApp(async ({ app, prisma, baseUrl }) => {
+      const f = await adminFixture(app, prisma, baseUrl);
+      const category = await prisma.productCategory.findFirstOrThrow({
+        where: { isActive: true, group: { isActive: true } },
+      });
+
+      // REG-01: Minimal draft save (only name + categoryId, sampleQuantity = 0, no localityId, declarationAccepted = false)
+      const minDraftRes = await f.call('owner', '/my/products', 'POST', {
+        name: 'Mật ong nháp tối thiểu REG-01',
+        categoryId: category.id,
+        formData: {
+          sampleQuantity: 0,
+          declarationAccepted: false,
+        },
+      });
+      expect(minDraftRes.status).toBe(201);
+      expect(minDraftRes.body.data).toMatchObject({
+        status: 'DRAFT',
+        localityId: null,
+        formData: {
+          sampleQuantity: 0,
+          declarationAccepted: false,
+        },
+      });
+      const draftId = minDraftRes.body.data.id as string;
+
+      // REG-02: Populate full 3-step formData, reload via GET /my/products/:id, update sampleQuantity from 6 -> 10 while preserving all other fields
+      const fullForm = {
+        entityName: 'Hợp tác xã Mật ong rừng U Minh Hạ',
+        representativeName: 'Nguyễn Văn An',
+        representativeTitle: 'Giám đốc Hợp tác xã',
+        contactAddress: 'Ấp 3, Xã Khánh An, Huyện U Minh, Tỉnh Cà Mau',
+        provinceName: 'Tỉnh Cà Mau',
+        phone: '0912345678',
+        email: 'htx.uminh@ocop.test',
+        registrationType: 'FIRST',
+        sampleQuantity: 6,
+        assessmentYear: 2026,
+        declarationAccepted: true,
+      };
+      const savedFull = await f.call(
+        'owner',
+        `/my/products/${draftId}`,
+        'PUT',
+        {
+          name: 'Mật ong rừng tràm U Minh nguyên chất 500ml',
+          categoryId: category.id,
+          localityId: f.locality.id,
+          description: 'Mật ong khai thác tự nhiên từ rừng tràm U Minh Hạ.',
+          formData: fullForm,
+        },
+      );
+      expect(savedFull.status).toBe(200);
+
+      const reloaded = await f.call('owner', `/my/products/${draftId}`);
+      expect(reloaded.status).toBe(200);
+      expect(reloaded.body.data.formData).toMatchObject(fullForm);
+
+      const updatedQty = await f.call(
+        'owner',
+        `/my/products/${draftId}`,
+        'PUT',
+        {
+          name: reloaded.body.data.name,
+          categoryId: reloaded.body.data.categoryId,
+          localityId: reloaded.body.data.localityId,
+          description: reloaded.body.data.description,
+          formData: {
+            ...reloaded.body.data.formData,
+            sampleQuantity: 10,
+          },
+        },
+      );
+      expect(updatedQty.status).toBe(200);
+      expect(updatedQty.body.data.formData).toMatchObject({
+        ...fullForm,
+        sampleQuantity: 10,
+      });
+
+      // REG-03: Each missing mandatory condition on POST /my/products/:id/submit returns 400 and keeps DRAFT
+      const missingCases: Array<{
+        localityId: string | null;
+        formData: Record<string, unknown>;
+      }> = [
+        { localityId: null, formData: fullForm },
+        {
+          localityId: f.locality.id,
+          formData: { ...fullForm, entityName: undefined },
+        },
+        {
+          localityId: f.locality.id,
+          formData: { ...fullForm, representativeName: undefined },
+        },
+        {
+          localityId: f.locality.id,
+          formData: { ...fullForm, representativeTitle: undefined },
+        },
+        {
+          localityId: f.locality.id,
+          formData: { ...fullForm, contactAddress: undefined },
+        },
+        {
+          localityId: f.locality.id,
+          formData: { ...fullForm, provinceName: undefined },
+        },
+        {
+          localityId: f.locality.id,
+          formData: { ...fullForm, phone: undefined, email: undefined },
+        },
+        {
+          localityId: f.locality.id,
+          formData: { ...fullForm, sampleQuantity: 0 },
+        },
+        {
+          localityId: f.locality.id,
+          formData: { ...fullForm, declarationAccepted: false },
+        },
+      ];
+
+      for (const testCase of missingCases) {
+        const branchDraft = await f.call('owner', '/my/products', 'POST', {
+          name: 'Nhánh thiếu điều kiện REG-03',
+          categoryId: category.id,
+          localityId: testCase.localityId,
+          formData: testCase.formData,
+        });
+        expect(branchDraft.status).toBe(201);
+        const branchId = branchDraft.body.data.id as string;
+        const branchSubmit = await f.call(
+          'owner',
+          `/my/products/${branchId}/submit`,
+          'POST',
+        );
+        expect(branchSubmit.status).toBe(400);
+        expect(
+          (await prisma.product.findUniqueOrThrow({ where: { id: branchId } }))
+            .status,
+        ).toBe('DRAFT');
+      }
+
+      // REG-03 boundary validation on create/update: assessmentYear outside 2020..2100 or invalid sampleQuantity returns 400
+      for (const badForm of [
+        { ...fullForm, assessmentYear: 2019 },
+        { ...fullForm, assessmentYear: 2101 },
+        { ...fullForm, sampleQuantity: -1 },
+        { ...fullForm, sampleQuantity: 100001 },
+        { ...fullForm, sampleQuantity: 1.5 },
+      ]) {
+        const badRes = await f.call('owner', '/my/products', 'POST', {
+          name: 'Biên ngoài khoảng REG-03',
+          categoryId: category.id,
+          localityId: f.locality.id,
+          formData: badForm,
+        });
+        expect(badRes.status).toBe(400);
+      }
+
+      // REG-04: Once submitted, PUT/DELETE/submit from stale tab on /my/products/:id returns 409 Conflict ("Only draft products can be changed")
+      const submitRes = await f.call(
+        'owner',
+        `/my/products/${draftId}/submit`,
+        'POST',
+      );
+      expect(submitRes.status).toBe(201);
+      expect(submitRes.body.data.status).toBe('SUBMITTED');
+
+      const staleUpdate = await f.call(
+        'owner',
+        `/my/products/${draftId}`,
+        'PUT',
+        {
+          name: 'Sửa từ tab cũ sau khi đã nộp',
+          categoryId: category.id,
+          localityId: f.locality.id,
+          formData: fullForm,
+        },
+      );
+      expect(staleUpdate.status).toBe(409);
+      expect(staleUpdate.body.message).toContain(
+        'Only draft products can be changed',
+      );
+
+      const staleDelete = await f.call(
+        'owner',
+        `/my/products/${draftId}`,
+        'DELETE',
+      );
+      expect(staleDelete.status).toBe(409);
+
+      // REG-05: Admin create-on-behalf requires registrantId and reason
+      expect(
+        (
+          await f.call('manager', '/admin/products', 'POST', {
+            ...draftPayload(category.id, f.locality.id),
+            reason: 'Thiếu registrantId',
+          })
+        ).status,
+      ).toBe(400);
+      expect(
+        (
+          await f.call('manager', '/admin/products', 'POST', {
+            ...draftPayload(category.id, f.locality.id),
+            registrantId: f.owner.id,
+            reason: '   ',
+          })
+        ).status,
+      ).toBe(400);
+
+      // REG-06: UPGRADE and REASSESSMENT create new independent products without altering existing COMPLETED product
+      const completedOld = await prisma.product.create({
+        data: {
+          registrantId: f.owner.id,
+          categoryId: category.id,
+          localityId: f.locality.id,
+          name: 'Mật ong rừng tràm U Minh nguyên chất 500ml',
+          status: 'COMPLETED',
+          submittedAt: new Date('2025-06-01T08:00:00+07:00'),
+          completedAt: new Date('2025-06-15T10:00:00+07:00'),
+          finalScore: 65,
+          starRating: 3,
+          formData: fullForm,
+        },
+      });
+
+      const upgradeCreate = await f.call('owner', '/my/products', 'POST', {
+        name: completedOld.name,
+        categoryId: category.id,
+        localityId: f.locality.id,
+        formData: { ...fullForm, registrationType: 'UPGRADE' },
+      });
+      expect(upgradeCreate.status).toBe(201);
+      const upgradeId = upgradeCreate.body.data.id as string;
+      expect(upgradeId).not.toBe(completedOld.id);
+      expect(
+        (await f.call('owner', `/my/products/${upgradeId}/submit`, 'POST'))
+          .status,
+      ).toBe(201);
+
+      const reassessCreate = await f.call('owner', '/my/products', 'POST', {
+        name: completedOld.name,
+        categoryId: category.id,
+        localityId: f.locality.id,
+        formData: { ...fullForm, registrationType: 'REASSESSMENT' },
+      });
+      expect(reassessCreate.status).toBe(201);
+      const reassessId = reassessCreate.body.data.id as string;
+      expect(reassessId).not.toBe(completedOld.id);
+      expect(reassessId).not.toBe(upgradeId);
+      expect(
+        (await f.call('owner', `/my/products/${reassessId}/submit`, 'POST'))
+          .status,
+      ).toBe(201);
+
+      const oldAfter = await prisma.product.findUniqueOrThrow({
+        where: { id: completedOld.id },
+      });
+      expect(oldAfter).toMatchObject({
+        id: completedOld.id,
+        status: 'COMPLETED',
+        finalScore: 65,
+        starRating: 3,
+      });
+
+      const upgradeAfter = await prisma.product.findUniqueOrThrow({
+        where: { id: upgradeId },
+      });
+      expect(upgradeAfter.registrationSnapshot).toMatchObject({
+        formData: { registrationType: 'UPGRADE' },
+      });
+      const reassessAfter = await prisma.product.findUniqueOrThrow({
+        where: { id: reassessId },
+      });
+      expect(reassessAfter.registrationSnapshot).toMatchObject({
+        formData: { registrationType: 'REASSESSMENT' },
+      });
+    });
+  });
 });

@@ -158,6 +158,7 @@ function scorePayload(
   fixture: Awaited<ReturnType<typeof createFixture>>,
   a: number,
   b?: number,
+  noteA?: string,
 ) {
   return fixture.criteria.flatMap((criterion) => {
     if (criterion.code === 'B' && b === undefined) return [];
@@ -168,6 +169,7 @@ function scorePayload(
         optionId: sub.options.find(
           ({ points }) => points === (criterion.code === 'A' ? a : b),
         )!.id,
+        ...(criterion.code === 'A' && noteA ? { note: noteA } : {}),
       },
     ];
   });
@@ -369,7 +371,7 @@ describe('assignment persistence', () => {
         await evaluations.saveDraft(
           fixture.judgeIds[0],
           fixture.productId,
-          scorePayload(fixture, 50, 40),
+          scorePayload(fixture, 50, 40, 'Ghi chú nháp ASG-03'),
         );
 
         await admin.replaceAssignments(
@@ -400,6 +402,7 @@ describe('assignment persistence', () => {
           scores: expect.arrayContaining([
             expect.objectContaining({
               subCriterionId: criterionA.subCriteria[0].id,
+              note: 'Ghi chú nháp ASG-03',
             }),
             expect.objectContaining({
               subCriterionId: criterionB.subCriteria[0].id,
@@ -433,6 +436,7 @@ describe('assignment persistence', () => {
           scores: expect.arrayContaining([
             expect.objectContaining({
               subCriterionId: criterionA.subCriteria[0].id,
+              note: 'Ghi chú nháp ASG-03',
             }),
             expect.objectContaining({
               subCriterionId: criterionB.subCriteria[0].id,
@@ -471,6 +475,182 @@ describe('assignment persistence', () => {
           status: EvaluationStatus.IN_PROGRESS,
           total: null,
           scores: [],
+        });
+      }),
+    );
+  });
+
+  it('preserves draft scores and notes when replacing with an equivalent criterion set or reordered list (ASG-07)', async () => {
+    await withTestApp(async ({ app, prisma }) =>
+      withFixture(prisma, async (fixture) => {
+        const admin = new AdminRepository(app.get(PrismaService));
+        const evaluations = new EvaluationsRepository(app.get(PrismaService));
+        const [criterionA, criterionB] = fixture.criteria;
+
+        // 1. GK1 assigned criterionIds: [] (all), saves draft scores + note on criterion A
+        await admin.replaceAssignments(
+          [
+            {
+              judgeId: fixture.judgeIds[0],
+              categoryId: fixture.categoryId,
+              criterionIds: [],
+            },
+          ],
+          fixture.adminId,
+          'Giao toàn bộ tiêu chí cho GK1',
+          {},
+        );
+        await evaluations.saveDraft(
+          fixture.judgeIds[0],
+          fixture.productId,
+          scorePayload(fixture, 50, 40, 'Ghi chú tiêu chí A giữ nguyên (ASG-07)'),
+        );
+
+        const assertDraftPreserved = async () => {
+          await expect(
+            prisma.evaluation.findUniqueOrThrow({
+              where: {
+                judgeId_productId: {
+                  judgeId: fixture.judgeIds[0],
+                  productId: fixture.productId,
+                },
+              },
+              include: { scores: true },
+            }),
+          ).resolves.toMatchObject({
+            status: EvaluationStatus.IN_PROGRESS,
+            total: null,
+            scores: expect.arrayContaining([
+              expect.objectContaining({
+                subCriterionId: criterionA.subCriteria[0].id,
+                note: 'Ghi chú tiêu chí A giữ nguyên (ASG-07)',
+              }),
+              expect.objectContaining({
+                subCriterionId: criterionB.subCriteria[0].id,
+              }),
+            ]),
+          });
+        };
+
+        // 2. replaceAssignments with criterionIds: [criterionA.id, criterionB.id] -> scores & note preserved
+        await admin.replaceAssignments(
+          [
+            {
+              judgeId: fixture.judgeIds[0],
+              categoryId: fixture.categoryId,
+              criterionIds: [criterionA.id, criterionB.id],
+            },
+          ],
+          fixture.adminId,
+          'Đổi từ [] sang danh sách đủ tiêu chí',
+          {},
+        );
+        await assertDraftPreserved();
+
+        // 3. replaceAssignments with criterionIds: [criterionB.id, criterionA.id] -> scores & note preserved
+        await admin.replaceAssignments(
+          [
+            {
+              judgeId: fixture.judgeIds[0],
+              categoryId: fixture.categoryId,
+              criterionIds: [criterionB.id, criterionA.id],
+            },
+          ],
+          fixture.adminId,
+          'Đổi thứ tự danh sách tiêu chí',
+          {},
+        );
+        await assertDraftPreserved();
+
+        // 4. replaceAssignments with criterionIds: [] -> scores & note preserved
+        await admin.replaceAssignments(
+          [
+            {
+              judgeId: fixture.judgeIds[0],
+              categoryId: fixture.categoryId,
+              criterionIds: [],
+            },
+          ],
+          fixture.adminId,
+          'Đổi về Toàn bộ []',
+          {},
+        );
+        await assertDraftPreserved();
+      }),
+    );
+  });
+
+  it('allows partial coverage when no open products exist, keeps product in SCORING when uncovered criteria remain, and preserves other categories on replace (ASG-01, ASG-02)', async () => {
+    await withTestApp(async ({ app, prisma }) =>
+      withFixture(prisma, async (fixture) => {
+        const admin = new AdminRepository(app.get(PrismaService));
+        const evaluations = new EvaluationsRepository(app.get(PrismaService));
+        const [criterionA] = fixture.criteria;
+
+        // Move fixture product back to DRAFT so category has no open products (ASG-01 precondition)
+        await prisma.product.update({
+          where: { id: fixture.productId },
+          data: { status: ProductStatus.DRAFT },
+        });
+
+        const beverageCategory = await prisma.productCategory.findFirstOrThrow({
+          where: { id: { not: fixture.categoryId } },
+        });
+
+        // ASG-01 & ASG-02: Save partial coverage on fixture.categoryId (no open products) + full assignment on beverageCategory
+        await admin.replaceAssignments(
+          [
+            {
+              judgeId: fixture.judgeIds[0],
+              categoryId: fixture.categoryId,
+              criterionIds: [criterionA.id],
+            },
+            {
+              judgeId: fixture.judgeIds[1],
+              categoryId: beverageCategory.id,
+              criterionIds: [],
+            },
+          ],
+          fixture.adminId,
+          'Phân công thiếu độ phủ khi chưa có hồ sơ mở (ASG-01, ASG-02)',
+          {},
+        );
+
+        const listedAfterSave = await admin.listAssignments();
+        expect(listedAfterSave).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              judgeId: fixture.judgeIds[0],
+              categoryId: fixture.categoryId,
+              criterionIds: [criterionA.id],
+            }),
+            expect.objectContaining({
+              judgeId: fixture.judgeIds[1],
+              categoryId: beverageCategory.id,
+              criterionIds: [],
+            }),
+          ]),
+        );
+
+        // Now submit the product and have GK1 score & submit their partial scope (criterion A only)
+        await prisma.product.update({
+          where: { id: fixture.productId },
+          data: { status: ProductStatus.SUBMITTED, submittedAt: new Date() },
+        });
+        await evaluations.saveDraft(
+          fixture.judgeIds[0],
+          fixture.productId,
+          scorePayload(fixture, 50),
+        );
+        await evaluations.submit(fixture.judgeIds[0], fixture.productId);
+
+        // Product remains SCORING with null finalScore/starRating because criterion B is uncovered
+        await expect(
+          prisma.product.findUniqueOrThrow({ where: { id: fixture.productId } }),
+        ).resolves.toMatchObject({
+          status: ProductStatus.SCORING,
+          finalScore: null,
+          starRating: null,
         });
       }),
     );

@@ -1,9 +1,37 @@
 import { readdirSync } from 'node:fs';
 import { adminFixture } from './support/admin-fixture';
 import { apiRequest, withTestApp } from './support/db-app';
+import { scenarioBuffers } from './support/scenario-files';
 
 const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]);
 const pdf = Buffer.from('%PDF-1.4\nprivate evidence');
+
+async function uploadMy(
+  baseUrl: string,
+  authorization: string,
+  productId: string,
+  options: {
+    field?: string;
+    name?: string;
+    mime?: string;
+    data?: Buffer;
+  } = {},
+) {
+  const form = new FormData();
+  const data = options.data ?? png;
+  const bytes = new ArrayBuffer(data.byteLength);
+  new Uint8Array(bytes).set(data);
+  form.append(
+    options.field ?? 'file',
+    new Blob([bytes], { type: options.mime ?? 'application/pdf' }),
+    options.name ?? 'document.pdf',
+  );
+  return fetch(`${baseUrl}/api/my/products/${productId}/attachments`, {
+    method: 'POST',
+    headers: { authorization },
+    body: form,
+  });
+}
 
 async function upload(
   baseUrl: string,
@@ -381,6 +409,177 @@ describe('admin private product files', () => {
           )
         ).status,
       ).toBe(409);
+    });
+  });
+
+  it('enforces private PDF route access control across my/public/judge/admin routes and registrant 10 MiB / signature / 20-file boundaries (FILE-04, FILE-05)', async () => {
+    await withTestApp(async ({ app, prisma, baseUrl }) => {
+      const f = await adminFixture(app, prisma, baseUrl);
+      const category = await prisma.productCategory.findFirstOrThrow({
+        where: { isActive: true, group: { isActive: true } },
+      });
+      const draft = await prisma.product.create({
+        data: {
+          registrantId: f.owner.id,
+          categoryId: category.id,
+          localityId: f.locality.id,
+          name: 'Hồ sơ kiểm thử FILE-04 & FILE-05',
+          formData: {},
+        },
+      });
+      const ownerAuth = f.headers('owner').authorization;
+
+      // FILE-05: Empty file (0 bytes) -> 415
+      const emptyRes = await uploadMy(baseUrl, ownerAuth, draft.id, {
+        name: 'empty.pdf',
+        mime: 'application/pdf',
+        data: scenarioBuffers.emptyBuffer(),
+      });
+      expect(emptyRes.status).toBe(415);
+
+      // FILE-05: Fake signature (.pdf extension & MIME but MZ header) -> 415
+      const fakeSigRes = await uploadMy(baseUrl, ownerAuth, draft.id, {
+        name: 'gia-mao.pdf',
+        mime: 'application/pdf',
+        data: scenarioBuffers.fakeSignaturePdf(),
+      });
+      expect(fakeSigRes.status).toBe(415);
+
+      // FILE-05: Over 10 MiB (10485761 bytes) -> 413
+      const over10MibData = scenarioBuffers.overLimitPdf();
+      expect(over10MibData.byteLength).toBe(10485761);
+      const over10MibRes = await uploadMy(baseUrl, ownerAuth, draft.id, {
+        name: 'file-qua-dung-luong.pdf',
+        mime: 'application/pdf',
+        data: over10MibData,
+      });
+      expect(over10MibRes.status).toBe(413);
+      expect(
+        await prisma.attachment.count({ where: { productId: draft.id } }),
+      ).toBe(0);
+
+      // FILE-05: Exact 10 MiB (10485760 bytes) with valid PDF header -> 201 accepted
+      const exact10MibData = scenarioBuffers.validPdf(10 * 1024 * 1024);
+      expect(exact10MibData.byteLength).toBe(10485760);
+      const exact10MibRes = await uploadMy(baseUrl, ownerAuth, draft.id, {
+        name: 'exact-10mib.pdf',
+        mime: 'application/pdf',
+        data: exact10MibData,
+      });
+      expect(exact10MibRes.status).toBe(201);
+      const exactPdf = (
+        (await exact10MibRes.json()) as {
+          data: { id: string; type: string; fileName: string };
+        }
+      ).data;
+      expect(exactPdf).toMatchObject({
+        type: 'EVIDENCE',
+        fileName: 'exact-10mib.pdf',
+      });
+
+      // FILE-05: Pre-seed 19 more attachments (total 20) via prisma.attachment.createMany to avoid hitting 20 req/min throttle, then upload 21st file -> 409
+      await prisma.attachment.createMany({
+        data: Array.from({ length: 19 }, (_, index) => ({
+          productId: draft.id,
+          type: 'IMAGE' as const,
+          fileName: `seeded-${index}.jpg`,
+          filePath: `seeded-key-${index}`,
+        })),
+      });
+      expect(
+        await prisma.attachment.count({ where: { productId: draft.id } }),
+      ).toBe(20);
+
+      const file21Res = await uploadMy(baseUrl, ownerAuth, draft.id, {
+        name: 'file-21.pdf',
+        mime: 'application/pdf',
+        data: scenarioBuffers.validPdf(),
+      });
+      expect(file21Res.status).toBe(409);
+      expect(
+        await prisma.attachment.count({ where: { productId: draft.id } }),
+      ).toBe(20);
+
+      // Transition product to SUBMITTED to test FILE-04 across all routes
+      await prisma.product.update({
+        where: { id: draft.id },
+        data: { status: 'SUBMITTED', submittedAt: new Date() },
+      });
+
+      // FILE-04: Unauthenticated on /api/my/products/:id/attachments/:pdfId -> 401
+      expect(
+        (
+          await fetch(
+            `${baseUrl}/api/my/products/${draft.id}/attachments/${exactPdf.id}`,
+          )
+        ).status,
+      ).toBe(401);
+
+      // FILE-04: Public route /api/products/:id/attachments/:pdfId -> 404
+      expect(
+        (
+          await fetch(
+            `${baseUrl}/api/products/${draft.id}/attachments/${exactPdf.id}`,
+          )
+        ).status,
+      ).toBe(404);
+
+      // FILE-04: Other registrant on /api/my/products/:id/attachments/:pdfId -> 404
+      expect(
+        (
+          await fetch(
+            `${baseUrl}/api/my/products/${draft.id}/attachments/${exactPdf.id}`,
+            { headers: f.headers('otherOwner') },
+          )
+        ).status,
+      ).toBe(404);
+
+      // FILE-04: Unassigned SCORE judge on /api/judge/products/:id/attachments/:pdfId -> 403
+      expect(
+        (
+          await fetch(
+            `${baseUrl}/api/judge/products/${draft.id}/attachments/${exactPdf.id}`,
+            { headers: f.headers('scorer') },
+          )
+        ).status,
+      ).toBe(403);
+
+      // FILE-04: Owner on /api/my/products/:id/attachments/:pdfId -> 200
+      expect(
+        (
+          await fetch(
+            `${baseUrl}/api/my/products/${draft.id}/attachments/${exactPdf.id}`,
+            { headers: f.headers('owner') },
+          )
+        ).status,
+      ).toBe(200);
+
+      // FILE-04: VIEW on /api/admin/products/:id/attachments/:pdfId -> 200
+      expect(
+        (
+          await fetch(
+            `${baseUrl}/api/admin/products/${draft.id}/attachments/${exactPdf.id}`,
+            { headers: f.headers('viewer') },
+          )
+        ).status,
+      ).toBe(200);
+
+      // FILE-04: Assigned SCORE judge on /api/judge/products/:id/attachments/:pdfId -> 200
+      await prisma.judgeAssignment.create({
+        data: {
+          judgeId: f.scorer.id,
+          categoryId: category.id,
+          criterionIds: [],
+        },
+      });
+      expect(
+        (
+          await fetch(
+            `${baseUrl}/api/judge/products/${draft.id}/attachments/${exactPdf.id}`,
+            { headers: f.headers('scorer') },
+          )
+        ).status,
+      ).toBe(200);
     });
   });
 });
