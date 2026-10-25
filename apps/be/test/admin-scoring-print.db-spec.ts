@@ -66,6 +66,21 @@ describe('H5 scoring forms and print-data endpoints', () => {
         targetSet.criterionCount,
       );
 
+      // PRINT-01: MANAGE and VIEW can also fetch blank criteria print-data for any set
+      const managerBlankPrint = await f.call(
+        'manager',
+        `/admin/criteria-sets/${targetSet.id}/print-data`,
+      );
+      expect(managerBlankPrint.status).toBe(200);
+      expect(managerBlankPrint.body.data.kind).toBe('BLANK_CRITERIA');
+
+      const viewerBlankPrint = await f.call(
+        'viewer',
+        `/admin/criteria-sets/${targetSet.id}/print-data`,
+      );
+      expect(viewerBlankPrint.status).toBe(200);
+      expect(viewerBlankPrint.body.data.kind).toBe('BLANK_CRITERIA');
+
       const registrantDenied = await f.call(
         'owner',
         `/admin/criteria-sets/${targetSet.id}/print-data`,
