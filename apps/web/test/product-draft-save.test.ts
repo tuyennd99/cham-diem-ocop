@@ -77,8 +77,42 @@ describe('saveProductDraft', () => {
     assert.equal(writes, 0);
   });
 
-  it('rejects selections that would exceed the 20-file product limit before writing', async () => {
+  it('rejects selections that would exceed the 20-file product limit or 10 MiB size limit before writing (FILE-02)', async () => {
     let writes = 0;
+    const oversized = new File([new Uint8Array(10 * 1024 * 1024 + 1)], 'over-10mib.pdf', {
+      type: 'application/pdf',
+      lastModified: 1,
+    });
+    await assert.rejects(
+      saveProductDraft({
+        payload,
+        files: [oversized],
+        commands: commands({
+          create: async () => {
+            writes++;
+            return { data: product() };
+          },
+        }),
+      }),
+      /10\s*MiB/i,
+    );
+    assert.equal(writes, 0);
+
+    await assert.rejects(
+      saveProductDraft({
+        payload,
+        files: Array.from({ length: 21 }, (_, index) => file(`new-${index}.png`)),
+        commands: commands({
+          create: async () => {
+            writes++;
+            return { data: product() };
+          },
+        }),
+      }),
+      /20/,
+    );
+    assert.equal(writes, 0);
+
     const existing = product({
       attachments: Array.from({ length: 19 }, (_, index) => attachment(`${index}`, `${index}.png`)),
     });
@@ -99,7 +133,7 @@ describe('saveProductDraft', () => {
     assert.equal(writes, 0);
   });
 
-  it('keeps the created ID and successful files after a later upload has an unknown outcome', async () => {
+  it('keeps the created ID and successful files after a later upload has an unknown outcome or 500 error (FILE-06)', async () => {
     const draft = product();
     const uploaded = attachment('file-1', 'one.png');
     const possiblyUploaded = attachment('file-2', 'two.png');
@@ -137,61 +171,107 @@ describe('saveProductDraft', () => {
     if (result.kind === 'upload-failed') {
       assert.equal(result.requiresReview, true);
       assert.deepEqual(result.remainingFiles, []);
+      assert.equal(
+        canStartProductDraftSave({
+          reviewRequired: result.requiresReview,
+          createOutcomeUnknown: false,
+        }),
+        false,
+      );
+    }
+
+    const server500Result = await saveProductDraft({
+      existingProduct: draft,
+      payload,
+      files: [file('one.png'), file('two.png')],
+      commands: commands({
+        update: async () => ({ data: draft }),
+        upload: async (_id, selected) => {
+          if (selected.name === 'one.png') return { data: uploaded };
+          throw new ApiError('Internal Server Error', 500);
+        },
+        detail: async () => ({ data: product({ attachments: [uploaded] }) }),
+      }),
+    });
+    assert.equal(server500Result.kind, 'upload-failed');
+    if (server500Result.kind === 'upload-failed') {
+      assert.equal(server500Result.product.id, 'draft-1');
+      assert.equal(server500Result.requiresReview, true);
+      assert.deepEqual(server500Result.remainingFiles, []);
+      assert.equal(
+        canStartProductDraftSave({
+          reviewRequired: server500Result.requiresReview,
+          createOutcomeUnknown: false,
+        }),
+        false,
+      );
     }
   });
 
-  it('stops on deterministic 4xx and retries the remaining files using the same draft ID', async () => {
-    const existing = product({
-      id: 'existing-draft',
-      attachments: [attachment('saved', 'saved.png')],
-    });
-    const first = file('first.png');
-    const rejected = file('rejected.png');
-    const later = file('later.png');
-    const updateIds: string[] = [];
-    let firstAttemptUploads = 0;
-    const firstResult = await saveProductDraft({
-      existingProduct: existing,
-      payload,
-      files: [first, rejected, later],
-      commands: commands({
-        update: async (id) => {
-          updateIds.push(id);
-          return { data: existing };
-        },
-        upload: async (_id, selected) => {
-          firstAttemptUploads++;
-          if (selected === rejected) throw new ApiError('Rejected file', 400);
-          return { data: attachment('saved-first', selected.name) };
-        },
-      }),
-    });
-    assert.equal(firstResult.kind, 'upload-failed');
-    assert.equal(firstResult.product.id, 'existing-draft');
-    if (firstResult.kind !== 'upload-failed') return;
-    assert.equal(firstResult.requiresReview, false);
-    assert.deepEqual(firstResult.remainingFiles, [rejected, later]);
-    assert.equal(firstAttemptUploads, 2);
-
+  it('stops on deterministic 415/4xx on second file and retries only remaining files using the same draft ID (FILE-03)', async () => {
+    const createdDraft = product({ id: 'draft-file-03', attachments: [] });
+    const validFirst = file('anh-chai-mat-ong.jpg', 'image/jpeg');
+    const fakePdfSecond = file('gia-mao.pdf', 'application/pdf');
+    const validPdfReplacement = file('giay-chung-nhan-attp.pdf', 'application/pdf');
     let creates = 0;
-    const retry = await saveProductDraft({
-      existingProduct: firstResult.product,
+    const updateIds: string[] = [];
+    const uploadedNames: string[] = [];
+
+    const firstAttempt = await saveProductDraft({
       payload,
-      files: firstResult.remainingFiles,
+      files: [validFirst, fakePdfSecond],
       commands: commands({
         create: async () => {
           creates++;
-          return { data: existing };
+          return { data: createdDraft };
         },
-        update: async (id) => {
-          updateIds.push(id);
-          return { data: firstResult.product };
+        upload: async (_id, selected) => {
+          uploadedNames.push(selected.name);
+          if (selected === fakePdfSecond) {
+            throw new ApiError('File content does not match its type', 415);
+          }
+          return { data: attachment('att-1', selected.name) };
         },
       }),
     });
-    assert.equal(creates, 0);
-    assert.deepEqual(updateIds, ['existing-draft', 'existing-draft']);
-    assert.equal(retry.kind, 'saved');
+    assert.equal(creates, 1);
+    assert.equal(firstAttempt.kind, 'upload-failed');
+    assert.equal(firstAttempt.product.id, 'draft-file-03');
+    assert.deepEqual(
+      firstAttempt.product.attachments.map((item) => item.id),
+      ['att-1'],
+    );
+    if (firstAttempt.kind !== 'upload-failed') return;
+    assert.equal(firstAttempt.requiresReview, false);
+    assert.deepEqual(firstAttempt.remainingFiles, [fakePdfSecond]);
+
+    const secondAttempt = await saveProductDraft({
+      existingProduct: firstAttempt.product,
+      payload,
+      files: [validPdfReplacement],
+      commands: commands({
+        create: async () => {
+          creates++;
+          return { data: createdDraft };
+        },
+        update: async (id) => {
+          updateIds.push(id);
+          return { data: firstAttempt.product };
+        },
+        upload: async (_id, selected) => {
+          uploadedNames.push(selected.name);
+          return { data: attachment('att-2', selected.name) };
+        },
+      }),
+    });
+    assert.equal(creates, 1);
+    assert.deepEqual(updateIds, ['draft-file-03']);
+    assert.equal(secondAttempt.kind, 'saved');
+    assert.equal(secondAttempt.product.id, 'draft-file-03');
+    assert.deepEqual(
+      secondAttempt.product.attachments.map((item) => item.id),
+      ['att-1', 'att-2'],
+    );
   });
 
   it('does not retry a create whose response was lost', async () => {

@@ -78,6 +78,8 @@ try {
     assert.equal(API.my.attachment('a/b', 'c'), '/my/products/a%2Fb/attachments/c');
     assert.equal(typeof validatePasswordBytes, 'function');
     assert.doesNotThrow(() => validatePasswordBytes('a'.repeat(72)));
+    assert.doesNotThrow(() => validatePasswordBytes('Đ'.repeat(36)));
+    assert.throws(() => validatePasswordBytes('Đ'.repeat(37)), /72 byte UTF-8/);
     assert.doesNotThrow(() => validatePasswordBytes('ệ'.repeat(24)));
     assert.throws(() => validatePasswordBytes('ệ'.repeat(25)), /72 byte UTF-8/);
     const session = { accessToken: 'test-token', user: {

@@ -8,11 +8,17 @@ import {
 } from '../src/lib/print-format';
 
 it('formats exact score without rounding 89.99 up to 90.00 and labels 5 stars as proposed consideration', () => {
+  assert.equal(formatExactScore(0), '0');
+  assert.equal(formatExactScore(81.5), '81.5');
   assert.equal(formatExactScore(89.99), '89.99');
   assert.equal(formatExactScore(89.999), '89.99');
   assert.equal(formatExactScore(90), '90');
+  assert.equal(formatExactScore(100), '100');
   assert.equal(formatExactScore(75.5), '75.5');
   assert.equal(formatExactScore(null), '—');
+  assert.equal(formatStarRatingLabel(1), 'Mức điểm 1 sao');
+  assert.equal(formatStarRatingLabel(2), 'Mức điểm 2 sao');
+  assert.equal(formatStarRatingLabel(3), 'Mức điểm 3 sao');
   assert.equal(formatStarRatingLabel(4), 'Mức điểm 4 sao');
   assert.equal(
     formatStarRatingLabel(5),
