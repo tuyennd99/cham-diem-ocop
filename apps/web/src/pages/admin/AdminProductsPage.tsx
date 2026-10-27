@@ -396,9 +396,13 @@ export function AdminProductsPage({
         })}
       </div>
 
-      <form className='admin-form filter-card' onSubmit={submitFilters}>
+      <form className='admin-form filter-card admin-filter-panel' onSubmit={submitFilters}>
         <div className='admin-filters'>
-          <label htmlFor='admin-product-q'>
+          <label
+            className='admin-filter-field'
+            data-filter-width='search'
+            htmlFor='admin-product-q'
+          >
             Tìm sản phẩm hoặc mã hồ sơ
             <Input
               id='admin-product-q'
@@ -411,7 +415,11 @@ export function AdminProductsPage({
             />
           </label>
 
-          <label htmlFor='admin-product-group'>
+          <label
+            className='admin-filter-field'
+            data-filter-width='group'
+            htmlFor='admin-product-group'
+          >
             Nhóm sản phẩm lớn
             <select
               id='admin-product-group'
@@ -430,7 +438,11 @@ export function AdminProductsPage({
             </select>
           </label>
 
-          <label htmlFor='admin-product-category'>
+          <label
+            className='admin-filter-field'
+            data-filter-width='group'
+            htmlFor='admin-product-category'
+          >
             Phân loại sản phẩm
             <select
               id='admin-product-category'
@@ -457,29 +469,29 @@ export function AdminProductsPage({
               ))}
             </select>
           </label>
-        </div>
 
-        <div className='admin-actions' style={{ marginTop: '12px' }}>
-          <Button type='submit'>Áp dụng</Button>
-          <Button
-            type='button'
-            variant='secondary'
-            aria-expanded={showAdvanced}
-            aria-controls='admin-product-advanced'
-            onClick={() => setShowAdvanced((open) => !open)}
-          >
-            <Filter className='size-4' aria-hidden='true' />
-            <span>Bộ lọc khác</span>
-            {hasActiveFilters && (
-              <span className='admin-filter-count'>{appliedChips.length}</span>
-            )}
-          </Button>
-          {hasActiveFilters && (
-            <Button type='button' variant='secondary' onClick={resetFilters}>
-              <RotateCcw className='size-4' aria-hidden='true' />
-              <span>Xóa bộ lọc</span>
+          <div className='admin-actions admin-filter-actions'>
+            <Button type='submit'>Áp dụng</Button>
+            <Button
+              type='button'
+              variant='secondary'
+              aria-expanded={showAdvanced}
+              aria-controls='admin-product-advanced'
+              onClick={() => setShowAdvanced((open) => !open)}
+            >
+              <Filter className='size-4' aria-hidden='true' />
+              <span>Bộ lọc khác</span>
+              {hasActiveFilters && (
+                <span className='admin-filter-count'>{appliedChips.length}</span>
+              )}
             </Button>
-          )}
+            {hasActiveFilters && (
+              <Button type='button' variant='secondary' onClick={resetFilters}>
+                <RotateCcw className='size-4' aria-hidden='true' />
+                <span>Xóa bộ lọc</span>
+              </Button>
+            )}
+          </div>
         </div>
 
         <div

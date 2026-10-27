@@ -486,3 +486,94 @@ it('preserves admin-managed catalog metadata and extra categories when reseeding
     });
   });
 });
+
+it('seeds sample OCOP products across all 6 groups and all 4 statuses idempotently when test accounts are enabled', async () => {
+  await withTestApp(async ({ prisma }) => {
+    const sandbox = seedSandbox();
+    const runWithSampleData = () =>
+      spawnSync(
+        process.execPath,
+        [
+          '--import',
+          pathToFileURL(require.resolve('tsx')).href,
+          resolve(__dirname, '../prisma/seed/seed.ts'),
+          '--seed-test-accounts',
+          '--only-sample-data',
+        ],
+        {
+          cwd: sandbox.root,
+          env: {
+            ...process.env,
+            DOTENV_CONFIG_PATH: join(sandbox.root, '.env'),
+          },
+          encoding: 'utf8',
+          timeout: 300000,
+        },
+      );
+
+    try {
+      const firstRun = runWithSampleData();
+      expect(firstRun.status).toBe(0);
+
+      const products = await prisma.product.findMany({
+        include: {
+          category: { select: { groupCode: true } },
+          statusEvents: { orderBy: { sequence: 'asc' } },
+          evaluations: { include: { scores: true } },
+        },
+      });
+      expect(products.length).toBeGreaterThanOrEqual(8);
+
+      const groupCodes = new Set(products.map((p) => p.category.groupCode));
+      expect(groupCodes).toEqual(
+        new Set([
+          'FOOD',
+          'DRINK',
+          'HERBAL',
+          'HANDICRAFT',
+          'ORNAMENTAL',
+          'TOURISM',
+        ]),
+      );
+
+      const statuses = new Set(products.map((p) => p.status));
+      expect(statuses).toEqual(
+        new Set([
+          ProductStatus.DRAFT,
+          ProductStatus.SUBMITTED,
+          ProductStatus.SCORING,
+          ProductStatus.COMPLETED,
+        ]),
+      );
+
+      for (const product of products) {
+        expect(product.statusEvents.length).toBeGreaterThanOrEqual(1);
+        if (product.status !== ProductStatus.DRAFT) {
+          expect(product.submittedAt).toBeInstanceOf(Date);
+          expect(product.localityId).toBeTruthy();
+          expect(product.registrationSnapshot).toBeTruthy();
+        }
+        if (product.status === ProductStatus.SCORING) {
+          expect(product.evaluations.length).toBeGreaterThanOrEqual(1);
+        }
+        if (product.status === ProductStatus.COMPLETED) {
+          expect(product.completedAt).toBeInstanceOf(Date);
+          expect(product.finalScore).toBeGreaterThan(0);
+          expect(product.starRating).toBeGreaterThanOrEqual(1);
+          expect(product.evaluations.length).toBeGreaterThanOrEqual(2);
+          for (const evaluation of product.evaluations) {
+            expect(evaluation.status).toBe(EvaluationStatus.SUBMITTED);
+            expect(evaluation.submissionSnapshot).toBeTruthy();
+            expect(evaluation.scores.length).toBeGreaterThan(0);
+          }
+        }
+      }
+
+      const secondRun = runWithSampleData();
+      expect(secondRun.status).toBe(0);
+      expect(await prisma.product.count()).toBe(products.length);
+    } finally {
+      rmSync(sandbox.root, { recursive: true, force: true });
+    }
+  });
+});

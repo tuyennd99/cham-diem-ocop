@@ -7,7 +7,9 @@ import type {
   RegistrationPrintData,
 } from '@ocop/shared';
 import { Link } from '@tanstack/react-router';
+import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import type { AdminProductSearch } from '../../lib/admin-search';
 import { formatExactScore, formatStarRatingLabel } from '../../lib/print-format';
 import { formatFormValue } from '../../lib/utils';
 import { PrivateAttachmentThumbnail } from '../../pages/registrant/AttachmentLink';
@@ -20,24 +22,25 @@ function formatViDateTime(value: string | null | undefined): string {
 
 export function PrintPageToolbar({
   backTo,
-  backLabel = '← Quay lại',
+  backSearch,
+  backLabel = 'Quay lại',
   title,
   children,
 }: {
   backTo: string;
+  backSearch?: AdminProductSearch;
   backLabel?: string;
   title: string;
   children?: ReactNode;
 }) {
   return (
     <div className='print-toolbar no-print' role='region' aria-label='Thanh công cụ in A4'>
-      <div className='hero-actions'>
-        <Link className='button button-secondary' to={backTo}>
-          {backLabel}
-        </Link>
-        <strong>{title}</strong>
-      </div>
-      <div className='hero-actions'>
+      <Link className='button button-secondary' to={backTo} search={backSearch}>
+        <ArrowLeft size={16} aria-hidden='true' />
+        {backLabel}
+      </Link>
+      <strong className='print-toolbar-title'>{title}</strong>
+      <div className='print-toolbar-actions'>
         {children}
         <Button type='button' onClick={() => window.print()}>
           In / Lưu PDF (A4)
@@ -456,89 +459,106 @@ export function ProductResultsPrintSheet({ data }: { data: ProductResultsPrintDa
       </header>
 
       <h2>1. Danh sách phiếu chấm của các thành viên Hội đồng</h2>
-      <table className='print-table'>
-        <thead>
-          <tr>
-            <th scope='col'>Thành viên chấm</th>
-            <th scope='col'>Đơn vị công tác (tại thời điểm nộp)</th>
-            <th scope='col'>Phạm vi phân công</th>
-            <th scope='col'>Trạng thái</th>
-            <th scope='col'>Thời điểm nộp</th>
-            <th scope='col'>Tổng điểm trong phạm vi</th>
-          </tr>
-        </thead>
-        <tbody>
-          {evaluations.length === 0 ? (
+      <p className='print-table-scroll-hint no-print'>Cuộn ngang để xem đầy đủ bảng.</p>
+      <div
+        className='print-table-scroll'
+        role='region'
+        aria-label='Phiếu chấm của các thành viên Hội đồng'
+        tabIndex={0}
+      >
+        <table className='print-table'>
+          <thead>
             <tr>
-              <td colSpan={6}>Chưa có phiếu chấm nào được nộp.</td>
+              <th scope='col'>Thành viên chấm</th>
+              <th scope='col'>Đơn vị công tác (tại thời điểm nộp)</th>
+              <th scope='col'>Phạm vi phân công</th>
+              <th scope='col'>Trạng thái</th>
+              <th scope='col'>Thời điểm nộp</th>
+              <th scope='col'>Tổng điểm trong phạm vi</th>
             </tr>
-          ) : (
-            evaluations.map((ev) => (
-              <tr key={ev.id}>
-                <td>
-                  <strong>{ev.judgeName}</strong>
-                </td>
-                <td>{ev.organizationUnitName ?? 'Chưa gán đơn vị'}</td>
-                <td>
-                  {ev.isPartialScope
-                    ? `Phân công một phần (Tối đa ${ev.scopeMaxScore} điểm)`
-                    : `Toàn bộ tiêu chí (Tối đa ${ev.scopeMaxScore} điểm)`}
-                </td>
-                <td>{ev.status === 'SUBMITTED' ? 'Đã nộp' : 'BẢN NHÁP — CHƯA NỘP'}</td>
-                <td>{formatViDateTime(ev.submittedAt)}</td>
-                <td className='print-num'>
-                  {ev.total !== null ? `${formatExactScore(ev.total)} / ${ev.scopeMaxScore}` : '—'}
-                </td>
+          </thead>
+          <tbody>
+            {evaluations.length === 0 ? (
+              <tr>
+                <td colSpan={6}>Chưa có phiếu chấm nào được nộp.</td>
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+            ) : (
+              evaluations.map((ev) => (
+                <tr key={ev.id}>
+                  <td>
+                    <strong>{ev.judgeName}</strong>
+                  </td>
+                  <td>{ev.organizationUnitName ?? 'Chưa gán đơn vị'}</td>
+                  <td>
+                    {ev.isPartialScope
+                      ? `Phân công một phần (Tối đa ${ev.scopeMaxScore} điểm)`
+                      : `Toàn bộ tiêu chí (Tối đa ${ev.scopeMaxScore} điểm)`}
+                  </td>
+                  <td>{ev.status === 'SUBMITTED' ? 'Đã nộp' : 'BẢN NHÁP — CHƯA NỘP'}</td>
+                  <td>{formatViDateTime(ev.submittedAt)}</td>
+                  <td className='print-num'>
+                    {ev.total !== null
+                      ? `${formatExactScore(ev.total)} / ${ev.scopeMaxScore}`
+                      : '—'}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
 
       <h2>2. Tổng hợp điểm trung bình theo từng tiêu chí</h2>
-      <table className='print-table'>
-        <thead>
-          <tr>
-            <th scope='col' style={{ width: '14%' }}>
-              Mã tiêu chí
-            </th>
-            <th scope='col' style={{ width: '54%' }}>
-              Tên tiêu chí
-            </th>
-            <th scope='col' style={{ width: '16%' }}>
-              Điểm tối đa
-            </th>
-            <th scope='col' style={{ width: '16%' }}>
-              Điểm trung bình
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {criteriaSummary.map((row) => (
-            <tr key={row.criterionId}>
-              <td>
-                <strong>{row.code}</strong>
-              </td>
-              <td>{row.name}</td>
-              <td className='print-num'>{row.maxScore}</td>
-              <td className='print-num'>{formatExactScore(row.averageScore)}</td>
+      <div
+        className='print-table-scroll'
+        role='region'
+        aria-label='Điểm trung bình theo từng tiêu chí'
+        tabIndex={0}
+      >
+        <table className='print-table'>
+          <thead>
+            <tr>
+              <th scope='col' style={{ width: '14%' }}>
+                Mã tiêu chí
+              </th>
+              <th scope='col' style={{ width: '54%' }}>
+                Tên tiêu chí
+              </th>
+              <th scope='col' style={{ width: '16%' }}>
+                Điểm tối đa
+              </th>
+              <th scope='col' style={{ width: '16%' }}>
+                Điểm trung bình
+              </th>
             </tr>
-          ))}
-        </tbody>
-        <tfoot>
-          <tr>
-            <th scope='row' colSpan={2}>
-              ĐIỂM TỔNG HỢP CUỐI CÙNG &amp; MỨC SAO THEO ĐIỂM
-            </th>
-            <th className='print-num'>100</th>
-            <th className='print-num'>
-              {isCompleted
-                ? `${formatExactScore(product.finalScore)} điểm (${product.starLabel ?? formatStarRatingLabel(product.starRating)})`
-                : 'Chưa hoàn tất'}
-            </th>
-          </tr>
-        </tfoot>
-      </table>
+          </thead>
+          <tbody>
+            {criteriaSummary.map((row) => (
+              <tr key={row.criterionId}>
+                <td>
+                  <strong>{row.code}</strong>
+                </td>
+                <td>{row.name}</td>
+                <td className='print-num'>{row.maxScore}</td>
+                <td className='print-num'>{formatExactScore(row.averageScore)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <th scope='row' colSpan={2}>
+                ĐIỂM TỔNG HỢP CUỐI CÙNG &amp; MỨC SAO THEO ĐIỂM
+              </th>
+              <th className='print-num'>100</th>
+              <th className='print-num'>
+                {isCompleted
+                  ? `${formatExactScore(product.finalScore)} điểm (${product.starLabel ?? formatStarRatingLabel(product.starRating)})`
+                  : 'Chưa hoàn tất'}
+              </th>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
 
       <footer className='print-signatures'>
         <div>
@@ -577,26 +597,8 @@ export function RegistrationPrintSheet({
 
   const { formData } = data;
 
-  return (
+  const sheet = (
     <article className='ocop-print-sheet' aria-label='Phiếu đăng ký sản phẩm OCOP Mẫu số 01'>
-      {imageAttachments.length > 0 && (
-        <aside className='no-print route-panel' aria-label='Chọn ảnh sản phẩm đưa vào bản in'>
-          <strong>Chọn ảnh minh họa sản phẩm in kèm Mẫu số 01:</strong>
-          <div className='hero-actions'>
-            {imageAttachments.map((img) => (
-              <label key={img.id}>
-                <input
-                  type='checkbox'
-                  checked={selectedImageIds.includes(img.id)}
-                  onChange={() => toggleImage(img.id)}
-                />{' '}
-                {img.fileName}
-              </label>
-            ))}
-          </div>
-        </aside>
-      )}
-
       <header className='print-sheet-header'>
         {data.isDraft && <div className='print-watermark'>BẢN NHÁP</div>}
         <p className='print-gov-header'>
@@ -722,9 +724,8 @@ export function RegistrationPrintSheet({
                     mode={attachmentMode}
                     productId={data.product.id}
                     attachmentId={img.id}
-                    name={img.fileName}
+                    name={`Ảnh sản phẩm ${data.product.name}`}
                   />
-                  <figcaption>{img.fileName}</figcaption>
                 </figure>
               ))}
           </div>
@@ -758,7 +759,7 @@ export function RegistrationPrintSheet({
             data.attachments.map((att, index) => (
               <tr key={att.id}>
                 <td className='print-num'>{index + 1}</td>
-                <td>{att.fileName}</td>
+                <td>{att.type === 'IMAGE' ? `Ảnh sản phẩm ${index + 1}` : att.fileName}</td>
                 <td>{att.type === 'IMAGE' ? 'Ảnh sản phẩm' : 'Tài liệu minh chứng'}</td>
                 <td>{formatViDateTime(att.createdAt)}</td>
               </tr>
@@ -781,5 +782,31 @@ export function RegistrationPrintSheet({
         Thời điểm kết xuất phiếu đăng ký: {formatViDateTime(data.generatedAt)}
       </p>
     </article>
+  );
+
+  return (
+    <>
+      {imageAttachments.length > 0 && (
+        <aside
+          className='no-print route-panel registration-image-picker'
+          aria-label='Chọn ảnh sản phẩm đưa vào bản in'
+        >
+          <strong>Chọn ảnh minh họa sản phẩm in kèm Mẫu số 01:</strong>
+          <div className='hero-actions'>
+            {imageAttachments.map((img) => (
+              <label key={img.id}>
+                <input
+                  type='checkbox'
+                  checked={selectedImageIds.includes(img.id)}
+                  onChange={() => toggleImage(img.id)}
+                />{' '}
+                {img.fileName}
+              </label>
+            ))}
+          </div>
+        </aside>
+      )}
+      {sheet}
+    </>
   );
 }

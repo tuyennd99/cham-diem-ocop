@@ -83,12 +83,25 @@ export function ChangePasswordPage() {
   });
 
   return (
-    <section className='route-panel password-page'>
-      <p className='eyebrow'>TÀI KHOẢN</p>
-      <h1>Đổi mật khẩu</h1>
-      <p>Chọn mật khẩu mới có ít nhất 8 ký tự.</p>
+    <section className='admin-page'>
+      <div>
+        <Link className='text-link text-sm' to='/account'>
+          ← Quay lại thông tin tài khoản
+        </Link>
+      </div>
+
+      <div className='admin-page-heading'>
+        <div>
+          <h1>Đổi mật khẩu</h1>
+          <p className='route-intro'>
+            Chọn mật khẩu mới có ít nhất 8 ký tự (tối đa 72 byte UTF-8). Sau khi đổi mật khẩu thành
+            công, bạn sẽ cần đăng nhập lại.
+          </p>
+        </div>
+      </div>
+
       <form
-        className='account-form'
+        className='admin-form account-form filter-card'
         onSubmit={(event) => {
           event.preventDefault();
           void form.handleSubmit();
@@ -97,32 +110,37 @@ export function ChangePasswordPage() {
         {passwordFields.map((config) => (
           <form.Field key={config.name} name={config.name}>
             {(field) => (
-              <label>
-                {config.label}
-                <Input
-                  name={field.name}
-                  type={show[config.name] ? 'text' : 'password'}
-                  autoComplete={config.autoComplete}
-                  minLength={config.minLength}
-                  maxLength={72}
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                  required
-                />
-                <button
-                  type='button'
-                  className='password-toggle'
-                  aria-pressed={show[config.name]}
-                  onClick={() =>
-                    setShow((current) => ({
-                      ...current,
-                      [config.name]: !current[config.name],
-                    }))
-                  }
-                >
-                  {show[config.name] ? `Ẩn ${config.toggleLabel}` : `Hiện ${config.toggleLabel}`}
-                </button>
+              <label htmlFor={`account-password-${config.name}`}>
+                <span>{config.label}</span>
+                <div className='flex items-center gap-2'>
+                  <Input
+                    id={`account-password-${config.name}`}
+                    name={field.name}
+                    type={show[config.name] ? 'text' : 'password'}
+                    autoComplete={config.autoComplete}
+                    minLength={config.minLength}
+                    maxLength={72}
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(event) => field.handleChange(event.target.value)}
+                    required
+                  />
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    size='sm'
+                    className='shrink-0'
+                    aria-pressed={show[config.name]}
+                    onClick={() =>
+                      setShow((current) => ({
+                        ...current,
+                        [config.name]: !current[config.name],
+                      }))
+                    }
+                  >
+                    {show[config.name] ? `Ẩn ${config.toggleLabel}` : `Hiện ${config.toggleLabel}`}
+                  </Button>
+                </div>
               </label>
             )}
           </form.Field>
@@ -134,17 +152,17 @@ export function ChangePasswordPage() {
         )}
         <form.Subscribe selector={(state) => state.isSubmitting}>
           {(busy) => (
-            <Button type='submit' disabled={busy}>
-              {busy ? 'Đang cập nhật…' : 'Cập nhật mật khẩu'}
-            </Button>
+            <div className='admin-actions'>
+              <Button type='submit' disabled={busy}>
+                {busy ? 'Đang cập nhật…' : 'Cập nhật mật khẩu'}
+              </Button>
+              <Link className='button button-secondary' to='/account'>
+                Hủy
+              </Link>
+            </div>
           )}
         </form.Subscribe>
       </form>
-      <p>
-        <Link className='text-link' to='/account'>
-          Quay lại tài khoản
-        </Link>
-      </p>
     </section>
   );
 }

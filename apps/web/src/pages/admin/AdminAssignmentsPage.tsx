@@ -345,7 +345,11 @@ export function AdminAssignmentsPage({
       ) : (
         <>
           <div className='admin-filters'>
-            <label htmlFor='assignment-filter-group'>
+            <label
+              className='admin-filter-field'
+              data-filter-width='group'
+              htmlFor='assignment-filter-group'
+            >
               Lọc theo nhóm lớn
               <select
                 id='assignment-filter-group'
@@ -374,7 +378,11 @@ export function AdminAssignmentsPage({
               </select>
             </label>
 
-            <label htmlFor='assignment-filter-category'>
+            <label
+              className='admin-filter-field'
+              data-filter-width='group'
+              htmlFor='assignment-filter-category'
+            >
               Lọc theo phân loại sản phẩm
               <select
                 id='assignment-filter-category'

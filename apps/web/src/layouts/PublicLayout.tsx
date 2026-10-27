@@ -12,7 +12,7 @@ export function SiteHeader() {
 
   return (
     <header className='site-header'>
-      <div className={`container header-inner${menuOpen ? 'menu-open' : ''}`}>
+      <div className={`container header-inner${menuOpen ? ' menu-open' : ''}`}>
         <Link className='brand' to='/' hash='home' aria-label='OCOP Đánh Giá — Trang chủ'>
           <span className='brand-mark' aria-hidden='true'>
             ★
@@ -58,7 +58,7 @@ export function SiteHeader() {
               to={signedIn ? workPath : '/register'}
               onClick={() => setMenuOpen(false)}
             >
-              {signedIn ? 'Mở hồ sơ' : 'Đăng ký sản phẩm'}
+              {signedIn ? 'Mở hồ sơ' : 'Tạo tài khoản chủ thể'}
             </Link>
           </div>
         </nav>
@@ -67,7 +67,7 @@ export function SiteHeader() {
             {signedIn ? session?.user.fullName : 'Đăng nhập'}
           </Link>
           <Link className='button button-primary header-cta' to={signedIn ? workPath : '/register'}>
-            {signedIn ? 'Khu vực làm việc' : 'Đăng ký sản phẩm'}
+            {signedIn ? 'Khu vực làm việc' : 'Tạo tài khoản chủ thể'}
           </Link>
         </div>
       </div>
@@ -116,6 +116,7 @@ export function SiteFooter() {
 export function PublicLayout() {
   return (
     <>
+      <SiteHeader />
       <Outlet />
       <SiteFooter />
     </>

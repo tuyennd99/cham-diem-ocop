@@ -813,7 +813,7 @@ describe('H4 product catalogs', () => {
       const allScores = category.criteriaSet!.criteria.flatMap((criterion) =>
         criterion.subCriteria.map((sub) => ({
           subCriterionId: sub.id,
-          optionId: sub.options[sub.options.length - 1].id,
+          optionId: [...sub.options].sort((a, b) => b.points - a.points)[0].id,
         })),
       );
       expect(

@@ -196,7 +196,7 @@ export function AdminUsersPage({
         <TabsContent value='users'>
           <div className='admin-page'>
             <form
-              className='admin-form filter-card'
+              className='admin-form filter-card admin-filter-panel'
               onSubmit={(event) => {
                 event.preventDefault();
                 applySearch({
@@ -207,7 +207,11 @@ export function AdminUsersPage({
               }}
             >
               <div className='admin-filters'>
-                <label htmlFor='admin-users-q'>
+                <label
+                  className='admin-filter-field'
+                  data-filter-width='search'
+                  htmlFor='admin-users-q'
+                >
                   Tìm họ tên, email hoặc số điện thoại
                   <Input
                     id='admin-users-q'
@@ -222,7 +226,11 @@ export function AdminUsersPage({
                   />
                 </label>
 
-                <label htmlFor='admin-users-kind'>
+                <label
+                  className='admin-filter-field'
+                  data-filter-width='status'
+                  htmlFor='admin-users-kind'
+                >
                   Loại tài khoản
                   <select
                     id='admin-users-kind'
@@ -242,7 +250,11 @@ export function AdminUsersPage({
                   </select>
                 </label>
 
-                <label htmlFor='admin-users-status'>
+                <label
+                  className='admin-filter-field'
+                  data-filter-width='status'
+                  htmlFor='admin-users-status'
+                >
                   Trạng thái hoạt động
                   <select
                     id='admin-users-status'
@@ -264,47 +276,47 @@ export function AdminUsersPage({
                     <option value='false'>Đã khóa</option>
                   </select>
                 </label>
-              </div>
 
-              <div className='admin-actions' style={{ marginTop: '12px' }}>
-                <Button type='submit'>Áp dụng</Button>
-                <Button
-                  type='button'
-                  variant='secondary'
-                  aria-expanded={showAdvanced}
-                  aria-controls='admin-users-advanced'
-                  onClick={() => setShowAdvanced((open) => !open)}
-                >
-                  <Filter className='size-4' aria-hidden='true' />
-                  <span>Bộ lọc khác</span>
-                  {activeFiltersCount > 0 && (
-                    <span className='admin-filter-count'>{activeFiltersCount}</span>
-                  )}
-                </Button>
-                {activeFiltersCount > 0 && (
+                <div className='admin-actions admin-filter-actions'>
+                  <Button type='submit'>Áp dụng</Button>
                   <Button
                     type='button'
                     variant='secondary'
-                    onClick={() =>
-                      applySearch({
-                        tab: 'users',
-                        page: 1,
-                        limit: appliedSearch.limit ?? DEFAULT_PAGE_SIZE,
-                      })
-                    }
+                    aria-expanded={showAdvanced}
+                    aria-controls='admin-users-advanced'
+                    onClick={() => setShowAdvanced((open) => !open)}
                   >
-                    <RotateCcw className='size-4' aria-hidden='true' />
-                    <span>Xóa bộ lọc</span>
+                    <Filter className='size-4' aria-hidden='true' />
+                    <span>Bộ lọc khác</span>
+                    {activeFiltersCount > 0 && (
+                      <span className='admin-filter-count'>{activeFiltersCount}</span>
+                    )}
                   </Button>
-                )}
-                <Button
-                  type='button'
-                  variant='secondary'
-                  disabled={usersQuery.isFetching}
-                  onClick={() => void usersQuery.refetch()}
-                >
-                  Tải lại
-                </Button>
+                  {activeFiltersCount > 0 && (
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      onClick={() =>
+                        applySearch({
+                          tab: 'users',
+                          page: 1,
+                          limit: appliedSearch.limit ?? DEFAULT_PAGE_SIZE,
+                        })
+                      }
+                    >
+                      <RotateCcw className='size-4' aria-hidden='true' />
+                      <span>Xóa bộ lọc</span>
+                    </Button>
+                  )}
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    disabled={usersQuery.isFetching}
+                    onClick={() => void usersQuery.refetch()}
+                  >
+                    Tải lại
+                  </Button>
+                </div>
               </div>
 
               <div

@@ -46,7 +46,7 @@ export function HomePage() {
             </p>
             <div className='hero-actions'>
               <Link className='button button-primary' to={session ? workPath : '/register'}>
-                {session ? 'Vào khu vực làm việc' : 'Đăng ký sản phẩm'}
+                {session ? 'Vào khu vực làm việc' : 'Tạo tài khoản chủ thể'}
               </Link>
               <Link className='button button-secondary' to='/products'>
                 Tra cứu sản phẩm
@@ -163,7 +163,7 @@ export function HomePage() {
               <p>Hệ thống hiện chưa có hồ sơ sản phẩm nào ở trạng thái công bố công khai.</p>
               <div className='state-actions'>
                 <Link className='button button-primary' to={session ? workPath : '/register'}>
-                  {session ? 'Vào khu vực làm việc' : 'Đăng ký sản phẩm'}
+                  {session ? 'Vào khu vực làm việc' : 'Tạo tài khoản chủ thể'}
                 </Link>
               </div>
             </div>

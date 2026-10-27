@@ -373,7 +373,7 @@ export function AdminReportsPage({
         </div>
 
         <form
-          className='admin-form filter-card no-print mt-3'
+          className='admin-form filter-card admin-filter-panel no-print mt-3'
           aria-label='Bộ lọc báo cáo thống kê'
           onSubmit={(event) => {
             event.preventDefault();
@@ -384,7 +384,11 @@ export function AdminReportsPage({
           }}
         >
           <div className='admin-filters'>
-            <label htmlFor='report-year'>
+            <label
+              className='admin-filter-field'
+              data-filter-width='year'
+              htmlFor='report-year'
+            >
               Năm báo cáo
               <Input
                 id='report-year'
@@ -400,7 +404,11 @@ export function AdminReportsPage({
                 }
               />
             </label>
-            <label htmlFor='report-month'>
+            <label
+              className='admin-filter-field'
+              data-filter-width='month'
+              htmlFor='report-month'
+            >
               Tháng
               <select
                 id='report-month'
@@ -420,7 +428,11 @@ export function AdminReportsPage({
                 ))}
               </select>
             </label>
-            <label htmlFor='report-group-by'>
+            <label
+              className='admin-filter-field'
+              data-filter-width='group'
+              htmlFor='report-group-by'
+            >
               Nhóm dòng báo cáo theo
               <select
                 id='report-group-by'
@@ -439,36 +451,36 @@ export function AdminReportsPage({
                 ))}
               </select>
             </label>
-          </div>
 
-          <div className='admin-actions' style={{ marginTop: '12px' }}>
-            <Button type='submit'>Áp dụng</Button>
-            <Button
-              type='button'
-              variant='secondary'
-              aria-expanded={showAdvanced}
-              aria-controls='report-advanced-filters'
-              onClick={() => setShowAdvanced((open) => !open)}
-            >
-              <Filter className='size-4' aria-hidden='true' />
-              <span>Bộ lọc khác</span>
-            </Button>
-            {hasExtraFilters && (
+            <div className='admin-actions admin-filter-actions'>
+              <Button type='submit'>Áp dụng</Button>
               <Button
                 type='button'
                 variant='secondary'
-                onClick={() =>
-                  applySearch({
-                    tab: reportTab,
-                    year: defaultYear,
-                    groupBy: 'month',
-                  })
-                }
+                aria-expanded={showAdvanced}
+                aria-controls='report-advanced-filters'
+                onClick={() => setShowAdvanced((open) => !open)}
               >
-                <RotateCcw className='size-4' aria-hidden='true' />
-                <span>Xóa bộ lọc</span>
+                <Filter className='size-4' aria-hidden='true' />
+                <span>Bộ lọc khác</span>
               </Button>
-            )}
+              {hasExtraFilters && (
+                <Button
+                  type='button'
+                  variant='secondary'
+                  onClick={() =>
+                    applySearch({
+                      tab: reportTab,
+                      year: defaultYear,
+                      groupBy: 'month',
+                    })
+                  }
+                >
+                  <RotateCcw className='size-4' aria-hidden='true' />
+                  <span>Xóa bộ lọc</span>
+                </Button>
+              )}
+            </div>
           </div>
 
           <div

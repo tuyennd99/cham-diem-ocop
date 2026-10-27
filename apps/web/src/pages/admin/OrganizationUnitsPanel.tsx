@@ -322,7 +322,11 @@ export function OrganizationUnitsPanel({
           });
         }}
       >
-        <label htmlFor='units-filter-q'>
+        <label
+          className='admin-filter-field'
+          data-filter-width='search'
+          htmlFor='units-filter-q'
+        >
           Tìm theo mã hoặc tên đơn vị
           <Input
             id='units-filter-q'
@@ -331,7 +335,11 @@ export function OrganizationUnitsPanel({
             onChange={(event) => setDraftQ(event.target.value)}
           />
         </label>
-        <label htmlFor='units-filter-active'>
+        <label
+          className='admin-filter-field'
+          data-filter-width='status'
+          htmlFor='units-filter-active'
+        >
           Trạng thái
           <select
             id='units-filter-active'
@@ -347,7 +355,7 @@ export function OrganizationUnitsPanel({
             <option value='false'>Ngừng nhận tài khoản mới</option>
           </select>
         </label>
-        <div className='admin-actions items-end'>
+        <div className='admin-actions admin-filter-actions items-end'>
           <Button type='submit'>Áp dụng</Button>
           {(appliedQuery.q !== undefined || appliedQuery.isActive !== undefined) && (
             <Button

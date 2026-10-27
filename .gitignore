@@ -23,3 +23,7 @@ open-design-diagnostics-*/
 *.tsbuildinfo
 
 .pnpm-store/
+.claude/
+.impeccable/
+**/.impeccable/
+graphify-out/

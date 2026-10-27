@@ -8,10 +8,12 @@ import { publicAttachmentUrl } from '../../constants/api';
 import { DEFAULT_PAGE_SIZE } from '../../constants/consts';
 import { PUBLIC_PRODUCT_STATUS_LABEL } from '../../constants/product-status';
 import { errorText } from '../../lib/api-error';
+import { useSession } from '../../lib/auth';
 import { useCategories, usePublicProducts } from '../../queries/common';
 import type { PublicProduct } from '../../types/public';
 
 export function PublicCatalogPage() {
+  const session = useSession();
   const [appliedQuery, setAppliedQuery] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [page, setPage] = useState(1);
@@ -34,24 +36,31 @@ export function PublicCatalogPage() {
   });
   const categories = categoryRequest.data ?? [];
   const rows = productRequest.data?.data ?? [];
+  const categoryGroups = new Map<string, typeof categories>();
+  for (const category of categories) {
+    const group = categoryGroups.get(category.groupName) ?? [];
+    group.push(category);
+    categoryGroups.set(category.groupName, group);
+  }
+  const productError = errorText(productRequest.error);
+  const categoryError = errorText(categoryRequest.error);
+  const hasAppliedFilters = Boolean(appliedQuery || categoryId);
   const meta = productRequest.data?.meta ?? {
     page,
     limit: DEFAULT_PAGE_SIZE,
     total: rows.length,
     totalPages: productRequest.data ? 1 : 0,
   };
-  const error = errorText(categoryRequest.error) || errorText(productRequest.error);
   const loading = productRequest.isPending;
 
   return (
-    <main className='route-main' id='content'>
+    <main className='route-main public-catalog' id='content'>
       <div className='route-container container'>
         <div className='section-heading'>
           <div>
-            <p className='eyebrow'>TRA CỨU CÔNG KHAI</p>
-            <h1>Danh sách sản phẩm OCOP</h1>
+            <h1>Tra cứu sản phẩm OCOP</h1>
           </div>
-          <p className='section-intro'>Hồ sơ được hiển thị sau khi chủ thể nộp đăng ký.</p>
+          {/* <p className='section-intro'>Hồ sơ được công khai từ trạng thái Đã tiếp nhận trở đi.</p> */}
         </div>
         <form
           className='lookup-controls'
@@ -64,29 +73,14 @@ export function PublicCatalogPage() {
             {(field) => (
               <div className='field search-field'>
                 <label htmlFor='product-search'>Tìm trong toàn danh mục</label>
-                <div className='search-row'>
-                  <Input
-                    id='product-search'
-                    type='search'
-                    value={field.state.value}
-                    onBlur={field.handleBlur}
-                    onChange={(event) => field.handleChange(event.target.value)}
-                    placeholder='Tên sản phẩm, mã hoặc nhóm'
-                  />
-                  {field.state.value && (
-                    <Button
-                      type='button'
-                      variant='secondary'
-                      onClick={() => {
-                        field.handleChange('');
-                        setAppliedQuery('');
-                        setPage(1);
-                      }}
-                    >
-                      Xóa từ khóa
-                    </Button>
-                  )}
-                </div>
+                <Input
+                  id='product-search'
+                  type='search'
+                  value={field.state.value}
+                  onBlur={field.handleBlur}
+                  onChange={(event) => field.handleChange(event.target.value)}
+                  placeholder='Tên sản phẩm, mã hoặc nhóm'
+                />
               </div>
             )}
           </searchForm.Field>
@@ -98,17 +92,17 @@ export function PublicCatalogPage() {
                   id='product-category'
                   value={field.state.value}
                   onBlur={field.handleBlur}
-                  onChange={(event) => {
-                    field.handleChange(event.target.value);
-                    setCategoryId(event.target.value);
-                    setPage(1);
-                  }}
+                  onChange={(event) => field.handleChange(event.target.value)}
                 >
                   <option value=''>Tất cả nhóm</option>
-                  {categories.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.groupName} · {item.name}
-                    </option>
+                  {Array.from(categoryGroups, ([groupName, items]) => (
+                    <optgroup key={groupName} label={groupName}>
+                      {items.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
               </div>
@@ -118,19 +112,25 @@ export function PublicCatalogPage() {
             Tìm kiếm
           </Button>
         </form>
+        <p className='lookup-hint'>Kết quả chỉ cập nhật sau khi bạn nhấn “Tìm kiếm”.</p>
+        {categoryError && (
+          <p className='form-note' role='status'>
+            Chưa tải được danh sách nhóm sản phẩm. Bạn vẫn có thể tìm theo tên hoặc mã hồ sơ.
+          </p>
+        )}
         <p className='result-count' aria-live='polite'>
           {loading
             ? 'Đang tải hồ sơ…'
-            : error
+            : productError
               ? 'Tạm thời chưa tải được dữ liệu'
               : `${meta.total} hồ sơ`}
         </p>
-        {!loading && error && (
+        {!loading && productError && (
           <div className='state-panel state-panel-error' role='alert'>
             <div className='state-panel-copy'>
               <p className='state-eyebrow'>TẠM THỜI GIÁN ĐOẠN KẾT NỐI</p>
               <h2>Chưa tải được danh sách sản phẩm OCOP</h2>
-              <p>Hệ thống tra cứu đang tạm thời không phản hồi ({error}). Vui lòng thử tải lại.</p>
+              <p>Hệ thống tra cứu đang tạm thời không phản hồi. Vui lòng thử tải lại.</p>
             </div>
             <div className='state-actions'>
               <button
@@ -147,7 +147,7 @@ export function PublicCatalogPage() {
           </div>
         )}
         {loading && (
-          <div className='record-list-skeleton' aria-busy='true' aria-label='Đang tải danh sách'>
+          <div className='record-list-skeleton' aria-hidden='true'>
             {times(4, (index) => (
               <div className='record-row skeleton-record' key={index}>
                 <div className='skeleton-media' />
@@ -160,13 +160,24 @@ export function PublicCatalogPage() {
             ))}
           </div>
         )}
-        {!loading && !error && rows.length === 0 && (
-          <div className='empty-state'>
-            <h2>Chưa có hồ sơ phù hợp</h2>
-            <p>Thử đổi từ khóa hoặc nhóm sản phẩm.</p>
+        {!loading && !productError && rows.length === 0 && (
+          <div className='empty-state public-catalog-empty'>
+            <h2>{hasAppliedFilters ? 'Không tìm thấy sản phẩm phù hợp' : 'Chưa có hồ sơ công khai'}</h2>
+            <p>
+              {hasAppliedFilters
+                ? 'Thử đổi từ khóa hoặc nhóm sản phẩm, rồi nhấn “Tìm kiếm”.'
+                : 'Hồ sơ sẽ xuất hiện tại đây sau khi được tiếp nhận.'}
+            </p>
+            {!hasAppliedFilters && !session && (
+              <div className='state-actions'>
+                <Link className='button button-primary' to='/register'>
+                  Tạo tài khoản chủ thể
+                </Link>
+              </div>
+            )}
           </div>
         )}
-        {!loading && !error && (
+        {!loading && !productError && (
           <div className='record-list'>
             {rows.map((product) => (
               <article className='record-row' key={product.id}>
@@ -207,7 +218,7 @@ export function PublicCatalogPage() {
                   {product.starRating ? (
                     <div className='rating-block'>
                       <strong>{product.starRating} sao</strong>
-                      <span className='stars' aria-label={`${product.starRating} sao`}>
+                      <span className='stars' aria-hidden='true'>
                         ★{product.starRating > 1 ? ` × ${product.starRating}` : ''}
                       </span>
                     </div>
@@ -226,7 +237,7 @@ export function PublicCatalogPage() {
             ))}
           </div>
         )}
-        {!error && (
+        {!productError && meta.total > 0 && (
           <nav className='pagination' aria-label='Phân trang'>
             <Button
               variant='secondary'

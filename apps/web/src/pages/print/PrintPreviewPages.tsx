@@ -8,6 +8,7 @@ import {
 } from '../../components/print/OcopPrintSheets';
 import { errorText } from '../../lib/api-error';
 import { useSession } from '../../lib/auth';
+import type { AdminProductSearch } from '../../lib/admin-search';
 import { hasStaffPermission } from '../../lib/session-contract';
 import {
   useCriteriaSetPrintData,
@@ -46,7 +47,7 @@ export function BlankCriteriaPrintPreviewPage({
     <section className='print-preview-page'>
       <PrintPageToolbar
         backTo='/admin/scoring-forms'
-        backLabel='← Phiếu chấm OCOP'
+        backLabel='Phiếu chấm OCOP'
         title='Xem trước Mẫu phiếu trắng A4'
       />
       {isPending && <p>Đang tải mẫu phiếu trắng…</p>}
@@ -67,7 +68,7 @@ export function AdminEvaluationPrintPreviewPage({
     <section className='print-preview-page'>
       <PrintPageToolbar
         backTo='/admin/scoring-forms'
-        backLabel='← Danh sách phiếu chấm'
+        backLabel='Danh sách phiếu chấm'
         title='Xem trước Phiếu chấm sản phẩm A4'
       />
       {isPending && <p>Đang tải dữ liệu phiếu chấm…</p>}
@@ -88,7 +89,7 @@ export function JudgeEvaluationPrintPreviewPage({
     <section className='print-preview-page'>
       <PrintPageToolbar
         backTo={`/judge/products/${encodeURIComponent(productId)}`}
-        backLabel='← Quay lại màn chấm điểm'
+        backLabel='Quay lại màn chấm điểm'
         title='Xem trước Phiếu chấm cá nhân A4'
       />
       {isPending && <p>Đang tải dữ liệu phiếu chấm…</p>}
@@ -100,8 +101,10 @@ export function JudgeEvaluationPrintPreviewPage({
 
 export function ProductRegistrationPrintPreviewPage({
   productId,
+  search,
 }: {
   productId: string;
+  search: AdminProductSearch;
 }) {
   const session = useSession();
   const isStaffViewer =
@@ -109,8 +112,9 @@ export function ProductRegistrationPrintPreviewPage({
     hasStaffPermission(session?.user, 'MANAGE');
   const mode: 'admin' | 'owner' = isStaffViewer ? 'admin' : 'owner';
   const backTo = isStaffViewer
-    ? `/admin/registrations/${encodeURIComponent(productId)}`
+    ? `/admin/${search.returnMode ?? 'registrations'}/${encodeURIComponent(productId)}`
     : `/my/products/${encodeURIComponent(productId)}`;
+  const { returnMode: _returnMode, ...backSearch } = search;
 
   const { data, error, isPending, refetch } = useRegistrationPrintData(mode, productId);
   const err = errorText(error);
@@ -118,7 +122,8 @@ export function ProductRegistrationPrintPreviewPage({
     <section className='print-preview-page'>
       <PrintPageToolbar
         backTo={backTo}
-        backLabel='← Quay lại hồ sơ'
+        backSearch={isStaffViewer ? backSearch : undefined}
+        backLabel='Quay lại hồ sơ'
         title='Xem trước Phiếu đăng ký Mẫu số 01 (A4)'
       />
       {isPending && <p>Đang tải dữ liệu phiếu đăng ký…</p>}
@@ -132,8 +137,10 @@ export function ProductRegistrationPrintPreviewPage({
 
 export function ProductResultsPrintPreviewPage({
   productId,
+  search,
 }: {
   productId: string;
+  search: AdminProductSearch;
 }) {
   const session = useSession();
   const isStaffViewer =
@@ -141,8 +148,9 @@ export function ProductResultsPrintPreviewPage({
     hasStaffPermission(session?.user, 'MANAGE');
   const mode: 'admin' | 'owner' = isStaffViewer ? 'admin' : 'owner';
   const backTo = isStaffViewer
-    ? `/admin/products/${encodeURIComponent(productId)}`
+    ? `/admin/${search.returnMode ?? 'products'}/${encodeURIComponent(productId)}`
     : `/my/products/${encodeURIComponent(productId)}`;
+  const { returnMode: _returnMode, ...backSearch } = search;
 
   const { data, error, isPending, refetch } = useResultsPrintData(mode, productId);
   const err = errorText(error);
@@ -150,7 +158,8 @@ export function ProductResultsPrintPreviewPage({
     <section className='print-preview-page'>
       <PrintPageToolbar
         backTo={backTo}
-        backLabel='← Quay lại hồ sơ'
+        backSearch={isStaffViewer ? backSearch : undefined}
+        backLabel='Quay lại hồ sơ'
         title='Xem trước Bảng tổng hợp kết quả đánh giá OCOP (A4)'
       />
       {isPending && <p>Đang tải bảng tổng hợp kết quả…</p>}

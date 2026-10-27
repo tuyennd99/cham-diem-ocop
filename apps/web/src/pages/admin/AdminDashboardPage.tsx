@@ -149,7 +149,7 @@ export function AdminDashboardPage({
       </div>
 
       <form
-        className='admin-form filter-card'
+        className='admin-form filter-card admin-filter-panel'
         aria-label='Bộ lọc Tổng quan OCOP'
         onSubmit={(event) => {
           event.preventDefault();
@@ -157,7 +157,11 @@ export function AdminDashboardPage({
         }}
       >
         <div className='admin-filters'>
-          <label htmlFor='dashboard-year'>
+          <label
+            className='admin-filter-field'
+            data-filter-width='year'
+            htmlFor='dashboard-year'
+          >
             Năm báo cáo
             <Input
               id='dashboard-year'
@@ -173,7 +177,11 @@ export function AdminDashboardPage({
               }
             />
           </label>
-          <label htmlFor='dashboard-month'>
+          <label
+            className='admin-filter-field'
+            data-filter-width='month'
+            htmlFor='dashboard-month'
+          >
             Tháng
             <select
               id='dashboard-month'
@@ -193,7 +201,11 @@ export function AdminDashboardPage({
               ))}
             </select>
           </label>
-          <label htmlFor='dashboard-group'>
+          <label
+            className='admin-filter-field'
+            data-filter-width='group'
+            htmlFor='dashboard-group'
+          >
             Nhóm sản phẩm lớn
             <select
               id='dashboard-group'
@@ -220,30 +232,30 @@ export function AdminDashboardPage({
               ))}
             </select>
           </label>
-        </div>
 
-        <div className='admin-actions' style={{ marginTop: '12px' }}>
-          <Button type='submit'>Áp dụng</Button>
-          <Button
-            type='button'
-            variant='secondary'
-            aria-expanded={showAdvanced}
-            aria-controls='dashboard-advanced-filters'
-            onClick={() => setShowAdvanced((open) => !open)}
-          >
-            <Filter className='size-4' aria-hidden='true' />
-            <span>Bộ lọc khác</span>
-          </Button>
-          {hasExtraFilters && (
+          <div className='admin-actions admin-filter-actions'>
+            <Button type='submit'>Áp dụng</Button>
             <Button
               type='button'
               variant='secondary'
-              onClick={() => applySearch({ year: defaultYear })}
+              aria-expanded={showAdvanced}
+              aria-controls='dashboard-advanced-filters'
+              onClick={() => setShowAdvanced((open) => !open)}
             >
-              <RotateCcw className='size-4' aria-hidden='true' />
-              <span>Xóa bộ lọc</span>
+              <Filter className='size-4' aria-hidden='true' />
+              <span>Bộ lọc khác</span>
             </Button>
-          )}
+            {hasExtraFilters && (
+              <Button
+                type='button'
+                variant='secondary'
+                onClick={() => applySearch({ year: defaultYear })}
+              >
+                <RotateCcw className='size-4' aria-hidden='true' />
+                <span>Xóa bộ lọc</span>
+              </Button>
+            )}
+          </div>
         </div>
 
         <div

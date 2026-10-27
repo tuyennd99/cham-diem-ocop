@@ -697,14 +697,16 @@ describe('OCOP E2E honey flow, judge scoring, and public privacy (E2E-01..06, JD
 
       const adminProductResults = await apiRequest<{
         data: {
-          product: { status: string; finalScore: number; starRating: number };
+          status: string;
+          finalScore: number;
+          starRating: number;
           evaluations: Array<{ total: number; status: string }>;
         };
       }>(baseUrl, `/admin/products/${productId}/results`, {
         headers: authHeaders(adminToken),
       });
       expect(adminProductResults.status).toBe(200);
-      expect(adminProductResults.body.data.product).toMatchObject({
+      expect(adminProductResults.body.data).toMatchObject({
         status: ProductStatus.COMPLETED,
         finalScore: 79,
         starRating: 4,
@@ -843,6 +845,11 @@ describe('OCOP E2E honey flow, judge scoring, and public privacy (E2E-01..06, JD
               {
                 judgeId: judge1Id,
                 categoryId: HONEY_CATEGORY_ID,
+                criterionIds: [],
+              },
+              {
+                judgeId: judge2Id,
+                categoryId: otherCategory.id,
                 criterionIds: [],
               },
             ],

@@ -131,7 +131,7 @@ export function AdminScoringFormsPage({
         <TabsContent value='sets'>
           <div className='admin-page'>
             <form
-              className='admin-form filter-card'
+              className='admin-form filter-card admin-filter-panel'
               onSubmit={(event) => {
                 event.preventDefault();
                 applySearch({
@@ -145,7 +145,11 @@ export function AdminScoringFormsPage({
               }}
             >
               <div className='admin-filters'>
-                <label htmlFor='scoring-sets-q'>
+                <label
+                  className='admin-filter-field'
+                  data-filter-width='search'
+                  htmlFor='scoring-sets-q'
+                >
                   Tìm theo tên phân loại, mã bộ hoặc nguồn
                   <Input
                     id='scoring-sets-q'
@@ -159,7 +163,11 @@ export function AdminScoringFormsPage({
                     }
                   />
                 </label>
-                <label htmlFor='scoring-sets-group'>
+                <label
+                  className='admin-filter-field'
+                  data-filter-width='group'
+                  htmlFor='scoring-sets-group'
+                >
                   Nhóm sản phẩm lớn
                   <select
                     id='scoring-sets-group'
@@ -179,7 +187,11 @@ export function AdminScoringFormsPage({
                     ))}
                   </select>
                 </label>
-                <label htmlFor='scoring-sets-status'>
+                <label
+                  className='admin-filter-field'
+                  data-filter-width='status'
+                  htmlFor='scoring-sets-status'
+                >
                   Trạng thái
                   <select
                     id='scoring-sets-status'
@@ -201,35 +213,36 @@ export function AdminScoringFormsPage({
                     <option value='false'>Ngừng áp dụng</option>
                   </select>
                 </label>
-              </div>
-              <div className='admin-actions' style={{ marginTop: '12px' }}>
-                <Button type='submit'>Áp dụng</Button>
-                {(appliedSearch.q !== undefined ||
-                  appliedSearch.groupId !== undefined ||
-                  appliedSearch.isActive !== undefined) && (
+
+                <div className='admin-actions admin-filter-actions'>
+                  <Button type='submit'>Áp dụng</Button>
+                  {(appliedSearch.q !== undefined ||
+                    appliedSearch.groupId !== undefined ||
+                    appliedSearch.isActive !== undefined) && (
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      onClick={() =>
+                        applySearch({
+                          tab: 'sets',
+                          page: 1,
+                          limit: appliedSearch.limit ?? DEFAULT_PAGE_SIZE,
+                        })
+                      }
+                    >
+                      <RotateCcw className='size-4' aria-hidden='true' />
+                      <span>Xóa bộ lọc</span>
+                    </Button>
+                  )}
                   <Button
                     type='button'
                     variant='secondary'
-                    onClick={() =>
-                      applySearch({
-                        tab: 'sets',
-                        page: 1,
-                        limit: appliedSearch.limit ?? DEFAULT_PAGE_SIZE,
-                      })
-                    }
+                    disabled={setsQuery.isFetching}
+                    onClick={() => void setsQuery.refetch()}
                   >
-                    <RotateCcw className='size-4' aria-hidden='true' />
-                    <span>Xóa bộ lọc</span>
+                    Tải lại
                   </Button>
-                )}
-                <Button
-                  type='button'
-                  variant='secondary'
-                  disabled={setsQuery.isFetching}
-                  onClick={() => void setsQuery.refetch()}
-                >
-                  Tải lại
-                </Button>
+                </div>
               </div>
             </form>
 
@@ -375,7 +388,7 @@ export function AdminScoringFormsPage({
         <TabsContent value='evaluations'>
           <div className='admin-page'>
             <form
-              className='admin-form filter-card'
+              className='admin-form filter-card admin-filter-panel'
               onSubmit={(event) => {
                 event.preventDefault();
                 applySearch({
@@ -391,7 +404,11 @@ export function AdminScoringFormsPage({
               }}
             >
               <div className='admin-filters'>
-                <label htmlFor='scoring-evals-q'>
+                <label
+                  className='admin-filter-field'
+                  data-filter-width='search'
+                  htmlFor='scoring-evals-q'
+                >
                   Từ khóa (sản phẩm, người chấm, mã phiếu)
                   <Input
                     id='scoring-evals-q'
@@ -406,7 +423,11 @@ export function AdminScoringFormsPage({
                   />
                 </label>
 
-                <label htmlFor='scoring-evals-group'>
+                <label
+                  className='admin-filter-field'
+                  data-filter-width='group'
+                  htmlFor='scoring-evals-group'
+                >
                   Nhóm sản phẩm
                   <select
                     id='scoring-evals-group'
@@ -427,7 +448,11 @@ export function AdminScoringFormsPage({
                   </select>
                 </label>
 
-                <label htmlFor='scoring-evals-status'>
+                <label
+                  className='admin-filter-field'
+                  data-filter-width='status'
+                  htmlFor='scoring-evals-status'
+                >
                   Trạng thái phiếu
                   <select
                     id='scoring-evals-status'
@@ -446,48 +471,48 @@ export function AdminScoringFormsPage({
                     {canManage && <option value='IN_PROGRESS'>Đang chấm nháp</option>}
                   </select>
                 </label>
-              </div>
 
-              <div className='admin-actions' style={{ marginTop: '12px' }}>
-                <Button type='submit'>Áp dụng</Button>
-                <Button
-                  type='button'
-                  variant='secondary'
-                  aria-expanded={showEvalAdvanced}
-                  aria-controls='admin-evaluations-advanced'
-                  onClick={() => setShowEvalAdvanced((open) => !open)}
-                >
-                  <Filter className='size-4' aria-hidden='true' />
-                  <span>Bộ lọc khác</span>
-                </Button>
-                {(appliedSearch.q !== undefined ||
-                  appliedSearch.groupId !== undefined ||
-                  appliedSearch.status !== undefined ||
-                  appliedSearch.productId !== undefined ||
-                  appliedSearch.judgeId !== undefined) && (
+                <div className='admin-actions admin-filter-actions'>
+                  <Button type='submit'>Áp dụng</Button>
                   <Button
                     type='button'
                     variant='secondary'
-                    onClick={() =>
-                      applySearch({
-                        tab: 'evaluations',
-                        page: 1,
-                        limit: appliedSearch.limit ?? DEFAULT_PAGE_SIZE,
-                      })
-                    }
+                    aria-expanded={showEvalAdvanced}
+                    aria-controls='admin-evaluations-advanced'
+                    onClick={() => setShowEvalAdvanced((open) => !open)}
                   >
-                    <RotateCcw className='size-4' aria-hidden='true' />
-                    <span>Xóa bộ lọc</span>
+                    <Filter className='size-4' aria-hidden='true' />
+                    <span>Bộ lọc khác</span>
                   </Button>
-                )}
-                <Button
-                  type='button'
-                  variant='secondary'
-                  disabled={evaluationsQuery.isFetching}
-                  onClick={() => void evaluationsQuery.refetch()}
-                >
-                  Tải lại
-                </Button>
+                  {(appliedSearch.q !== undefined ||
+                    appliedSearch.groupId !== undefined ||
+                    appliedSearch.status !== undefined ||
+                    appliedSearch.productId !== undefined ||
+                    appliedSearch.judgeId !== undefined) && (
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      onClick={() =>
+                        applySearch({
+                          tab: 'evaluations',
+                          page: 1,
+                          limit: appliedSearch.limit ?? DEFAULT_PAGE_SIZE,
+                        })
+                      }
+                    >
+                      <RotateCcw className='size-4' aria-hidden='true' />
+                      <span>Xóa bộ lọc</span>
+                    </Button>
+                  )}
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    disabled={evaluationsQuery.isFetching}
+                    onClick={() => void evaluationsQuery.refetch()}
+                  >
+                    Tải lại
+                  </Button>
+                </div>
               </div>
 
               <div

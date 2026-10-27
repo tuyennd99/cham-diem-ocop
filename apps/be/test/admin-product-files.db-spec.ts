@@ -545,24 +545,20 @@ describe('admin private product files', () => {
       ).toBe(403);
 
       // FILE-04: Owner on /api/my/products/:id/attachments/:pdfId -> 200
-      expect(
-        (
-          await fetch(
-            `${baseUrl}/api/my/products/${draft.id}/attachments/${exactPdf.id}`,
-            { headers: f.headers('owner') },
-          )
-        ).status,
-      ).toBe(200);
+      const ownerDownload = await fetch(
+        `${baseUrl}/api/my/products/${draft.id}/attachments/${exactPdf.id}`,
+        { headers: f.headers('owner') },
+      );
+      expect(ownerDownload.status).toBe(200);
+      await ownerDownload.arrayBuffer();
 
       // FILE-04: VIEW on /api/admin/products/:id/attachments/:pdfId -> 200
-      expect(
-        (
-          await fetch(
-            `${baseUrl}/api/admin/products/${draft.id}/attachments/${exactPdf.id}`,
-            { headers: f.headers('viewer') },
-          )
-        ).status,
-      ).toBe(200);
+      const viewerDownload = await fetch(
+        `${baseUrl}/api/admin/products/${draft.id}/attachments/${exactPdf.id}`,
+        { headers: f.headers('viewer') },
+      );
+      expect(viewerDownload.status).toBe(200);
+      await viewerDownload.arrayBuffer();
 
       // FILE-04: Assigned SCORE judge on /api/judge/products/:id/attachments/:pdfId -> 200
       await prisma.judgeAssignment.create({
@@ -572,14 +568,12 @@ describe('admin private product files', () => {
           criterionIds: [],
         },
       });
-      expect(
-        (
-          await fetch(
-            `${baseUrl}/api/judge/products/${draft.id}/attachments/${exactPdf.id}`,
-            { headers: f.headers('scorer') },
-          )
-        ).status,
-      ).toBe(200);
+      const judgeDownload = await fetch(
+        `${baseUrl}/api/judge/products/${draft.id}/attachments/${exactPdf.id}`,
+        { headers: f.headers('scorer') },
+      );
+      expect(judgeDownload.status).toBe(200);
+      await judgeDownload.arrayBuffer();
     });
   });
 });

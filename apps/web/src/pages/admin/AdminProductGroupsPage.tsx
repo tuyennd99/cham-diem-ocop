@@ -421,7 +421,11 @@ export function AdminProductGroupsPage({
                   });
                 }}
               >
-                <label htmlFor='catalog-search-q'>
+                <label
+                  className='admin-filter-field'
+                  data-filter-width='search'
+                  htmlFor='catalog-search-q'
+                >
                   Tìm mã hoặc tên phân loại
                   <Input
                     id='catalog-search-q'
@@ -430,7 +434,11 @@ export function AdminProductGroupsPage({
                     onChange={(event) => setSearchText(event.target.value)}
                   />
                 </label>
-                <label htmlFor='catalog-search-status'>
+                <label
+                  className='admin-filter-field'
+                  data-filter-width='status'
+                  htmlFor='catalog-search-status'
+                >
                   Trạng thái mở đăng ký
                   <select
                     id='catalog-search-status'
@@ -448,7 +456,7 @@ export function AdminProductGroupsPage({
                     <option value='false'>Ngừng mở đăng ký</option>
                   </select>
                 </label>
-                <div className='admin-actions items-end'>
+                <div className='admin-actions admin-filter-actions items-end'>
                   <Button type='submit'>Áp dụng</Button>
                   <Button
                     type='button'

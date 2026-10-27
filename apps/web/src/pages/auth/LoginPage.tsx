@@ -14,7 +14,7 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm({
-    defaultValues: { email: '', password: '' },
+    defaultValues: { email: '', password: 'OcopTest@2026!' },
     onSubmit: async ({ value }) => {
       setError('');
       try {

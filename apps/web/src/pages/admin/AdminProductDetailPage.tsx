@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import type { ProductStatus } from '@ocop/shared';
 import { Link, Outlet, useBlocker, useNavigate } from '@tanstack/react-router';
+import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -73,6 +74,7 @@ export function AdminProductDetailPage({
     : 'information';
   const listSearch = toAdminProductApiQuery(search);
   const listPath = mode === 'products' ? '/admin/products' : '/admin/registrations';
+  const printSearch = { ...search, returnMode: mode };
 
   function changeDetailTab(value: string) {
     const nextTab = (
@@ -211,7 +213,7 @@ export function AdminProductDetailPage({
     <section className='admin-page'>
       <div>
         <Link className='text-link text-sm' to={listPath} search={listSearch}>
-          ← Quay lại danh sách
+          <ArrowLeft size={16} aria-hidden='true' /> Quay lại danh sách
         </Link>
       </div>
 
@@ -238,6 +240,7 @@ export function AdminProductDetailPage({
             className='button button-secondary'
             to='/print/products/$id/registration'
             params={{ id: product.id }}
+            search={printSearch}
           >
             In phiếu đăng ký (Mẫu 01)
           </Link>
@@ -246,6 +249,7 @@ export function AdminProductDetailPage({
               className='button button-secondary'
               to='/print/products/$id/results'
               params={{ id: product.id }}
+              search={printSearch}
             >
               In bảng tổng hợp kết quả
             </Link>
@@ -641,7 +645,7 @@ export function AdminProductDetailPage({
         </TabsContent>
 
         <TabsContent value='results'>
-          <AdminProductResultsPage productId={product.id} mode={mode} />
+          <AdminProductResultsPage productId={product.id} mode={mode} printSearch={printSearch} />
         </TabsContent>
       </Tabs>
       <Outlet />

@@ -7,6 +7,7 @@ import { databaseObject } from '../../src/prisma/sql';
 import bcrypt from 'bcryptjs';
 import { createPrismaAdapter } from '../../src/prisma/client';
 import { PASSWORD_MAX_BYTES, PASSWORD_ROUNDS } from '../../src/constants/auth';
+import { seedSampleOcopData } from './sample-data';
 
 type CategorySeed = {
   id: string;
@@ -304,9 +305,16 @@ async function seedTestAccounts() {
       },
     });
   }
+
+  await seedSampleOcopData(prisma, passwordHash);
 }
 
 async function main() {
+  if (process.argv.includes('--only-sample-data')) {
+    await seedBootstrapAdmin();
+    await seedTestAccounts();
+    return;
+  }
   const criteriaSets = loadCriteriaSets();
   validateCriteriaSets(criteriaSets);
   const categoryByKey = new Map<string, string>();

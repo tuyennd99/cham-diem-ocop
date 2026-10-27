@@ -375,7 +375,11 @@ export function LocalitiesPanel({
           });
         }}
       >
-        <label htmlFor='localities-filter-q'>
+        <label
+          className='admin-filter-field'
+          data-filter-width='search'
+          htmlFor='localities-filter-q'
+        >
           Tìm mã, tên hoặc tỉnh/thành
           <Input
             id='localities-filter-q'
@@ -384,7 +388,11 @@ export function LocalitiesPanel({
             onChange={(event) => setDraftQ(event.target.value)}
           />
         </label>
-        <label htmlFor='localities-filter-type'>
+        <label
+          className='admin-filter-field'
+          data-filter-width='status'
+          htmlFor='localities-filter-type'
+        >
           Loại địa bàn
           <select
             id='localities-filter-type'
@@ -400,7 +408,11 @@ export function LocalitiesPanel({
             <option value='WARD'>Phường</option>
           </select>
         </label>
-        <label htmlFor='localities-filter-active'>
+        <label
+          className='admin-filter-field'
+          data-filter-width='status'
+          htmlFor='localities-filter-active'
+        >
           Trạng thái
           <select
             id='localities-filter-active'
@@ -416,7 +428,7 @@ export function LocalitiesPanel({
             <option value='false'>Ngừng mở đăng ký</option>
           </select>
         </label>
-        <div className='admin-actions items-end'>
+        <div className='admin-actions admin-filter-actions items-end'>
           <Button type='submit'>Áp dụng</Button>
           {(appliedQuery.q !== undefined ||
             appliedQuery.type !== undefined ||

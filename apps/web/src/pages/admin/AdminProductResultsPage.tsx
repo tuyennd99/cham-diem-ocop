@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router';
+import type { AdminProductSearch } from '../../lib/admin-search';
 import { errorText } from '../../lib/api-error';
 import { useSession } from '../../lib/auth';
 import { formatExactScore, formatStarRatingLabel } from '../../lib/print-format';
@@ -13,9 +14,11 @@ const EVALUATION_STATUS_LABEL: Record<string, string> = {
 export function AdminProductResultsPage({
   productId,
   mode: _mode = 'products',
+  printSearch,
 }: {
   productId: string;
   mode?: AdminProductMode;
+  printSearch?: AdminProductSearch;
 }) {
   const session = useSession();
   const canManage = hasStaffPermission(session?.user, 'MANAGE');
@@ -66,6 +69,7 @@ export function AdminProductResultsPage({
             className='button button-secondary'
             to='/print/products/$id/results'
             params={{ id: product.id }}
+            search={printSearch}
           >
             In bảng tổng hợp kết quả (A4)
           </Link>

@@ -26,6 +26,7 @@ export type AdminProductDetailTab =
 
 export type AdminProductSearch = AdminProductQuery & {
   tab?: AdminProductDetailTab;
+  returnMode?: 'products' | 'registrations';
 };
 
 const PRODUCT_STATUSES: readonly ProductStatus[] = [
@@ -166,11 +167,23 @@ export function parseAdminProductSearch(
   const tab = parseEnum(search.tab, DETAIL_TABS);
   if (tab !== undefined) result.tab = tab;
 
+  const returnMode = parseEnum(search.returnMode, ['products', 'registrations'] as const);
+  if (returnMode !== undefined) result.returnMode = returnMode;
+
+  return result;
+}
+
+export function parseAdminProductPrintSearch(
+  search: Record<string, unknown>,
+): AdminProductSearch {
+  const result = parseAdminProductSearch(search);
+  if (search.page === undefined || search.page === null || search.page === '') delete result.page;
+  if (search.limit === undefined || search.limit === null || search.limit === '') delete result.limit;
   return result;
 }
 
 export function toAdminProductApiQuery(search: AdminProductSearch): AdminProductQuery {
-  const { tab: _tab, ...query } = search;
+  const { tab: _tab, returnMode: _returnMode, ...query } = search;
   return query;
 }
 
