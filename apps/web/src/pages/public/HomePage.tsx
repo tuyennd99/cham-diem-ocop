@@ -1,7 +1,18 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { times } from 'lodash';
+import { FormField } from '@/components/form-field';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { publicAttachmentUrl } from '../../constants/api';
+import { ALL } from '../../constants/consts';
 import {
   PUBLIC_PRODUCT_STATUS_LABEL,
   PUBLIC_PRODUCT_STATUS_TONE,
@@ -45,12 +56,14 @@ export function HomePage() {
               một hệ thống.
             </p>
             <div className='hero-actions'>
-              <Link className='button button-primary' to={session ? workPath : '/register'}>
-                {session ? 'Vào khu vực làm việc' : 'Tạo tài khoản chủ thể'}
-              </Link>
-              <Link className='button button-secondary' to='/products'>
-                Tra cứu sản phẩm
-              </Link>
+              <Button asChild>
+                <Link to={session ? workPath : '/register'}>
+                  {session ? 'Vào khu vực làm việc' : 'Tạo tài khoản chủ thể'}
+                </Link>
+              </Button>
+              <Button asChild variant='secondary'>
+                <Link to='/products'>Tra cứu sản phẩm</Link>
+              </Button>
             </div>
           </div>
           <aside className='hero-aside' aria-label='Dành cho chủ thể OCOP'>
@@ -81,21 +94,25 @@ export function HomePage() {
                 Hồ sơ hiển thị thông tin công bố, trạng thái xử lý và kết quả xếp hạng.
               </p>
             </div>
-            <label className='field featured-filter'>
-              <span>Nhóm sản phẩm</span>
-              <select
-                value={categoryId}
-                onChange={(event) => setCategoryId(event.target.value)}
+            <FormField label='Danh mục sản phẩm' htmlFor='home-1' className='field featured-filter'>
+              <Select
+                value={categoryId || ALL}
+                onValueChange={(value) => setCategoryId(value === ALL ? '' : value)}
                 disabled={Boolean(error) && categories.length === 0}
               >
-                <option value=''>Tất cả nhóm</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.groupName} · {category.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <SelectTrigger id='home-1'>
+                  <SelectValue placeholder='Tất cả danh mục' />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Tất cả danh mục</SelectItem>
+                  {categories.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormField>
           </div>
 
           {loading && (
@@ -125,34 +142,30 @@ export function HomePage() {
                 <p className='state-tech-note'>Mã phản hồi: {error}</p>
               </div>
               <div className='state-actions'>
-                <button type='button' className='button button-primary' onClick={handleRetry}>
+                <Button type='button' onClick={handleRetry}>
                   Thử lại
-                </button>
-                <Link className='button button-secondary' to='/products'>
-                  Mở trang tra cứu
-                </Link>
+                </Button>
+                <Button asChild variant='secondary'>
+                  <Link to='/products'>Mở trang tra cứu</Link>
+                </Button>
               </div>
             </div>
           )}
 
           {!loading && !error && !products.length && categoryId && (
             <div className='empty-state'>
-              <h3>Chưa có sản phẩm trong nhóm này</h3>
+              <h3>Chưa có sản phẩm trong danh mục này</h3>
               <p>
-                Hiện chưa có hồ sơ công khai thuộc nhóm sản phẩm đang chọn. Hãy chọn nhóm khác hoặc
-                xem toàn bộ danh mục.
+                Hiện chưa có hồ sơ công khai thuộc danh mục sản phẩm đang chọn. Hãy chọn danh mục
+                khác hoặc xem toàn bộ danh mục.
               </p>
               <div className='state-actions'>
-                <button
-                  type='button'
-                  className='button button-secondary'
-                  onClick={() => setCategoryId('')}
-                >
-                  Xem tất cả nhóm
-                </button>
-                <Link className='button button-secondary' to='/products'>
-                  Xem tất cả sản phẩm
-                </Link>
+                <Button type='button' variant='secondary' onClick={() => setCategoryId('')}>
+                  Xem tất cả danh mục
+                </Button>
+                <Button asChild variant='secondary'>
+                  <Link to='/products'>Xem tất cả sản phẩm</Link>
+                </Button>
               </div>
             </div>
           )}
@@ -162,9 +175,11 @@ export function HomePage() {
               <h3>Chưa có sản phẩm công khai</h3>
               <p>Hệ thống hiện chưa có hồ sơ sản phẩm nào ở trạng thái công bố công khai.</p>
               <div className='state-actions'>
-                <Link className='button button-primary' to={session ? workPath : '/register'}>
-                  {session ? 'Vào khu vực làm việc' : 'Tạo tài khoản chủ thể'}
-                </Link>
+                <Button asChild>
+                  <Link to={session ? workPath : '/register'}>
+                    {session ? 'Vào khu vực làm việc' : 'Tạo tài khoản chủ thể'}
+                  </Link>
+                </Button>
               </div>
             </div>
           )}
@@ -200,13 +215,11 @@ export function HomePage() {
                       </Link>
                       <div className='featured-card-body'>
                         <div className='record-badges'>
-                          <span className='badge badge-category'>
-                            {product.category.groupName} · {product.category.name}
-                          </span>
+                          <Badge variant='secondary'>{product.category.name}</Badge>
                           {statusText && (
-                            <span className={`badge status-badge ${statusClass}`}>
+                            <Badge variant='outline' className={statusClass}>
                               {statusText}
-                            </span>
+                            </Badge>
                           )}
                         </div>
                         <h3>
@@ -239,9 +252,9 @@ export function HomePage() {
                 })}
               </div>
               <div className='featured-footer'>
-                <Link className='button button-secondary' to='/products'>
-                  Xem tất cả sản phẩm
-                </Link>
+                <Button asChild variant='secondary'>
+                  <Link to='/products'>Xem tất cả sản phẩm</Link>
+                </Button>
               </div>
             </>
           )}
@@ -268,7 +281,7 @@ export function HomePage() {
             <article className='step-item'>
               <span className='step-number'>02</span>
               <h3>Đánh giá</h3>
-              <p>Giám khảo chấm các tiểu tiêu chí theo bộ tiêu chí của nhóm sản phẩm.</p>
+              <p>Giám khảo chấm các tiểu tiêu chí theo bộ tiêu chí của danh mục sản phẩm.</p>
             </article>
             <article className='step-item'>
               <span className='step-number'>03</span>
@@ -287,7 +300,7 @@ export function HomePage() {
               <h2 id='criteria-title'>Thang điểm tối đa 100 điểm</h2>
             </div>
             <p className='section-intro'>
-              Bộ tiêu chí cụ thể được áp dụng theo nhóm sản phẩm và dữ liệu do hệ thống quản lý.
+              Bộ tiêu chí cụ thể được áp dụng theo danh mục sản phẩm và dữ liệu do hệ thống quản lý.
             </p>
           </div>
           <div className='star-bands' aria-label='Ngưỡng điểm xếp hạng sao OCOP'>

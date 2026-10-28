@@ -14,11 +14,8 @@ import type {
   AdminCategoriesQueryDto,
   CreateLocalityDto,
   CreateAdminCategoryDto,
-  CreateProductGroupDto,
-  ProductGroupsQueryDto,
   UpdateLocalityDto,
   UpdateAdminCategoryDto,
-  UpdateProductGroupDto,
 } from '../dtos/admin-catalogs.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { databaseObject } from '../prisma/sql';
@@ -26,26 +23,12 @@ import type { RequestMeta } from '../types/auth';
 import { assertCriteriaSetReady } from '../utils/category-availability';
 import { writeAudit } from '../utils/audit-log';
 
-const productGroupSelect = {
-  id: true,
-  code: true,
-  name: true,
-  description: true,
-  order: true,
-  isActive: true,
-} satisfies Prisma.ProductGroupSelect;
-
 const categoryFields = {
   id: true,
-  groupId: true,
-  groupCode: true,
-  groupName: true,
   name: true,
   description: true,
   order: true,
   isActive: true,
-  classificationGroup: true,
-  classificationSubgroup: true,
 } as const;
 
 const criteriaSetSummary = {
@@ -318,7 +301,7 @@ export class AdminCatalogsRepository {
     });
   }
 
-  async listProductGroups(query: ProductGroupsQueryDto) {
+  async listCategories(query: AdminCategoriesQueryDto) {
     const { page, limit, q, isActive } = query;
     const skip = (page - 1) * limit;
     if (!Number.isSafeInteger(page) || !Number.isSafeInteger(skip)) {
@@ -326,137 +309,13 @@ export class AdminCatalogsRepository {
         'Pagination exceeds the safe integer range',
       );
     }
-    const where: Prisma.ProductGroupWhereInput = {
-      ...(isActive === undefined ? {} : { isActive }),
-      ...(q
-        ? {
-            OR: [
-              { code: { contains: q, mode: 'insensitive' } },
-              { name: { contains: q, mode: 'insensitive' } },
-            ],
-          }
-        : {}),
-    };
-    const [data, total] = await this.prisma.$transaction(
-      [
-        this.prisma.productGroup.findMany({
-          where,
-          select: productGroupSelect,
-          orderBy: [{ order: 'asc' }, { id: 'asc' }],
-          skip,
-          take: limit,
-        }),
-        this.prisma.productGroup.count({ where }),
-      ],
-      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
-    );
-    return { data, total };
-  }
-
-  createProductGroup(
-    input: CreateProductGroupDto,
-    actorId: string,
-    meta: RequestMeta,
-  ) {
-    const { reason, ...data } = input;
-    return this.prisma.$transaction(async (tx) => {
-      const group = await tx.productGroup.create({
-        data,
-        select: productGroupSelect,
-      });
-      await writeAudit(tx, {
-        actorId,
-        action: 'product_group.create',
-        entityType: 'ProductGroup',
-        entityId: group.id,
-        afterData: group,
-        reason,
-        ...meta,
-      });
-      return group;
-    });
-  }
-
-  updateProductGroup(
-    id: string,
-    input: UpdateProductGroupDto,
-    actorId: string,
-    meta: RequestMeta,
-  ) {
-    const { reason, ...changes } = input;
-    return this.prisma.$transaction(
-      async (tx) => {
-        await this.lockGroups(tx, [id]);
-        const before = await tx.productGroup.findUnique({
-          where: { id },
-          select: productGroupSelect,
-        });
-        if (!before) return null;
-        const categoryIds = await tx.productCategory.findMany({
-          where: { groupId: id },
-          select: { id: true },
-          orderBy: { id: 'asc' },
-        });
-        await this.lockCategories(
-          tx,
-          categoryIds.map(({ id: categoryId }) => categoryId),
-        );
-        const categories = await tx.productCategory.findMany({
-          where: { groupId: id },
-          select: { id: true },
-          orderBy: { id: 'asc' },
-        });
-        const after = Object.keys(changes).length
-          ? await tx.productGroup.update({
-              where: { id },
-              data: changes,
-              select: productGroupSelect,
-            })
-          : before;
-        if (after.name !== before.name && categories.length) {
-          await tx.productCategory.updateMany({
-            where: { groupId: id },
-            data: { groupName: after.name },
-          });
-        }
-        if (Object.keys(changes).length) {
-          await writeAudit(tx, {
-            actorId,
-            action: 'product_group.update',
-            entityType: 'ProductGroup',
-            entityId: id,
-            beforeData: before,
-            afterData: after,
-            reason,
-            ...meta,
-          });
-        }
-        return after;
-      },
-      { timeout: 15000, maxWait: 10000 },
-    );
-  }
-
-  async listCategories(query: AdminCategoriesQueryDto) {
-    const { page, limit, q, groupId, isActive } = query;
-    const skip = (page - 1) * limit;
-    if (!Number.isSafeInteger(page) || !Number.isSafeInteger(skip)) {
-      throw new BadRequestException(
-        'Pagination exceeds the safe integer range',
-      );
-    }
     const where: Prisma.ProductCategoryWhereInput = {
-      ...(groupId ? { groupId } : {}),
       ...(isActive === undefined ? {} : { isActive }),
       ...(q
         ? {
             OR: [
               { id: { contains: q, mode: 'insensitive' } },
               { name: { contains: q, mode: 'insensitive' } },
-              { groupCode: { contains: q, mode: 'insensitive' } },
-              { groupName: { contains: q, mode: 'insensitive' } },
-              { classificationGroup: { contains: q, mode: 'insensitive' } },
-              { classificationSubgroup: { contains: q, mode: 'insensitive' } },
             ],
           }
         : {}),
@@ -532,23 +391,14 @@ export class AdminCatalogsRepository {
     actorId: string,
     meta: RequestMeta,
   ) {
-    const { reason, groupId, ...fields } = input;
+    const { reason, ...fields } = input;
     return this.prisma.$transaction(
       async (tx) => {
-        await this.lockGroups(tx, [groupId]);
-        const group = await tx.productGroup.findUnique({
-          where: { id: groupId },
-        });
-        if (!group) return null;
         const category = await tx.productCategory.create({
           data: {
             ...fields,
-            groupId,
-            groupCode: group.code,
-            groupName: group.name,
             isActive: false,
             order: input.order ?? 0,
-            classificationSubgroup: input.classificationSubgroup ?? null,
             description: input.description ?? null,
           },
           select: adminCategorySelect,
@@ -578,35 +428,13 @@ export class AdminCatalogsRepository {
     const { reason, ...requested } = input;
     return this.prisma.$transaction(
       async (tx) => {
-        const initial = await tx.productCategory.findUnique({
-          where: { id },
-          select: { groupId: true },
-        });
-        if (!initial) return null;
-        const targetGroupId = requested.groupId ?? initial.groupId;
-        const lockedGroupIds = [
-          ...new Set([initial.groupId, targetGroupId]),
-        ].sort();
-        await this.lockGroups(tx, lockedGroupIds);
         await this.lockCategories(tx, [id]);
         const before = await tx.productCategory.findUnique({
           where: { id },
           select: categoryMutationSelect,
         });
         if (!before) return null;
-        if (!lockedGroupIds.includes(before.groupId)) {
-          throw new ConflictException(
-            'Product category group changed while updating',
-          );
-        }
-        const targetGroup = await tx.productGroup.findUnique({
-          where: { id: targetGroupId },
-        });
-        if (!targetGroup) return null;
         if (requested.isActive === true) {
-          if (!targetGroup.isActive) {
-            throw new ConflictException('An active product group is required');
-          }
           const currentSet = await tx.criteriaSet.findUnique({
             where: { categoryId: id },
             select: {
@@ -623,24 +451,8 @@ export class AdminCatalogsRepository {
           });
           assertCriteriaSetReady(currentSet);
         }
-        if (targetGroupId !== before.groupId) {
-          const submittedCount = await tx.product.count({
-            where: { categoryId: id, status: { in: submittedStatuses } },
-          });
-          if (submittedCount) {
-            throw new ConflictException(
-              'A category with submitted products cannot move to another group',
-            );
-          }
-        }
         const data: Prisma.ProductCategoryUncheckedUpdateInput = {
           ...(requested.name === undefined ? {} : { name: requested.name }),
-          ...(requested.classificationGroup === undefined
-            ? {}
-            : { classificationGroup: requested.classificationGroup }),
-          ...(requested.classificationSubgroup === undefined
-            ? {}
-            : { classificationSubgroup: requested.classificationSubgroup }),
           ...(requested.description === undefined
             ? {}
             : { description: requested.description }),
@@ -648,13 +460,6 @@ export class AdminCatalogsRepository {
           ...(requested.isActive === undefined
             ? {}
             : { isActive: requested.isActive }),
-          ...(requested.groupId === undefined
-            ? {}
-            : {
-                groupId: targetGroup.id,
-                groupCode: targetGroup.code,
-                groupName: targetGroup.name,
-              }),
         };
         if (!Object.keys(data).length) {
           const row = await tx.productCategory.findUnique({
@@ -718,15 +523,6 @@ export class AdminCatalogsRepository {
           }
         : null,
     };
-  }
-
-  private async lockGroups(tx: Prisma.TransactionClient, ids: string[]) {
-    const ordered = [...new Set(ids)].sort();
-    if (!ordered.length) return;
-    await tx.$queryRaw(Prisma.sql`
-      SELECT "id" FROM ${databaseObject('product_groups')}
-      WHERE "id" IN (${Prisma.join(ordered)}) ORDER BY "id" FOR UPDATE
-    `);
   }
 
   private async lockCategories(tx: Prisma.TransactionClient, ids: string[]) {

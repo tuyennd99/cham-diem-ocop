@@ -30,7 +30,7 @@ export class EvaluationsRepository {
         description: true,
         status: true,
         createdAt: true,
-        category: { select: { id: true, name: true, groupName: true } },
+        category: { select: { id: true, name: true } },
         attachments: {
           where: { type: 'IMAGE' },
           orderBy: { createdAt: 'asc' },
@@ -69,7 +69,7 @@ export class EvaluationsRepository {
         category: {
           id: context.product.category.id,
           name: context.product.category.name,
-          groupName: context.product.category.groupName,
+
         },
         attachments: context.product.attachments,
       },
@@ -120,7 +120,7 @@ export class EvaluationsRepository {
         category: {
           id: context.product.category.id,
           name: context.product.category.name,
-          groupName: context.product.category.groupName,
+
           criteriaSet: context.product.category.criteriaSet
             ? {
                 id: context.product.category.criteriaSet.id,
@@ -284,7 +284,7 @@ export class EvaluationsRepository {
       if (!criteriaSet) throw new ConflictException('No scoring criteria are configured for this product');
       const scoreBySubCriterion = new Map(evaluation.scores.map((score) => [score.subCriterionId, score]));
       const submissionSnapshot = {
-        version: 1,
+        version: 2,
         submittedAt: submittedAt.toISOString(),
         product: {
           id: context.product.id,
@@ -294,7 +294,7 @@ export class EvaluationsRepository {
           category: {
             id: context.product.category.id,
             name: context.product.category.name,
-            group: context.product.category.group,
+
           },
         },
         criteriaSet: {
@@ -347,7 +347,7 @@ export class EvaluationsRepository {
       include: {
         category: {
           include: {
-            group: { select: { id: true, code: true, name: true } },
+
             criteriaSet: {
               include: {
                 criteria: {

@@ -26,7 +26,7 @@ const publicProductSelect = {
   starRating: true,
   createdAt: true,
   category: {
-    select: { id: true, name: true, groupCode: true, groupName: true },
+    select: { id: true, name: true },
   },
   attachments: {
     where: { type: 'IMAGE' as const },
@@ -41,12 +41,7 @@ const registrantProductInclude = {
     select: {
       id: true,
       name: true,
-      groupCode: true,
-      groupName: true,
-      classificationGroup: true,
-      classificationSubgroup: true,
       isActive: true,
-      group: { select: { isActive: true } },
       criteriaSet: { select: { isActive: true } },
     },
   },
@@ -88,15 +83,10 @@ export class ProductsRepository {
       .findMany({
         where: {
           isActive: true,
-          group: { isActive: true },
           criteriaSet: { is: { isActive: true } },
         },
         select: {
           id: true,
-          groupCode: true,
-          groupName: true,
-          classificationGroup: true,
-          classificationSubgroup: true,
           name: true,
           description: true,
           criteriaSet: {
@@ -129,7 +119,7 @@ export class ProductsRepository {
             },
           },
         },
-        orderBy: [{ groupCode: 'asc' }, { name: 'asc' }],
+        orderBy: [{ order: 'asc' }, { id: 'asc' }],
       })
       .then((categories) =>
         categories.flatMap(({ criteriaSet, ...category }) => {
@@ -170,11 +160,6 @@ export class ProductsRepository {
               {
                 category: {
                   name: { contains: input.query, mode: 'insensitive' },
-                },
-              },
-              {
-                category: {
-                  groupName: { contains: input.query, mode: 'insensitive' },
                 },
               },
             ],
@@ -256,8 +241,7 @@ export class ProductsRepository {
           name: input.name,
           description: input.description,
           formData: input.formData,
-          // Insert the product row before taking the locality lock to preserve
-          // the group → category → owner → product → locality lock order.
+          // Insert before locking locality to preserve category → owner → product → locality order.
           localityId: null,
           createdById: actor.id,
         },
@@ -454,9 +438,6 @@ export class ProductsRepository {
             select: {
               id: true,
               name: true,
-              classificationGroup: true,
-              classificationSubgroup: true,
-              group: { select: { id: true, code: true, name: true } },
             },
           },
           registrant: {
@@ -483,7 +464,6 @@ export class ProductsRepository {
         product,
         registrant: product.registrant,
         category: product.category,
-        group: product.category.group,
         locality,
       });
       const updated = await tx.product.updateMany({
@@ -660,7 +640,6 @@ export class ProductsRepository {
       where: { id },
       select: {
         isActive: true,
-        group: { select: { isActive: true } },
         criteriaSet: {
           select: {
             isActive: true,
@@ -674,9 +653,9 @@ export class ProductsRepository {
         },
       },
     });
-    if (!category?.isActive || !category.group.isActive) {
+    if (!category?.isActive) {
       throw new ConflictException(
-        'Product category or group is unavailable for new registration',
+        'Product category is unavailable for new registration',
       );
     }
     assertCriteriaSetReady(category.criteriaSet);
@@ -692,32 +671,13 @@ export class ProductsRepository {
   ) {
     const ids = [...new Set(categoryIds)].sort();
     if (!ids.length) return;
-    const before = await tx.productCategory.findMany({
-      where: { id: { in: ids } },
-      select: { id: true, groupId: true },
-    });
-    if (before.length !== ids.length)
-      throw new NotFoundException('Product category not found');
-    const groups = [...new Set(before.map(({ groupId }) => groupId))].sort();
-    await tx.$queryRaw(Prisma.sql`
-      SELECT "id" FROM ${databaseObject('product_groups')}
-      WHERE "id" IN (${Prisma.join(groups)}) ORDER BY "id" FOR UPDATE
-    `);
     for (const id of ids) await lockEvaluationCategory(tx, id);
-    const after = await tx.productCategory.findMany({
+    const categories = await tx.productCategory.findMany({
       where: { id: { in: ids } },
-      select: { id: true, groupId: true },
+      select: { id: true },
     });
-    if (
-      after.length !== before.length ||
-      before.some(
-        (category) =>
-          after.find(({ id }) => id === category.id)?.groupId !==
-          category.groupId,
-      )
-    ) {
-      throw new ConflictException('Product category changed while mutating');
-    }
+    if (categories.length !== ids.length)
+      throw new NotFoundException('Product category not found');
   }
 
   private lockProduct(tx: Prisma.TransactionClient, id: string) {

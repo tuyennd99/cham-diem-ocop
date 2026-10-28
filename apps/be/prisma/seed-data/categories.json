@@ -2,241 +2,163 @@
   "sourceEdition": "Quyết định 26/2026/QĐ-TTg ngày 22/05/2026, Phụ lục I và II",
   "sourceUrl": "https://xaydungchinhsach.chinhphu.vn/quyet-dinh-so-26-2026-qd-ttg-bo-tieu-chi-va-quy-trinh-danh-gia-phan-hang-san-pham-ocop-119260529164111182.htm",
   "transcriptionUrl": "https://thuvienphapluat.vn/van-ban/thuong-mai/quyet-dinh-26-2026-qd-ttg-bo-tieu-chi-danh-gia-phan-hang-san-pham-moi-xa-mot-san-pham-707078.aspx",
-  "notes": "Tên bộ sản phẩm đối chiếu Phụ lục II và nhóm đối chiếu Phụ lục I. PDF chính thức trên Chinhphu.vn là nguồn có thẩm quyền; bản phiên âm Thư Viện Pháp Luật được dùng để trích văn bản và các số điểm nằm cuối dòng lựa chọn. Dấu sao trong nhãn là ngưỡng tối thiểu xếp hạng, không phải điểm.",
+  "notes": "Danh mục sản phẩm độc lập, theo thứ tự 26 bộ sản phẩm; mỗi danh mục giữ nguyên mã và bộ tiêu chí chấm điểm.",
   "categories": [
     {
       "id": "fresh-produce",
-      "groupCode": "FOOD",
-      "groupName": "Sản phẩm thực phẩm",
       "name": "Rau, củ, quả, hạt tươi",
       "criteriaSetKey": "fresh-produce",
-      "classificationGroup": "Thực phẩm tươi sống",
-      "classificationSubgroup": "Rau, củ, quả, hạt tươi"
+      "order": 1
     },
     {
       "id": "fresh-animal-products",
-      "groupCode": "FOOD",
-      "groupName": "Sản phẩm thực phẩm",
       "name": "Thịt, thủy sản, trứng, sữa tươi",
       "criteriaSetKey": "fresh-animal-products",
-      "classificationGroup": "Thực phẩm tươi sống",
-      "classificationSubgroup": "Thịt, thủy sản, trứng, sữa tươi"
+      "order": 2
     },
     {
       "id": "processed-grains",
-      "groupCode": "FOOD",
-      "groupName": "Sản phẩm thực phẩm",
       "name": "Gạo, ngũ cốc, hạt sơ chế khác",
       "criteriaSetKey": "processed-grains",
-      "classificationGroup": "Thực phẩm thô, sơ chế",
-      "classificationSubgroup": "Gạo, ngũ cốc, hạt sơ chế khác"
+      "order": 3
     },
     {
       "id": "honey-and-other-agri-food",
-      "groupCode": "FOOD",
-      "groupName": "Sản phẩm thực phẩm",
       "name": "Mật ong, mật khác và nông sản thực phẩm khác",
       "criteriaSetKey": "honey-and-other-agri-food",
-      "classificationGroup": "Thực phẩm thô, sơ chế",
-      "classificationSubgroup": "Mật ong, mật khác và nông sản thực phẩm khác"
+      "order": 4
     },
     {
       "id": "ready-to-eat",
-      "groupCode": "FOOD",
-      "groupName": "Sản phẩm thực phẩm",
       "name": "Đồ ăn nhanh",
       "criteriaSetKey": "ready-to-eat",
-      "classificationGroup": "Thực phẩm chế biến",
-      "classificationSubgroup": "Đồ ăn nhanh"
+      "order": 5
     },
     {
       "id": "grain-products",
-      "groupCode": "FOOD",
-      "groupName": "Sản phẩm thực phẩm",
       "name": "Chế biến từ gạo, ngũ cốc",
       "criteriaSetKey": "grain-products",
-      "classificationGroup": "Thực phẩm chế biến",
-      "classificationSubgroup": "Chế biến từ gạo, ngũ cốc"
+      "order": 6
     },
     {
       "id": "processed-produce",
-      "groupCode": "FOOD",
-      "groupName": "Sản phẩm thực phẩm",
       "name": "Chế biến từ rau, củ, quả, hạt",
       "criteriaSetKey": "processed-produce",
-      "classificationGroup": "Thực phẩm chế biến",
-      "classificationSubgroup": "Chế biến từ rau, củ, quả, hạt"
+      "order": 7
     },
     {
       "id": "processed-animal-and-agri-food",
-      "groupCode": "FOOD",
-      "groupName": "Sản phẩm thực phẩm",
       "name": "Chế biến từ thịt, thủy sản, trứng, sữa, các sản phẩm từ mật ong, mật khác và nông sản thực phẩm khác",
       "criteriaSetKey": "processed-animal-and-agri-food",
-      "classificationGroup": "Thực phẩm chế biến",
-      "classificationSubgroup": "Chế biến từ thịt, trứng, sữa, thủy sản, các sản phẩm từ mật ong, mật khác và nông sản thực phẩm khác"
+      "order": 8
     },
     {
       "id": "liquid-condiments",
-      "groupCode": "FOOD",
-      "groupName": "Sản phẩm thực phẩm",
       "name": "Tương, nước mắm, gia vị dạng lỏng khác",
       "criteriaSetKey": "liquid-condiments",
-      "classificationGroup": "Gia vị",
-      "classificationSubgroup": "Tương, nước mắm, gia vị dạng lỏng khác"
+      "order": 9
     },
     {
       "id": "other-condiments",
-      "groupCode": "FOOD",
-      "groupName": "Sản phẩm thực phẩm",
       "name": "Gia vị khác (muối, hành, tỏi, tiêu)",
       "criteriaSetKey": "other-condiments",
-      "classificationGroup": "Gia vị",
-      "classificationSubgroup": "Gia vị khác"
+      "order": 10
     },
     {
       "id": "tea",
-      "groupCode": "FOOD",
-      "groupName": "Sản phẩm thực phẩm",
       "name": "Chè tươi, chè chế biến",
       "criteriaSetKey": "tea",
-      "classificationGroup": "Chè",
-      "classificationSubgroup": "Chè tươi, chế biến"
+      "order": 11
     },
     {
       "id": "herbal-tea",
-      "groupCode": "FOOD",
-      "groupName": "Sản phẩm thực phẩm",
       "name": "Sản phẩm trà từ thực vật khác",
       "criteriaSetKey": "herbal-tea",
-      "classificationGroup": "Chè",
-      "classificationSubgroup": "Sản phẩm chè từ thực vật khác"
+      "order": 12
     },
     {
       "id": "coffee-cocoa",
-      "groupCode": "FOOD",
-      "groupName": "Sản phẩm thực phẩm",
       "name": "Cà phê, cacao",
       "criteriaSetKey": "coffee-cocoa",
-      "classificationGroup": "Cà phê, ca cao",
-      "classificationSubgroup": null
+      "order": 13
     },
     {
       "id": "white-liquor",
-      "groupCode": "DRINK",
-      "groupName": "Sản phẩm đồ uống",
       "name": "Rượu trắng",
       "criteriaSetKey": "white-liquor",
-      "classificationGroup": "Đồ uống có cồn",
-      "classificationSubgroup": "Rượu trắng"
+      "order": 14
     },
     {
       "id": "other-alcoholic-drinks",
-      "groupCode": "DRINK",
-      "groupName": "Sản phẩm đồ uống",
       "name": "Đồ uống có cồn khác",
       "criteriaSetKey": "other-alcoholic-drinks",
-      "classificationGroup": "Đồ uống có cồn",
-      "classificationSubgroup": "Đồ uống có cồn khác"
+      "order": 15
     },
     {
       "id": "bottled-water",
-      "groupCode": "DRINK",
-      "groupName": "Sản phẩm đồ uống",
       "name": "Nước khoáng thiên nhiên, nước uống đóng chai",
       "criteriaSetKey": "bottled-water",
-      "classificationGroup": "Đồ uống không cồn",
-      "classificationSubgroup": "Nước khoáng thiên nhiên, nước uống đóng chai"
+      "order": 16
     },
     {
       "id": "other-non-alcoholic-drinks",
-      "groupCode": "DRINK",
-      "groupName": "Sản phẩm đồ uống",
       "name": "Đồ uống không cồn khác",
       "criteriaSetKey": "other-non-alcoholic-drinks",
-      "classificationGroup": "Đồ uống không cồn",
-      "classificationSubgroup": "Đồ uống không cồn"
+      "order": 17
     },
     {
       "id": "herbal-functional-products",
-      "groupCode": "HERBAL",
-      "groupName": "Sản phẩm dược liệu và sản phẩm từ dược liệu",
       "name": "Thực phẩm chức năng, thuốc dược liệu, thuốc cổ truyền",
       "criteriaSetKey": "herbal-functional-products",
-      "classificationGroup": "Thực phẩm chức năng, thuốc dược liệu, thuốc cổ truyền",
-      "classificationSubgroup": null
+      "order": 18
     },
     {
       "id": "herbal-cosmetics",
-      "groupCode": "HERBAL",
-      "groupName": "Sản phẩm dược liệu và sản phẩm từ dược liệu",
       "name": "Mỹ phẩm có thành phần từ dược liệu",
       "criteriaSetKey": "herbal-cosmetics",
-      "classificationGroup": "Mỹ phẩm có thành phần từ dược liệu",
-      "classificationSubgroup": null
+      "order": 19
     },
     {
       "id": "essential-oils-and-herbs",
-      "groupCode": "HERBAL",
-      "groupName": "Sản phẩm dược liệu và sản phẩm từ dược liệu",
       "name": "Tinh dầu và dược liệu khác",
       "criteriaSetKey": "essential-oils-and-herbs",
-      "classificationGroup": "Tinh dầu và dược liệu khác",
-      "classificationSubgroup": null
+      "order": 20
     },
     {
       "id": "handicraft",
-      "groupCode": "HANDICRAFT",
-      "groupName": "Sản phẩm hàng thủ công mỹ nghệ",
       "name": "Thủ công mỹ nghệ",
       "criteriaSetKey": "handicraft",
-      "classificationGroup": "Thủ công mỹ nghệ gia dụng, trang trí",
-      "classificationSubgroup": null
+      "order": 21
     },
     {
       "id": "textiles-apparel",
-      "groupCode": "HANDICRAFT",
-      "groupName": "Sản phẩm hàng thủ công mỹ nghệ",
       "name": "Vải, may mặc",
       "criteriaSetKey": "textiles-apparel",
-      "classificationGroup": "Vải, may mặc",
-      "classificationSubgroup": null
+      "order": 22
     },
     {
       "id": "flowers",
-      "groupCode": "ORNAMENTAL",
-      "groupName": "Sản phẩm sinh vật cảnh",
       "name": "Hoa",
       "criteriaSetKey": "flowers",
-      "classificationGroup": "Hoa",
-      "classificationSubgroup": null
+      "order": 23
     },
     {
       "id": "ornamental-plants",
-      "groupCode": "ORNAMENTAL",
-      "groupName": "Sản phẩm sinh vật cảnh",
       "name": "Cây cảnh",
       "criteriaSetKey": "ornamental-plants",
-      "classificationGroup": "Cây cảnh",
-      "classificationSubgroup": null
+      "order": 24
     },
     {
       "id": "ornamental-animals",
-      "groupCode": "ORNAMENTAL",
-      "groupName": "Sản phẩm sinh vật cảnh",
       "name": "Động vật cảnh",
       "criteriaSetKey": "ornamental-animals",
-      "classificationGroup": "Động vật cảnh",
-      "classificationSubgroup": null
+      "order": 25
     },
     {
       "id": "community-ecotourism",
-      "groupCode": "TOURISM",
-      "groupName": "Sản phẩm dịch vụ du lịch cộng đồng, du lịch sinh thái và điểm du lịch",
       "name": "Dịch vụ du lịch cộng đồng, du lịch sinh thái và điểm du lịch",
       "criteriaSetKey": "community-ecotourism",
-      "classificationGroup": "Dịch vụ du lịch cộng đồng, du lịch sinh thái và điểm du lịch",
-      "classificationSubgroup": null
+      "order": 26
     }
   ]
 }

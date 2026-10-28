@@ -25,7 +25,7 @@ it('retains report filters, page and explicit boolean without carrying unknown k
   };
   const result = parseAdminProductSearch(input);
   assert.equal(result.page, 2);
-  assert.equal(result.groupId, 'g1');
+  assert.equal(Object.hasOwn(result, 'groupId'), false);
   assert.equal(result.categoryId, 'c1');
   assert.equal(result.unmappedLocality, false);
   assert.equal(result.from, input.from);
@@ -93,7 +93,7 @@ it('parses assignment matrix filters without carrying unknown keys', () => {
     uncoveredOnly: 'true',
     unknown: 'x',
   });
-  assert.equal(query.groupId, 'g1');
+  assert.equal(Object.hasOwn(query, 'groupId'), false);
   assert.equal(query.categoryId, 'c1');
   assert.equal(query.uncoveredOnly, true);
   assert.equal(Object.hasOwn(query, 'unknown'), false);
@@ -127,4 +127,22 @@ it('restores result report tab and grouping after reload', () => {
   assert.equal(query.month, 10);
   assert.equal(query.groupBy, 'locality');
   assert.equal(query.assessmentYear, 2025);
+});
+
+it('accepts flat categories and drops legacy hierarchy across all search flows', () => {
+  for (const parse of [
+    parseAdminProductSearch,
+    parseAdminScoringSearch,
+    parseAdminDashboardSearch,
+    parseAdminReportsSearch,
+    parseAdminAssignmentSearch,
+  ]) {
+    const query = parse({ categoryId: 'tea', groupId: 'FOOD' });
+    assert.equal(query.categoryId, 'tea');
+    assert.equal(Object.hasOwn(query, 'groupId'), false);
+  }
+  const catalog = parseAdminCatalogSearch({ tab: 'groups', groupId: 'FOOD' });
+  assert.equal(catalog.tab, undefined);
+  assert.equal(Object.hasOwn(catalog, 'groupId'), false);
+  assert.equal(parseAdminReportsSearch({ groupBy: 'group' }).groupBy, 'month');
 });

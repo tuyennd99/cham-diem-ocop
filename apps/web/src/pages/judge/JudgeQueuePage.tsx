@@ -1,5 +1,8 @@
 import { Link } from '@tanstack/react-router';
-import { times } from 'lodash';
+import AlertError from '@/components/alert-error';
+import PageSpin from '@/components/page-spin';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { errorText } from '../../lib/api-error';
 import { useJudgeQueue } from '../../queries/judge';
 
@@ -14,24 +17,8 @@ export function JudgeQueuePage() {
           <h1>Hàng chờ chấm</h1>
         </div>
       </div>
-      {loading && (
-        <div className='record-list-skeleton' aria-busy='true' aria-label='Đang tải hàng chờ'>
-          {times(4, (index) => (
-            <div className='record-row skeleton-record' key={index}>
-              <div className='skeleton-media' />
-              <div className='skeleton-copy'>
-                <div className='skeleton-line' />
-                <div className='skeleton-line short' />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      {error && (
-        <p className='form-note' role='alert'>
-          {error}
-        </p>
-      )}
+      {loading && <PageSpin />}
+      {error && <AlertError title='Không thể tải hàng chờ chấm' errors={[error]} />}
       {!loading && !error && !rows.length && (
         <div className='empty-state'>
           <h2>Chưa có hồ sơ được phân công</h2>
@@ -44,10 +31,8 @@ export function JudgeQueuePage() {
             <article className='record-row' key={row.id}>
               <div className='record-main'>
                 <div className='record-badges'>
-                  <span className='badge badge-category'>
-                    {row.category.groupName} · {row.category.name}
-                  </span>
-                  <span className='badge'>{row.status}</span>
+                  <Badge variant='secondary'>{row.category.name}</Badge>
+                  <Badge variant='outline'>{row.status}</Badge>
                 </div>
                 <h2>{row.name}</h2>
                 <p>{row.description}</p>
@@ -59,13 +44,11 @@ export function JudgeQueuePage() {
               </div>
               <div className='record-result'>
                 <span>{row.attachments.length} ảnh</span>
-                <Link
-                  className='button button-secondary'
-                  to='/judge/products/$id'
-                  params={{ id: row.id }}
-                >
-                  Mở phiếu
-                </Link>
+                <Button asChild variant='secondary'>
+                  <Link to='/judge/products/$id' params={{ id: row.id }}>
+                    Mở phiếu
+                  </Link>
+                </Button>
               </div>
             </article>
           ))}

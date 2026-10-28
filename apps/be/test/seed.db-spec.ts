@@ -345,7 +345,7 @@ describe('seed scoring history guard', () => {
   );
 });
 
-it('seeds six official groups and links all 26 classifications without fabricated catalogs', async () => {
+it('seeds exactly 26 independent official categories in order without fabricated catalogs', async () => {
   await withTestApp(async ({ prisma }) => {
     const initialSeed = seedSandbox();
     try {
@@ -353,36 +353,36 @@ it('seeds six official groups and links all 26 classifications without fabricate
     } finally {
       rmSync(initialSeed.root, { recursive: true, force: true });
     }
-    const groups = await prisma.productGroup.findMany({
-      include: { categories: { include: { criteriaSet: true } } },
+    const categories = await prisma.productCategory.findMany({
+      include: { criteriaSet: true },
+      orderBy: [{ order: 'asc' }, { id: 'asc' }],
     });
-    expect(groups).toHaveLength(6);
-    expect(groups.flatMap((group) => group.categories)).toHaveLength(26);
+    expect(categories).toHaveLength(26);
     const catalog = JSON.parse(
       readFileSync(join(officialDataDir, 'categories.json'), 'utf8'),
     ).categories;
-    for (const category of catalog) {
-      const group = groups.find(({ code }) => code === category.groupCode);
-      expect(group?.name).toBe(category.groupName);
-      expect(group?.categories).toContainEqual(
-        expect.objectContaining({
-          id: category.id,
-          name: category.name,
-          groupCode: category.groupCode,
-          groupName: category.groupName,
-          criteriaSet: expect.objectContaining({
-            isActive: true,
-            version: expect.any(String),
-            sourceHash: expect.stringMatching(/^[a-f0-9]{64}$/),
-          }),
-        }),
-      );
+    expect(categories.map(({ id }) => id)).toEqual(
+      catalog.map((c: { id: string }) => c.id),
+    );
+    for (const [index, category] of catalog.entries()) {
+      expect(categories[index]).toMatchObject({
+        id: category.id,
+        name: category.name,
+        order: index + 1,
+        criteriaSet: {
+          isActive: true,
+          version: expect.any(String),
+          sourceHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+        },
+      });
+      expect(categories[index]).not.toHaveProperty('groupId');
     }
     expect(await prisma.organizationUnit.count()).toBe(0);
     expect(await prisma.locality.count()).toBe(0);
-    const before = await prisma.productGroup.findMany({
-      orderBy: { code: 'asc' },
-    });
+    const before = await scoringSnapshot(
+      prisma,
+      categories.map(({ id }) => id),
+    );
     const sandbox = seedSandbox();
     try {
       expect(runSeed(sandbox.root).status).toBe(0);
@@ -390,7 +390,10 @@ it('seeds six official groups and links all 26 classifications without fabricate
       rmSync(sandbox.root, { recursive: true, force: true });
     }
     expect(
-      await prisma.productGroup.findMany({ orderBy: { code: 'asc' } }),
+      await scoringSnapshot(
+        prisma,
+        categories.map(({ id }) => id),
+      ),
     ).toEqual(before);
   });
 });
@@ -398,40 +401,10 @@ it('seeds six official groups and links all 26 classifications without fabricate
 it('preserves admin-managed catalog metadata and extra categories when reseeding', async () => {
   await withTestApp(async ({ prisma }) => {
     const official = officialCategories[0];
-    const group = await prisma.productGroup.findUniqueOrThrow({
-      where: { code: 'FOOD' },
-    });
-    const extraGroup = await prisma.productGroup.create({
-      data: {
-        code: 'TEST-' + randomUUID(),
-        name: 'Admin destination group',
-        description: 'Keep this',
-        order: 80,
-        isActive: false,
-      },
-    });
-    await prisma.productGroup.update({
-      where: { id: group.id },
-      data: {
-        name: 'Admin renamed group',
-        description: 'Admin description',
-        order: 77,
-        isActive: false,
-      },
-    });
-    await prisma.productCategory.updateMany({
-      where: { groupId: group.id },
-      data: { groupName: 'Admin renamed group' },
-    });
     await prisma.productCategory.update({
       where: { id: official.id },
       data: {
-        groupId: extraGroup.id,
-        groupCode: extraGroup.code,
-        groupName: extraGroup.name,
         name: 'Admin renamed category',
-        classificationGroup: 'Admin classification',
-        classificationSubgroup: 'Admin subgroup',
         description: 'Admin category description',
         order: 66,
         isActive: false,
@@ -440,11 +413,7 @@ it('preserves admin-managed catalog metadata and extra categories when reseeding
     const extraCategory = await prisma.productCategory.create({
       data: {
         id: 'test-extra-' + randomUUID(),
-        groupId: extraGroup.id,
-        groupCode: extraGroup.code,
-        groupName: extraGroup.name,
         name: 'Extra category ' + randomUUID(),
-        classificationGroup: 'Extra classification',
         order: 90,
         isActive: false,
       },
@@ -456,22 +425,9 @@ it('preserves admin-managed catalog metadata and extra categories when reseeding
       rmSync(sandbox.root, { recursive: true, force: true });
     }
     await expect(
-      prisma.productGroup.findUniqueOrThrow({ where: { id: group.id } }),
-    ).resolves.toMatchObject({
-      name: 'Admin renamed group',
-      description: 'Admin description',
-      order: 77,
-      isActive: false,
-    });
-    await expect(
       prisma.productCategory.findUniqueOrThrow({ where: { id: official.id } }),
     ).resolves.toMatchObject({
-      groupId: extraGroup.id,
-      groupCode: extraGroup.code,
-      groupName: extraGroup.name,
       name: 'Admin renamed category',
-      classificationGroup: 'Admin classification',
-      classificationSubgroup: 'Admin subgroup',
       description: 'Admin category description',
       order: 66,
       isActive: false,
@@ -482,12 +438,11 @@ it('preserves admin-managed catalog metadata and extra categories when reseeding
       }),
     ).resolves.toMatchObject({
       name: extraCategory.name,
-      groupId: extraGroup.id,
     });
   });
 });
 
-it('seeds sample OCOP products across all 6 groups and all 4 statuses idempotently when test accounts are enabled', async () => {
+it('seeds sample OCOP products across multiple categories and all 4 statuses idempotently when test accounts are enabled', async () => {
   await withTestApp(async ({ prisma }) => {
     const sandbox = seedSandbox();
     const runWithSampleData = () =>
@@ -517,24 +472,16 @@ it('seeds sample OCOP products across all 6 groups and all 4 statuses idempotent
 
       const products = await prisma.product.findMany({
         include: {
-          category: { select: { groupCode: true } },
+          category: { select: { id: true } },
           statusEvents: { orderBy: { sequence: 'asc' } },
           evaluations: { include: { scores: true } },
         },
       });
       expect(products.length).toBeGreaterThanOrEqual(8);
 
-      const groupCodes = new Set(products.map((p) => p.category.groupCode));
-      expect(groupCodes).toEqual(
-        new Set([
-          'FOOD',
-          'DRINK',
-          'HERBAL',
-          'HANDICRAFT',
-          'ORNAMENTAL',
-          'TOURISM',
-        ]),
-      );
+      expect(
+        new Set(products.map((p) => p.category.id)).size,
+      ).toBeGreaterThanOrEqual(6);
 
       const statuses = new Set(products.map((p) => p.status));
       expect(statuses).toEqual(

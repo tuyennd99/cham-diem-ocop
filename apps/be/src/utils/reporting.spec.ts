@@ -76,9 +76,6 @@ describe('H6 reporting and analytics dashboard engine', () => {
     const baseCategory = {
       id: 'cat-tea',
       name: 'Chè tươi, chè chế biến',
-      groupId: 'grp-food',
-      groupCode: 'FOOD',
-      groupName: 'Sản phẩm thực phẩm',
       criterionIds: ['c1', 'c2'],
     };
     const baseLocality = {
@@ -208,7 +205,6 @@ describe('H6 reporting and analytics dashboard engine', () => {
     const janReg = buildRegistrationReport({
       query: { year: 2026, month: 1, groupBy: 'locality' },
       products,
-      groups: [{ id: 'grp-food', code: 'FOOD', name: 'Sản phẩm thực phẩm' }],
       categories: [baseCategory],
       localities: [baseLocality],
       now,
@@ -239,15 +235,16 @@ describe('H6 reporting and analytics dashboard engine', () => {
 
     // 2. January Results Report
     const janRes = buildResultsReport({
-      query: { year: 2026, month: 1, groupBy: 'group' },
+      query: { year: 2026, month: 1, groupBy: 'category' },
       products,
-      groups: [{ id: 'grp-food', code: 'FOOD', name: 'Sản phẩm thực phẩm' }],
       categories: [baseCategory],
       localities: [baseLocality],
       now,
       historyAvailableFrom: historyFrom,
       assignmentHistoryAvailable: false,
     });
+    expect(janRes.rows[0]).toMatchObject({ key: baseCategory.id, label: baseCategory.name, drillDown: { categoryId: baseCategory.id } });
+    expect(janRes.rows[0].drillDown).not.toHaveProperty('groupId');
     expect(janRes.totals).toMatchObject({
       completedCount: 1,
       completedValidCount: 1,
@@ -258,9 +255,8 @@ describe('H6 reporting and analytics dashboard engine', () => {
 
     // 3. February Results Report (A completed 02/02 with 3 stars, even though 0 new submissions in Feb)
     const febRes = buildResultsReport({
-      query: { year: 2026, month: 2, groupBy: 'group' },
+      query: { year: 2026, month: 2, groupBy: 'category' },
       products,
-      groups: [{ id: 'grp-food', code: 'FOOD', name: 'Sản phẩm thực phẩm' }],
       categories: [baseCategory],
       localities: [baseLocality],
       now,
@@ -281,7 +277,6 @@ describe('H6 reporting and analytics dashboard engine', () => {
     const febDash = buildAnalyticsDashboard({
       query: { year: 2026, month: 2 },
       products,
-      groups: [{ id: 'grp-food', code: 'FOOD', name: 'Sản phẩm thực phẩm' }],
       categories: [baseCategory],
       localities: [baseLocality],
       coveredCategoryIdsAtNow: new Set(),
@@ -292,6 +287,11 @@ describe('H6 reporting and analytics dashboard engine', () => {
       needsAttention: [],
     });
     expect(febDash.kpis).toHaveLength(8);
+    expect(febDash.charts.byCategory).toEqual([{
+      categoryId: baseCategory.id, categoryName: baseCategory.name,
+      registeredCount: 0, completedCount: 1,
+    }]);
+    expect(febDash.charts).not.toHaveProperty('byProductGroup');
     const kpiById = new Map(febDash.kpis.map((k) => [k.id, k]));
     expect(kpiById.get('registeredInPeriod')?.value).toBe(0);
     expect(kpiById.get('completedInPeriod')?.value).toBe(1);

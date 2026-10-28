@@ -1,14 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
+import type { AdminUserRecord, LocalityRecord } from '@ocop/shared';
 import { useForm, useStore } from '@tanstack/react-form';
 import { Link, useBlocker, useNavigate } from '@tanstack/react-router';
 import { omit, toString } from 'lodash';
-import type { AdminUserRecord, LocalityRecord } from '@ocop/shared';
+import AlertError from '@/components/alert-error';
+import { FormField } from '@/components/form-field';
+import PageSpin from '@/components/page-spin';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
-  toAdminProductApiQuery,
-  type AdminProductSearch,
-} from '../../lib/admin-search';
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { ALL } from '../../constants/consts';
+import { toAdminProductApiQuery, type AdminProductSearch } from '../../lib/admin-search';
 import { ApiError, messageOf } from '../../lib/api-error';
 import { PRODUCT_FILE_ACCEPT } from '../../lib/attachments';
 import { useSession } from '../../lib/auth';
@@ -16,18 +27,17 @@ import {
   productEditorCategories,
   type ProductEditorCategory,
 } from '../../lib/product-editor-categories';
-import { formatCategoryPath } from '../../lib/utils';
-import { hasStaffPermission } from '../../lib/session-contract';
 import { canStartProductDraftSave, saveProductDraft } from '../../lib/save-product-draft';
-import { useCategories, useLocalities } from '../../queries/common';
+import { hasStaffPermission } from '../../lib/session-contract';
+import { AttachmentLink } from '../../pages/registrant/AttachmentLink';
 import { useAdminProductDetail, useProductDraftCommands } from '../../queries/admin-products';
 import { useRegistrantOwners } from '../../queries/admin-users';
+import { useCategories, useLocalities } from '../../queries/common';
 import { useMyProduct } from '../../queries/registrant';
 import type {
   RegistrantProduct as Product,
   RegistrantFormData as RegistrationFormData,
 } from '../../types/registrant';
-import { AttachmentLink } from '../../pages/registrant/AttachmentLink';
 
 interface ProductEditorFormValues extends RegistrationFormData {
   name: string;
@@ -139,11 +149,7 @@ const stepZeroTextFields: Array<{
   { name: 'email', label: 'Email liên hệ', maxLength: 320, type: 'email', autoComplete: 'email' },
 ];
 
-export function ProductDraftEditor({
-  mode,
-  productId,
-  returnSearch,
-}: ProductDraftEditorProps) {
+export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDraftEditorProps) {
   const navigate = useNavigate();
   const session = useSession();
   const canManage = hasStaffPermission(session?.user, 'MANAGE');
@@ -224,7 +230,7 @@ export function ProductDraftEditor({
         }
         if (!value.categoryId) {
           setStep(1);
-          throw new Error('Chọn phân loại sản phẩm ở Bước 2 trước khi lưu hồ sơ.');
+          throw new Error('Chọn danh mục sản phẩm ở Bước 2 trước khi lưu hồ sơ.');
         }
         const sampleQuantity = value.sampleQuantity === '' ? 0 : Number(value.sampleQuantity);
         if (!Number.isInteger(sampleQuantity) || sampleQuantity < 0 || sampleQuantity > 100000) {
@@ -305,9 +311,7 @@ export function ProductDraftEditor({
         }
       } catch (cause) {
         const unknownCreate =
-          createStarted.current &&
-          !product &&
-          !(cause instanceof ApiError && cause.status < 500);
+          createStarted.current && !product && !(cause instanceof ApiError && cause.status < 500);
         setCreateOutcomeUnknown(unknownCreate);
         setError(
           unknownCreate
@@ -390,7 +394,7 @@ export function ProductDraftEditor({
   if (productId && !loaded && !error) {
     return (
       <section className={editorClassName} aria-busy='true'>
-        <p role='status'>Đang tải bản nháp…</p>
+        <PageSpin />
       </section>
     );
   }
@@ -398,13 +402,20 @@ export function ProductDraftEditor({
     return (
       <section className={editorClassName}>
         <h1>Không tìm thấy bản nháp</h1>
-        <p role='alert'>{error || 'Hồ sơ không tồn tại hoặc bạn không có quyền truy cập.'}</p>
+        <AlertError
+          title='Không tìm thấy bản nháp'
+          errors={[error || 'Hồ sơ không tồn tại hoặc bạn không có quyền truy cập.']}
+        />
         {mode === 'owner' ? (
-          <Link to='/my/products'>Quay lại danh sách</Link>
+          <Button asChild variant='secondary' className='mt-3'>
+            <Link to='/my/products'>Quay lại danh sách</Link>
+          </Button>
         ) : (
-          <Link to='/admin/registrations' search={listReturnSearch}>
-            Quay lại danh sách phiếu đăng ký
-          </Link>
+          <Button asChild variant='secondary' className='mt-3'>
+            <Link to='/admin/registrations' search={listReturnSearch}>
+              Quay lại danh sách phiếu đăng ký
+            </Link>
+          </Button>
         )}
       </section>
     );
@@ -415,17 +426,17 @@ export function ProductDraftEditor({
         <h1>Hồ sơ đã nộp</h1>
         <p>Hồ sơ không còn ở trạng thái bản nháp nên không thể sửa.</p>
         {mode === 'owner' ? (
-          <Link to='/my/products/$id' params={{ id: product.id }}>
-            Quay lại hồ sơ
-          </Link>
+          <Button asChild variant='secondary' className='mt-3'>
+            <Link to='/my/products/$id' params={{ id: product.id }}>
+              Quay lại hồ sơ
+            </Link>
+          </Button>
         ) : (
-          <Link
-            to='/admin/registrations/$id'
-            params={{ id: product.id }}
-            search={returnSearch}
-          >
-            Quay lại hồ sơ
-          </Link>
+          <Button asChild variant='secondary' className='mt-3'>
+            <Link to='/admin/registrations/$id' params={{ id: product.id }} search={returnSearch}>
+              Quay lại hồ sơ
+            </Link>
+          </Button>
         )}
       </section>
     );
@@ -436,8 +447,8 @@ export function ProductDraftEditor({
   const registrantTotalPages = registrantLookup.data?.meta?.totalPages ?? 0;
   const currentLocalityUnavailable = Boolean(
     product?.localityId &&
-      localityResolve.data &&
-      !localityResolve.data.data.some(({ id }) => id === product.localityId),
+    localityResolve.data &&
+    !localityResolve.data.data.some(({ id }) => id === product.localityId),
   );
   const activeRegistrantSummary = product
     ? `${adminProductQuery.data?.data.registrant.fullName ?? ''} (${adminProductQuery.data?.data.registrant.email ?? ''})`
@@ -458,12 +469,10 @@ export function ProductDraftEditor({
             >
               ← {product ? 'Quay lại chi tiết phiếu' : 'Quay lại danh sách phiếu đăng ký'}
             </Link>
-            <h1 className='mt-2'>
-              {productId ? 'Sửa phiếu đăng ký' : 'Nhập phiếu đăng ký'}
-            </h1>
+            <h1 className='mt-2'>{productId ? 'Sửa phiếu đăng ký' : 'Nhập phiếu đăng ký'}</h1>
             <p className='route-intro'>
-              Chủ thể: <strong>{activeRegistrantSummary}</strong> · Trạng thái: Bản nháp. Ảnh và
-              tài liệu minh chứng tùy chọn (tối đa 20 tệp, mỗi tệp 10 MiB).
+              Chủ thể: <strong>{activeRegistrantSummary}</strong> · Trạng thái: Bản nháp. Ảnh và tài
+              liệu minh chứng tùy chọn (tối đa 20 tệp, mỗi tệp 10 MiB).
             </p>
           </div>
         </div>
@@ -472,8 +481,8 @@ export function ProductDraftEditor({
           <p className='eyebrow'>KHU VỰC CHỦ THỂ · MẪU 01</p>
           <h1>{productId ? 'Sửa hồ sơ nháp' : 'Tạo hồ sơ sản phẩm'}</h1>
           <p>
-            Hoàn thành phiếu đăng ký theo từng bước. Ảnh và tài liệu minh chứng là tùy chọn; mỗi
-            tệp tối đa 10 MiB.
+            Hoàn thành phiếu đăng ký theo từng bước. Ảnh và tài liệu minh chứng là tùy chọn; mỗi tệp
+            tối đa 10 MiB.
           </p>
         </>
       )}
@@ -484,8 +493,10 @@ export function ProductDraftEditor({
           <div className='admin-step-grid'>
             {!product ? (
               <>
-                <label htmlFor='admin-draft-registrant-search'>
-                  Tìm chủ thể đã xác minh (tên hoặc email)
+                <FormField
+                  label='Tìm chủ thể đã xác minh (tên hoặc email)'
+                  htmlFor='admin-draft-registrant-search'
+                >
                   <Input
                     id='admin-draft-registrant-search'
                     value={registrantSearch}
@@ -496,42 +507,46 @@ export function ProductDraftEditor({
                     maxLength={100}
                     placeholder='Nhập tên hoặc email chủ thể…'
                   />
-                </label>
+                </FormField>
                 <div className='form-group'>
-                  <label htmlFor='admin-draft-registrant-select'>
+                  <Label htmlFor='admin-draft-registrant-select'>
                     Chọn chủ thể đăng ký (bắt buộc)
-                  </label>
-                  <select
-                    id='admin-draft-registrant-select'
-                    value={registrantId}
-                    onChange={(event) => {
+                  </Label>
+                  <Select
+                    value={registrantId || ALL}
+                    onValueChange={(value) => {
+                      const nextId = value === ALL ? '' : value;
                       const selected =
-                        registrantLookup.data?.data.find(
-                          ({ id }) => id === event.target.value,
-                        ) ?? null;
-                      setRegistrantId(event.target.value);
+                        registrantLookup.data?.data.find(({ id }) => id === nextId) ?? null;
+                      setRegistrantId(nextId);
                       setSelectedRegistrant(selected);
                     }}
                   >
-                    <option value=''>Chọn chủ thể đăng ký</option>
-                    {selectedRegistrant &&
-                      !registrantLookup.data?.data.some(
-                        ({ id }) => id === selectedRegistrant.id,
-                      ) && (
-                        <option value={selectedRegistrant.id}>
-                          {selectedRegistrant.fullName} · {selectedRegistrant.email}
-                        </option>
-                      )}
-                    {registrantLookup.data?.data.map((owner) => (
-                      <option key={owner.id} value={owner.id}>
-                        {owner.fullName} · {owner.email}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger id='admin-draft-registrant-select'>
+                      <SelectValue placeholder='Chọn chủ thể đăng ký' />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL}>Chọn chủ thể đăng ký</SelectItem>
+                      {selectedRegistrant &&
+                        !registrantLookup.data?.data.some(
+                          ({ id }) => id === selectedRegistrant.id,
+                        ) && (
+                          <SelectItem value={selectedRegistrant.id}>
+                            {selectedRegistrant.fullName} · {selectedRegistrant.email}
+                          </SelectItem>
+                        )}
+                      {registrantLookup.data?.data.map((owner) => (
+                        <SelectItem key={owner.id} value={owner.id}>
+                          {owner.fullName} · {owner.email}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   {registrantLookup.error && (
-                    <p className='form-note' role='alert'>
-                      Không tải được danh sách chủ thể: {messageOf(registrantLookup.error)}
-                    </p>
+                    <AlertError
+                      title='Không tải được danh sách chủ thể'
+                      errors={[messageOf(registrantLookup.error)]}
+                    />
                   )}
                   <div className='admin-actions mt-2'>
                     <Button
@@ -543,7 +558,7 @@ export function ProductDraftEditor({
                     >
                       Trước
                     </Button>
-                    <span className='text-xs text-muted'>
+                    <span className='text-muted text-xs'>
                       {registrantTotalPages > 0
                         ? `Trang ${registrantPage} / ${registrantTotalPages}`
                         : 'Chưa có chủ thể phù hợp'}
@@ -567,15 +582,14 @@ export function ProductDraftEditor({
             ) : (
               <div>
                 <span className='text-sm font-semibold'>Chủ thể sở hữu hồ sơ</span>
-                <p className='text-sm text-muted mt-1'>
+                <p className='text-muted mt-1 text-sm'>
                   {adminProductQuery.data?.data.registrant.fullName} ·{' '}
                   {adminProductQuery.data?.data.registrant.email}
                 </p>
               </div>
             )}
 
-            <label htmlFor='admin-draft-reason'>
-              Lý do thao tác (bắt buộc)
+            <FormField label='Lý do thao tác (bắt buộc)' htmlFor='admin-draft-reason'>
               <Input
                 id='admin-draft-reason'
                 value={reason}
@@ -584,13 +598,13 @@ export function ProductDraftEditor({
                 onChange={(event) => setReason(event.target.value)}
                 required
               />
-            </label>
+            </FormField>
           </div>
         </div>
       )}
 
       <div>
-        <p className='text-sm font-semibold text-muted mb-2'>
+        <p className='text-muted mb-2 text-sm font-semibold'>
           Bước {step + 1}/3 · {applicationSteps[step]}
         </p>
         <ol className='form-steps' aria-label='Các bước đăng ký'>
@@ -624,8 +638,10 @@ export function ProductDraftEditor({
             <form.Field name='localityId'>
               {(field) => (
                 <div className={mode === 'admin' ? 'admin-step-span-2' : undefined}>
-                  <label htmlFor='editor-locality-search'>
-                    Địa bàn hành chính (xã/phường)
+                  <FormField
+                    label='Địa bàn hành chính (xã/phường)'
+                    htmlFor='editor-locality-search'
+                  >
                     <Input
                       id='editor-locality-search'
                       value={localitySearch}
@@ -636,36 +652,46 @@ export function ProductDraftEditor({
                       placeholder='Tìm xã/phường hoặc tỉnh/thành'
                       maxLength={100}
                     />
-                  </label>
-                  <label htmlFor='editor-locality-select' className='mt-2'>
-                    Chọn địa bàn hành chính
-                    <select
-                      id='editor-locality-select'
-                      value={field.state.value}
-                      onBlur={field.handleBlur}
-                      onChange={(event) => field.handleChange(event.target.value)}
+                  </FormField>
+                  <FormField
+                    label='Chọn địa bàn hành chính'
+                    htmlFor='editor-locality-select'
+                    className='mt-2'
+                  >
+                    <Select
+                      value={field.state.value || ALL}
+                      onValueChange={(value) => field.handleChange(value === ALL ? '' : value)}
                     >
-                      <option value=''>Chưa chọn địa bàn</option>
-                      {product?.localityId &&
-                        !localityOptions.some(({ id }) => id === product.localityId) && (
-                          <option value={product.localityId} disabled={currentLocalityUnavailable}>
-                            {product.locality
-                              ? `${product.locality.name} · ${product.locality.provinceName}`
-                              : product.localityId}
-                            {currentLocalityUnavailable ? ' · Đã ngừng hiệu lực' : ''}
-                          </option>
-                        )}
-                      {localityOptions.map((locality) => (
-                        <option key={locality.id} value={locality.id}>
-                          {locality.name} · {locality.provinceName}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                      <SelectTrigger id='editor-locality-select' onBlur={field.handleBlur}>
+                        <SelectValue placeholder='Chưa chọn địa bàn' />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={ALL}>Chưa chọn địa bàn</SelectItem>
+                        {product?.localityId &&
+                          !localityOptions.some(({ id }) => id === product.localityId) && (
+                            <SelectItem
+                              value={product.localityId}
+                              disabled={currentLocalityUnavailable}
+                            >
+                              {product.locality
+                                ? `${product.locality.name} · ${product.locality.provinceName}`
+                                : product.localityId}
+                              {currentLocalityUnavailable ? ' · Đã ngừng hiệu lực' : ''}
+                            </SelectItem>
+                          )}
+                        {localityOptions.map((locality) => (
+                          <SelectItem key={locality.id} value={locality.id}>
+                            {locality.name} · {locality.provinceName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormField>
                   {localityQuery.error && (
-                    <p role='alert' className='form-note'>
-                      Không tải được danh mục địa bàn: {messageOf(localityQuery.error)}
-                    </p>
+                    <AlertError
+                      title='Không tải được danh mục địa bàn'
+                      errors={[messageOf(localityQuery.error)]}
+                    />
                   )}
                   {currentLocalityUnavailable && (
                     <p role='status' className='form-note'>
@@ -711,22 +737,22 @@ export function ProductDraftEditor({
             </form.Field>
             <form.Field name='provinceName'>
               {(field) => (
-                <label>
-                  Tỉnh/thành phố đăng ký
+                <FormField label='Tỉnh/thành phố đăng ký' htmlFor='product-draft-1'>
                   <Input
+                    id='product-draft-1'
                     value={field.state.value}
                     onBlur={field.handleBlur}
                     onChange={(event) => field.handleChange(event.target.value)}
                     maxLength={100}
                   />
-                </label>
+                </FormField>
               )}
             </form.Field>
             <form.Field name='assessmentYear'>
               {(field) => (
-                <label>
-                  Năm đăng ký
+                <FormField label='Năm đăng ký' htmlFor='product-draft-2'>
                   <Input
+                    id='product-draft-2'
                     type='number'
                     min={2020}
                     max={2100}
@@ -735,44 +761,48 @@ export function ProductDraftEditor({
                     onBlur={field.handleBlur}
                     onChange={(event) => field.handleChange(event.target.value)}
                   />
-                </label>
+                </FormField>
               )}
             </form.Field>
             {stepZeroTextFields.slice(1, 4).map((config) => (
               <form.Field key={config.name} name={config.name}>
                 {(field) => (
-                  <label>
-                    {config.label}
+                  <FormField label={config.label} htmlFor={`product-draft-${config.name}`}>
                     <Input
+                      id={`product-draft-${config.name}`}
                       value={field.state.value}
                       onBlur={field.handleBlur}
                       onChange={(event) => field.handleChange(event.target.value)}
                       maxLength={config.maxLength}
                     />
-                  </label>
+                  </FormField>
                 )}
               </form.Field>
             ))}
             <form.Field name='contactAddress'>
               {(field) => (
-                <label className={mode === 'admin' ? 'admin-step-span-2' : undefined}>
-                  Địa chỉ liên hệ
-                  <textarea
+                <FormField
+                  label='Địa chỉ liên hệ'
+                  htmlFor='product-draft-3'
+                  className={mode === 'admin' ? 'admin-step-span-2' : undefined}
+                >
+                  <Textarea
+                    id='product-draft-3'
                     rows={3}
                     value={field.state.value}
                     onBlur={field.handleBlur}
                     onChange={(event) => field.handleChange(event.target.value)}
                     maxLength={1000}
                   />
-                </label>
+                </FormField>
               )}
             </form.Field>
             {stepZeroTextFields.slice(4).map((config) => (
               <form.Field key={config.name} name={config.name}>
                 {(field) => (
-                  <label>
-                    {config.label}
+                  <FormField label={config.label} htmlFor={`product-draft-${config.name}`}>
                     <Input
+                      id={`product-draft-${config.name}`}
                       type={config.type}
                       autoComplete={config.autoComplete}
                       value={field.state.value}
@@ -780,7 +810,7 @@ export function ProductDraftEditor({
                       onChange={(event) => field.handleChange(event.target.value)}
                       maxLength={config.maxLength}
                     />
-                  </label>
+                  </FormField>
                 )}
               </form.Field>
             ))}
@@ -790,40 +820,39 @@ export function ProductDraftEditor({
           <div className={mode === 'admin' ? 'admin-step-grid' : undefined}>
             <form.Field name='name'>
               {(field) => (
-                <label>
-                  Tên sản phẩm (bắt buộc)
+                <FormField label='Tên sản phẩm (bắt buộc)' htmlFor='product-draft-4'>
                   <Input
+                    id='product-draft-4'
                     value={field.state.value}
                     onBlur={field.handleBlur}
                     onChange={(event) => field.handleChange(event.target.value)}
                     maxLength={255}
                   />
-                </label>
+                </FormField>
               )}
             </form.Field>
             <form.Field name='categoryId'>
               {(field) => (
                 <div>
-                  <label>
-                    Ngành, nhóm, phân nhóm sản phẩm (bắt buộc)
-                    <select
-                      value={field.state.value}
-                      onBlur={field.handleBlur}
-                      onChange={(event) => field.handleChange(event.target.value)}
+                  <FormField label='Danh mục sản phẩm (bắt buộc)' htmlFor='product-draft-5'>
+                    <Select
+                      value={field.state.value || ALL}
+                      onValueChange={(value) => field.handleChange(value === ALL ? '' : value)}
                     >
-                      <option value=''>Chọn phân loại sản phẩm</option>
-                      {categories.map((item) => (
-                        <option key={item.id} value={item.id} disabled={item.unavailable}>
-                          {formatCategoryPath([
-                            item.groupName,
-                            item.classificationGroup,
-                            item.classificationSubgroup,
-                          ])}
-                          {item.unavailable ? ' · Đã ngừng sử dụng' : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                      <SelectTrigger id='product-draft-5' onBlur={field.handleBlur}>
+                        <SelectValue placeholder='Chọn danh mục sản phẩm' />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={ALL}>Chọn danh mục sản phẩm</SelectItem>
+                        {categories.map((item) => (
+                          <SelectItem key={item.id} value={item.id} disabled={item.unavailable}>
+                            {item.name}
+                            {item.unavailable ? ' · Đã ngừng sử dụng' : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormField>
                   {categories.some((item) => item.id === field.state.value && item.unavailable) && (
                     <p role='status' className='form-note'>
                       Danh mục của bản nháp đã ngừng sử dụng. Hồ sơ vẫn được lưu và chỉnh sửa; hãy
@@ -835,44 +864,51 @@ export function ProductDraftEditor({
             </form.Field>
             <form.Field name='description'>
               {(field) => (
-                <label className={mode === 'admin' ? 'admin-step-span-2' : undefined}>
-                  Mô tả sản phẩm (tùy chọn)
-                  <textarea
+                <FormField
+                  label='Mô tả sản phẩm (tùy chọn)'
+                  htmlFor='product-draft-6'
+                  className={mode === 'admin' ? 'admin-step-span-2' : undefined}
+                >
+                  <Textarea
+                    id='product-draft-6'
                     rows={4}
                     maxLength={10000}
                     value={field.state.value}
                     onBlur={field.handleBlur}
                     onChange={(event) => field.handleChange(event.target.value)}
                   />
-                </label>
+                </FormField>
               )}
             </form.Field>
             <form.Field name='registrationType'>
               {(field) => (
-                <label>
-                  Lần đăng ký đánh giá
-                  <select
-                    value={field.state.value}
-                    onBlur={field.handleBlur}
-                    onChange={(event) =>
+                <FormField label='Lần đăng ký đánh giá' htmlFor='product-draft-7'>
+                  <Select
+                    value={field.state.value || ALL}
+                    onValueChange={(value) =>
                       field.handleChange(
-                        event.target.value as RegistrationFormData['registrationType'],
+                        (value === ALL ? '' : value) as RegistrationFormData['registrationType'],
                       )
                     }
                   >
-                    <option value=''>Chọn lần đăng ký</option>
-                    <option value='FIRST'>Lần đầu</option>
-                    <option value='UPGRADE'>Nâng hạng</option>
-                    <option value='REASSESSMENT'>Đánh giá lại</option>
-                  </select>
-                </label>
+                    <SelectTrigger id='product-draft-7' onBlur={field.handleBlur}>
+                      <SelectValue placeholder='Chọn lần đăng ký' />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL}>Chọn lần đăng ký</SelectItem>
+                      <SelectItem value='FIRST'>Lần đầu</SelectItem>
+                      <SelectItem value='UPGRADE'>Nâng hạng</SelectItem>
+                      <SelectItem value='REASSESSMENT'>Đánh giá lại</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormField>
               )}
             </form.Field>
             <form.Field name='sampleQuantity'>
               {(field) => (
-                <label>
-                  Số lượng sản phẩm mẫu
+                <FormField label='Số lượng sản phẩm mẫu' htmlFor='product-draft-8'>
                   <Input
+                    id='product-draft-8'
                     type='number'
                     min={0}
                     step={1}
@@ -880,7 +916,7 @@ export function ProductDraftEditor({
                     onBlur={field.handleBlur}
                     onChange={(event) => field.handleChange(event.target.value)}
                   />
-                </label>
+                </FormField>
               )}
             </form.Field>
           </div>
@@ -889,29 +925,32 @@ export function ProductDraftEditor({
           <div className='grid gap-4'>
             <form.Field name='declarationAccepted'>
               {(field) => (
-                <label
+                <div
                   className='declaration-field'
                   style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}
                 >
-                  <input
-                    type='checkbox'
-                    style={{ width: 'auto', minHeight: 'auto', padding: 0, marginTop: 4 }}
+                  <Checkbox
+                    id='product-draft-declaration'
+                    className='mt-1'
                     checked={field.state.value}
                     onBlur={field.handleBlur}
-                    onChange={(event) => field.handleChange(event.target.checked)}
+                    onCheckedChange={(checked) => field.handleChange(checked === true)}
                   />
-                  <span>
+                  <Label htmlFor='product-draft-declaration' className='cursor-pointer'>
                     Tôi cam đoan thông tin kê khai là đúng sự thật, tuân thủ quy định đánh giá, phân
                     hạng OCOP và chịu trách nhiệm về hồ sơ.
-                  </span>
-                </label>
+                  </Label>
+                </div>
               )}
             </form.Field>
             <form.Subscribe selector={(state) => state.isSubmitting}>
               {(busy) => (
-                <label>
-                  Ảnh sản phẩm hoặc tài liệu minh chứng (tùy chọn)
+                <FormField
+                  label='Ảnh sản phẩm hoặc tài liệu minh chứng (tùy chọn)'
+                  htmlFor='product-draft-9'
+                >
                   <Input
+                    id='product-draft-9'
                     ref={fileInput}
                     type='file'
                     accept={PRODUCT_FILE_ACCEPT}
@@ -919,7 +958,7 @@ export function ProductDraftEditor({
                     disabled={busy || reviewRequired}
                     onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
                   />
-                </label>
+                </FormField>
               )}
             </form.Subscribe>
             {files.map((file, index) => (
@@ -927,16 +966,12 @@ export function ProductDraftEditor({
                 {file.name} · {(file.size / 1024 / 1024).toFixed(1)} MiB
               </p>
             ))}
-            <p className='text-sm text-muted'>
+            <p className='text-muted text-sm'>
               {(product?.attachments.length ?? 0) + files.length} / 20 tệp đã chọn hoặc lưu
             </p>
           </div>
         )}
-        {error && (
-          <p role='alert' className='form-note'>
-            {error}
-          </p>
-        )}
+        {error && <AlertError title='Không thể lưu bản nháp' errors={[error]} />}
         <form.Subscribe selector={(state) => state.isSubmitting}>
           {(busy) => (
             <div className='hero-actions mt-4'>
@@ -953,6 +988,7 @@ export function ProductDraftEditor({
               <Button
                 type='submit'
                 variant={step === applicationSteps.length - 1 ? 'primary' : 'secondary'}
+                loading={busy}
                 disabled={
                   busy || !canStartProductDraftSave({ reviewRequired, createOutcomeUnknown })
                 }

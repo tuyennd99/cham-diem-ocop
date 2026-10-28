@@ -103,6 +103,29 @@ body {
   line-height: 1.6;
 }
 
+@layer components {
+
+  /* Đặt nguyên các rule CSS button hiện tại vào đây */
+  .button {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.35;
+    cursor: pointer;
+    transition:
+      background-color 180ms ease-out,
+      border-color 180ms ease-out,
+      color 180ms ease-out;
+  }
+}
+
 button,
 input,
 select {
@@ -271,24 +294,6 @@ h3 {
   text-underline-offset: 4px;
 }
 
-.button {
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px 16px;
-  border: 1px solid transparent;
-  border-radius: var(--radius);
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.35;
-  cursor: pointer;
-  transition:
-    background-color 180ms ease-out,
-    border-color 180ms ease-out,
-    color 180ms ease-out;
-}
 
 .button-primary {
   background: var(--accent);
@@ -3976,6 +3981,7 @@ h3 {
 }
 
 [data-admin-ui='true'] .admin-filters>label,
+[data-admin-ui='true'] .admin-filters>[data-slot='form-field'],
 [data-admin-ui='true'] .admin-filter-field {
   flex: 0 1 var(--admin-filter-field-width, 240px);
   min-width: 0;
@@ -4014,6 +4020,7 @@ h3 {
 @media (max-width: 767px) {
 
   [data-admin-ui='true'] .admin-filters>label,
+  [data-admin-ui='true'] .admin-filters>[data-slot='form-field'],
   [data-admin-ui='true'] .admin-filter-field,
   [data-admin-ui='true'] .admin-filter-actions {
     flex-basis: 100%;
@@ -4181,6 +4188,11 @@ h3 {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
+}
+
+[data-admin-ui='true'] .admin-table-region .table-wrap {
+  border: 0;
+  border-radius: 0;
 }
 
 [data-admin-ui='true'] .admin-assignment-sticky-bar {

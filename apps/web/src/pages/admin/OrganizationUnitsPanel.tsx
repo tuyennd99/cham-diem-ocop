@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import type {
   CreateOrganizationUnitInput,
@@ -7,7 +7,14 @@ import type {
   UpdateOrganizationUnitInput,
 } from '@ocop/shared';
 import { useBlocker } from '@tanstack/react-router';
+import AlertError from '@/components/alert-error';
+import { FormField } from '@/components/form-field';
+import PageSpin from '@/components/page-spin';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { DataTable, type DataTableColumnDef } from '@/components/ui/data-table';
 import {
   Dialog,
   DialogContent,
@@ -16,7 +23,15 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { DEFAULT_PAGE_SIZE } from '../../constants/consts';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { ALL, DEFAULT_PAGE_SIZE } from '../../constants/consts';
 import { errorText, messageOf } from '../../lib/api-error';
 import { useOrganizationUnits } from '../../queries/admin-users';
 
@@ -141,8 +156,7 @@ function UnitFormDialog({
         </DialogHeader>
         <form className='admin-form account-form' onSubmit={(event) => void submit(event)}>
           {!isEdit && (
-            <label htmlFor='unit-code'>
-              Mã đơn vị (bất biến)
+            <FormField label='Mã đơn vị (bất biến)' htmlFor='unit-code'>
               <Input
                 id='unit-code'
                 value={code}
@@ -150,10 +164,9 @@ function UnitFormDialog({
                 maxLength={50}
                 required
               />
-            </label>
+            </FormField>
           )}
-          <label htmlFor='unit-name'>
-            Tên đơn vị
+          <FormField label='Tên đơn vị' htmlFor='unit-name'>
             <Input
               id='unit-name'
               value={name}
@@ -161,17 +174,15 @@ function UnitFormDialog({
               maxLength={255}
               required
             />
-          </label>
-          <label htmlFor='unit-description'>
-            Mô tả (tùy chọn)
+          </FormField>
+          <FormField label='Mô tả (tùy chọn)' htmlFor='unit-description'>
             <Input
               id='unit-description'
               value={description}
               onChange={(event) => setDescription(event.target.value)}
             />
-          </label>
-          <label htmlFor='unit-order'>
-            Thứ tự hiển thị
+          </FormField>
+          <FormField label='Thứ tự hiển thị' htmlFor='unit-order'>
             <Input
               id='unit-order'
               type='number'
@@ -181,18 +192,19 @@ function UnitFormDialog({
               step={1}
               required
             />
-          </label>
-          <label className='inline-flex items-center gap-2 cursor-pointer'>
-            <input
-              type='checkbox'
+          </FormField>
+          <div className='inline-flex items-center gap-2'>
+            <Checkbox
+              id='organization-units-1'
               checked={isActive}
-              onChange={(event) => setIsActive(event.target.checked)}
+              onCheckedChange={(checked) => setIsActive(checked === true)}
               disabled={busy}
             />
-            <span>Nhận tài khoản mới</span>
-          </label>
-          <label htmlFor='unit-reason'>
-            Lý do {isEdit ? 'thay đổi' : 'tạo đơn vị'}
+            <Label htmlFor='organization-units-1' className='cursor-pointer'>
+              Nhận tài khoản mới
+            </Label>
+          </div>
+          <FormField label={<>Lý do {isEdit ? 'thay đổi' : 'tạo đơn vị'}</>} htmlFor='unit-reason'>
             <Input
               id='unit-reason'
               value={reason}
@@ -200,14 +212,10 @@ function UnitFormDialog({
               maxLength={255}
               required
             />
-          </label>
-          {error && (
-            <p className='form-note' role='alert'>
-              {error}
-            </p>
-          )}
+          </FormField>
+          {error && <AlertError title='Không thể lưu đơn vị' errors={[error]} />}
           <div className='admin-actions'>
-            <Button type='submit' disabled={busy}>
+            <Button type='submit' loading={busy} disabled={busy}>
               {busy ? 'Đang lưu…' : isEdit ? 'Lưu đơn vị' : 'Tạo đơn vị'}
             </Button>
             <Button
@@ -270,9 +278,66 @@ export function OrganizationUnitsPanel({
   });
 
   const units = data?.data ?? [];
-  const totalPages = data?.meta?.totalPages ?? 0;
   const currentPage = data?.meta?.page ?? appliedQuery.page ?? 1;
+  const currentLimit = appliedQuery.limit ?? DEFAULT_PAGE_SIZE;
   const loadErrorText = errorText(loadError);
+
+  const columns = useMemo<DataTableColumnDef<OrganizationUnitRecord>[]>(
+    () => [
+      {
+        accessorKey: 'code',
+        header: 'Mã đơn vị',
+        meta: { cellClassName: 'font-mono text-xs' },
+      },
+      {
+        accessorKey: 'name',
+        header: 'Tên đơn vị',
+        meta: { isRowHeader: true },
+      },
+      {
+        accessorKey: 'description',
+        header: 'Mô tả',
+        meta: { cellClassName: 'text-sm text-muted' },
+        cell: ({ row }) => row.original.description ?? 'Không có mô tả.',
+      },
+      {
+        accessorKey: 'order',
+        header: 'Thứ tự',
+        meta: {
+          align: 'right',
+          cellStyle: { fontVariantNumeric: 'tabular-nums' },
+        },
+      },
+      {
+        accessorKey: 'isActive',
+        header: 'Trạng thái',
+        cell: ({ row }) => (
+          <Badge variant={row.original.isActive ? 'default' : 'secondary'}>
+            {row.original.isActive ? 'Đang hoạt động' : 'Ngừng nhận tài khoản mới'}
+          </Badge>
+        ),
+      },
+      {
+        id: 'actions',
+        header: 'Thao tác',
+        meta: { align: 'right' },
+        cell: ({ row }) => (
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            onClick={() => {
+              setCreateOpen(false);
+              setEditingUnit(row.original);
+            }}
+          >
+            Sửa
+          </Button>
+        ),
+      },
+    ],
+    [],
+  );
 
   return (
     <section className='admin-page' aria-label='Quản lý đơn vị'>
@@ -287,6 +352,7 @@ export function OrganizationUnitsPanel({
           <Button
             type='button'
             variant='secondary'
+            loading={isFetching}
             disabled={isPending}
             onClick={() => void refetch()}
           >
@@ -322,39 +388,41 @@ export function OrganizationUnitsPanel({
           });
         }}
       >
-        <label
+        <FormField
+          label='Tìm theo mã hoặc tên đơn vị'
+          htmlFor='units-filter-q'
           className='admin-filter-field'
           data-filter-width='search'
-          htmlFor='units-filter-q'
         >
-          Tìm theo mã hoặc tên đơn vị
           <Input
             id='units-filter-q'
             value={draftQ}
             placeholder='Nhập mã hoặc tên đơn vị…'
             onChange={(event) => setDraftQ(event.target.value)}
           />
-        </label>
-        <label
+        </FormField>
+        <FormField
+          label='Trạng thái'
+          htmlFor='units-filter-active'
           className='admin-filter-field'
           data-filter-width='status'
-          htmlFor='units-filter-active'
         >
-          Trạng thái
-          <select
-            id='units-filter-active'
-            value={draftIsActive === undefined ? '' : String(draftIsActive)}
-            onChange={(event) =>
-              setDraftIsActive(
-                event.target.value === '' ? undefined : event.target.value === 'true',
-              )
+          <Select
+            value={draftIsActive === undefined ? ALL : String(draftIsActive)}
+            onValueChange={(value) =>
+              setDraftIsActive(value === ALL ? undefined : value === 'true')
             }
           >
-            <option value=''>Tất cả</option>
-            <option value='true'>Đang hoạt động</option>
-            <option value='false'>Ngừng nhận tài khoản mới</option>
-          </select>
-        </label>
+            <SelectTrigger id='units-filter-active'>
+              <SelectValue placeholder='Tất cả' />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>Tất cả</SelectItem>
+              <SelectItem value='true'>Đang hoạt động</SelectItem>
+              <SelectItem value='false'>Ngừng nhận tài khoản mới</SelectItem>
+            </SelectContent>
+          </Select>
+        </FormField>
         <div className='admin-actions admin-filter-actions items-end'>
           <Button type='submit'>Áp dụng</Button>
           {(appliedQuery.q !== undefined || appliedQuery.isActive !== undefined) && (
@@ -378,8 +446,8 @@ export function OrganizationUnitsPanel({
       )}
 
       {loadErrorText && (
-        <div className='form-note' role='alert'>
-          <p>{loadErrorText}</p>
+        <div className='space-y-2'>
+          <AlertError title='Không thể tải danh sách đơn vị' errors={[loadErrorText]} />
           <Button
             type='button'
             variant='secondary'
@@ -391,15 +459,15 @@ export function OrganizationUnitsPanel({
         </div>
       )}
 
-      {isPending && <p aria-live='polite'>Đang tải đơn vị…</p>}
+      {isPending && <PageSpin />}
 
       {!isPending && !loadError && units.length === 0 && (
-        <div className='admin-table-region empty-card'>
+        <Card className='admin-table-region empty-card'>
           <h3>Chưa có đơn vị phù hợp</h3>
-          <p className='text-sm text-muted'>
+          <p className='text-muted text-sm'>
             Tạo đơn vị hoạt động để gán cho tài khoản cán bộ và giám khảo nội bộ.
           </p>
-        </div>
+        </Card>
       )}
 
       {!isPending && !loadError && units.length > 0 && (
@@ -409,84 +477,18 @@ export function OrganizationUnitsPanel({
           aria-label='Bảng đơn vị công tác'
           tabIndex={0}
         >
-          <table className='admin-data-table'>
-            <thead>
-              <tr>
-                <th scope='col'>Mã đơn vị</th>
-                <th scope='col'>Tên đơn vị</th>
-                <th scope='col'>Mô tả</th>
-                <th scope='col' style={{ textAlign: 'right' }}>
-                  Thứ tự
-                </th>
-                <th scope='col'>Trạng thái</th>
-                <th scope='col' style={{ textAlign: 'right' }}>
-                  Thao tác
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {units.map((unit) => (
-                <tr key={unit.id}>
-                  <td className='font-mono text-xs'>{unit.code}</td>
-                  <th scope='row' className='font-semibold'>
-                    {unit.name}
-                  </th>
-                  <td className='text-sm text-muted'>{unit.description ?? 'Không có mô tả.'}</td>
-                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                    {unit.order}
-                  </td>
-                  <td>
-                    <span className={`status-badge ${unit.isActive ? 'completed' : 'draft'}`}>
-                      {unit.isActive ? 'Đang hoạt động' : 'Ngừng nhận tài khoản mới'}
-                    </span>
-                  </td>
-                  <td style={{ textAlign: 'right' }}>
-                    <Button
-                      type='button'
-                      variant='secondary'
-                      size='sm'
-                      onClick={() => {
-                        setCreateOpen(false);
-                        setEditingUnit(unit);
-                      }}
-                    >
-                      Sửa
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className='table-footer'>
-            <div className='page-info'>
-              Hiển thị <strong>{units.length}</strong> /{' '}
-              <strong>{data?.meta?.total ?? units.length}</strong> đơn vị
-            </div>
-            <div className='pagination-actions'>
-              <Button
-                type='button'
-                variant='secondary'
-                size='sm'
-                disabled={currentPage <= 1}
-                onClick={() => applyQuery({ ...appliedQuery, page: currentPage - 1 })}
-              >
-                Trước
-              </Button>
-              <span className='text-xs font-semibold px-2'>
-                {totalPages > 0 ? `Trang ${currentPage} / ${totalPages}` : 'Chưa có đơn vị phù hợp'}
-              </span>
-              <Button
-                type='button'
-                variant='secondary'
-                size='sm'
-                disabled={totalPages === 0 || currentPage >= totalPages}
-                onClick={() => applyQuery({ ...appliedQuery, page: currentPage + 1 })}
-              >
-                Sau
-              </Button>
-            </div>
-          </div>
+          <DataTable
+            columns={columns}
+            data={units}
+            total={data?.meta?.total ?? units.length}
+            page={currentPage}
+            pageSize={currentLimit}
+            getRowId={(row) => row.id}
+            onPageChange={(nextPage) => applyQuery({ ...appliedQuery, page: nextPage })}
+            onPageSizeChange={(nextLimit) =>
+              applyQuery({ ...appliedQuery, page: 1, limit: nextLimit })
+            }
+          />
         </div>
       )}
 

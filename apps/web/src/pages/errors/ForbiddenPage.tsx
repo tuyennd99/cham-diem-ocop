@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router';
+import { Button } from '@/components/ui/button';
 import { homeFor, useSession } from '../../lib/auth';
 
 export function ForbiddenPage() {
@@ -11,9 +12,9 @@ export function ForbiddenPage() {
           <p className='eyebrow'>403 · KHÔNG CÓ QUYỀN TRUY CẬP</p>
           <h1>Bạn không thể mở trang này</h1>
           <p>Hãy quay lại khu vực phù hợp với tài khoản của bạn.</p>
-          <Link className='button button-primary' to={home}>
-            Quay lại khu vực của tôi
-          </Link>
+          <Button asChild>
+            <Link to={home}>Quay lại khu vực của tôi</Link>
+          </Button>
         </section>
       </div>
     </main>

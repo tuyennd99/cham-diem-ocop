@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type {
   AdminProductQuery,
   LocalityType,
@@ -11,25 +11,34 @@ import type {
 } from '@ocop/shared';
 import { Link } from '@tanstack/react-router';
 import { Filter, RotateCcw } from 'lucide-react';
+import AlertError from '@/components/alert-error';
+import { FormField } from '@/components/form-field';
+import PageSpin from '@/components/page-spin';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DataTable, type DataTableColumnDef } from '@/components/ui/data-table';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ALL } from '../../constants/consts';
 import { currentVietnameseYear } from '../../lib/admin-date';
 import {
   parseAdminReportsSearch,
   toAdminReportApiQuery,
-  type AdminReportTab,
   type AdminReportsSearch,
+  type AdminReportTab,
 } from '../../lib/admin-search';
 import { errorText } from '../../lib/api-error';
 import { formatExactScore } from '../../lib/print-format';
 import { formatComparisonDelta } from '../../lib/report-format';
 import { useAdminRegistrationsReport, useAdminResultsReport } from '../../queries/admin';
-import {
-  useAdminCategories,
-  useAdminLocalities,
-  useAdminProductGroups,
-} from '../../queries/admin-catalogs';
+import { useAdminCategories, useAdminLocalities } from '../../queries/admin-catalogs';
 
 interface AdminReportsPageProps {
   search?: AdminReportsSearch;
@@ -40,8 +49,13 @@ const GROUP_BY_LABELS: Record<ReportGroupBy, string> = {
   month: 'Theo tháng',
   year: 'Theo năm',
   locality: 'Theo địa bàn (Xã / Phường)',
-  group: 'Theo nhóm sản phẩm lớn',
-  category: 'Theo phân loại sản phẩm',
+  category: 'Theo danh mục sản phẩm',
+};
+
+const NUMERIC_CELL_META = {
+  align: 'right' as const,
+  cellClassName: 'print-num',
+  cellStyle: { fontVariantNumeric: 'tabular-nums' } as const,
 };
 
 function formatViTime(iso: string | null | undefined): string {
@@ -92,12 +106,12 @@ function DataQualityBanner({
           {formatViTime(period.asOf)} · <strong>Thời điểm tổng hợp:</strong>{' '}
           {formatViTime(period.generatedAt)}
           {period.isPartialPeriod && (
-            <span className='status-badge scoring ml-2'>
+            <Badge variant='secondary' className='ml-2'>
               Kỳ hiện tại chưa kết thúc (so sánh tương ứng cùng khoảng kỳ trước)
-            </span>
+            </Badge>
           )}
         </p>
-        <details className='mt-1 text-xs text-muted'>
+        <details className='text-muted mt-1 text-xs'>
           <summary className='cursor-pointer font-semibold'>Chi tiết kỳ báo cáo</summary>
           <p className='mt-1'>
             Múi giờ: <code>{period.timezone}</code> · Khoảng thời gian:{' '}
@@ -209,34 +223,19 @@ function ResultsRowCells({ row }: { row: ResultsReportRow }) {
         {formatExactScore(row.averageScore)}
       </td>
       <td className='print-num' style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-        <DrillDownLink
-          count={row.starCounts[1]}
-          drillDown={{ ...row.drillDown, starRating: 1 }}
-        />
+        <DrillDownLink count={row.starCounts[1]} drillDown={{ ...row.drillDown, starRating: 1 }} />
       </td>
       <td className='print-num' style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-        <DrillDownLink
-          count={row.starCounts[2]}
-          drillDown={{ ...row.drillDown, starRating: 2 }}
-        />
+        <DrillDownLink count={row.starCounts[2]} drillDown={{ ...row.drillDown, starRating: 2 }} />
       </td>
       <td className='print-num' style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-        <DrillDownLink
-          count={row.starCounts[3]}
-          drillDown={{ ...row.drillDown, starRating: 3 }}
-        />
+        <DrillDownLink count={row.starCounts[3]} drillDown={{ ...row.drillDown, starRating: 3 }} />
       </td>
       <td className='print-num' style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-        <DrillDownLink
-          count={row.starCounts[4]}
-          drillDown={{ ...row.drillDown, starRating: 4 }}
-        />
+        <DrillDownLink count={row.starCounts[4]} drillDown={{ ...row.drillDown, starRating: 4 }} />
       </td>
       <td className='print-num' style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-        <DrillDownLink
-          count={row.starCounts[5]}
-          drillDown={{ ...row.drillDown, starRating: 5 }}
-        />
+        <DrillDownLink count={row.starCounts[5]} drillDown={{ ...row.drillDown, starRating: 5 }} />
       </td>
       <td className='print-num' style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
         {row.distinctRegistrantCount}
@@ -272,12 +271,11 @@ export function AdminReportsPage({
   const [draftFilters, setDraftFilters] = useState<AdminReportsSearch>(appliedSearch);
   const [showAdvanced, setShowAdvanced] = useState(
     Boolean(
-      appliedSearch.groupId ||
-        appliedSearch.categoryId ||
-        appliedSearch.localityType ||
-        appliedSearch.localityId ||
-        appliedSearch.registrationType ||
-        appliedSearch.assessmentYear,
+      appliedSearch.categoryId ||
+      appliedSearch.localityType ||
+      appliedSearch.localityId ||
+      appliedSearch.registrationType ||
+      appliedSearch.assessmentYear,
     ),
   );
 
@@ -287,11 +285,9 @@ export function AdminReportsPage({
 
   const apiQuery = toAdminReportApiQuery(appliedSearch);
 
-  const groupsQuery = useAdminProductGroups({ page: 1, limit: 100 });
   const categoriesQuery = useAdminCategories({
     page: 1,
     limit: 100,
-    groupId: draftFilters.groupId,
   });
   const localitiesQuery = useAdminLocalities({
     page: 1,
@@ -302,15 +298,293 @@ export function AdminReportsPage({
   const regQuery = useAdminRegistrationsReport(apiQuery, reportTab === 'registrations');
   const resQuery = useAdminResultsReport(apiQuery, reportTab === 'results');
 
-  const groups = groupsQuery.data?.data ?? [];
   const categories = categoriesQuery.data?.data ?? [];
   const localities = localitiesQuery.data?.data ?? [];
 
-  const activeError = errorText(
-    reportTab === 'registrations' ? regQuery.error : resQuery.error,
+  const activeError = errorText(reportTab === 'registrations' ? regQuery.error : resQuery.error);
+  const activeLoading = reportTab === 'registrations' ? regQuery.isPending : resQuery.isPending;
+
+  const regGroupBy = regQuery.data?.groupBy ?? appliedSearch.groupBy ?? 'month';
+  const resGroupBy = resQuery.data?.groupBy ?? appliedSearch.groupBy ?? 'month';
+
+  const registrationColumns = useMemo<DataTableColumnDef<RegistrationReportRow>[]>(
+    () => [
+      {
+        accessorKey: 'label',
+        header: GROUP_BY_LABELS[regGroupBy],
+        meta: { isRowHeader: true },
+      },
+      {
+        id: 'progress',
+        header: 'Tiến độ hồ sơ',
+        meta: { align: 'center' },
+        columns: [
+          {
+            id: 'registeredCount',
+            header: 'Đã đăng ký',
+            meta: NUMERIC_CELL_META,
+            cell: ({ row }) => (
+              <DrillDownLink
+                count={row.original.registeredCount}
+                drillDown={row.original.drillDown}
+              />
+            ),
+          },
+          {
+            id: 'waitingCount',
+            header: 'Chờ chấm',
+            meta: NUMERIC_CELL_META,
+            cell: ({ row }) => (
+              <DrillDownLink
+                count={row.original.waitingCount}
+                drillDown={{ ...row.original.drillDown, status: 'SUBMITTED' }}
+              />
+            ),
+          },
+          {
+            id: 'scoringCount',
+            header: 'Đang chấm',
+            meta: NUMERIC_CELL_META,
+            cell: ({ row }) => (
+              <DrillDownLink
+                count={row.original.scoringCount}
+                drillDown={{ ...row.original.drillDown, status: 'SCORING' }}
+              />
+            ),
+          },
+          {
+            id: 'completedCount',
+            header: 'Hoàn tất',
+            meta: NUMERIC_CELL_META,
+            cell: ({ row }) => (
+              <DrillDownLink
+                count={row.original.completedCount}
+                drillDown={{ ...row.original.drillDown, status: 'COMPLETED' }}
+              />
+            ),
+          },
+        ],
+      },
+      {
+        id: 'results',
+        header: 'Kết quả chấm',
+        meta: { align: 'center' },
+        columns: [
+          {
+            accessorKey: 'passedCount',
+            header: 'Đạt (≥50đ)',
+            meta: NUMERIC_CELL_META,
+          },
+          {
+            accessorKey: 'failedCount',
+            header: 'Chưa đạt (<50đ)',
+            meta: NUMERIC_CELL_META,
+          },
+          {
+            id: 'passRate',
+            header: 'Tỷ lệ đạt',
+            meta: NUMERIC_CELL_META,
+            cell: ({ row }) =>
+              row.original.passRate !== null ? `${formatExactScore(row.original.passRate)}%` : '—',
+          },
+          {
+            id: 'averageScore',
+            header: 'Điểm TB',
+            meta: NUMERIC_CELL_META,
+            cell: ({ row }) => formatExactScore(row.original.averageScore),
+          },
+        ],
+      },
+      {
+        id: 'stars',
+        header: 'Mức sao theo điểm',
+        meta: { align: 'center' },
+        columns: [
+          {
+            id: 'star1',
+            header: '1 sao',
+            meta: NUMERIC_CELL_META,
+            cell: ({ row }) => row.original.starCounts[1],
+          },
+          {
+            id: 'star2',
+            header: '2 sao',
+            meta: NUMERIC_CELL_META,
+            cell: ({ row }) => row.original.starCounts[2],
+          },
+          {
+            id: 'star3',
+            header: '3 sao',
+            meta: NUMERIC_CELL_META,
+            cell: ({ row }) => row.original.starCounts[3],
+          },
+          {
+            id: 'star4',
+            header: '4 sao',
+            meta: NUMERIC_CELL_META,
+            cell: ({ row }) => row.original.starCounts[4],
+          },
+          {
+            id: 'star5',
+            header: 'Mức 5 sao*',
+            meta: NUMERIC_CELL_META,
+            cell: ({ row }) => row.original.starCounts[5],
+          },
+        ],
+      },
+      {
+        id: 'meta',
+        header: 'Chủ thể & Dữ liệu',
+        meta: { align: 'center' },
+        columns: [
+          {
+            accessorKey: 'distinctRegistrantCount',
+            header: 'Chủ thể',
+            meta: NUMERIC_CELL_META,
+          },
+          {
+            id: 'missing',
+            header: 'Thiếu DL/ĐB',
+            meta: NUMERIC_CELL_META,
+            cell: ({ row }) => row.original.missingDataCount + row.original.unmappedLocalityCount,
+          },
+        ],
+      },
+    ],
+    [regGroupBy],
   );
-  const activeLoading =
-    reportTab === 'registrations' ? regQuery.isPending : resQuery.isPending;
+
+  const resultsColumns = useMemo<DataTableColumnDef<ResultsReportRow>[]>(
+    () => [
+      {
+        accessorKey: 'label',
+        header: GROUP_BY_LABELS[resGroupBy],
+        meta: { isRowHeader: true },
+      },
+      {
+        id: 'results',
+        header: 'Kết quả chấm hoàn tất',
+        meta: { align: 'center' },
+        columns: [
+          {
+            id: 'completedCount',
+            header: 'Số hoàn tất',
+            meta: NUMERIC_CELL_META,
+            cell: ({ row }) => (
+              <DrillDownLink
+                count={row.original.completedCount}
+                drillDown={row.original.drillDown}
+              />
+            ),
+          },
+          {
+            accessorKey: 'passedCount',
+            header: 'Đạt (≥50đ)',
+            meta: NUMERIC_CELL_META,
+          },
+          {
+            accessorKey: 'failedCount',
+            header: 'Chưa đạt (<50đ)',
+            meta: NUMERIC_CELL_META,
+          },
+          {
+            id: 'passRate',
+            header: 'Tỷ lệ đạt',
+            meta: NUMERIC_CELL_META,
+            cell: ({ row }) =>
+              row.original.passRate !== null ? `${formatExactScore(row.original.passRate)}%` : '—',
+          },
+          {
+            id: 'averageScore',
+            header: 'Điểm TB',
+            meta: NUMERIC_CELL_META,
+            cell: ({ row }) => formatExactScore(row.original.averageScore),
+          },
+        ],
+      },
+      {
+        id: 'stars',
+        header: 'Mức sao theo điểm',
+        meta: { align: 'center' },
+        columns: [
+          {
+            id: 'star1',
+            header: '1 sao',
+            meta: NUMERIC_CELL_META,
+            cell: ({ row }) => (
+              <DrillDownLink
+                count={row.original.starCounts[1]}
+                drillDown={{ ...row.original.drillDown, starRating: 1 }}
+              />
+            ),
+          },
+          {
+            id: 'star2',
+            header: '2 sao',
+            meta: NUMERIC_CELL_META,
+            cell: ({ row }) => (
+              <DrillDownLink
+                count={row.original.starCounts[2]}
+                drillDown={{ ...row.original.drillDown, starRating: 2 }}
+              />
+            ),
+          },
+          {
+            id: 'star3',
+            header: '3 sao',
+            meta: NUMERIC_CELL_META,
+            cell: ({ row }) => (
+              <DrillDownLink
+                count={row.original.starCounts[3]}
+                drillDown={{ ...row.original.drillDown, starRating: 3 }}
+              />
+            ),
+          },
+          {
+            id: 'star4',
+            header: '4 sao',
+            meta: NUMERIC_CELL_META,
+            cell: ({ row }) => (
+              <DrillDownLink
+                count={row.original.starCounts[4]}
+                drillDown={{ ...row.original.drillDown, starRating: 4 }}
+              />
+            ),
+          },
+          {
+            id: 'star5',
+            header: 'Mức 5 sao*',
+            meta: NUMERIC_CELL_META,
+            cell: ({ row }) => (
+              <DrillDownLink
+                count={row.original.starCounts[5]}
+                drillDown={{ ...row.original.drillDown, starRating: 5 }}
+              />
+            ),
+          },
+        ],
+      },
+      {
+        id: 'meta',
+        header: 'Chủ thể & Dữ liệu',
+        meta: { align: 'center' },
+        columns: [
+          {
+            accessorKey: 'distinctRegistrantCount',
+            header: 'Chủ thể',
+            meta: NUMERIC_CELL_META,
+          },
+          {
+            id: 'missing',
+            header: 'Thiếu ĐB/Lỗi',
+            meta: NUMERIC_CELL_META,
+            cell: ({ row }) => row.original.unmappedLocalityCount + row.original.invalidResultCount,
+          },
+        ],
+      },
+    ],
+    [resGroupBy],
+  );
 
   function changeTab(val: string) {
     const nextTab: AdminReportTab = val === 'results' ? 'results' : 'registrations';
@@ -322,14 +596,13 @@ export function AdminReportsPage({
 
   const hasExtraFilters = Boolean(
     appliedSearch.month ||
-      appliedSearch.groupId ||
-      appliedSearch.categoryId ||
-      appliedSearch.localityType ||
-      appliedSearch.localityId ||
-      appliedSearch.registrationType ||
-      appliedSearch.assessmentYear ||
-      (appliedSearch.groupBy && appliedSearch.groupBy !== 'month') ||
-      (appliedSearch.year && appliedSearch.year !== defaultYear),
+    appliedSearch.categoryId ||
+    appliedSearch.localityType ||
+    appliedSearch.localityId ||
+    appliedSearch.registrationType ||
+    appliedSearch.assessmentYear ||
+    (appliedSearch.groupBy && appliedSearch.groupBy !== 'month') ||
+    (appliedSearch.year && appliedSearch.year !== defaultYear),
   );
 
   return (
@@ -338,17 +611,17 @@ export function AdminReportsPage({
         <div>
           <h1>Báo cáo thống kê OCOP</h1>
           <p className='route-intro'>
-            Tổng hợp hồ sơ đăng ký và kết quả đánh giá hoàn tất theo kỳ, địa bàn và nhóm sản phẩm.
+            Tổng hợp hồ sơ đăng ký và kết quả đánh giá hoàn tất theo kỳ, địa bàn và danh mục sản
+            phẩm.
           </p>
         </div>
         <div className='admin-actions'>
           <Button
             type='button'
             variant='secondary'
+            loading={reportTab === 'registrations' ? regQuery.isFetching : resQuery.isFetching}
             onClick={() =>
-              void (reportTab === 'registrations'
-                ? regQuery.refetch()
-                : resQuery.refetch())
+              void (reportTab === 'registrations' ? regQuery.refetch() : resQuery.refetch())
             }
           >
             Tải lại số liệu
@@ -365,7 +638,7 @@ export function AdminReportsPage({
             <TabsTrigger value='registrations'>Hồ sơ đăng ký</TabsTrigger>
             <TabsTrigger value='results'>Kết quả hoàn tất</TabsTrigger>
           </TabsList>
-          <p className='text-xs text-muted'>
+          <p className='text-muted text-xs'>
             {reportTab === 'registrations'
               ? 'Căn cứ: Tính các hồ sơ có Ngày nộp nằm trong kỳ báo cáo và đối chiếu trạng thái tại mốc chốt.'
               : 'Căn cứ: Tính các hồ sơ có Ngày hoàn tất chấm điểm nằm trong kỳ báo cáo.'}
@@ -384,12 +657,12 @@ export function AdminReportsPage({
           }}
         >
           <div className='admin-filters'>
-            <label
+            <FormField
+              label='Năm báo cáo'
+              htmlFor='report-year'
               className='admin-filter-field'
               data-filter-width='year'
-              htmlFor='report-year'
             >
-              Năm báo cáo
               <Input
                 id='report-year'
                 type='number'
@@ -403,54 +676,62 @@ export function AdminReportsPage({
                   }))
                 }
               />
-            </label>
-            <label
+            </FormField>
+            <FormField
+              label='Tháng'
+              htmlFor='report-month'
               className='admin-filter-field'
               data-filter-width='month'
-              htmlFor='report-month'
             >
-              Tháng
-              <select
-                id='report-month'
-                value={draftFilters.month ?? ''}
-                onChange={(event) =>
+              <Select
+                value={draftFilters.month ? String(draftFilters.month) : ALL}
+                onValueChange={(value) =>
                   setDraftFilters((old) => ({
                     ...old,
-                    month: event.target.value ? Number(event.target.value) : undefined,
+                    month: value === ALL ? undefined : Number(value),
                   }))
                 }
               >
-                <option value=''>Cả năm</option>
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => (
-                  <option key={m} value={m}>
-                    Tháng {m}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label
+                <SelectTrigger id='report-month'>
+                  <SelectValue placeholder='Cả năm' />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Cả năm</SelectItem>
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => (
+                    <SelectItem key={m} value={String(m)}>
+                      Tháng {m}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormField>
+            <FormField
+              label='Nhóm dòng báo cáo theo'
+              htmlFor='report-group-by'
               className='admin-filter-field'
               data-filter-width='group'
-              htmlFor='report-group-by'
             >
-              Nhóm dòng báo cáo theo
-              <select
-                id='report-group-by'
+              <Select
                 value={draftFilters.groupBy ?? 'month'}
-                onChange={(event) =>
+                onValueChange={(value) =>
                   setDraftFilters((old) => ({
                     ...old,
-                    groupBy: event.target.value as ReportGroupBy,
+                    groupBy: value as ReportGroupBy,
                   }))
                 }
               >
-                {(Object.keys(GROUP_BY_LABELS) as ReportGroupBy[]).map((key) => (
-                  <option key={key} value={key}>
-                    {GROUP_BY_LABELS[key]}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <SelectTrigger id='report-group-by'>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(GROUP_BY_LABELS) as ReportGroupBy[]).map((key) => (
+                    <SelectItem key={key} value={key}>
+                      {GROUP_BY_LABELS[key]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormField>
 
             <div className='admin-actions admin-filter-actions'>
               <Button type='submit'>Áp dụng</Button>
@@ -483,67 +764,36 @@ export function AdminReportsPage({
             </div>
           </div>
 
-          <div
-            id='report-advanced-filters'
-            hidden={!showAdvanced}
-            className='advanced-filter-grid'
-          >
-            <label htmlFor='report-group-id'>
-              Nhóm sản phẩm lớn
-              <select
-                id='report-group-id'
-                value={draftFilters.groupId ?? ''}
-                onChange={(event) => {
-                  const nextGroupId = event.target.value || undefined;
-                  const keepCat =
-                    !nextGroupId ||
-                    categories.some(
-                      (cat) => cat.id === draftFilters.categoryId && cat.groupId === nextGroupId,
-                    );
+          <div id='report-advanced-filters' hidden={!showAdvanced} className='advanced-filter-grid'>
+            <FormField label='Danh mục sản phẩm' htmlFor='report-category-id'>
+              <Select
+                value={draftFilters.categoryId ?? ALL}
+                onValueChange={(value) =>
                   setDraftFilters((old) => ({
                     ...old,
-                    groupId: nextGroupId,
-                    categoryId: keepCat ? old.categoryId : undefined,
-                  }));
-                }}
-              >
-                <option value=''>Tất cả nhóm</option>
-                {groups.map((grp) => (
-                  <option key={grp.id} value={grp.id}>
-                    {grp.code} · {grp.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label htmlFor='report-category-id'>
-              Phân loại sản phẩm
-              <select
-                id='report-category-id'
-                value={draftFilters.categoryId ?? ''}
-                onChange={(event) =>
-                  setDraftFilters((old) => ({
-                    ...old,
-                    categoryId: event.target.value || undefined,
+                    categoryId: value === ALL ? undefined : value,
                   }))
                 }
               >
-                <option value=''>Tất cả phân loại</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <SelectTrigger id='report-category-id'>
+                  <SelectValue placeholder='Tất cả danh mục' />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Tất cả danh mục</SelectItem>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormField>
 
-            <label htmlFor='report-locality-type'>
-              Loại địa bàn
-              <select
-                id='report-locality-type'
-                value={draftFilters.localityType ?? ''}
-                onChange={(event) => {
-                  const nextType = (event.target.value || undefined) as LocalityType | undefined;
+            <FormField label='Loại địa bàn' htmlFor='report-locality-type'>
+              <Select
+                value={draftFilters.localityType ?? ALL}
+                onValueChange={(value) => {
+                  const nextType = (value === ALL ? undefined : value) as LocalityType | undefined;
                   const keepLoc =
                     !nextType ||
                     localities.some(
@@ -556,56 +806,65 @@ export function AdminReportsPage({
                   }));
                 }}
               >
-                <option value=''>Tất cả (Xã &amp; Phường)</option>
-                <option value='COMMUNE'>Xã</option>
-                <option value='WARD'>Phường</option>
-              </select>
-            </label>
+                <SelectTrigger id='report-locality-type'>
+                  <SelectValue placeholder='Tất cả (Xã & Phường)' />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Tất cả (Xã &amp; Phường)</SelectItem>
+                  <SelectItem value='COMMUNE'>Xã</SelectItem>
+                  <SelectItem value='WARD'>Phường</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
 
-            <label htmlFor='report-locality-id'>
-              Địa bàn cụ thể
-              <select
-                id='report-locality-id'
-                value={draftFilters.localityId ?? ''}
-                onChange={(event) =>
+            <FormField label='Địa bàn cụ thể' htmlFor='report-locality-id'>
+              <Select
+                value={draftFilters.localityId ?? ALL}
+                onValueChange={(value) =>
                   setDraftFilters((old) => ({
                     ...old,
-                    localityId: event.target.value || undefined,
+                    localityId: value === ALL ? undefined : value,
                   }))
                 }
               >
-                <option value=''>Tất cả địa bàn</option>
-                {localities.map((loc) => (
-                  <option key={loc.id} value={loc.id}>
-                    {loc.name} · {loc.provinceName}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <SelectTrigger id='report-locality-id'>
+                  <SelectValue placeholder='Tất cả địa bàn' />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Tất cả địa bàn</SelectItem>
+                  {localities.map((loc) => (
+                    <SelectItem key={loc.id} value={loc.id}>
+                      {loc.name} · {loc.provinceName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormField>
 
-            <label htmlFor='report-registration-type'>
-              Loại đăng ký
-              <select
-                id='report-registration-type'
-                value={draftFilters.registrationType ?? ''}
-                onChange={(event) =>
+            <FormField label='Loại đăng ký' htmlFor='report-registration-type'>
+              <Select
+                value={draftFilters.registrationType ?? ALL}
+                onValueChange={(value) =>
                   setDraftFilters((old) => ({
                     ...old,
-                    registrationType: (event.target.value || undefined) as
-                      | ProductRegistrationType
-                      | undefined,
+                    registrationType: (value === ALL ? undefined : value) as
+                      ProductRegistrationType | undefined,
                   }))
                 }
               >
-                <option value=''>Tất cả</option>
-                <option value='FIRST'>Lần đầu</option>
-                <option value='UPGRADE'>Nâng hạng</option>
-                <option value='REASSESSMENT'>Đánh giá lại</option>
-              </select>
-            </label>
+                <SelectTrigger id='report-registration-type'>
+                  <SelectValue placeholder='Tất cả' />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Tất cả</SelectItem>
+                  <SelectItem value='FIRST'>Lần đầu</SelectItem>
+                  <SelectItem value='UPGRADE'>Nâng hạng</SelectItem>
+                  <SelectItem value='REASSESSMENT'>Đánh giá lại</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
 
-            <label htmlFor='report-assessment-year'>
-              Năm đánh giá khai báo
+            <FormField label='Năm đánh giá khai báo' htmlFor='report-assessment-year'>
               <Input
                 id='report-assessment-year'
                 type='number'
@@ -620,16 +879,16 @@ export function AdminReportsPage({
                   }))
                 }
               />
-            </label>
+            </FormField>
           </div>
         </form>
 
         {activeError && (
-          <div className='form-note mt-4' role='alert'>
-            <p>{activeError}</p>
+          <div className='mt-4'>
+            <AlertError title='Không thể tải báo cáo' errors={[activeError]} />
           </div>
         )}
-        {activeLoading && <p aria-live='polite'>Đang tổng hợp báo cáo…</p>}
+        {activeLoading && <PageSpin />}
 
         <TabsContent value='registrations'>
           {regQuery.data && (
@@ -638,9 +897,7 @@ export function AdminReportsPage({
                 <p className='print-gov-header'>
                   HỆ THỐNG ĐÁNH GIÁ, PHÂN HẠNG SẢN PHẨM OCOP — BÁO CÁO THỐNG KÊ ĐĂNG KÝ THEO KỲ
                 </p>
-                <h2>
-                  BÁO CÁO HỒ SƠ ĐĂNG KÝ THEO KỲ ({regQuery.data.period.label.toUpperCase()})
-                </h2>
+                <h2>BÁO CÁO HỒ SƠ ĐĂNG KÝ THEO KỲ ({regQuery.data.period.label.toUpperCase()})</h2>
                 <DataQualityBanner
                   period={regQuery.data.period}
                   dataQuality={regQuery.data.dataQuality}
@@ -653,36 +910,28 @@ export function AdminReportsPage({
                   <strong style={{ fontVariantNumeric: 'tabular-nums' }}>
                     {regQuery.data.totals.registeredCount}
                   </strong>
-                  <small>
-                    {formatComparisonDelta(regQuery.data.comparison.registeredCount)}
-                  </small>
+                  <small>{formatComparisonDelta(regQuery.data.comparison.registeredCount)}</small>
                 </article>
                 <article className='dashboard-stat'>
                   <span>Đã hoàn tất (tại mốc chốt)</span>
                   <strong style={{ fontVariantNumeric: 'tabular-nums' }}>
                     {regQuery.data.totals.completedCount}
                   </strong>
-                  <small>
-                    {formatComparisonDelta(regQuery.data.comparison.completedCount)}
-                  </small>
+                  <small>{formatComparisonDelta(regQuery.data.comparison.completedCount)}</small>
                 </article>
                 <article className='dashboard-stat'>
                   <span>Đạt ngưỡng ≥ 3 sao theo điểm</span>
                   <strong style={{ fontVariantNumeric: 'tabular-nums' }}>
                     {regQuery.data.totals.passedCount}
                   </strong>
-                  <small>
-                    {formatComparisonDelta(regQuery.data.comparison.passedCount)}
-                  </small>
+                  <small>{formatComparisonDelta(regQuery.data.comparison.passedCount)}</small>
                 </article>
                 <article className='dashboard-stat'>
                   <span>Chưa đạt ngưỡng (&lt; 50 điểm)</span>
                   <strong style={{ fontVariantNumeric: 'tabular-nums' }}>
                     {regQuery.data.totals.failedCount}
                   </strong>
-                  <small>
-                    {formatComparisonDelta(regQuery.data.comparison.failedCount)}
-                  </small>
+                  <small>{formatComparisonDelta(regQuery.data.comparison.failedCount)}</small>
                 </article>
               </div>
 
@@ -692,88 +941,20 @@ export function AdminReportsPage({
                 aria-label='Bảng báo cáo hồ sơ đăng ký theo kỳ'
                 tabIndex={0}
               >
-                <table className='print-table data-table admin-data-table'>
-                  <thead>
-                    <tr>
-                      <th scope='col' rowSpan={2}>
-                        {GROUP_BY_LABELS[regQuery.data.groupBy]}
-                      </th>
-                      <th scope='colgroup' colSpan={4} style={{ textAlign: 'center' }}>
-                        Tiến độ hồ sơ
-                      </th>
-                      <th scope='colgroup' colSpan={4} style={{ textAlign: 'center' }}>
-                        Kết quả chấm
-                      </th>
-                      <th scope='colgroup' colSpan={5} style={{ textAlign: 'center' }}>
-                        Mức sao theo điểm
-                      </th>
-                      <th scope='colgroup' colSpan={2} style={{ textAlign: 'center' }}>
-                        Chủ thể &amp; Dữ liệu
-                      </th>
-                    </tr>
-                    <tr>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        Đã đăng ký
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        Chờ chấm
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        Đang chấm
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        Hoàn tất
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        Đạt (≥50đ)
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        Chưa đạt (&lt;50đ)
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        Tỷ lệ đạt
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        Điểm TB
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        1 sao
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        2 sao
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        3 sao
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        4 sao
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        Mức 5 sao*
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        Chủ thể
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        Thiếu DL/ĐB
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {regQuery.data.rows.map((row) => (
-                      <tr key={row.key}>
-                        <th scope='row'>{row.label}</th>
-                        <RegistrationRowCells row={row} />
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
+                <DataTable
+                  columns={registrationColumns}
+                  data={regQuery.data.rows}
+                  manual={false}
+                  paginated={false}
+                  getRowId={(row) => row.key}
+                  tableClassName='print-table data-table admin-data-table'
+                  footer={
                     <tr>
                       <th scope='row'>{regQuery.data.totals.label}</th>
                       <RegistrationRowCells row={regQuery.data.totals} />
                     </tr>
-                  </tfoot>
-                </table>
+                  }
+                />
               </div>
 
               <p className='print-footnote'>
@@ -808,36 +989,28 @@ export function AdminReportsPage({
                   <strong style={{ fontVariantNumeric: 'tabular-nums' }}>
                     {resQuery.data.totals.completedCount}
                   </strong>
-                  <small>
-                    {formatComparisonDelta(resQuery.data.comparison.completedCount)}
-                  </small>
+                  <small>{formatComparisonDelta(resQuery.data.comparison.completedCount)}</small>
                 </article>
                 <article className='dashboard-stat'>
                   <span>Đạt ngưỡng ≥ 3 sao theo điểm</span>
                   <strong style={{ fontVariantNumeric: 'tabular-nums' }}>
                     {resQuery.data.totals.passedCount}
                   </strong>
-                  <small>
-                    {formatComparisonDelta(resQuery.data.comparison.passedCount)}
-                  </small>
+                  <small>{formatComparisonDelta(resQuery.data.comparison.passedCount)}</small>
                 </article>
                 <article className='dashboard-stat'>
                   <span>Chưa đạt ngưỡng (&lt; 50 điểm)</span>
                   <strong style={{ fontVariantNumeric: 'tabular-nums' }}>
                     {resQuery.data.totals.failedCount}
                   </strong>
-                  <small>
-                    {formatComparisonDelta(resQuery.data.comparison.failedCount)}
-                  </small>
+                  <small>{formatComparisonDelta(resQuery.data.comparison.failedCount)}</small>
                 </article>
                 <article className='dashboard-stat'>
                   <span>Mức điểm 5 sao (90–100 điểm)</span>
                   <strong style={{ fontVariantNumeric: 'tabular-nums' }}>
                     {resQuery.data.totals.starCounts[5]}
                   </strong>
-                  <small>
-                    {formatComparisonDelta(resQuery.data.comparison.star5Count)}
-                  </small>
+                  <small>{formatComparisonDelta(resQuery.data.comparison.star5Count)}</small>
                 </article>
               </div>
 
@@ -847,81 +1020,25 @@ export function AdminReportsPage({
                 aria-label='Bảng báo cáo kết quả hoàn tất theo kỳ'
                 tabIndex={0}
               >
-                <table className='print-table data-table admin-data-table'>
-                  <thead>
-                    <tr>
-                      <th scope='col' rowSpan={2}>
-                        {GROUP_BY_LABELS[resQuery.data.groupBy]}
-                      </th>
-                      <th scope='colgroup' colSpan={5} style={{ textAlign: 'center' }}>
-                        Kết quả chấm hoàn tất
-                      </th>
-                      <th scope='colgroup' colSpan={5} style={{ textAlign: 'center' }}>
-                        Mức sao theo điểm
-                      </th>
-                      <th scope='colgroup' colSpan={2} style={{ textAlign: 'center' }}>
-                        Chủ thể &amp; Dữ liệu
-                      </th>
-                    </tr>
-                    <tr>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        Số hoàn tất
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        Đạt (≥50đ)
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        Chưa đạt (&lt;50đ)
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        Tỷ lệ đạt
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        Điểm TB
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        1 sao
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        2 sao
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        3 sao
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        4 sao
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        Mức 5 sao*
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        Chủ thể
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        Thiếu ĐB/Lỗi
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {resQuery.data.rows.map((row) => (
-                      <tr key={row.key}>
-                        <th scope='row'>{row.label}</th>
-                        <ResultsRowCells row={row} />
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
+                <DataTable
+                  columns={resultsColumns}
+                  data={resQuery.data.rows}
+                  manual={false}
+                  paginated={false}
+                  getRowId={(row) => row.key}
+                  tableClassName='print-table data-table admin-data-table'
+                  footer={
                     <tr>
                       <th scope='row'>{resQuery.data.totals.label}</th>
                       <ResultsRowCells row={resQuery.data.totals} />
                     </tr>
-                  </tfoot>
-                </table>
+                  }
+                />
               </div>
 
               <p className='print-footnote'>
-                * Chú thích: Kết quả 90–100 điểm là mức điểm 5 sao / đề nghị xem xét 5 sao theo
-                điểm hệ thống, không thay thế Quyết định công nhận OCOP chính thức.
+                * Chú thích: Kết quả 90–100 điểm là mức điểm 5 sao / đề nghị xem xét 5 sao theo điểm
+                hệ thống, không thay thế Quyết định công nhận OCOP chính thức.
               </p>
             </article>
           )}

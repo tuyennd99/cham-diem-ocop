@@ -1,4 +1,7 @@
 import { Link } from '@tanstack/react-router';
+import AlertError from '@/components/alert-error';
+import PageSpin from '@/components/page-spin';
+import { Button } from '@/components/ui/button';
 import type { AdminProductSearch } from '../../lib/admin-search';
 import { errorText } from '../../lib/api-error';
 import { useSession } from '../../lib/auth';
@@ -32,25 +35,22 @@ export function AdminProductResultsPage({
 
   if (error) {
     return (
-      <section className='admin-table-region p-4' role='alert'>
-        <p className='form-note'>{error}</p>
-        <button
+      <section className='admin-table-region p-4 space-y-2'>
+        <AlertError title='Không thể tải kết quả chấm' errors={[error]} />
+        <Button
           type='button'
-          className='button button-secondary button-sm'
+          variant='secondary'
+          size='sm'
           onClick={() => void refetch()}
         >
           Thử lại
-        </button>
+        </Button>
       </section>
     );
   }
 
   if (isPending || !product) {
-    return (
-      <p role='status' aria-busy='true'>
-        Đang tải kết quả chấm…
-      </p>
-    );
+    return <PageSpin />;
   }
 
   return (
@@ -65,14 +65,15 @@ export function AdminProductResultsPage({
           </p>
         </div>
         <div className='admin-actions'>
-          <Link
-            className='button button-secondary'
-            to='/print/products/$id/results'
-            params={{ id: product.id }}
-            search={printSearch}
-          >
-            In bảng tổng hợp kết quả (A4)
-          </Link>
+          <Button asChild variant='secondary'>
+            <Link
+              to='/print/products/$id/results'
+              params={{ id: product.id }}
+              search={printSearch}
+            >
+              In bảng tổng hợp kết quả (A4)
+            </Link>
+          </Button>
         </div>
       </div>
 
@@ -99,13 +100,14 @@ export function AdminProductResultsPage({
                 </p>
               </div>
               {evaluation.id && (
-                <Link
-                  className='button button-secondary button-sm'
-                  to='/print/evaluations/$id'
-                  params={{ id: evaluation.id }}
-                >
-                  In phiếu chấm
-                </Link>
+                <Button asChild variant='secondary' size='sm'>
+                  <Link
+                    to='/print/evaluations/$id'
+                    params={{ id: evaluation.id }}
+                  >
+                    In phiếu chấm
+                  </Link>
+                </Button>
               )}
             </div>
             <div className='record-list'>

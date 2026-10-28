@@ -176,10 +176,13 @@ describe('H6 statistical reports and analytics dashboard endpoints', () => {
         unmappedLocalityCount: 1,
       });
 
+      expect((await f.call('viewer', '/admin/reports/results?groupBy=group')).status).toBe(400);
+      expect((await f.call('viewer', '/admin/dashboard?groupId=legacy-group')).status).toBe(400);
+
       // 2. January 2026 Results Report
       const janRes = await f.call(
         'viewer',
-        '/admin/reports/results?year=2026&month=1&groupBy=group',
+        '/admin/reports/results?year=2026&month=1&groupBy=category',
       );
       expect(janRes.status).toBe(200);
       expect(janRes.body.data.totals).toMatchObject({
@@ -210,7 +213,12 @@ describe('H6 statistical reports and analytics dashboard endpoints', () => {
       expect(dash.status).toBe(200);
       expect(dash.body.data.kpis).toHaveLength(8);
       expect(dash.body.data.charts.monthlyTrend).toHaveLength(12);
-      expect(dash.body.data.charts.byProductGroup).toHaveLength(6);
+      expect(dash.body.data.charts.byCategory).toHaveLength(26);
+      expect(dash.body.data.charts).not.toHaveProperty('byProductGroup');
+      for (const category of dash.body.data.charts.byCategory) {
+        expect(category).toMatchObject({ categoryId: expect.any(String), categoryName: expect.any(String), registeredCount: expect.any(Number), completedCount: expect.any(Number) });
+        expect(category).not.toHaveProperty('categories');
+      }
       expect(dash.body.data.charts.cohortProgress).toMatchObject({
         registeredCount: 3,
         waitingCount: 1,

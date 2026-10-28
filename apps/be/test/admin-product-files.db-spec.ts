@@ -75,7 +75,7 @@ describe('admin private product files', () => {
     await withTestApp(async ({ app, prisma, baseUrl }) => {
       const f = await adminFixture(app, prisma, baseUrl);
       const category = await prisma.productCategory.findFirstOrThrow({
-        where: { isActive: true, group: { isActive: true } },
+        where: { isActive: true },
       });
       const draft = await prisma.product.create({
         data: {
@@ -260,7 +260,7 @@ describe('admin private product files', () => {
     await withTestApp(async ({ app, prisma, baseUrl }) => {
       const f = await adminFixture(app, prisma, baseUrl);
       const category = await prisma.productCategory.findFirstOrThrow({
-        where: { isActive: true, group: { isActive: true } },
+        where: { isActive: true },
       });
       const product = await prisma.product.create({
         data: {
@@ -318,7 +318,7 @@ describe('admin private product files', () => {
     await withTestApp(async ({ app, prisma, baseUrl }) => {
       const f = await adminFixture(app, prisma, baseUrl);
       const category = await prisma.productCategory.findFirstOrThrow({
-        where: { isActive: true, group: { isActive: true } },
+        where: { isActive: true },
       });
       const product = await prisma.product.create({
         data: {
@@ -353,7 +353,7 @@ describe('admin private product files', () => {
     await withTestApp(async ({ app, prisma, baseUrl }) => {
       const f = await adminFixture(app, prisma, baseUrl);
       const category = await prisma.productCategory.findFirstOrThrow({
-        where: { isActive: true, group: { isActive: true } },
+        where: { isActive: true },
       });
       const product = await prisma.product.create({
         data: {
@@ -416,7 +416,7 @@ describe('admin private product files', () => {
     await withTestApp(async ({ app, prisma, baseUrl }) => {
       const f = await adminFixture(app, prisma, baseUrl);
       const category = await prisma.productCategory.findFirstOrThrow({
-        where: { isActive: true, group: { isActive: true } },
+        where: { isActive: true },
       });
       const draft = await prisma.product.create({
         data: {

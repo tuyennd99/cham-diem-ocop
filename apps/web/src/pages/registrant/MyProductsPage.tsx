@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
+import AlertError from '@/components/alert-error';
+import { ConfirmDialog } from '@/components/confirm-dialog';
+import PageSpin from '@/components/page-spin';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { myProductsApi } from '../../api';
 import { queryKeys } from '../../constants/query-key';
@@ -13,48 +17,45 @@ export function MyProductsPage() {
   const { data: products = [], error: loadError, isPending: loading, refetch } = useMyProducts();
   const [actionError, setActionError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [confirmState, setConfirmState] = useState<{
+    mode: 'submit' | 'delete';
+    product: Product;
+  } | null>(null);
   const error = actionError || errorText(loadError);
+
   const refresh = async () => {
     setActionError('');
     await refetch();
   };
-  async function remove(id: string) {
-    if (busy || !window.confirm('Xóa bản nháp này?')) return;
+
+  async function executeConfirm() {
+    if (!confirmState || busy) return;
+    const { mode, product } = confirmState;
     setBusy(true);
     setActionError('');
     try {
-      await myProductsApi.remove(id);
-      queryClient.setQueryData<Product[]>(queryKeys.myProducts.list, (rows = []) =>
-        rows.filter((item) => item.id !== id),
-      );
+      if (mode === 'delete') {
+        await myProductsApi.remove(product.id);
+        queryClient.setQueryData<Product[]>(queryKeys.myProducts.list, (rows = []) =>
+          rows.filter((item) => item.id !== product.id),
+        );
+      } else {
+        const { data } = await myProductsApi.submit(product.id);
+        queryClient.setQueryData<Product[]>(queryKeys.myProducts.list, (rows = []) =>
+          rows.map((item) => (item.id === product.id ? { ...item, ...data } : item)),
+        );
+        queryClient.setQueryData<Product>(queryKeys.myProducts.detail(product.id), (current) =>
+          current ? { ...current, ...data } : data,
+        );
+      }
+      setConfirmState(null);
     } catch (cause) {
       setActionError(messageOf(cause));
     } finally {
       setBusy(false);
     }
   }
-  async function submit(id: string) {
-    if (
-      busy ||
-      !window.confirm('Nộp hồ sơ này để bắt đầu đánh giá? Sau khi nộp, không thể sửa bản nháp.')
-    )
-      return;
-    setBusy(true);
-    setActionError('');
-    try {
-      const { data } = await myProductsApi.submit(id);
-      queryClient.setQueryData<Product[]>(queryKeys.myProducts.list, (rows = []) =>
-        rows.map((item) => (item.id === id ? { ...item, ...data } : item)),
-      );
-      queryClient.setQueryData<Product>(queryKeys.myProducts.detail(id), (current) =>
-        current ? { ...current, ...data } : data,
-      );
-    } catch (cause) {
-      setActionError(messageOf(cause));
-    } finally {
-      setBusy(false);
-    }
-  }
+
   return (
     <section>
       <div className='section-heading'>
@@ -62,13 +63,13 @@ export function MyProductsPage() {
           <p className='eyebrow'>KHU VỰC CHỦ THỂ</p>
           <h1>Hồ sơ của tôi</h1>
         </div>
-        <Link className='button button-primary' to='/my/products/new'>
-          Tạo hồ sơ
-        </Link>
+        <Button asChild>
+          <Link to='/my/products/new'>Tạo hồ sơ</Link>
+        </Button>
       </div>
       {error && (
-        <div className='form-note' role='alert'>
-          <p>{error}</p>
+        <div className='mb-4 space-y-2'>
+          <AlertError title='Không thể xử lý hồ sơ' errors={[error]} />
           <Button
             type='button'
             variant='secondary'
@@ -79,14 +80,14 @@ export function MyProductsPage() {
           </Button>
         </div>
       )}
-      {loading && <p>Đang tải hồ sơ…</p>}
+      {loading && <PageSpin />}
       {!loading && !error && !products.length && (
         <div className='empty-state'>
           <h2>Chưa có hồ sơ</h2>
           <p>Tạo bản nháp để bắt đầu đăng ký sản phẩm.</p>
-          <Link className='button button-primary' to='/my/products/new'>
-            Tạo hồ sơ
-          </Link>
+          <Button asChild>
+            <Link to='/my/products/new'>Tạo hồ sơ</Link>
+          </Button>
         </div>
       )}
       {!loading && !error && (
@@ -95,10 +96,8 @@ export function MyProductsPage() {
             <article className='record-row' key={product.id}>
               <div className='record-main'>
                 <div className='record-badges'>
-                  <span className='badge badge-category'>
-                    {product.category.groupName} · {product.category.name}
-                  </span>
-                  <span className='badge'>{product.status}</span>
+                  <Badge variant='secondary'>{product.category.name}</Badge>
+                  <Badge variant='outline'>{product.status}</Badge>
                 </div>
                 <h2>{product.name}</h2>
                 <p className='record-origin'>
@@ -114,13 +113,11 @@ export function MyProductsPage() {
                     {product.finalScore} điểm · {product.starRating} sao
                   </strong>
                 )}
-                <Link
-                  className='button button-secondary'
-                  to='/my/products/$id'
-                  params={{ id: product.id }}
-                >
-                  Mở hồ sơ
-                </Link>
+                <Button asChild variant='secondary'>
+                  <Link to='/my/products/$id' params={{ id: product.id }}>
+                    Mở hồ sơ
+                  </Link>
+                </Button>
                 {product.status === 'DRAFT' && (
                   <>
                     <Link
@@ -133,14 +130,14 @@ export function MyProductsPage() {
                     <Button
                       variant='secondary'
                       disabled={busy}
-                      onClick={() => void submit(product.id)}
+                      onClick={() => setConfirmState({ mode: 'submit', product })}
                     >
                       Nộp hồ sơ
                     </Button>
                     <Button
                       variant='secondary'
                       disabled={busy}
-                      onClick={() => void remove(product.id)}
+                      onClick={() => setConfirmState({ mode: 'delete', product })}
                     >
                       Xóa
                     </Button>
@@ -151,6 +148,26 @@ export function MyProductsPage() {
           ))}
         </div>
       )}
+      <ConfirmDialog
+        open={confirmState !== null}
+        onOpenChange={(open) => {
+          if (!open && !busy) setConfirmState(null);
+        }}
+        title={
+          confirmState?.mode === 'delete'
+            ? `Xóa bản nháp: ${confirmState.product.name}`
+            : `Nộp hồ sơ: ${confirmState?.product.name ?? ''}`
+        }
+        description={
+          confirmState?.mode === 'delete'
+            ? 'Bản nháp sản phẩm sẽ bị xóa vĩnh viễn và không thể khôi phục.'
+            : 'Nộp hồ sơ này để bắt đầu đánh giá? Sau khi nộp, không thể sửa bản nháp.'
+        }
+        confirmLabel={confirmState?.mode === 'delete' ? 'Xóa bản nháp' : 'Nộp hồ sơ'}
+        destructive={confirmState?.mode === 'delete'}
+        pending={busy}
+        onConfirm={() => void executeConfirm()}
+      />
     </section>
   );
 }

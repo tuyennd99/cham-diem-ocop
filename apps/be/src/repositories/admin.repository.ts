@@ -44,12 +44,7 @@ const adminProductSelect = {
     select: {
       id: true,
       name: true,
-      groupId: true,
-      groupCode: true,
-      groupName: true,
-      classificationGroup: true,
-      classificationSubgroup: true,
-      group: { select: { id: true, code: true, name: true } },
+
     },
   },
   registrant: { select: { id: true, fullName: true, email: true } },
@@ -147,7 +142,7 @@ export class AdminRepository {
             select: {
               id: true,
               name: true,
-              groupName: true,
+
               assignments: {
                 where: { judge: { is: { role: { not: Role.REGISTRANT }, staffPermissions: { has: StaffPermission.SCORE }, isActive: true, verified: true } } },
                 select: { judgeId: true },
@@ -250,7 +245,7 @@ export class AdminRepository {
     return this.prisma.judgeAssignment.findMany({
       include: {
         judge: { select: { id: true, email: true, fullName: true, isActive: true } },
-        category: { select: { id: true, name: true, groupCode: true, groupName: true } },
+        category: { select: { id: true, name: true } },
       },
       orderBy: [{ category: { name: 'asc' } }, { judge: { fullName: 'asc' } }],
     });
@@ -284,7 +279,7 @@ export class AdminRepository {
           select: {
             id: true,
             name: true,
-            groupName: true,
+
             criteriaSet: {
               select: { criteria: { select: { id: true, code: true } } },
             },
@@ -353,7 +348,7 @@ export class AdminRepository {
         const missing = criteria.filter(({ id }) => !covered.has(id));
         if (!categoryAssignments.length || missing.length) {
           coverageIssues.push(
-            `${category.groupName} · ${category.name}: ${!categoryAssignments.length ? 'chưa có giám khảo' : `thiếu ${missing.map(({ code }) => code).join(', ')}`}`,
+            `${category.name}: ${!categoryAssignments.length ? 'chưa có giám khảo' : `thiếu ${missing.map(({ code }) => code).join(', ')}`}`,
           );
         }
       }
@@ -554,7 +549,6 @@ export class AdminRepository {
     const conditions: Prisma.ProductWhereInput[] = [];
     if (!canManage) conditions.push({ status: { not: ProductStatus.DRAFT } });
     if (query.status) conditions.push({ status: query.status });
-    if (query.groupId) conditions.push({ category: { is: { groupId: query.groupId } } });
     if (query.categoryId) conditions.push({ categoryId: query.categoryId });
     if (query.registrantId) conditions.push({ registrantId: query.registrantId });
     if (query.registrantQ) {
@@ -590,7 +584,7 @@ export class AdminRepository {
       where: { id: productId, ...(canManage ? {} : { status: { not: ProductStatus.DRAFT } }) },
       select: {
         id: true, name: true, status: true, finalScore: true, starRating: true,
-        category: { select: { id: true, name: true, groupName: true } },
+        category: { select: { id: true, name: true } },
         evaluations: {
           where: canManage ? {} : { status: EvaluationStatus.SUBMITTED },
           orderBy: [{ createdAt: 'asc' }, { judgeId: 'asc' }],
@@ -613,7 +607,7 @@ export class AdminRepository {
     query: AdminCriteriaSetsQueryDto,
     access: { canViewAll: boolean; scorerUserId?: string },
   ) {
-    const { page, limit, q, groupId, isActive } = query;
+    const { page, limit, q, categoryId, isActive } = query;
     const skip = (page - 1) * limit;
     if (!Number.isSafeInteger(page) || !Number.isSafeInteger(skip)) {
       throw new BadRequestException('Pagination exceeds the safe integer range');
@@ -622,7 +616,7 @@ export class AdminRepository {
       ...(isActive === undefined ? {} : { isActive }),
       category: {
         is: {
-          ...(groupId ? { groupId } : {}),
+          ...(categoryId ? { id: categoryId } : {}),
           ...(!access.canViewAll && access.scorerUserId
             ? {
                 assignments: {
@@ -654,9 +648,9 @@ export class AdminRepository {
                     OR: [
                       { id: { contains: q, mode: 'insensitive' } },
                       { name: { contains: q, mode: 'insensitive' } },
-                      { groupCode: { contains: q, mode: 'insensitive' } },
-                      { groupName: { contains: q, mode: 'insensitive' } },
-                      { classificationGroup: { contains: q, mode: 'insensitive' } },
+
+
+
                     ],
                   },
                 },
@@ -681,11 +675,11 @@ export class AdminRepository {
               select: {
                 id: true,
                 name: true,
-                groupId: true,
-                groupCode: true,
-                groupName: true,
-                classificationGroup: true,
-                classificationSubgroup: true,
+
+
+
+
+
                 order: true,
               },
             },
@@ -709,11 +703,11 @@ export class AdminRepository {
       id: row.id,
       categoryId: row.category.id,
       categoryName: row.category.name,
-      groupId: row.category.groupId,
-      groupCode: row.category.groupCode,
-      groupName: row.category.groupName,
-      classificationGroup: row.category.classificationGroup,
-      classificationSubgroup: row.category.classificationSubgroup,
+
+
+
+
+
       name: row.name,
       source: row.source,
       version: row.version,
@@ -766,11 +760,11 @@ export class AdminRepository {
           select: {
             id: true,
             name: true,
-            groupId: true,
-            groupCode: true,
-            groupName: true,
-            classificationGroup: true,
-            classificationSubgroup: true,
+
+
+
+
+
           },
         },
         criteria: {
@@ -806,11 +800,11 @@ export class AdminRepository {
       id: row.id,
       categoryId: row.category.id,
       categoryName: row.category.name,
-      groupId: row.category.groupId,
-      groupCode: row.category.groupCode,
-      groupName: row.category.groupName,
-      classificationGroup: row.category.classificationGroup,
-      classificationSubgroup: row.category.classificationSubgroup,
+
+
+
+
+
       name: row.name,
       source: row.source,
       version: row.version,
@@ -835,7 +829,7 @@ export class AdminRepository {
     query: AdminEvaluationsQueryDto,
     access: { canManage: boolean; canView: boolean; scorerUserId: string },
   ) {
-    const { page, limit, q, productId, groupId, categoryId, judgeId, status } = query;
+    const { page, limit, q, productId, categoryId, judgeId, status } = query;
     const skip = (page - 1) * limit;
     if (!Number.isSafeInteger(page) || !Number.isSafeInteger(skip)) {
       throw new BadRequestException('Pagination exceeds the safe integer range');
@@ -856,7 +850,6 @@ export class AdminRepository {
     if (productId) conditions.push({ productId });
     if (judgeId) conditions.push({ judgeId });
     if (categoryId) conditions.push({ product: { is: { categoryId } } });
-    if (groupId) conditions.push({ product: { is: { category: { is: { groupId } } } } });
     if (q) {
       conditions.push({
         OR: [
@@ -900,8 +893,8 @@ export class AdminRepository {
                   select: {
                     id: true,
                     name: true,
-                    groupId: true,
-                    groupName: true,
+
+
                     assignments: {
                       select: { judgeId: true, criterionIds: true },
                     },
@@ -994,8 +987,8 @@ export class AdminRepository {
           status: row.product.status,
           categoryId: row.product.category.id,
           categoryName: row.product.category.name,
-          groupId: row.product.category.groupId,
-          groupName: row.product.category.groupName,
+
+
         },
         judge: {
           id: row.judge.id,
@@ -1037,7 +1030,7 @@ export class AdminRepository {
               select: {
                 id: true,
                 name: true,
-                groupName: true,
+
                 criteriaSet: {
                   select: {
                     id: true,
@@ -1159,9 +1152,9 @@ export class AdminRepository {
           select: {
             id: true,
             name: true,
-            groupName: true,
-            classificationGroup: true,
-            classificationSubgroup: true,
+
+
+
           },
         },
         locality: {
@@ -1213,7 +1206,7 @@ export class AdminRepository {
           select: {
             id: true,
             name: true,
-            groupName: true,
+
             assignments: {
               select: { judgeId: true, criterionIds: true },
             },
@@ -1275,7 +1268,6 @@ export class AdminRepository {
       async (tx) => {
         const [
           rawProducts,
-          groups,
           categories,
           localities,
           earliestEvent,
@@ -1309,9 +1301,9 @@ export class AdminRepository {
                 select: {
                   id: true,
                   name: true,
-                  groupId: true,
-                  groupCode: true,
-                  groupName: true,
+
+
+
                 },
               },
               statusEvents: {
@@ -1325,17 +1317,13 @@ export class AdminRepository {
             },
             orderBy: { id: 'asc' },
           }),
-          tx.productGroup.findMany({
-            select: { id: true, code: true, name: true },
-            orderBy: [{ order: 'asc' }, { id: 'asc' }],
-          }),
           tx.productCategory.findMany({
             select: {
               id: true,
               name: true,
-              groupId: true,
-              groupCode: true,
-              groupName: true,
+
+
+
               criteriaSet: {
                 select: {
                   criteria: { select: { id: true } },
@@ -1424,7 +1412,6 @@ export class AdminRepository {
         return {
           generatedAt: new Date(),
           products,
-          groups,
           categories: categories.map(({ criteriaSet: _cs, assignments: _as, ...cat }) => cat),
           localities,
           coveredCategoryIdsAtNow,

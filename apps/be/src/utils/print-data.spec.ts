@@ -14,7 +14,7 @@ describe('print-data builders', () => {
     expect(formatStarPrintLabel(null, null)).toBeNull();
   });
 
-  it('builds evaluation print data from version 1 submissionSnapshot and marks out-of-scope criteria', () => {
+  it.each([1, 2])('builds evaluation print data from version %i submissionSnapshot and marks out-of-scope criteria', (version) => {
     const result = buildEvaluationPrintData({
       generatedAt: new Date('2026-10-24T08:00:00.000Z'),
       evaluationId: 'eval-1',
@@ -23,7 +23,7 @@ describe('print-data builders', () => {
       total: 50,
       assignedCriterionIds: ['crit-a'],
       submissionSnapshot: {
-        version: 1,
+        version,
         submittedAt: '2026-10-20T09:00:00.000Z',
         product: {
           id: 'prod-1',
@@ -33,7 +33,7 @@ describe('print-data builders', () => {
           category: {
             id: 'cat-1',
             name: 'Chè tươi, chè chế biến',
-            group: { id: 'grp-food', code: 'FOOD', name: 'Sản phẩm thực phẩm' },
+            ...(version === 1 ? { group: { id: 'grp-food', code: 'FOOD', name: 'Sản phẩm thực phẩm' } } : {}),
           },
         },
         criteriaSet: {
@@ -74,7 +74,6 @@ describe('print-data builders', () => {
         category: {
           id: 'cat-1',
           name: 'Danh mục đổi tên',
-          groupName: 'Nhóm đổi tên',
           criteriaSet: {
             id: 'set-1',
             name: 'Bộ đổi tên',
@@ -134,7 +133,8 @@ describe('print-data builders', () => {
     });
 
     expect(result.isDraft).toBe(false);
-    expect(result.provenance).toBe('SNAPSHOT_V1');
+    expect(result.provenance).toBe(version === 1 ? 'SNAPSHOT_V1' : 'SNAPSHOT_V2');
+    expect(result.product).not.toHaveProperty('groupName');
     expect(result.historicalValuesVerified).toBe(true);
     expect(result.judge.fullName).toBe('Nguyễn Văn Giám Khảo (Lúc nộp)');
     expect(result.judge.organizationUnitName).toBe('Sở Nông nghiệp (Lúc nộp)');
@@ -217,7 +217,6 @@ describe('print-data builders', () => {
         category: {
           id: 'cat-1',
           name: 'Chè',
-          groupName: 'Thực phẩm',
           criteriaSet: null,
         },
       },
@@ -237,7 +236,7 @@ describe('print-data builders', () => {
     expect(result.criteria[0].subCriteria[0].selectedLabel).toBe('Mức tối đa');
   });
 
-  it('preserves registrationSnapshot fields on registration print data after catalog/locality renames', () => {
+  it.each([1, 2])('preserves version %i registrationSnapshot fields after catalog/locality renames', (version) => {
     const result = buildRegistrationPrintData({
       generatedAt: new Date('2026-10-24T08:00:00.000Z'),
       product: {
@@ -253,7 +252,7 @@ describe('print-data builders', () => {
         provinceNameAtSubmit: 'Tỉnh Cũ',
         formData: { entityName: 'Chủ thể hiện tại' },
         registrationSnapshot: {
-          version: 1,
+          version,
           submittedAt: '2026-10-21T03:00:00.000Z',
           product: {
             id: 'prod-1',
@@ -269,9 +268,10 @@ describe('print-data builders', () => {
           category: {
             id: 'cat-1',
             name: 'Phân loại lúc nộp',
-            classificationGroup: 'Nhóm con lúc nộp',
-            classificationSubgroup: null,
-            group: { id: 'grp-1', code: 'FOOD', name: 'Nhóm lớn lúc nộp' },
+            ...(version === 1 ? {
+              classificationGroup: 'Nhóm con lúc nộp', classificationSubgroup: null,
+              group: { id: 'grp-1', code: 'FOOD', name: 'Nhóm lớn lúc nộp' },
+            } : {}),
           },
           locality: {
             id: 'loc-1',
@@ -302,9 +302,6 @@ describe('print-data builders', () => {
         category: {
           id: 'cat-1',
           name: 'Phân loại đổi tên',
-          groupName: 'Nhóm đổi tên',
-          classificationGroup: 'Nhóm con đổi tên',
-          classificationSubgroup: null,
         },
         locality: {
           id: 'loc-1',
@@ -328,7 +325,7 @@ describe('print-data builders', () => {
     expect(result.hasSubmissionSnapshot).toBe(true);
     expect(result.product.name).toBe('Tên sản phẩm lúc nộp');
     expect(result.registrant.fullName).toBe('Chủ thể lúc nộp');
-    expect(result.category.name).toBe('Phân loại lúc nộp');
+    expect(result.category).toEqual({ id: 'cat-1', name: 'Phân loại lúc nộp' });
     expect(result.locality?.name).toBe('Xã lúc nộp');
     expect(result.formData.entityName).toBe('HTX lúc nộp');
   });
@@ -352,7 +349,6 @@ describe('print-data builders', () => {
         category: {
           id: 'cat-1',
           name: 'Chè',
-          groupName: 'Thực phẩm',
           criteriaSet: {
             id: 'set-1',
             name: 'Bộ Chè',

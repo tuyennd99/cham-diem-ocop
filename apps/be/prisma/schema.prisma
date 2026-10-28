@@ -124,20 +124,6 @@ model OrganizationUnit {
   @@map("organization_units")
 }
 
-model ProductGroup {
-  id         String            @id @default(cuid())
-  code       String            @unique @db.VarChar(50)
-  name       String            @db.VarChar(255)
-  description String?
-  order      Int               @default(0)
-  isActive   Boolean           @default(true)
-  createdAt  DateTime          @default(now()) @db.Timestamptz(3)
-  updatedAt  DateTime          @updatedAt @db.Timestamptz(3)
-  categories ProductCategory[]
-
-  @@map("product_groups")
-}
-
 model Locality {
   id            String       @id @default(cuid())
   code          String       @unique @db.VarChar(50)
@@ -156,14 +142,8 @@ model Locality {
 
 model ProductCategory {
   id                     String            @id @default(cuid())
-  groupId                String
-  group                  ProductGroup      @relation(fields: [groupId], references: [id], onDelete: Restrict)
   isActive               Boolean           @default(true)
   order                  Int               @default(0)
-  groupCode              String            @db.VarChar(50)
-  groupName              String            @db.VarChar(255)
-  classificationGroup    String            @db.VarChar(255)
-  classificationSubgroup String?           @db.VarChar(255)
   name                   String            @unique @db.VarChar(255)
   description            String?
   createdAt              DateTime          @default(now()) @db.Timestamptz(3)
@@ -172,8 +152,21 @@ model ProductCategory {
   products               Product[]
   assignments            JudgeAssignment[]
 
-  @@index([groupCode, name])
   @@map("product_categories")
+}
+
+model LegacyCategoryMetadata {
+  id   String @id
+  data Json
+
+  @@map("legacy_category_metadata")
+}
+
+model LegacyProductGroupMetadata {
+  id   String @id
+  data Json
+
+  @@map("legacy_product_group_metadata")
 }
 
 model CriteriaSet {

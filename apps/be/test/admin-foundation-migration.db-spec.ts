@@ -174,6 +174,135 @@ it('upgrades legacy rows without inventing historical data or changing identitie
       ],
     });
     expect(evaluation.submissionSnapshot.judge).not.toHaveProperty('email');
+
+    for (const folder of [
+      '0012_catalog_metadata',
+      '0013_registration_snapshot',
+    ]) {
+      await client.query(
+        readFileSync(resolve(migrationDir, folder, 'migration.sql'), 'utf8'),
+      );
+    }
+    const catalog: { id: string; name: string; order: number }[] = JSON.parse(
+      readFileSync(
+        resolve(__dirname, '../prisma/seed-data/categories.json'),
+        'utf8',
+      ),
+    ).categories;
+    await client.query(`
+      INSERT INTO product_groups (id,code,name,"isActive","updatedAt") VALUES
+        ('retired-group','RETIRED','Retired custom group',false,now()),
+        ('empty-group','EMPTY','Empty custom group',true,now());
+      UPDATE product_categories SET "groupId"='retired-group',"groupCode"='RETIRED',"groupName"='Retired custom group',"order"=91 WHERE id='category';
+      UPDATE products SET "registrationSnapshot"='{"version":1,"category":{"id":"category","group":{"name":"Original group"}}}';
+    `);
+    for (const category of catalog) {
+      await client.query(
+        `INSERT INTO product_categories
+        (id,"groupId","groupCode","groupName","classificationGroup",name,"order","updatedAt")
+        VALUES ($1,'product-group-FOOD','FOOD','Food','Old classification',$2,0,now())`,
+        [category.id, 'Old ' + category.id],
+      );
+    }
+    const preserved = new Map<string, Record<string, unknown>[]>();
+    for (const table of tables.filter(
+      (table) => table !== 'product_categories',
+    )) {
+      preserved.set(
+        table,
+        (await client.query(`SELECT * FROM "${table}"`)).rows,
+      );
+    }
+    const flatMigration = readFileSync(
+      resolve(migrationDir, '0014_flat_product_categories/migration.sql'),
+      'utf8',
+    );
+    await client.query(
+      `INSERT INTO product_categories
+      (id,"groupId","groupCode","groupName","classificationGroup",name,"updatedAt")
+      VALUES ('conflicting-custom','product-group-FOOD','FOOD','Food','Custom',$1,now())`,
+      [catalog[0].name],
+    );
+    await expect(client.query(flatMigration)).rejects.toThrow(
+      /unique constraint/,
+    );
+    await client.query('ROLLBACK');
+    expect(
+      (
+        await client.query(
+          "SELECT to_regclass('legacy_category_metadata') AS archive",
+        )
+      ).rows[0].archive,
+    ).toBeNull();
+    expect(
+      (
+        await client.query(
+          'SELECT "groupId",name FROM product_categories WHERE id=$1',
+          [catalog[0].id],
+        )
+      ).rows[0],
+    ).toEqual({ groupId: 'product-group-FOOD', name: 'Old ' + catalog[0].id });
+    await client.query(
+      "DELETE FROM product_categories WHERE id='conflicting-custom'",
+    );
+    await client.query(flatMigration);
+    for (const [table, rows] of preserved) {
+      expect((await client.query(`SELECT * FROM "${table}"`)).rows).toEqual(
+        rows,
+      );
+    }
+    const flat = (
+      await client.query(
+        'SELECT id,name,"order","isActive" FROM product_categories ORDER BY "order",id',
+      )
+    ).rows;
+    expect(flat).toHaveLength(27);
+    expect(flat.slice(0, 26)).toEqual(
+      catalog.map(({ id, name, order }) => ({
+        id,
+        name,
+        order,
+        isActive: true,
+      })),
+    );
+    expect(flat[26]).toEqual({
+      id: 'category',
+      name: 'Legacy category',
+      order: 91,
+      isActive: false,
+    });
+    expect(
+      (await client.query("SELECT to_regclass('product_groups') AS groups"))
+        .rows[0].groups,
+    ).toBeNull();
+    expect(
+      (
+        await client.query(
+          `SELECT column_name FROM information_schema.columns
+      WHERE table_schema=$1 AND table_name='product_categories'
+      AND column_name IN ('groupId','groupCode','groupName','classificationGroup','classificationSubgroup')`,
+          [schema],
+        )
+      ).rows,
+    ).toEqual([]);
+    expect(
+      (
+        await client.query(
+          "SELECT data FROM legacy_category_metadata WHERE id='category'",
+        )
+      ).rows[0].data,
+    ).toMatchObject({
+      groupId: 'retired-group',
+      classificationGroup: 'legacy',
+      group: { name: 'Retired custom group' },
+    });
+    expect(
+      (
+        await client.query(
+          "SELECT data FROM legacy_product_group_metadata WHERE id='empty-group'",
+        )
+      ).rows[0].data,
+    ).toMatchObject({ id: 'empty-group', name: 'Empty custom group' });
   } finally {
     if (created) await client.query('ROLLBACK');
     if (created) await client.query(`DROP SCHEMA "${schema}" CASCADE`);

@@ -65,10 +65,6 @@ async function createFixture(prisma: PrismaService) {
   );
   const category = await prisma.productCategory.create({
     data: {
-      group: { connect: { code: 'FOOD' } },
-      groupCode: `test-${suffix}`,
-      groupName: 'Test group',
-      classificationGroup: 'Test classification',
       name: `Evaluation test ${suffix}`,
       criteriaSet: {
         create: {
@@ -292,8 +288,9 @@ describe('evaluation persistence', () => {
           await evaluations.saveDraft(fixture.judgeIds[0], fixture.productId, scores(fixture, 60, 40));
           await evaluations.submit(fixture.judgeIds[0], fixture.productId);
           const before = await prisma.evaluation.findUniqueOrThrow({ where: { judgeId_productId: { judgeId: fixture.judgeIds[0], productId: fixture.productId } } });
+          expect((before.submissionSnapshot as { product: { category: unknown } }).product.category).toEqual({ id: fixture.categoryId, name: expect.any(String) });
           expect(before.submissionSnapshot).toMatchObject({
-            version: 1,
+            version: 2,
             judge: { id: fixture.judgeIds[0], organizationUnit: { id: unitAtSubmit.id, code: unitAtSubmit.code, name: 'Unit at submit' } },
             criteriaSet: { version: '1', source: null, sourceHash: null },
             assignedCriterionIds: fixture.criteria.map(({ id }) => id),
@@ -311,8 +308,6 @@ describe('evaluation persistence', () => {
           const subCriterionIds = fixture.criteria.flatMap(({ subCriteria }) => subCriteria.map(({ id }) => id));
           await prisma.scoreOption.updateMany({ where: { subCriterionId: { in: subCriterionIds } }, data: { label: 'Renamed option' } });
           await prisma.productCategory.update({ where: { id: fixture.categoryId }, data: { name: 'Renamed category' } });
-          const group = await prisma.productCategory.findUniqueOrThrow({ where: { id: fixture.categoryId }, select: { groupId: true } });
-          await prisma.productGroup.update({ where: { id: group.groupId }, data: { name: 'Renamed group' } });
           const after = await prisma.evaluation.findUniqueOrThrow({ where: { judgeId_productId: { judgeId: fixture.judgeIds[0], productId: fixture.productId } } });
           expect(after.submissionSnapshot).toEqual(before.submissionSnapshot);
         } finally {

@@ -179,14 +179,14 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <div className='admin-nav-group'>
             <span className='admin-nav-group-label'>Quản trị</span>
             {canView && (
-              <AdminNavTooltip label='Nhóm sản phẩm & địa bàn' enabled={tooltipEnabled}>
+              <AdminNavTooltip label='Danh mục sản phẩm' enabled={tooltipEnabled}>
                 <Link
                   to='/admin/product-groups'
-                  title='Nhóm sản phẩm & địa bàn'
+                  title='Danh mục sản phẩm'
                   onClick={closeMobileMenu}
                 >
                   <FolderTree className='size-4' aria-hidden='true' />
-                  <span>Nhóm sản phẩm & địa bàn</span>
+                  <span>Danh mục sản phẩm</span>
                 </Link>
               </AdminNavTooltip>
             )}
@@ -249,7 +249,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <Link to='/admin' activeOptions={{ exact: true, includeSearch: false }}>
             Tổng quan
           </Link>
-          <Link to='/admin/product-groups'>Nhóm sản phẩm</Link>
+          <Link to='/admin/product-groups'>Danh mục sản phẩm</Link>
           <Link to='/admin/products'>Sản phẩm</Link>
           <Link to='/admin/registrations'>Phiếu đăng ký</Link>
           <Link to='/admin/scoring-forms'>Phiếu chấm OCOP</Link>
@@ -345,9 +345,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
             </div>
             <div className='application-topbar-actions'>
               <Link to='/'>Trang công khai</Link>
-              <button type='button' onClick={handleLogout}>
+              <Button type='button' variant='ghost' size='sm' onClick={handleLogout}>
                 Đăng xuất
-              </button>
+              </Button>
             </div>
           </header>
           <main className='application-content' id='content'>

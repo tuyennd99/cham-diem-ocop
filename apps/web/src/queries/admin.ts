@@ -3,10 +3,11 @@ import { useQuery } from '@tanstack/react-query';
 import { adminApi } from '../api';
 import { queryKeys } from '../constants/query-key';
 
-export function useAdminDashboard(query: AdminReportFilterQuery = {}) {
+export function useAdminDashboard(query: AdminReportFilterQuery = {}, enabled = true) {
   return useQuery({
     queryKey: queryKeys.admin.dashboard(query),
     queryFn: async () => (await adminApi.dashboard(query)).data,
+    enabled,
   });
 }
 

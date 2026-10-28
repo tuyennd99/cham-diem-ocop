@@ -8,7 +8,6 @@ import type {
   AdminUserQuery,
   LocalityQuery,
   OrganizationUnitQuery,
-  ProductGroupQuery,
   PublicLocalityQuery,
 } from '@ocop/shared';
 import type { PublicProductParams } from '../types/public';
@@ -72,10 +71,6 @@ export const queryKeys = {
       ['admin-users', 'owners', query] as const,
   },
   adminCatalogs: {
-    groups: {
-      all: ['admin-product-groups'] as const,
-      list: (query: ProductGroupQuery) => ['admin-product-groups', 'list', query] as const,
-    },
     categories: {
       all: ['admin-categories'] as const,
       list: (query: AdminCategoryQuery) => ['admin-categories', 'list', query] as const,

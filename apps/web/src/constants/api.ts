@@ -51,8 +51,6 @@ export const API = {
     userResetPassword: (id: string) => `/admin/users/${seg(id)}/reset-password`,
     organizationUnits: '/admin/organization-units',
     organizationUnit: (id: string) => `/admin/organization-units/${seg(id)}`,
-    productGroups: '/admin/product-groups',
-    productGroup: (id: string) => `/admin/product-groups/${seg(id)}`,
     categories: '/admin/categories',
     category: (id: string) => `/admin/categories/${seg(id)}`,
     localities: '/admin/localities',

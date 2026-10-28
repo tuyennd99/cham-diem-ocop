@@ -2,10 +2,19 @@ import { useState } from 'react';
 import { useForm } from '@tanstack/react-form';
 import { Link } from '@tanstack/react-router';
 import { times, trim } from 'lodash';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { publicAttachmentUrl } from '../../constants/api';
-import { DEFAULT_PAGE_SIZE } from '../../constants/consts';
+import { ALL, DEFAULT_PAGE_SIZE } from '../../constants/consts';
 import { PUBLIC_PRODUCT_STATUS_LABEL } from '../../constants/product-status';
 import { errorText } from '../../lib/api-error';
 import { useSession } from '../../lib/auth';
@@ -36,12 +45,6 @@ export function PublicCatalogPage() {
   });
   const categories = categoryRequest.data ?? [];
   const rows = productRequest.data?.data ?? [];
-  const categoryGroups = new Map<string, typeof categories>();
-  for (const category of categories) {
-    const group = categoryGroups.get(category.groupName) ?? [];
-    group.push(category);
-    categoryGroups.set(category.groupName, group);
-  }
   const productError = errorText(productRequest.error);
   const categoryError = errorText(categoryRequest.error);
   const hasAppliedFilters = Boolean(appliedQuery || categoryId);
@@ -72,14 +75,14 @@ export function PublicCatalogPage() {
           <searchForm.Field name='query'>
             {(field) => (
               <div className='field search-field'>
-                <label htmlFor='product-search'>Tìm trong toàn danh mục</label>
+                <Label htmlFor='product-search'>Tìm trong toàn danh mục</Label>
                 <Input
                   id='product-search'
                   type='search'
                   value={field.state.value}
                   onBlur={field.handleBlur}
                   onChange={(event) => field.handleChange(event.target.value)}
-                  placeholder='Tên sản phẩm, mã hoặc nhóm'
+                  placeholder='Tên sản phẩm, mã hoặc danh mục'
                 />
               </div>
             )}
@@ -87,24 +90,23 @@ export function PublicCatalogPage() {
           <searchForm.Field name='categoryId'>
             {(field) => (
               <div className='field status-field'>
-                <label htmlFor='product-category'>Nhóm sản phẩm</label>
-                <select
-                  id='product-category'
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
+                <Label htmlFor='product-category'>Danh mục sản phẩm</Label>
+                <Select
+                  value={field.state.value || ALL}
+                  onValueChange={(value) => field.handleChange(value === ALL ? '' : value)}
                 >
-                  <option value=''>Tất cả nhóm</option>
-                  {Array.from(categoryGroups, ([groupName, items]) => (
-                    <optgroup key={groupName} label={groupName}>
-                      {items.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
+                  <SelectTrigger id='product-category'>
+                    <SelectValue placeholder='Tất cả danh mục' />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL}>Tất cả danh mục</SelectItem>
+                    {categories.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
           </searchForm.Field>
@@ -115,7 +117,7 @@ export function PublicCatalogPage() {
         <p className='lookup-hint'>Kết quả chỉ cập nhật sau khi bạn nhấn “Tìm kiếm”.</p>
         {categoryError && (
           <p className='form-note' role='status'>
-            Chưa tải được danh sách nhóm sản phẩm. Bạn vẫn có thể tìm theo tên hoặc mã hồ sơ.
+            Chưa tải được danh sách danh mục sản phẩm. Bạn vẫn có thể tìm theo tên hoặc mã hồ sơ.
           </p>
         )}
         <p className='result-count' aria-live='polite'>
@@ -133,16 +135,15 @@ export function PublicCatalogPage() {
               <p>Hệ thống tra cứu đang tạm thời không phản hồi. Vui lòng thử tải lại.</p>
             </div>
             <div className='state-actions'>
-              <button
+              <Button
                 type='button'
-                className='button button-primary'
                 onClick={() => {
                   void categoryRequest.refetch();
                   void productRequest.refetch();
                 }}
               >
                 Thử lại
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -162,17 +163,19 @@ export function PublicCatalogPage() {
         )}
         {!loading && !productError && rows.length === 0 && (
           <div className='empty-state public-catalog-empty'>
-            <h2>{hasAppliedFilters ? 'Không tìm thấy sản phẩm phù hợp' : 'Chưa có hồ sơ công khai'}</h2>
+            <h2>
+              {hasAppliedFilters ? 'Không tìm thấy sản phẩm phù hợp' : 'Chưa có hồ sơ công khai'}
+            </h2>
             <p>
               {hasAppliedFilters
-                ? 'Thử đổi từ khóa hoặc nhóm sản phẩm, rồi nhấn “Tìm kiếm”.'
+                ? 'Thử đổi từ khóa hoặc danh mục sản phẩm, rồi nhấn “Tìm kiếm”.'
                 : 'Hồ sơ sẽ xuất hiện tại đây sau khi được tiếp nhận.'}
             </p>
             {!hasAppliedFilters && !session && (
               <div className='state-actions'>
-                <Link className='button button-primary' to='/register'>
-                  Tạo tài khoản chủ thể
-                </Link>
+                <Button asChild>
+                  <Link to='/register'>Tạo tài khoản chủ thể</Link>
+                </Button>
               </div>
             )}
           </div>
@@ -196,13 +199,15 @@ export function PublicCatalogPage() {
                 </div>
                 <div className='record-main'>
                   <div className='record-badges'>
-                    <span className='badge badge-category'>{product.category.groupName}</span>
-                    <span className={`badge status-badge status-${product.status.toLowerCase()}`}>
+                    <Badge variant='secondary'>{product.category.name}</Badge>
+                    <Badge
+                      variant='outline'
+                      className={`status-badge status-${product.status.toLowerCase()}`}
+                    >
                       {PUBLIC_PRODUCT_STATUS_LABEL[product.status]}
-                    </span>
+                    </Badge>
                   </div>
                   <h2>{product.name}</h2>
-                  <p className='record-origin'>{product.category.name}</p>
                   <dl className='record-facts'>
                     <div>
                       <dt>Mã hồ sơ</dt>
@@ -225,13 +230,11 @@ export function PublicCatalogPage() {
                   ) : (
                     <p className='no-rating'>Chưa có kết quả</p>
                   )}
-                  <Link
-                    className='button button-secondary detail-link'
-                    to='/products/$id'
-                    params={{ id: product.id }}
-                  >
-                    Xem hồ sơ
-                  </Link>
+                  <Button asChild variant='secondary' className='detail-link'>
+                    <Link to='/products/$id' params={{ id: product.id }}>
+                      Xem hồ sơ
+                    </Link>
+                  </Button>
                 </div>
               </article>
             ))}

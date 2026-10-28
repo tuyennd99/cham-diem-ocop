@@ -1,23 +1,31 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import type {
+  AdminProductListItem,
   AdminProductQuery,
   LocalityRecord,
   ProductStatus,
 } from '@ocop/shared';
 import { Link } from '@tanstack/react-router';
-import {
-  AlertCircle,
-  ChevronLeft,
-  ChevronRight,
-  Filter,
-  Inbox,
-  Plus,
-  RotateCcw,
-  Tag,
-} from 'lucide-react';
+import { Filter, Inbox, Plus, RotateCcw, Tag } from 'lucide-react';
+import AlertError from '@/components/alert-error';
+import { FormField } from '@/components/form-field';
+import PageSpin from '@/components/page-spin';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { DataTable, type DataTableColumnDef } from '@/components/ui/data-table';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { ALL } from '../../constants/consts';
 import { ADMIN_DASHBOARD_STATUS_LABEL } from '../../constants/product-status';
 import {
   nextVietnameseDayIso,
@@ -36,11 +44,7 @@ import { useSession } from '../../lib/auth';
 import { formatExactScore, formatStarRatingLabel } from '../../lib/print-format';
 import { hasStaffPermission } from '../../lib/session-contract';
 import { PrivateAttachmentThumbnail } from '../../pages/registrant/AttachmentLink';
-import {
-  useAdminCategories,
-  useAdminCategoryDetail,
-  useAdminProductGroups,
-} from '../../queries/admin-catalogs';
+import { useAdminCategories, useAdminCategoryDetail } from '../../queries/admin-catalogs';
 import { useAdminProductList, type AdminProductMode } from '../../queries/admin-products';
 import { useLocalities } from '../../queries/common';
 
@@ -67,19 +71,8 @@ function formatDateBasisLabel(basis?: 'submittedAt' | 'completedAt') {
 }
 
 function formatStatusBadge(status: ProductStatus) {
-  const tone =
-    status === 'DRAFT'
-      ? 'draft'
-      : status === 'SUBMITTED'
-        ? 'submitted'
-        : status === 'SCORING'
-          ? 'scoring'
-          : 'completed';
-  return (
-    <span className={`status-badge ${tone}`}>
-      {ADMIN_DASHBOARD_STATUS_LABEL[status] ?? status}
-    </span>
-  );
+  const variant = status === 'COMPLETED' ? 'default' : status === 'DRAFT' ? 'secondary' : 'outline';
+  return <Badge variant={variant}>{ADMIN_DASHBOARD_STATUS_LABEL[status] ?? status}</Badge>;
 }
 
 function deriveDateInputs(search: AdminProductSearch): {
@@ -141,11 +134,9 @@ export function AdminProductsPage({
   const [localityPage, setLocalityPage] = useState(1);
   const [selectedLocality, setSelectedLocality] = useState<LocalityRecord | null>(null);
 
-  const groupsQuery = useAdminProductGroups({ page: 1, limit: 100 });
   const categoriesQuery = useAdminCategories({
     page: 1,
     limit: 100,
-    groupId: draftFilters.groupId,
   });
   const selectedCategoryDetail = useAdminCategoryDetail(
     draftFilters.categoryId ?? appliedSearch.categoryId ?? null,
@@ -168,7 +159,6 @@ export function AdminProductsPage({
   const error = errorText(loadError);
   const data = response?.data ?? [];
   const meta = response?.meta;
-  const groups = groupsQuery.data?.data ?? [];
   const categories = categoriesQuery.data?.data ?? [];
   const localities = localityQuery.data?.data ?? [];
   const localityMeta = localityQuery.data?.meta;
@@ -184,26 +174,145 @@ export function AdminProductsPage({
     { value: 'COMPLETED', label: ADMIN_DASHBOARD_STATUS_LABEL.COMPLETED },
   ];
 
+  const productColumns = useMemo<DataTableColumnDef<AdminProductListItem>[]>(
+    () => [
+      {
+        accessorKey: 'name',
+        header: 'Sản phẩm / Mã hồ sơ',
+        cell: ({ row }) => {
+          const product = row.original;
+          const image = product.attachments.find((file) => file.type === 'IMAGE');
+          return (
+            <div className='product-cell'>
+              {image ? (
+                <PrivateAttachmentThumbnail
+                  mode='admin'
+                  productId={product.id}
+                  attachmentId={image.id}
+                  name={product.name}
+                />
+              ) : (
+                <div
+                  className='product-thumb text-muted flex items-center justify-center'
+                  aria-hidden='true'
+                >
+                  <Tag className='size-5 opacity-40' />
+                </div>
+              )}
+              <div>
+                <div className='product-title'>{product.name}</div>
+                <div className='product-code'>
+                  <span title={product.id}>{product.id}</span>
+                </div>
+                <Badge variant='secondary' className='mt-1'>
+                  {product.category.name}
+                </Badge>
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        id: 'registrant',
+        header: 'Chủ thể',
+        cell: ({ row }) => {
+          const product = row.original;
+          return (
+            <div>
+              <div className='registrant-name'>{product.registrant.fullName}</div>
+              <div className='registrant-email'>{product.registrant.email}</div>
+            </div>
+          );
+        },
+      },
+      {
+        id: 'locality',
+        header: 'Địa bàn / Năm',
+        cell: ({ row }) => {
+          const product = row.original;
+          const year = product.formData.assessmentYear;
+          const registrationType = product.formData.registrationType;
+          return (
+            <div>
+              <div className='text-fg font-medium'>
+                {product.locality?.name ?? 'Chưa gắn địa bàn'}
+                {product.locality ? ` · ${product.locality.provinceName}` : ''}
+              </div>
+              <div className='text-muted mt-0.5 text-xs'>
+                Năm {year ?? '—'} · {formatRegistrationType(registrationType)}
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: 'status',
+        header: 'Trạng thái',
+        cell: ({ row }) => formatStatusBadge(row.original.status),
+      },
+      {
+        id: 'result',
+        header: 'Kết quả',
+        meta: {
+          align: 'right',
+          cellStyle: { fontVariantNumeric: 'tabular-nums' },
+        },
+        cell: ({ row }) => {
+          const product = row.original;
+          return product.status === 'COMPLETED' && product.finalScore !== null ? (
+            <div>
+              <div className='score-val'>{formatExactScore(product.finalScore)} điểm</div>
+              <div className='text-muted mt-0.5 text-xs'>
+                {formatStarRatingLabel(product.starRating)}
+              </div>
+            </div>
+          ) : (
+            <span className='text-muted text-xs'>Chưa có kết quả</span>
+          );
+        },
+      },
+      {
+        id: 'actions',
+        header: 'Thao tác',
+        meta: { align: 'right' },
+        cell: ({ row }) => {
+          const product = row.original;
+          return (
+            <div className='flex items-center justify-end gap-2'>
+              <Button asChild variant='secondary' size='sm'>
+                <Link
+                  to={mode === 'products' ? '/admin/products/$id' : '/admin/registrations/$id'}
+                  params={{ id: product.id }}
+                  search={appliedSearch}
+                >
+                  Mở hồ sơ
+                </Link>
+              </Button>
+              {canManage && product.status === 'DRAFT' && (
+                <Button asChild variant='secondary' size='sm'>
+                  <Link
+                    to='/admin/registrations/$id/edit'
+                    params={{ id: product.id }}
+                    search={appliedSearch}
+                  >
+                    Sửa phiếu
+                  </Link>
+                </Button>
+              )}
+            </div>
+          );
+        },
+      },
+    ],
+    [appliedSearch, canManage, mode],
+  );
+
   function handleStatusSelect(status: ProductStatus | undefined) {
     applySearch({
       ...appliedSearch,
       page: 1,
       status,
     });
-  }
-
-  function handleGroupChange(nextGroupId: string) {
-    const groupId = nextGroupId || undefined;
-    const currentCategoryStillMatches =
-      !groupId ||
-      categories.some(
-        (cat) => cat.id === draftFilters.categoryId && cat.groupId === groupId,
-      );
-    setDraftFilters((current) => ({
-      ...current,
-      groupId,
-      categoryId: currentCategoryStillMatches ? current.categoryId : undefined,
-    }));
   }
 
   function submitFilters(event: FormEvent<HTMLFormElement>) {
@@ -283,11 +392,6 @@ export function AdminProductsPage({
   if (appliedSearch.q) {
     appliedChips.push({ key: 'q', label: `Từ khóa: ${appliedSearch.q}` });
   }
-  if (appliedSearch.groupId) {
-    const groupLabel =
-      groups.find((item) => item.id === appliedSearch.groupId)?.name ?? appliedSearch.groupId;
-    appliedChips.push({ key: 'groupId', label: `Nhóm lớn: ${groupLabel}` });
-  }
   if (appliedSearch.categoryId) {
     const catLabel =
       categories.find((item) => item.id === appliedSearch.categoryId)?.name ??
@@ -346,8 +450,6 @@ export function AdminProductsPage({
   const currentCategoryOptionMissing =
     Boolean(draftFilters.categoryId) &&
     !categories.some((item) => item.id === draftFilters.categoryId);
-  const currentGroupOptionMissing =
-    Boolean(draftFilters.groupId) && !groups.some((item) => item.id === draftFilters.groupId);
   const currentLocalityOptionMissing =
     Boolean(draftFilters.localityId) &&
     !localities.some((item) => item.id === draftFilters.localityId);
@@ -365,16 +467,12 @@ export function AdminProductsPage({
         </div>
         {canManage && (
           <div className='admin-actions'>
-            <Link
-              className='button button-primary'
-              to='/admin/registrations/new'
-              search={appliedSearch}
-            >
-              <Plus className='size-4' aria-hidden='true' />
-              <span>
-                {mode === 'products' ? 'Thêm phiếu đăng ký' : 'Nhập phiếu đăng ký'}
-              </span>
-            </Link>
+            <Button asChild>
+              <Link to='/admin/registrations/new' search={appliedSearch}>
+                <Plus className='size-4' aria-hidden='true' />
+                <span>{mode === 'products' ? 'Thêm phiếu đăng ký' : 'Nhập phiếu đăng ký'}</span>
+              </Link>
+            </Button>
           </div>
         )}
       </div>
@@ -384,7 +482,7 @@ export function AdminProductsPage({
           const pressed = (appliedSearch.status ?? undefined) === option.value;
           return (
             <button
-              key={option.value ?? 'ALL'}
+              key={option.value ?? ALL}
               type='button'
               aria-pressed={pressed}
               className={`tab-item ${pressed ? 'active' : ''}`}
@@ -398,12 +496,12 @@ export function AdminProductsPage({
 
       <form className='admin-form filter-card admin-filter-panel' onSubmit={submitFilters}>
         <div className='admin-filters'>
-          <label
+          <FormField
+            label='Tìm sản phẩm hoặc mã hồ sơ'
+            htmlFor='admin-product-q'
             className='admin-filter-field'
             data-filter-width='search'
-            htmlFor='admin-product-q'
           >
-            Tìm sản phẩm hoặc mã hồ sơ
             <Input
               id='admin-product-q'
               placeholder='Nhập tên sản phẩm hoặc mã hồ sơ…'
@@ -413,62 +511,43 @@ export function AdminProductsPage({
                 setDraftFilters((old) => ({ ...old, q: event.target.value || undefined }))
               }
             />
-          </label>
+          </FormField>
 
-          <label
-            className='admin-filter-field'
-            data-filter-width='group'
-            htmlFor='admin-product-group'
-          >
-            Nhóm sản phẩm lớn
-            <select
-              id='admin-product-group'
-              value={draftFilters.groupId ?? ''}
-              onChange={(event) => handleGroupChange(event.target.value)}
-            >
-              <option value=''>Tất cả nhóm lớn</option>
-              {currentGroupOptionMissing && draftFilters.groupId && (
-                <option value={draftFilters.groupId}>Mã nhóm: {draftFilters.groupId}</option>
-              )}
-              {groups.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.code} · {group.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label
-            className='admin-filter-field'
-            data-filter-width='group'
+          <FormField
+            label='Danh mục sản phẩm'
             htmlFor='admin-product-category'
+            className='admin-filter-field'
+            data-filter-width='group'
           >
-            Phân loại sản phẩm
-            <select
-              id='admin-product-category'
-              value={draftFilters.categoryId ?? ''}
-              onChange={(event) =>
+            <Select
+              value={draftFilters.categoryId ?? ALL}
+              onValueChange={(value) =>
                 setDraftFilters((old) => ({
                   ...old,
-                  categoryId: event.target.value || undefined,
+                  categoryId: value === ALL ? undefined : value,
                 }))
               }
             >
-              <option value=''>Tất cả phân loại</option>
-              {currentCategoryOptionMissing && draftFilters.categoryId && (
-                <option value={draftFilters.categoryId}>
-                  {selectedCategoryDetail.data?.data.id === draftFilters.categoryId
-                    ? selectedCategoryDetail.data.data.name
-                    : `Mã phân loại: ${draftFilters.categoryId}`}
-                </option>
-              )}
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
-          </label>
+              <SelectTrigger id='admin-product-category'>
+                <SelectValue placeholder='Tất cả danh mục' />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Tất cả danh mục</SelectItem>
+                {currentCategoryOptionMissing && draftFilters.categoryId && (
+                  <SelectItem value={draftFilters.categoryId}>
+                    {selectedCategoryDetail.data?.data.id === draftFilters.categoryId
+                      ? selectedCategoryDetail.data.data.name
+                      : `Mã danh mục: ${draftFilters.categoryId}`}
+                  </SelectItem>
+                )}
+                {categories.map((category) => (
+                  <SelectItem key={category.id} value={category.id}>
+                    {category.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormField>
 
           <div className='admin-actions admin-filter-actions'>
             <Button type='submit'>Áp dụng</Button>
@@ -494,13 +573,8 @@ export function AdminProductsPage({
           </div>
         </div>
 
-        <div
-          id='admin-product-advanced'
-          hidden={!showAdvanced}
-          className='advanced-filter-grid'
-        >
-          <label htmlFor='admin-product-registrant-q'>
-            Từ khóa chủ thể (tên hoặc email)
+        <div id='admin-product-advanced' hidden={!showAdvanced} className='advanced-filter-grid'>
+          <FormField label='Từ khóa chủ thể (tên hoặc email)' htmlFor='admin-product-registrant-q'>
             <Input
               id='admin-product-registrant-q'
               placeholder='Nhập tên hoặc email chủ thể…'
@@ -513,30 +587,33 @@ export function AdminProductsPage({
                 }))
               }
             />
-          </label>
+          </FormField>
 
-          <label htmlFor='admin-product-registration-type'>
-            Loại đăng ký
-            <select
-              id='admin-product-registration-type'
-              value={draftFilters.registrationType ?? ''}
-              onChange={(event) =>
+          <FormField label='Loại đăng ký' htmlFor='admin-product-registration-type'>
+            <Select
+              value={draftFilters.registrationType ?? ALL}
+              onValueChange={(value) =>
                 setDraftFilters((old) => ({
                   ...old,
-                  registrationType: (event.target.value ||
-                    undefined) as AdminProductQuery['registrationType'],
+                  registrationType: (value === ALL
+                    ? undefined
+                    : value) as AdminProductQuery['registrationType'],
                 }))
               }
             >
-              <option value=''>Tất cả loại đăng ký</option>
-              <option value='FIRST'>Lần đầu</option>
-              <option value='UPGRADE'>Nâng hạng</option>
-              <option value='REASSESSMENT'>Đánh giá lại</option>
-            </select>
-          </label>
+              <SelectTrigger id='admin-product-registration-type'>
+                <SelectValue placeholder='Tất cả loại đăng ký' />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Tất cả loại đăng ký</SelectItem>
+                <SelectItem value='FIRST'>Lần đầu</SelectItem>
+                <SelectItem value='UPGRADE'>Nâng hạng</SelectItem>
+                <SelectItem value='REASSESSMENT'>Đánh giá lại</SelectItem>
+              </SelectContent>
+            </Select>
+          </FormField>
 
-          <label htmlFor='admin-product-assessment-year'>
-            Năm đánh giá
+          <FormField label='Năm đánh giá' htmlFor='admin-product-assessment-year'>
             <Input
               id='admin-product-assessment-year'
               type='number'
@@ -551,33 +628,36 @@ export function AdminProductsPage({
                 }))
               }
             />
-          </label>
+          </FormField>
 
-          <label htmlFor='admin-product-star-rating'>
-            Mức sao theo điểm
-            <select
-              id='admin-product-star-rating'
-              value={draftFilters.starRating ?? ''}
-              onChange={(event) =>
+          <FormField label='Mức sao theo điểm' htmlFor='admin-product-star-rating'>
+            <Select
+              value={draftFilters.starRating ? String(draftFilters.starRating) : ALL}
+              onValueChange={(value) =>
                 setDraftFilters((old) => ({
                   ...old,
-                  starRating: (event.target.value
-                    ? Number(event.target.value)
-                    : undefined) as AdminProductQuery['starRating'],
+                  starRating: (value === ALL
+                    ? undefined
+                    : Number(value)) as AdminProductQuery['starRating'],
                 }))
               }
             >
-              <option value=''>Tất cả mức sao</option>
-              <option value='1'>Mức điểm 1 sao</option>
-              <option value='2'>Mức điểm 2 sao</option>
-              <option value='3'>Mức điểm 3 sao</option>
-              <option value='4'>Mức điểm 4 sao</option>
-              <option value='5'>Mức điểm 5 sao / Đề nghị xem xét 5 sao</option>
-            </select>
-          </label>
+              <SelectTrigger id='admin-product-star-rating'>
+                <SelectValue placeholder='Tất cả mức sao' />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Tất cả mức sao</SelectItem>
+                <SelectItem value='1'>Mức điểm 1 sao</SelectItem>
+                <SelectItem value='2'>Mức điểm 2 sao</SelectItem>
+                <SelectItem value='3'>Mức điểm 3 sao</SelectItem>
+                <SelectItem value='4'>Mức điểm 4 sao</SelectItem>
+                <SelectItem value='5'>Mức điểm 5 sao / Đề nghị xem xét 5 sao</SelectItem>
+              </SelectContent>
+            </Select>
+          </FormField>
 
           <div className='form-group'>
-            <label htmlFor='admin-product-locality-search'>Tìm địa bàn (xã / phường)</label>
+            <Label htmlFor='admin-product-locality-search'>Tìm địa bàn (xã / phường)</Label>
             <Input
               id='admin-product-locality-search'
               placeholder='Nhập tên hoặc mã xã / phường…'
@@ -588,15 +668,14 @@ export function AdminProductsPage({
                 setLocalityPage(1);
               }}
             />
-            <label htmlFor='admin-product-locality-select' className='mt-2'>
+            <Label htmlFor='admin-product-locality-select' className='mt-2'>
               Địa bàn hành chính
-            </label>
-            <select
-              id='admin-product-locality-select'
-              value={draftFilters.localityId ?? ''}
+            </Label>
+            <Select
+              value={draftFilters.localityId ?? ALL}
               disabled={Boolean(draftFilters.unmappedLocality)}
-              onChange={(event) => {
-                const id = event.target.value;
+              onValueChange={(value) => {
+                const id = value === ALL ? '' : value;
                 const found = localities.find((loc) => loc.id === id) ?? null;
                 setSelectedLocality(found);
                 setDraftFilters((old) => ({
@@ -606,24 +685,30 @@ export function AdminProductsPage({
                 }));
               }}
             >
-              <option value=''>Tất cả địa bàn</option>
-              {currentLocalityOptionMissing && draftFilters.localityId && (
-                <option value={draftFilters.localityId}>
-                  {selectedLocality?.id === draftFilters.localityId
-                    ? `${selectedLocality.name} · ${selectedLocality.provinceName}`
-                    : `Mã địa bàn: ${draftFilters.localityId}`}
-                </option>
-              )}
-              {localities.map((locality) => (
-                <option key={locality.id} value={locality.id}>
-                  {locality.name} · {locality.provinceName}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger id='admin-product-locality-select'>
+                <SelectValue placeholder='Tất cả địa bàn' />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Tất cả địa bàn</SelectItem>
+                {currentLocalityOptionMissing && draftFilters.localityId && (
+                  <SelectItem value={draftFilters.localityId}>
+                    {selectedLocality?.id === draftFilters.localityId
+                      ? `${selectedLocality.name} · ${selectedLocality.provinceName}`
+                      : `Mã địa bàn: ${draftFilters.localityId}`}
+                  </SelectItem>
+                )}
+                {localities.map((locality) => (
+                  <SelectItem key={locality.id} value={locality.id}>
+                    {locality.name} · {locality.provinceName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             {localityQuery.error && (
-              <p className='form-note' role='alert'>
-                Không tải được danh mục địa bàn: {errorText(localityQuery.error)}
-              </p>
+              <AlertError
+                title='Không tải được danh mục địa bàn'
+                errors={[errorText(localityQuery.error)]}
+              />
             )}
             <div className='admin-actions mt-1'>
               <Button
@@ -635,7 +720,7 @@ export function AdminProductsPage({
               >
                 Trang địa bàn trước
               </Button>
-              <span className='text-xs text-muted'>
+              <span className='text-muted text-xs'>
                 {(localityMeta?.totalPages ?? 0) > 0
                   ? `Trang ${localityMeta?.page ?? localityPage} / ${localityMeta?.totalPages ?? 1}`
                   : 'Chưa có địa bàn phù hợp'}
@@ -654,45 +739,48 @@ export function AdminProductsPage({
                 Trang địa bàn sau
               </Button>
             </div>
-            <label
-              htmlFor='admin-product-unmapped-locality'
-              className='inline-flex items-center gap-2 text-sm mt-1 cursor-pointer'
-            >
-              <input
+            <div className='inline-flex items-center gap-2'>
+              <Checkbox
                 id='admin-product-unmapped-locality'
-                type='checkbox'
                 checked={draftFilters.unmappedLocality ?? false}
-                onChange={(event) =>
+                onCheckedChange={(checked) =>
                   setDraftFilters((old) => ({
                     ...old,
-                    unmappedLocality: event.target.checked ? true : undefined,
-                    localityId: event.target.checked ? undefined : old.localityId,
+                    unmappedLocality: checked === true ? true : undefined,
+                    localityId: checked === true ? undefined : old.localityId,
                   }))
                 }
               />
-              <span>Chỉ hồ sơ chưa gắn địa bàn</span>
-            </label>
+              <Label htmlFor='admin-product-unmapped-locality' className='cursor-pointer'>
+                Chỉ hồ sơ chưa gắn địa bàn
+              </Label>
+            </div>
           </div>
 
-          <label htmlFor='admin-product-date-basis'>
-            Căn cứ lọc ngày
-            <select
-              id='admin-product-date-basis'
+          <FormField label='Căn cứ lọc ngày' htmlFor='admin-product-date-basis'>
+            <Select
               value={draftFilters.dateBasis ?? 'submittedAt'}
-              onChange={(event) =>
+              onValueChange={(value) =>
                 setDraftFilters((old) => ({
                   ...old,
-                  dateBasis: event.target.value as 'submittedAt' | 'completedAt',
+                  dateBasis: value as 'submittedAt' | 'completedAt',
                 }))
               }
             >
-              <option value='submittedAt'>Ngày nộp</option>
-              <option value='completedAt'>Ngày hoàn tất</option>
-            </select>
-          </label>
+              <SelectTrigger id='admin-product-date-basis'>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value='submittedAt'>Ngày nộp</SelectItem>
+                <SelectItem value='completedAt'>Ngày hoàn tất</SelectItem>
+              </SelectContent>
+            </Select>
+          </FormField>
 
-          <label htmlFor='admin-product-from'>
-            Từ ngày ({formatDateBasisLabel(draftFilters.dateBasis)})
+          <FormField
+            label={<>Từ ngày ({formatDateBasisLabel(draftFilters.dateBasis)})</>}
+            htmlFor='admin-product-from'
+          >
             <Input
               id='admin-product-from'
               type='date'
@@ -705,10 +793,12 @@ export function AdminProductsPage({
                 }))
               }
             />
-          </label>
+          </FormField>
 
-          <label htmlFor='admin-product-to'>
-            Đến ngày ({formatDateBasisLabel(draftFilters.dateBasis)})
+          <FormField
+            label={<>Đến ngày ({formatDateBasisLabel(draftFilters.dateBasis)})</>}
+            htmlFor='admin-product-to'
+          >
             <Input
               id='admin-product-to'
               type='date'
@@ -721,57 +811,59 @@ export function AdminProductsPage({
                 }))
               }
             />
-          </label>
+          </FormField>
 
-          <label htmlFor='admin-product-sort-by'>
-            Sắp xếp theo
-            <select
-              id='admin-product-sort-by'
+          <FormField label='Sắp xếp theo' htmlFor='admin-product-sort-by'>
+            <Select
               value={draftFilters.sortBy ?? 'submittedAt'}
-              onChange={(event) =>
+              onValueChange={(value) =>
                 setDraftFilters((old) => ({
                   ...old,
-                  sortBy: event.target.value as AdminProductQuery['sortBy'],
+                  sortBy: value as AdminProductQuery['sortBy'],
                 }))
               }
             >
-              <option value='submittedAt'>Ngày nộp</option>
-              <option value='name'>Tên sản phẩm</option>
-              <option value='finalScore'>Điểm số</option>
-            </select>
-          </label>
+              <SelectTrigger id='admin-product-sort-by'>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value='submittedAt'>Ngày nộp</SelectItem>
+                <SelectItem value='name'>Tên sản phẩm</SelectItem>
+                <SelectItem value='finalScore'>Điểm số</SelectItem>
+              </SelectContent>
+            </Select>
+          </FormField>
 
-          <label htmlFor='admin-product-sort-direction'>
-            Thứ tự sắp xếp
-            <select
-              id='admin-product-sort-direction'
+          <FormField label='Thứ tự sắp xếp' htmlFor='admin-product-sort-direction'>
+            <Select
               value={draftFilters.sortDirection ?? 'desc'}
-              onChange={(event) =>
+              onValueChange={(value) =>
                 setDraftFilters((old) => ({
                   ...old,
-                  sortDirection: event.target.value as AdminProductQuery['sortDirection'],
+                  sortDirection: value as AdminProductQuery['sortDirection'],
                 }))
               }
             >
-              <option value='desc'>Giảm dần</option>
-              <option value='asc'>Tăng dần</option>
-            </select>
-          </label>
+              <SelectTrigger id='admin-product-sort-direction'>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value='desc'>Giảm dần</SelectItem>
+                <SelectItem value='asc'>Tăng dần</SelectItem>
+              </SelectContent>
+            </Select>
+          </FormField>
         </div>
 
-        {filterError && (
-          <p className='form-note' role='alert'>
-            {filterError}
-          </p>
-        )}
+        {filterError && <AlertError title='Bộ lọc chưa hợp lệ' errors={[filterError]} />}
 
         {hasActiveFilters && (
           <div className='admin-applied-filters' aria-label='Điều kiện đang áp dụng'>
-            <span className='text-xs font-semibold text-muted'>Đang lọc:</span>
+            <span className='text-muted text-xs font-semibold'>Đang lọc:</span>
             {appliedChips.map((chip) => (
-              <span key={chip.key} className='cat-tag'>
+              <Badge key={chip.key} variant='secondary'>
                 {chip.label}
-              </span>
+              </Badge>
             ))}
           </div>
         )}
@@ -784,38 +876,23 @@ export function AdminProductsPage({
       )}
 
       {error && (
-        <div className='form-alert' role='alert'>
-          <AlertCircle className='size-5 shrink-0 text-red-700' aria-hidden='true' />
-          <div>
-            <p className='font-semibold text-red-900'>
-              {mode === 'products'
+        <div className='space-y-2'>
+          <AlertError
+            title={
+              mode === 'products'
                 ? 'Không tải được danh sách sản phẩm'
-                : 'Không tải được danh sách phiếu đăng ký'}
-            </p>
-            <p className='text-sm text-red-800 mt-0.5'>{error}</p>
-          </div>
-          <Button
-            type='button'
-            variant='secondary'
-            size='sm'
-            className='ml-auto'
-            onClick={() => void refetch()}
-          >
+                : 'Không tải được danh sách phiếu đăng ký'
+            }
+            errors={[error]}
+          />
+          <Button type='button' variant='secondary' size='sm' onClick={() => void refetch()}>
             <RotateCcw className='size-4' aria-hidden='true' />
             <span>Thử lại</span>
           </Button>
         </div>
       )}
 
-      {loading && (
-        <div className='admin-table-region p-8 text-center text-muted' aria-busy='true'>
-          <p className='text-sm font-medium'>
-            {mode === 'products'
-              ? 'Đang tải danh sách sản phẩm OCOP…'
-              : 'Đang tải danh sách phiếu đăng ký…'}
-          </p>
-        </div>
-      )}
+      {loading && <PageSpin />}
 
       {!loading && !error && (
         <>
@@ -823,177 +900,43 @@ export function AdminProductsPage({
             <div
               className='admin-table-region'
               role='region'
-              aria-label={
-                mode === 'products' ? 'Bảng sản phẩm OCOP' : 'Bảng phiếu đăng ký OCOP'
-              }
+              aria-label={mode === 'products' ? 'Bảng sản phẩm OCOP' : 'Bảng phiếu đăng ký OCOP'}
               tabIndex={0}
               aria-busy={isFetching}
             >
               <p className='admin-table-scroll-hint'>
                 Vuốt hoặc dùng phím mũi tên ngang để xem đầy đủ các cột.
               </p>
-              <table className='admin-data-table'>
-                <thead>
-                  <tr>
-                    <th scope='col'>Sản phẩm / Mã hồ sơ</th>
-                    <th scope='col'>Chủ thể</th>
-                    <th scope='col'>Địa bàn / Năm</th>
-                    <th scope='col'>Trạng thái</th>
-                    <th scope='col' style={{ textAlign: 'right' }}>
-                      Kết quả
-                    </th>
-                    <th scope='col' style={{ textAlign: 'right' }}>
-                      Thao tác
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.map((product) => {
-                    const image = product.attachments.find((file) => file.type === 'IMAGE');
-                    const year = product.formData.assessmentYear;
-                    const registrationType = product.formData.registrationType;
-                    return (
-                      <tr key={product.id}>
-                        <td>
-                          <div className='product-cell'>
-                            {image ? (
-                              <PrivateAttachmentThumbnail
-                                mode='admin'
-                                productId={product.id}
-                                attachmentId={image.id}
-                                name={product.name}
-                              />
-                            ) : (
-                              <div
-                                className='product-thumb flex items-center justify-center text-muted'
-                                aria-hidden='true'
-                              >
-                                <Tag className='size-5 opacity-40' />
-                              </div>
-                            )}
-                            <div>
-                              <div className='product-title'>{product.name}</div>
-                              <div className='product-code'>
-                                <span title={product.id}>{product.id}</span> ·{' '}
-                                {product.category.groupName}
-                              </div>
-                              <span className='cat-tag'>{product.category.name}</span>
-                            </div>
-                          </div>
-                        </td>
-
-                        <td>
-                          <div className='registrant-name'>{product.registrant.fullName}</div>
-                          <div className='registrant-email'>{product.registrant.email}</div>
-                        </td>
-
-                        <td>
-                          <div className='font-medium text-fg'>
-                            {product.locality?.name ?? 'Chưa gắn địa bàn'}
-                            {product.locality ? ` · ${product.locality.provinceName}` : ''}
-                          </div>
-                          <div className='text-xs text-muted mt-0.5'>
-                            Năm {year ?? '—'} · {formatRegistrationType(registrationType)}
-                          </div>
-                        </td>
-
-                        <td>{formatStatusBadge(product.status)}</td>
-
-                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                          {product.status === 'COMPLETED' && product.finalScore !== null ? (
-                            <div>
-                              <div className='score-val'>
-                                {formatExactScore(product.finalScore)} điểm
-                              </div>
-                              <div className='text-xs text-muted mt-0.5'>
-                                {formatStarRatingLabel(product.starRating)}
-                              </div>
-                            </div>
-                          ) : (
-                            <span className='text-xs text-muted'>Chưa có kết quả</span>
-                          )}
-                        </td>
-
-                        <td style={{ textAlign: 'right' }}>
-                          <div className='flex items-center justify-end gap-2'>
-                            <Link
-                              className='button button-secondary button-sm'
-                              to={
-                                mode === 'products'
-                                  ? '/admin/products/$id'
-                                  : '/admin/registrations/$id'
-                              }
-                              params={{ id: product.id }}
-                              search={appliedSearch}
-                            >
-                              Mở hồ sơ
-                            </Link>
-                            {canManage && product.status === 'DRAFT' && (
-                              <Link
-                                className='button button-secondary button-sm'
-                                to='/admin/registrations/$id/edit'
-                                params={{ id: product.id }}
-                                search={appliedSearch}
-                              >
-                                Sửa phiếu
-                              </Link>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-
-              <div className='table-footer'>
-                <div className='page-info'>
-                  Hiển thị <strong>{data.length}</strong> /{' '}
-                  <strong>{meta?.total ?? data.length}</strong>{' '}
-                  {mode === 'products' ? 'sản phẩm' : 'phiếu đăng ký'}
-                </div>
-
-                <div className='pagination-actions'>
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    size='sm'
-                    disabled={(appliedSearch.page ?? 1) <= 1}
-                    onClick={() => changePage((appliedSearch.page ?? 1) - 1)}
-                  >
-                    <ChevronLeft className='size-4' aria-hidden='true' />
-                    <span>Trước</span>
-                  </Button>
-                  <span className='text-xs font-semibold px-2'>
-                    Trang {meta?.page ?? appliedSearch.page ?? 1} /{' '}
-                    {Math.max(1, meta?.totalPages ?? 1)}
-                  </span>
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    size='sm'
-                    disabled={(appliedSearch.page ?? 1) >= (meta?.totalPages ?? 1)}
-                    onClick={() => changePage((appliedSearch.page ?? 1) + 1)}
-                  >
-                    <span>Sau</span>
-                    <ChevronRight className='size-4' aria-hidden='true' />
-                  </Button>
-                </div>
-              </div>
+              <DataTable
+                columns={productColumns}
+                data={data}
+                total={meta?.total ?? data.length}
+                page={meta?.page ?? appliedSearch.page ?? 1}
+                pageSize={appliedSearch.limit ?? 20}
+                getRowId={(row) => row.id}
+                onPageChange={(nextPage) => changePage(nextPage)}
+                onPageSizeChange={(nextLimit) =>
+                  applySearch({
+                    ...appliedSearch,
+                    page: 1,
+                    limit: nextLimit,
+                  })
+                }
+              />
             </div>
           ) : (
-            <div className='admin-table-region empty-card'>
+            <Card className='admin-table-region empty-card'>
               <Inbox className='empty-icon mx-auto' aria-hidden='true' />
               {hasActiveFilters ? (
                 <>
-                  <h2 className='font-semibold text-lg text-fg mb-1'>
+                  <h2 className='text-fg mb-1 text-lg font-semibold'>
                     Không có kết quả phù hợp bộ lọc
                   </h2>
-                  <p className='text-sm text-muted'>
-                    Thử điều chỉnh từ khóa, nhóm sản phẩm, khoảng ngày hoặc xóa bộ lọc để xem toàn
-                    bộ danh sách.
+                  <p className='text-muted text-sm'>
+                    Thử điều chỉnh từ khóa, danh mục sản phẩm, khoảng ngày hoặc xóa bộ lọc để xem
+                    toàn bộ danh sách.
                   </p>
-                  <div className='admin-actions justify-center mt-4'>
+                  <div className='admin-actions mt-4 justify-center'>
                     <Button type='button' variant='secondary' onClick={resetFilters}>
                       <RotateCcw className='size-4' aria-hidden='true' />
                       <span>Xóa bộ lọc</span>
@@ -1002,33 +945,31 @@ export function AdminProductsPage({
                 </>
               ) : (
                 <>
-                  <h2 className='font-semibold text-lg text-fg mb-1'>
+                  <h2 className='text-fg mb-1 text-lg font-semibold'>
                     {mode === 'products'
                       ? 'Chưa có hồ sơ sản phẩm nào'
                       : 'Chưa có phiếu đăng ký nào'}
                   </h2>
-                  <p className='text-sm text-muted'>
+                  <p className='text-muted text-sm'>
                     {mode === 'products'
                       ? 'Khi chủ thể nộp hồ sơ hoặc quản trị viên nhập hộ phiếu đăng ký, sản phẩm sẽ hiển thị tại đây.'
                       : 'Bắt đầu bằng cách nhập phiếu đăng ký mới cho chủ thể sản xuất.'}
                   </p>
                   {canManage && (
-                    <div className='admin-actions justify-center mt-4'>
-                      <Link
-                        className='button button-primary'
-                        to='/admin/registrations/new'
-                        search={appliedSearch}
-                      >
-                        <Plus className='size-4' aria-hidden='true' />
-                        <span>
-                          {mode === 'products' ? 'Thêm phiếu đăng ký' : 'Nhập phiếu đăng ký'}
-                        </span>
-                      </Link>
+                    <div className='admin-actions mt-4 justify-center'>
+                      <Button asChild>
+                        <Link to='/admin/registrations/new' search={appliedSearch}>
+                          <Plus className='size-4' aria-hidden='true' />
+                          <span>
+                            {mode === 'products' ? 'Thêm phiếu đăng ký' : 'Nhập phiếu đăng ký'}
+                          </span>
+                        </Link>
+                      </Button>
                     </div>
                   )}
                 </>
               )}
-            </div>
+            </Card>
           )}
         </>
       )}

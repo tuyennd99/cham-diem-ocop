@@ -6,6 +6,23 @@ React, Vite, and TanStack Router frontend for the OCOP scoring monorepo. The pro
 
 From the repository root, install workspace dependencies with `pnpm install`, then start the web and API apps using the root development scripts. The Vite dev server proxies `/api` to `http://localhost:3030` by default; set `VITE_API_PROXY` to change that target. Set `VITE_API_URL` when the browser should call a different API base URL directly.
 
+## Routing
+
+Define routes in `src/routes/` with TanStack file-based routing. `src/router.tsx` creates the router and supplies session/query context, preload, pending, and scroll options. `src/types/router.ts` registers its type.
+
+Vite's TanStack plugin generates `src/routeTree.gen.ts` and automatically splits route components. Do not edit generated output. Run `pnpm --filter @ocop/web build` before typechecking when the generated file is absent.
+
+Account and product/registration detail screens use index route files. Password and edit routes are independent pages under the authenticated layout; do not turn the detail screens into their parent layouts.
+
+Verification from repository root:
+
+    pnpm --filter @ocop/web build
+    pnpm --filter @ocop/web typecheck
+    node apps/web/test/router.check.mjs
+    node apps/web/test/proxy.check.mjs
+
+Root providers and navigation indicators belong in `src/routes/__root.tsx`; the authenticated pending screen belongs in `src/routes/_app.tsx`.
+
 ## Frontend API and constants convention
 
 The OCOP frontend uses the shared Axios transport in `src/api/base-request.ts`. Domain functions in `src/api/` own endpoints and request serialization; pages and query hooks consume those functions. Shared endpoints, session keys, query keys, HTTP statuses and pagination defaults live in `src/constants/`. The previous fetch client in `src/lib/api.ts` and unrelated task/system API samples have been removed.

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import type {
   CreateLocalityInput,
@@ -8,7 +8,14 @@ import type {
   UpdateLocalityInput,
 } from '@ocop/shared';
 import { useBlocker } from '@tanstack/react-router';
+import AlertError from '@/components/alert-error';
+import { FormField } from '@/components/form-field';
+import PageSpin from '@/components/page-spin';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { DataTable, type DataTableColumnDef } from '@/components/ui/data-table';
 import {
   Dialog,
   DialogContent,
@@ -17,11 +24,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { DEFAULT_PAGE_SIZE } from '../../constants/consts';
+import { Label } from '@/components/ui/label';
 import {
-  localityEffectiveValue,
-  vietnameseDateTimeInput,
-} from '../../lib/admin-date';
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { ALL, DEFAULT_PAGE_SIZE } from '../../constants/consts';
+import { localityEffectiveValue, vietnameseDateTimeInput } from '../../lib/admin-date';
 import { errorText, messageOf } from '../../lib/api-error';
 import { useAdminLocalities } from '../../queries/admin-catalogs';
 
@@ -110,11 +122,7 @@ function LocalityFormDialog({
     try {
       const effectiveFrom = localityEffectiveValue(effectiveFromInput, locality?.effectiveFrom);
       const effectiveTo = localityEffectiveValue(effectiveToInput, locality?.effectiveTo);
-      if (
-        effectiveFrom &&
-        effectiveTo &&
-        Date.parse(effectiveFrom) >= Date.parse(effectiveTo)
-      ) {
+      if (effectiveFrom && effectiveTo && Date.parse(effectiveFrom) >= Date.parse(effectiveTo)) {
         throw new Error('Thời điểm Hiệu lực đến phải sau thời điểm Hiệu lực từ.');
       }
 
@@ -165,8 +173,7 @@ function LocalityFormDialog({
         </DialogHeader>
         <form className='admin-form account-form' onSubmit={(event) => void submit(event)}>
           {!isEdit && (
-            <label htmlFor='locality-code'>
-              Mã địa bàn (bất biến)
+            <FormField label='Mã địa bàn (bất biến)' htmlFor='locality-code'>
               <Input
                 id='locality-code'
                 value={code}
@@ -174,10 +181,9 @@ function LocalityFormDialog({
                 maxLength={50}
                 required
               />
-            </label>
+            </FormField>
           )}
-          <label htmlFor='locality-name'>
-            Tên xã / phường
+          <FormField label='Tên xã / phường' htmlFor='locality-name'>
             <Input
               id='locality-name'
               value={name}
@@ -185,20 +191,19 @@ function LocalityFormDialog({
               maxLength={255}
               required
             />
-          </label>
-          <label htmlFor='locality-type'>
-            Loại địa bàn
-            <select
-              id='locality-type'
-              value={type}
-              onChange={(event) => setType(event.target.value as LocalityType)}
-            >
-              <option value='COMMUNE'>Xã</option>
-              <option value='WARD'>Phường</option>
-            </select>
-          </label>
-          <label htmlFor='locality-province'>
-            Tỉnh / Thành phố
+          </FormField>
+          <FormField label='Loại địa bàn' htmlFor='locality-type'>
+            <Select value={type} onValueChange={(val) => setType(val as LocalityType)}>
+              <SelectTrigger id='locality-type'>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value='COMMUNE'>Xã</SelectItem>
+                <SelectItem value='WARD'>Phường</SelectItem>
+              </SelectContent>
+            </Select>
+          </FormField>
+          <FormField label='Tỉnh / Thành phố' htmlFor='locality-province'>
             <Input
               id='locality-province'
               value={provinceName}
@@ -206,9 +211,11 @@ function LocalityFormDialog({
               maxLength={255}
               required
             />
-          </label>
-          <label htmlFor='locality-effective-from'>
-            Hiệu lực từ (giờ Việt Nam, để trống nếu không giới hạn)
+          </FormField>
+          <FormField
+            label='Hiệu lực từ (giờ Việt Nam, để trống nếu không giới hạn)'
+            htmlFor='locality-effective-from'
+          >
             <Input
               id='locality-effective-from'
               type='datetime-local'
@@ -216,9 +223,11 @@ function LocalityFormDialog({
               value={effectiveFromInput}
               onChange={(event) => setEffectiveFromInput(event.target.value)}
             />
-          </label>
-          <label htmlFor='locality-effective-to'>
-            Hiệu lực đến (giờ Việt Nam, để trống nếu không giới hạn)
+          </FormField>
+          <FormField
+            label='Hiệu lực đến (giờ Việt Nam, để trống nếu không giới hạn)'
+            htmlFor='locality-effective-to'
+          >
             <Input
               id='locality-effective-to'
               type='datetime-local'
@@ -226,18 +235,22 @@ function LocalityFormDialog({
               value={effectiveToInput}
               onChange={(event) => setEffectiveToInput(event.target.value)}
             />
-          </label>
-          <label className='inline-flex items-center gap-2 cursor-pointer'>
-            <input
-              type='checkbox'
+          </FormField>
+          <div className='inline-flex items-center gap-2'>
+            <Checkbox
+              id='localities-1'
               checked={isActive}
-              onChange={(event) => setIsActive(event.target.checked)}
+              onCheckedChange={(checked) => setIsActive(checked === true)}
               disabled={busy}
             />
-            <span>Mở cho đăng ký mới</span>
-          </label>
-          <label htmlFor='locality-reason'>
-            Lý do {isEdit ? 'thay đổi' : 'tạo địa bàn'}
+            <Label htmlFor='localities-1' className='cursor-pointer'>
+              Mở cho đăng ký mới
+            </Label>
+          </div>
+          <FormField
+            label={<>Lý do {isEdit ? 'thay đổi' : 'tạo địa bàn'}</>}
+            htmlFor='locality-reason'
+          >
             <Input
               id='locality-reason'
               value={reason}
@@ -245,14 +258,10 @@ function LocalityFormDialog({
               maxLength={255}
               required
             />
-          </label>
-          {error && (
-            <p className='form-note' role='alert'>
-              {error}
-            </p>
-          )}
+          </FormField>
+          {error && <AlertError title='Không thể lưu địa bàn' errors={[error]} />}
           <div className='admin-actions'>
-            <Button type='submit' disabled={busy}>
+            <Button type='submit' loading={busy} disabled={busy}>
               {busy ? 'Đang lưu…' : isEdit ? 'Lưu địa bàn' : 'Thêm địa bàn'}
             </Button>
             <Button
@@ -320,9 +329,80 @@ export function LocalitiesPanel({
   });
 
   const localities = data?.data ?? [];
-  const totalPages = data?.meta?.totalPages ?? 0;
   const currentPage = data?.meta?.page ?? appliedQuery.page ?? 1;
+  const currentLimit = appliedQuery.limit ?? DEFAULT_PAGE_SIZE;
   const loadErrorText = errorText(loadError);
+
+  const columns = useMemo<DataTableColumnDef<LocalityRecord>[]>(() => {
+    const cols: DataTableColumnDef<LocalityRecord>[] = [
+      {
+        accessorKey: 'code',
+        header: 'Mã địa bàn',
+        meta: { cellClassName: 'font-mono text-xs' },
+      },
+      {
+        accessorKey: 'name',
+        header: 'Tên xã / phường',
+        meta: { isRowHeader: true },
+      },
+      {
+        accessorKey: 'type',
+        header: 'Loại',
+        cell: ({ row }) => (row.original.type === 'WARD' ? 'Phường' : 'Xã'),
+      },
+      {
+        accessorKey: 'provinceName',
+        header: 'Tỉnh / Thành phố',
+      },
+      {
+        id: 'effectiveRange',
+        header: 'Khoảng hiệu lực',
+        meta: { cellClassName: 'text-xs text-muted' },
+        cell: ({ row }) => {
+          const item = row.original;
+          return (
+            <>
+              {item.effectiveFrom ? new Date(item.effectiveFrom).toLocaleString('vi-VN') : 'Từ đầu'}{' '}
+              →{' '}
+              {item.effectiveTo ? new Date(item.effectiveTo).toLocaleString('vi-VN') : 'Hiện hành'}
+            </>
+          );
+        },
+      },
+      {
+        accessorKey: 'isActive',
+        header: 'Trạng thái',
+        cell: ({ row }) => (
+          <Badge variant={row.original.isActive ? 'default' : 'secondary'}>
+            {row.original.isActive ? 'Đang mở đăng ký' : 'Ngừng mở đăng ký'}
+          </Badge>
+        ),
+      },
+    ];
+
+    if (canManage) {
+      cols.push({
+        id: 'actions',
+        header: 'Thao tác',
+        meta: { align: 'right' },
+        cell: ({ row }) => (
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            onClick={() => {
+              setCreateOpen(false);
+              setEditingLocality(row.original);
+            }}
+          >
+            Sửa
+          </Button>
+        ),
+      });
+    }
+
+    return cols;
+  }, [canManage]);
 
   return (
     <section className='admin-page' aria-label='Danh mục địa bàn xã phường'>
@@ -337,6 +417,7 @@ export function LocalitiesPanel({
           <Button
             type='button'
             variant='secondary'
+            loading={isFetching}
             disabled={isPending}
             onClick={() => void refetch()}
           >
@@ -375,59 +456,63 @@ export function LocalitiesPanel({
           });
         }}
       >
-        <label
+        <FormField
+          label='Tìm mã, tên hoặc tỉnh/thành'
+          htmlFor='localities-filter-q'
           className='admin-filter-field'
           data-filter-width='search'
-          htmlFor='localities-filter-q'
         >
-          Tìm mã, tên hoặc tỉnh/thành
           <Input
             id='localities-filter-q'
             value={draftQ}
             placeholder='Nhập mã, tên xã/phường hoặc tỉnh…'
             onChange={(event) => setDraftQ(event.target.value)}
           />
-        </label>
-        <label
-          className='admin-filter-field'
-          data-filter-width='status'
+        </FormField>
+        <FormField
+          label='Loại địa bàn'
           htmlFor='localities-filter-type'
-        >
-          Loại địa bàn
-          <select
-            id='localities-filter-type'
-            value={draftType ?? ''}
-            onChange={(event) =>
-              setDraftType(
-                event.target.value ? (event.target.value as LocalityType) : undefined,
-              )
-            }
-          >
-            <option value=''>Tất cả</option>
-            <option value='COMMUNE'>Xã</option>
-            <option value='WARD'>Phường</option>
-          </select>
-        </label>
-        <label
           className='admin-filter-field'
           data-filter-width='status'
-          htmlFor='localities-filter-active'
         >
-          Trạng thái
-          <select
-            id='localities-filter-active'
-            value={draftIsActive === undefined ? '' : String(draftIsActive)}
-            onChange={(event) =>
-              setDraftIsActive(
-                event.target.value === '' ? undefined : event.target.value === 'true',
-              )
+          <Select
+            value={draftType ?? ALL}
+            onValueChange={(value) =>
+              setDraftType(value === ALL ? undefined : (value as LocalityType))
             }
           >
-            <option value=''>Tất cả</option>
-            <option value='true'>Đang mở đăng ký</option>
-            <option value='false'>Ngừng mở đăng ký</option>
-          </select>
-        </label>
+            <SelectTrigger id='localities-filter-type'>
+              <SelectValue placeholder='Tất cả' />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>Tất cả</SelectItem>
+              <SelectItem value='COMMUNE'>Xã</SelectItem>
+              <SelectItem value='WARD'>Phường</SelectItem>
+            </SelectContent>
+          </Select>
+        </FormField>
+        <FormField
+          label='Trạng thái'
+          htmlFor='localities-filter-active'
+          className='admin-filter-field'
+          data-filter-width='status'
+        >
+          <Select
+            value={draftIsActive === undefined ? ALL : String(draftIsActive)}
+            onValueChange={(value) =>
+              setDraftIsActive(value === ALL ? undefined : value === 'true')
+            }
+          >
+            <SelectTrigger id='localities-filter-active'>
+              <SelectValue placeholder='Tất cả' />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>Tất cả</SelectItem>
+              <SelectItem value='true'>Đang mở đăng ký</SelectItem>
+              <SelectItem value='false'>Ngừng mở đăng ký</SelectItem>
+            </SelectContent>
+          </Select>
+        </FormField>
         <div className='admin-actions admin-filter-actions items-end'>
           <Button type='submit'>Áp dụng</Button>
           {(appliedQuery.q !== undefined ||
@@ -453,8 +538,8 @@ export function LocalitiesPanel({
       )}
 
       {loadErrorText && (
-        <div className='form-note' role='alert'>
-          <p>{loadErrorText}</p>
+        <div className='space-y-2'>
+          <AlertError title='Không thể tải địa bàn' errors={[loadErrorText]} />
           <Button
             type='button'
             variant='secondary'
@@ -466,16 +551,16 @@ export function LocalitiesPanel({
         </div>
       )}
 
-      {isPending && <p aria-live='polite'>Đang tải địa bàn…</p>}
+      {isPending && <PageSpin />}
 
       {!isPending && !loadError && localities.length === 0 && (
-        <div className='admin-table-region empty-card'>
+        <Card className='admin-table-region empty-card'>
           <h3>Chưa có địa bàn phù hợp</h3>
-          <p className='text-sm text-muted'>
+          <p className='text-muted text-sm'>
             Nạp danh mục Xã/Phường đã đối chiếu để phục vụ chọn địa bàn khi nộp hồ sơ và báo cáo
             thống kê.
           </p>
-        </div>
+        </Card>
       )}
 
       {!isPending && !loadError && localities.length > 0 && (
@@ -485,94 +570,18 @@ export function LocalitiesPanel({
           aria-label='Bảng danh mục Xã Phường'
           tabIndex={0}
         >
-          <table className='admin-data-table'>
-            <thead>
-              <tr>
-                <th scope='col'>Mã địa bàn</th>
-                <th scope='col'>Tên xã / phường</th>
-                <th scope='col'>Loại</th>
-                <th scope='col'>Tỉnh / Thành phố</th>
-                <th scope='col'>Khoảng hiệu lực</th>
-                <th scope='col'>Trạng thái</th>
-                {canManage && (
-                  <th scope='col' style={{ textAlign: 'right' }}>
-                    Thao tác
-                  </th>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {localities.map((item) => (
-                <tr key={item.id}>
-                  <td className='font-mono text-xs'>{item.code}</td>
-                  <th scope='row' className='font-semibold'>
-                    {item.name}
-                  </th>
-                  <td>{item.type === 'WARD' ? 'Phường' : 'Xã'}</td>
-                  <td>{item.provinceName}</td>
-                  <td className='text-xs text-muted'>
-                    {item.effectiveFrom
-                      ? new Date(item.effectiveFrom).toLocaleString('vi-VN')
-                      : 'Từ đầu'}{' '}
-                    →{' '}
-                    {item.effectiveTo
-                      ? new Date(item.effectiveTo).toLocaleString('vi-VN')
-                      : 'Hiện hành'}
-                  </td>
-                  <td>
-                    <span className={`status-badge ${item.isActive ? 'completed' : 'draft'}`}>
-                      {item.isActive ? 'Đang mở đăng ký' : 'Ngừng mở đăng ký'}
-                    </span>
-                  </td>
-                  {canManage && (
-                    <td style={{ textAlign: 'right' }}>
-                      <Button
-                        type='button'
-                        variant='secondary'
-                        size='sm'
-                        onClick={() => {
-                          setCreateOpen(false);
-                          setEditingLocality(item);
-                        }}
-                      >
-                        Sửa
-                      </Button>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className='table-footer'>
-            <div className='page-info'>
-              Hiển thị <strong>{localities.length}</strong> /{' '}
-              <strong>{data?.meta?.total ?? localities.length}</strong> địa bàn
-            </div>
-            <div className='pagination-actions'>
-              <Button
-                type='button'
-                variant='secondary'
-                size='sm'
-                disabled={currentPage <= 1}
-                onClick={() => applyQuery({ ...appliedQuery, page: currentPage - 1 })}
-              >
-                Trước
-              </Button>
-              <span className='text-xs font-semibold px-2'>
-                {totalPages > 0 ? `Trang ${currentPage} / ${totalPages}` : 'Chưa có địa bàn phù hợp'}
-              </span>
-              <Button
-                type='button'
-                variant='secondary'
-                size='sm'
-                disabled={totalPages === 0 || currentPage >= totalPages}
-                onClick={() => applyQuery({ ...appliedQuery, page: currentPage + 1 })}
-              >
-                Sau
-              </Button>
-            </div>
-          </div>
+          <DataTable
+            columns={columns}
+            data={localities}
+            total={data?.meta?.total ?? localities.length}
+            page={currentPage}
+            pageSize={currentLimit}
+            getRowId={(row) => row.id}
+            onPageChange={(nextPage) => applyQuery({ ...appliedQuery, page: nextPage })}
+            onPageSizeChange={(nextLimit) =>
+              applyQuery({ ...appliedQuery, page: 1, limit: nextLimit })
+            }
+          />
         </div>
       )}
 

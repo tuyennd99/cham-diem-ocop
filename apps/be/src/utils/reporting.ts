@@ -155,9 +155,9 @@ export interface ReportingProductRecord {
   category: {
     id: string;
     name: string;
-    groupId: string;
-    groupCode: string;
-    groupName: string;
+
+
+
     criterionIds?: string[];
   };
   locality: {
@@ -209,7 +209,6 @@ export function matchesReportDimensionFilters(
   product: ReportingProductRecord,
   query: AdminReportFilterQuery,
 ): boolean {
-  if (query.groupId && product.category.groupId !== query.groupId) return false;
   if (query.categoryId && product.category.id !== query.categoryId)
     return false;
   if (query.localityId && product.locality?.id !== query.localityId)
@@ -424,8 +423,8 @@ function resolveGroupingBuckets(
   period: ReturnType<typeof resolveVietnamPeriod>,
   baseQuery: AdminReportFilterQuery,
   catalogs: {
-    groups: Array<{ id: string; code: string; name: string }>;
-    categories: Array<{ id: string; name: string; groupName: string }>;
+
+    categories: Array<{ id: string; name: string }>;
     localities: Array<{
       id: string;
       code: string;
@@ -443,7 +442,7 @@ function resolveGroupingBuckets(
     dateBasis: dateField,
     from: period.from,
     toExclusive: period.toExclusive,
-    ...(baseQuery.groupId ? { groupId: baseQuery.groupId } : {}),
+
     ...(baseQuery.categoryId ? { categoryId: baseQuery.categoryId } : {}),
     ...(baseQuery.localityId ? { localityId: baseQuery.localityId } : {}),
     ...(baseQuery.registrationType
@@ -488,23 +487,12 @@ function resolveGroupingBuckets(
     });
   }
 
-  if (groupBy === 'group') {
-    return catalogs.groups
-      .filter((g) => !baseQuery.groupId || g.id === baseQuery.groupId)
-      .map((g) => ({
-        key: g.id,
-        label: `${g.code} · ${g.name}`,
-        drillDown: { ...baseDrill, groupId: g.id },
-        items: items.filter((p) => p.category.groupId === g.id),
-      }));
-  }
-
   if (groupBy === 'category') {
     return catalogs.categories
       .filter((c) => !baseQuery.categoryId || c.id === baseQuery.categoryId)
       .map((c) => ({
         key: c.id,
-        label: `${c.groupName} · ${c.name}`,
+        label: c.name,
         drillDown: { ...baseDrill, categoryId: c.id },
         items: items.filter((p) => p.category.id === c.id),
       }));
@@ -608,13 +596,13 @@ function computeDataQuality(
 export function buildRegistrationReport(input: {
   query: AdminReportQuery;
   products: readonly ReportingProductRecord[];
-  groups: Array<{ id: string; code: string; name: string }>;
+
   categories: Array<{
     id: string;
     name: string;
-    groupId: string;
-    groupCode: string;
-    groupName: string;
+
+
+
   }>;
   localities: Array<{
     id: string;
@@ -664,7 +652,7 @@ export function buildRegistrationReport(input: {
     dateBasis: 'submittedAt',
     from: period.from,
     toExclusive: period.toExclusive,
-    ...(input.query.groupId ? { groupId: input.query.groupId } : {}),
+
     ...(input.query.categoryId ? { categoryId: input.query.categoryId } : {}),
     ...(input.query.localityId ? { localityId: input.query.localityId } : {}),
     ...(input.query.registrationType
@@ -703,7 +691,7 @@ export function buildRegistrationReport(input: {
     period,
     input.query,
     {
-      groups: input.groups,
+
       categories: input.categories,
       localities: input.localities,
     },
@@ -771,13 +759,13 @@ export function buildRegistrationReport(input: {
 export function buildResultsReport(input: {
   query: AdminReportQuery;
   products: readonly ReportingProductRecord[];
-  groups: Array<{ id: string; code: string; name: string }>;
+
   categories: Array<{
     id: string;
     name: string;
-    groupId: string;
-    groupCode: string;
-    groupName: string;
+
+
+
   }>;
   localities: Array<{
     id: string;
@@ -827,7 +815,7 @@ export function buildResultsReport(input: {
     status: 'COMPLETED',
     from: period.from,
     toExclusive: period.toExclusive,
-    ...(input.query.groupId ? { groupId: input.query.groupId } : {}),
+
     ...(input.query.categoryId ? { categoryId: input.query.categoryId } : {}),
     ...(input.query.localityId ? { localityId: input.query.localityId } : {}),
     ...(input.query.registrationType
@@ -862,7 +850,7 @@ export function buildResultsReport(input: {
     period,
     input.query,
     {
-      groups: input.groups,
+
       categories: input.categories,
       localities: input.localities,
     },
@@ -923,13 +911,13 @@ export function buildResultsReport(input: {
 export function buildAnalyticsDashboard(input: {
   query: AdminReportFilterQuery;
   products: readonly ReportingProductRecord[];
-  groups: Array<{ id: string; code: string; name: string }>;
+
   categories: Array<{
     id: string;
     name: string;
-    groupId: string;
-    groupCode: string;
-    groupName: string;
+
+
+
   }>;
   localities: Array<{
     id: string;
@@ -954,7 +942,7 @@ export function buildAnalyticsDashboard(input: {
     name: string;
     status: 'SUBMITTED' | 'SCORING';
     submittedAt: string | null;
-    category: { id: string; name: string; groupName: string };
+    category: { id: string; name: string };
     assignedJudgeCount: number;
     submittedEvaluationCount: number;
     pendingEvaluationCount: number;
@@ -970,9 +958,9 @@ export function buildAnalyticsDashboard(input: {
   const isCurrentAsOf = period.asOfDate.getTime() >= now.getTime();
 
   const regReport = buildRegistrationReport({
-    query: { ...input.query, groupBy: 'group' },
+    query: { ...input.query, groupBy: 'category' },
     products: input.products,
-    groups: input.groups,
+
     categories: input.categories,
     localities: input.localities,
     now,
@@ -981,9 +969,9 @@ export function buildAnalyticsDashboard(input: {
   });
 
   const resReport = buildResultsReport({
-    query: { ...input.query, groupBy: 'group' },
+    query: { ...input.query, groupBy: 'category' },
     products: input.products,
-    groups: input.groups,
+
     categories: input.categories,
     localities: input.localities,
     now,
@@ -1250,27 +1238,13 @@ export function buildAnalyticsDashboard(input: {
       .map((p) => p.id),
   );
 
-  const byProductGroup = input.groups.map((grp) => {
-    const grpCategories = input.categories.filter((c) => c.groupId === grp.id);
-    const categoryItems = grpCategories.map((cat) => {
-      const catProds = dimensionFiltered.filter((p) => p.category.id === cat.id);
-      return {
-        categoryId: cat.id,
-        categoryName: cat.name,
-        registeredCount: catProds.filter((p) => regCohortIds.has(p.id)).length,
-        completedCount: catProds.filter((p) => resCohortIds.has(p.id)).length,
-      };
-    });
+  const byCategory = input.categories.map((cat) => {
+    const products = dimensionFiltered.filter((product) => product.category.id === cat.id);
     return {
-      groupId: grp.id,
-      groupCode: grp.code,
-      groupName: grp.name,
-      registeredCount: categoryItems.reduce(
-        (s, c) => s + c.registeredCount,
-        0,
-      ),
-      completedCount: categoryItems.reduce((s, c) => s + c.completedCount, 0),
-      categories: categoryItems,
+      categoryId: cat.id,
+      categoryName: cat.name,
+      registeredCount: products.filter((product) => regCohortIds.has(product.id)).length,
+      completedCount: products.filter((product) => resCohortIds.has(product.id)).length,
     };
   });
 
@@ -1322,7 +1296,7 @@ export function buildAnalyticsDashboard(input: {
     kpis,
     charts: {
       monthlyTrend,
-      byProductGroup,
+      byCategory,
       cohortProgress,
       starDistribution,
     },

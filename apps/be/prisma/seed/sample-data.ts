@@ -43,9 +43,6 @@ interface LoadedCriterion {
 interface LoadedCategory {
   id: string;
   name: string;
-  classificationGroup: string;
-  classificationSubgroup: string | null;
-  group: { id: string; code: string; name: string };
   criteriaSet: {
     id: string;
     name: string | null;
@@ -570,9 +567,6 @@ export async function seedSampleOcopData(
     select: {
       id: true,
       name: true,
-      classificationGroup: true,
-      classificationSubgroup: true,
-      group: { select: { id: true, code: true, name: true } },
       criteriaSet: {
         select: {
           id: true,
@@ -659,10 +653,7 @@ export async function seedSampleOcopData(
           category: {
             id: category.id,
             name: category.name,
-            classificationGroup: category.classificationGroup,
-            classificationSubgroup: category.classificationSubgroup,
           },
-          group: category.group,
           locality: {
             id: locality.id,
             code: locality.code,
@@ -841,7 +832,7 @@ export async function seedSampleOcopData(
 
       const submissionSnapshot = submitEvaluation
         ? ({
-            version: 1,
+            version: 2,
             submittedAt: evalTimestamp.toISOString(),
             product: {
               id: spec.id,
@@ -851,7 +842,6 @@ export async function seedSampleOcopData(
               category: {
                 id: category.id,
                 name: category.name,
-                group: category.group,
               },
             },
             criteriaSet: {

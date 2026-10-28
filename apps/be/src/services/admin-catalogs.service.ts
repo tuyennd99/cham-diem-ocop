@@ -5,12 +5,9 @@ import type {
   AdminCategoriesQueryDto,
   CreateLocalityDto,
   CreateAdminCategoryDto,
-  CreateProductGroupDto,
-  ProductGroupsQueryDto,
   PublicLocalitiesQueryDto,
   UpdateLocalityDto,
   UpdateAdminCategoryDto,
-  UpdateProductGroupDto,
 } from '../dtos/admin-catalogs.dto';
 import type { RequestMeta } from '../types/auth';
 
@@ -65,43 +62,6 @@ export class AdminCatalogsService {
     return locality;
   }
 
-  async listProductGroups(query: ProductGroupsQueryDto) {
-    const { data, total } = await this.repository.listProductGroups(query);
-    return {
-      data,
-      meta: {
-        page: query.page,
-        limit: query.limit,
-        total,
-        totalPages: Math.ceil(total / query.limit),
-      },
-    };
-  }
-
-  createProductGroup(
-    input: CreateProductGroupDto,
-    actorId: string,
-    meta: RequestMeta,
-  ) {
-    return this.repository.createProductGroup(input, actorId, meta);
-  }
-
-  async updateProductGroup(
-    id: string,
-    input: UpdateProductGroupDto,
-    actorId: string,
-    meta: RequestMeta,
-  ) {
-    const group = await this.repository.updateProductGroup(
-      id,
-      input,
-      actorId,
-      meta,
-    );
-    if (!group) throw new NotFoundException('Product group not found');
-    return group;
-  }
-
   async listCategories(query: AdminCategoriesQueryDto) {
     const { data, total } = await this.repository.listCategories(query);
     return {
@@ -127,7 +87,7 @@ export class AdminCatalogsService {
     meta: RequestMeta,
   ) {
     const category = await this.repository.createCategory(input, actorId, meta);
-    if (!category) throw new NotFoundException('Product group not found');
+    if (!category) throw new NotFoundException('Product category not found');
     return category;
   }
 
@@ -144,7 +104,7 @@ export class AdminCatalogsService {
       meta,
     );
     if (!category)
-      throw new NotFoundException('Product category or group not found');
+      throw new NotFoundException('Product category not found');
     return category;
   }
 }

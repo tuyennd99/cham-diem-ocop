@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { myProductsApi } from '../../api';
 import { adminProductsApi } from '../../api/admin-products';
 import { messageOf } from '../../lib/api-error';
@@ -29,9 +30,14 @@ export function AttachmentLink({
     }
   }
   return (
-    <button type='button' className='text-link' onClick={() => void open()}>
+    <Button
+      type='button'
+      variant='link'
+      className='text-link h-auto min-h-0 p-0'
+      onClick={() => void open()}
+    >
       {name}
-    </button>
+    </Button>
   );
 }
 

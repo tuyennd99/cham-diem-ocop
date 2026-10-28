@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import { useForm } from '@tanstack/react-form';
+import AlertError from '@/components/alert-error';
+import { FormField } from '@/components/form-field';
+import PasswordInput from '@/components/password-input';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { authApi } from '../../api';
@@ -72,9 +75,9 @@ export function ForgotPasswordPage() {
         >
           <sendCodeForm.Field name='email'>
             {(field) => (
-              <label>
-                Email
+              <FormField label='Email' htmlFor={`forgot-password-${field.name}`}>
                 <Input
+                  id={`forgot-password-${field.name}`}
                   name={field.name}
                   type='email'
                   autoComplete='email'
@@ -83,7 +86,7 @@ export function ForgotPasswordPage() {
                   onChange={(event) => field.handleChange(event.target.value)}
                   required
                 />
-              </label>
+              </FormField>
             )}
           </sendCodeForm.Field>
           {notice && (
@@ -91,14 +94,10 @@ export function ForgotPasswordPage() {
               {notice}
             </p>
           )}
-          {error && (
-            <p className='form-note' role='alert'>
-              {error}
-            </p>
-          )}
+          {error && <AlertError title='Không thể gửi mã xác thực' errors={[error]} />}
           <sendCodeForm.Subscribe selector={(state) => state.isSubmitting}>
             {(busy) => (
-              <Button type='submit' className='auth-submit-btn' disabled={busy}>
+              <Button type='submit' className='auth-submit-btn' loading={busy} disabled={busy}>
                 {busy ? 'Đang gửi…' : 'Gửi mã xác thực'}
               </Button>
             )}
@@ -114,9 +113,9 @@ export function ForgotPasswordPage() {
         >
           <resetForm.Field name='code'>
             {(field) => (
-              <label>
-                Mã OTP
+              <FormField label='Mã OTP' htmlFor={`forgot-password-${field.name}`}>
                 <Input
+                  id={`forgot-password-${field.name}`}
                   name={field.name}
                   className='otp-code-input'
                   inputMode='numeric'
@@ -128,16 +127,15 @@ export function ForgotPasswordPage() {
                   onChange={(event) => field.handleChange(event.target.value)}
                   required
                 />
-              </label>
+              </FormField>
             )}
           </resetForm.Field>
           <resetForm.Field name='password'>
             {(field) => (
-              <label>
-                Mật khẩu mới
-                <Input
+              <FormField label='Mật khẩu mới' htmlFor={`forgot-password-${field.name}`}>
+                <PasswordInput
+                  id={`forgot-password-${field.name}`}
                   name={field.name}
-                  type='password'
                   autoComplete='new-password'
                   minLength={8}
                   maxLength={72}
@@ -146,17 +144,13 @@ export function ForgotPasswordPage() {
                   onChange={(event) => field.handleChange(event.target.value)}
                   required
                 />
-              </label>
+              </FormField>
             )}
           </resetForm.Field>
-          {error && (
-            <p className='form-note' role='alert'>
-              {error}
-            </p>
-          )}
+          {error && <AlertError title='Không thể đặt lại mật khẩu' errors={[error]} />}
           <resetForm.Subscribe selector={(state) => state.isSubmitting}>
             {(busy) => (
-              <Button type='submit' className='auth-submit-btn' disabled={busy}>
+              <Button type='submit' className='auth-submit-btn' loading={busy} disabled={busy}>
                 {busy ? 'Đang lưu…' : 'Đặt lại mật khẩu'}
               </Button>
             )}

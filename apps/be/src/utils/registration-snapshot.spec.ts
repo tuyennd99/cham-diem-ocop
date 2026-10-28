@@ -34,10 +34,7 @@ describe('buildRegistrationSnapshot', () => {
     category: {
       id: 'category-1',
       name: 'Category',
-      classificationGroup: 'Classification',
-      classificationSubgroup: null,
     },
-    group: { id: 'group-1', code: 'G1', name: 'Group' },
     locality: {
       id: 'locality-1',
       code: 'L1',
@@ -51,7 +48,7 @@ describe('buildRegistrationSnapshot', () => {
     const snapshot = buildRegistrationSnapshot(input);
 
     expect(snapshot).toEqual({
-      version: 1,
+      version: 2,
       submittedAt: '2026-10-23T05:00:00.000Z',
       product: { id: 'product-1', name: 'Product', description: null },
       registrant: {
@@ -63,9 +60,6 @@ describe('buildRegistrationSnapshot', () => {
       category: {
         id: 'category-1',
         name: 'Category',
-        classificationGroup: 'Classification',
-        classificationSubgroup: null,
-        group: { id: 'group-1', code: 'G1', name: 'Group' },
       },
       locality: {
         id: 'locality-1',

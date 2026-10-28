@@ -2,23 +2,13 @@ import type {
   AdminCategoryQuery,
   CreateAdminCategoryInput,
   CreateLocalityInput,
-  CreateProductGroupInput,
   LocalityQuery,
-  ProductGroupQuery,
   UpdateAdminCategoryInput,
   UpdateLocalityInput,
-  UpdateProductGroupInput,
 } from '@ocop/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { adminCatalogsApi } from '../api/admin-catalogs';
 import { queryKeys } from '../constants/query-key';
-
-export function useAdminProductGroups(query: ProductGroupQuery) {
-  return useQuery({
-    queryKey: queryKeys.adminCatalogs.groups.list(query),
-    queryFn: () => adminCatalogsApi.groups(query),
-  });
-}
 
 export function useAdminCategories(query: AdminCategoryQuery) {
   return useQuery({
@@ -46,7 +36,6 @@ export function useAdminCatalogMutations() {
   const queryClient = useQueryClient();
 
   const invalidateCatalogs = () => {
-    void queryClient.invalidateQueries({ queryKey: queryKeys.adminCatalogs.groups.all });
     void queryClient.invalidateQueries({ queryKey: queryKeys.adminCatalogs.categories.all });
     void queryClient.invalidateQueries({ queryKey: queryKeys.categories });
     void queryClient.invalidateQueries({ queryKey: queryKeys.scoringPrint.criteriaSets.all });
@@ -56,19 +45,6 @@ export function useAdminCatalogMutations() {
     void queryClient.invalidateQueries({ queryKey: queryKeys.adminCatalogs.localities.all });
     void queryClient.invalidateQueries({ queryKey: queryKeys.localities.all });
   };
-
-  const createGroup = useMutation({
-    mutationFn: (data: CreateProductGroupInput) => adminCatalogsApi.createGroup(data),
-    onSuccess: invalidateCatalogs,
-    retry: false,
-  });
-
-  const updateGroup = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: UpdateProductGroupInput }) =>
-      adminCatalogsApi.updateGroup(id, data),
-    onSuccess: invalidateCatalogs,
-    retry: false,
-  });
 
   const createCategory = useMutation({
     mutationFn: (data: CreateAdminCategoryInput) => adminCatalogsApi.createCategory(data),
@@ -97,9 +73,6 @@ export function useAdminCatalogMutations() {
   });
 
   return {
-    createGroup: (data: CreateProductGroupInput) => createGroup.mutateAsync(data),
-    updateGroup: (id: string, data: UpdateProductGroupInput) =>
-      updateGroup.mutateAsync({ id, data }),
     createCategory: (data: CreateAdminCategoryInput) => createCategory.mutateAsync(data),
     updateCategory: (id: string, data: UpdateAdminCategoryInput) =>
       updateCategory.mutateAsync({ id, data }),

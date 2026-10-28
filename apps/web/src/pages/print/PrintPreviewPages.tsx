@@ -1,3 +1,5 @@
+import AlertError from '@/components/alert-error';
+import PageSpin from '@/components/page-spin';
 import { Button } from '@/components/ui/button';
 import {
   BlankCriteriaPrintSheet,
@@ -26,9 +28,8 @@ function PrintLoadError({
   onRetry: () => void;
 }) {
   return (
-    <section className='route-panel' role='alert'>
-      <h2>Không tải được dữ liệu bản in</h2>
-      <p className='form-note'>{message}</p>
+    <section className='route-panel space-y-2'>
+      <AlertError title='Không tải được dữ liệu bản in' errors={[message]} />
       <Button type='button' variant='secondary' onClick={onRetry}>
         Thử lại
       </Button>
@@ -50,7 +51,7 @@ export function BlankCriteriaPrintPreviewPage({
         backLabel='Phiếu chấm OCOP'
         title='Xem trước Mẫu phiếu trắng A4'
       />
-      {isPending && <p>Đang tải mẫu phiếu trắng…</p>}
+      {isPending && <PageSpin />}
       {err && <PrintLoadError message={err} onRetry={() => void refetch()} />}
       {data?.data && <BlankCriteriaPrintSheet data={data.data} />}
     </section>
@@ -71,7 +72,7 @@ export function AdminEvaluationPrintPreviewPage({
         backLabel='Danh sách phiếu chấm'
         title='Xem trước Phiếu chấm sản phẩm A4'
       />
-      {isPending && <p>Đang tải dữ liệu phiếu chấm…</p>}
+      {isPending && <PageSpin />}
       {err && <PrintLoadError message={err} onRetry={() => void refetch()} />}
       {data?.data && <EvaluationPrintSheet data={data.data} />}
     </section>
@@ -92,7 +93,7 @@ export function JudgeEvaluationPrintPreviewPage({
         backLabel='Quay lại màn chấm điểm'
         title='Xem trước Phiếu chấm cá nhân A4'
       />
-      {isPending && <p>Đang tải dữ liệu phiếu chấm…</p>}
+      {isPending && <PageSpin />}
       {err && <PrintLoadError message={err} onRetry={() => void refetch()} />}
       {data?.data && <EvaluationPrintSheet data={data.data} />}
     </section>
@@ -126,7 +127,7 @@ export function ProductRegistrationPrintPreviewPage({
         backLabel='Quay lại hồ sơ'
         title='Xem trước Phiếu đăng ký Mẫu số 01 (A4)'
       />
-      {isPending && <p>Đang tải dữ liệu phiếu đăng ký…</p>}
+      {isPending && <PageSpin />}
       {err && <PrintLoadError message={err} onRetry={() => void refetch()} />}
       {data?.data && (
         <RegistrationPrintSheet data={data.data} attachmentMode={mode} />
@@ -162,7 +163,7 @@ export function ProductResultsPrintPreviewPage({
         backLabel='Quay lại hồ sơ'
         title='Xem trước Bảng tổng hợp kết quả đánh giá OCOP (A4)'
       />
-      {isPending && <p>Đang tải bảng tổng hợp kết quả…</p>}
+      {isPending && <PageSpin />}
       {err && <PrintLoadError message={err} onRetry={() => void refetch()} />}
       {data?.data && <ProductResultsPrintSheet data={data.data} />}
     </section>

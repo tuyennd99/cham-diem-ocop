@@ -3,15 +3,14 @@ import type {
   Locality,
   Product,
   ProductCategory,
-  ProductGroup,
   User,
 } from '@prisma/client';
 import type {
   ProductApplicationForm,
   ProductRegistrationType,
-  RegistrationSnapshotV1,
+  RegistrationSnapshotV2,
 } from '@ocop/shared';
-export type { RegistrationSnapshotV1 } from '@ocop/shared';
+export type { RegistrationSnapshot, RegistrationSnapshotV1, RegistrationSnapshotV2 } from '@ocop/shared';
 import { productRegistrationTypes } from '../constants/products';
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -75,15 +74,11 @@ export function buildRegistrationSnapshot(input: {
   submittedAt: Date;
   product: Pick<Product, 'id' | 'name' | 'description' | 'formData'>;
   registrant: Pick<User, 'id' | 'fullName' | 'email' | 'phone'>;
-  category: Pick<
-    ProductCategory,
-    'id' | 'name' | 'classificationGroup' | 'classificationSubgroup'
-  >;
-  group: Pick<ProductGroup, 'id' | 'code' | 'name'>;
+  category: Pick<ProductCategory, 'id' | 'name'>;
   locality: Pick<Locality, 'id' | 'code' | 'name' | 'type' | 'provinceName'>;
-}): RegistrationSnapshotV1 {
+}): RegistrationSnapshotV2 {
   return {
-    version: 1,
+    version: 2,
     submittedAt: input.submittedAt.toISOString(),
     product: {
       id: input.product.id,
@@ -99,13 +94,6 @@ export function buildRegistrationSnapshot(input: {
     category: {
       id: input.category.id,
       name: input.category.name,
-      classificationGroup: input.category.classificationGroup,
-      classificationSubgroup: input.category.classificationSubgroup,
-      group: {
-        id: input.group.id,
-        code: input.group.code,
-        name: input.group.name,
-      },
     },
     locality: {
       id: input.locality.id,

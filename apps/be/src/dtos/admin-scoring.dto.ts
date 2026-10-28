@@ -53,7 +53,7 @@ export class AdminCriteriaSetsQueryDto implements AdminCriteriaSetQuery {
   @IsString()
   @MinLength(1)
   @MaxLength(100)
-  groupId?: string;
+  categoryId?: string;
 
   @ApiPropertyOptional({ type: Boolean })
   @IsOptional()
@@ -92,14 +92,6 @@ export class AdminEvaluationsQueryDto implements AdminEvaluationQuery {
   @MinLength(1)
   @MaxLength(100)
   productId?: string;
-
-  @ApiPropertyOptional({ maxLength: 100 })
-  @IsOptional()
-  @Transform(trimString)
-  @IsString()
-  @MinLength(1)
-  @MaxLength(100)
-  groupId?: string;
 
   @ApiPropertyOptional({ maxLength: 100 })
   @IsOptional()

@@ -20,7 +20,6 @@ describe('AdminRepository.replaceAssignments', () => {
             {
               id: 'category-1',
               name: 'Thực phẩm',
-              groupName: 'Nông sản',
               criteriaSet: { criteria: [{ id: 'criterion-1', code: '1.1' }] },
             },
           ]),
@@ -39,7 +38,7 @@ describe('AdminRepository.replaceAssignments', () => {
         repository.replaceAssignments([], 'admin-1', undefined, {}),
       ).rejects.toThrow(
         new ConflictException(
-          'Phân công chưa phủ đủ tiêu chí cho Nông sản · Thực phẩm: chưa có giám khảo',
+          'Phân công chưa phủ đủ tiêu chí cho Thực phẩm: chưa có giám khảo',
         ),
       );
       expect(transaction.judgeAssignment.findMany).toHaveBeenCalled();

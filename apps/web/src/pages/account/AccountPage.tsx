@@ -1,6 +1,9 @@
 import type { Role, StaffPermission } from '@ocop/shared';
-import { Link, Outlet, useLocation } from '@tanstack/react-router';
+import { Link } from '@tanstack/react-router';
 import { KeyRound, RotateCcw } from 'lucide-react';
+import AlertError from '@/components/alert-error';
+import PageSpin from '@/components/page-spin';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { errorText } from '../../lib/api-error';
 import { useSession } from '../../lib/auth';
@@ -20,15 +23,10 @@ const PERMISSION_LABELS: Record<StaffPermission, string> = {
 };
 
 export function AccountPage() {
-  const pathname = useLocation({ select: (loc) => loc.pathname });
   const session = useSession();
   const { data: meUser, error: loadError, isPending, isFetching, refetch } = useMe();
   const user = meUser ?? session?.user ?? null;
   const error = errorText(loadError);
-
-  if (pathname !== '/account') {
-    return <Outlet />;
-  }
 
   return (
     <section className='admin-page'>
@@ -43,30 +41,29 @@ export function AccountPage() {
           <Button
             type='button'
             variant='secondary'
+            loading={isFetching}
             disabled={isFetching}
             onClick={() => void refetch()}
           >
             <RotateCcw className='size-4' aria-hidden='true' />
             <span>{isFetching ? 'Đang làm mới…' : 'Làm mới'}</span>
           </Button>
-          <Link className='button button-primary' to='/account/password'>
-            <KeyRound className='size-4' aria-hidden='true' />
-            <span>Đổi mật khẩu</span>
-          </Link>
+          <Button asChild>
+            <Link to='/account/password'>
+              <KeyRound className='size-4' aria-hidden='true' />
+              <span>Đổi mật khẩu</span>
+            </Link>
+          </Button>
         </div>
       </div>
 
       {error && !user && (
-        <div className='form-alert' role='alert'>
-          <div>
-            <p className='font-semibold text-red-900'>Không tải được thông tin tài khoản</p>
-            <p className='text-sm text-red-800 mt-0.5'>{error}</p>
-          </div>
+        <div className='space-y-2'>
+          <AlertError title='Không tải được thông tin tài khoản' errors={[error]} />
           <Button
             type='button'
             variant='secondary'
             size='sm'
-            className='ml-auto'
             onClick={() => void refetch()}
           >
             <RotateCcw className='size-4' aria-hidden='true' />
@@ -75,13 +72,7 @@ export function AccountPage() {
         </div>
       )}
 
-      {isPending && !user && (
-        <div className='admin-table-region p-6' aria-busy='true'>
-          <p role='status' className='text-sm text-muted'>
-            Đang tải thông tin tài khoản…
-          </p>
-        </div>
-      )}
+      {isPending && !user && <PageSpin />}
 
       {user && (
         <div className='admin-table-region p-6'>
@@ -90,9 +81,9 @@ export function AccountPage() {
               <h2>{user.fullName}</h2>
               <p className='text-sm text-muted'>{user.email}</p>
             </div>
-            <span className={`status-badge ${user.verified ? 'completed' : 'scoring'}`}>
+            <Badge variant={user.verified ? 'default' : 'outline'}>
               {user.verified ? 'Đã xác thực' : 'Chưa xác thực'}
-            </span>
+            </Badge>
           </div>
 
           <dl className='detail-facts'>
@@ -116,13 +107,13 @@ export function AccountPage() {
               <dt>Quyền làm việc</dt>
               <dd>
                 {user.role === 'REGISTRANT' ? (
-                  <span className='status-badge draft'>Chủ thể đăng ký hồ sơ</span>
+                  <Badge variant='secondary'>Chủ thể đăng ký hồ sơ</Badge>
                 ) : user.staffPermissions.length > 0 ? (
                   <span className='flex flex-wrap gap-1.5 mt-1'>
                     {user.staffPermissions.map((permission) => (
-                      <span key={permission} className='cat-tag'>
+                      <Badge key={permission} variant='secondary'>
                         {PERMISSION_LABELS[permission]} ({permission})
-                      </span>
+                      </Badge>
                     ))}
                   </span>
                 ) : (

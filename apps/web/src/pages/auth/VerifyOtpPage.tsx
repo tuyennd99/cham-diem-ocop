@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { useForm } from '@tanstack/react-form';
 import { useNavigate } from '@tanstack/react-router';
 import { CheckCircle2, Loader2, RotateCcw, ShieldCheck } from 'lucide-react';
+import AlertError from '@/components/alert-error';
+import { FormField } from '@/components/form-field';
+import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { authApi } from '../../api';
@@ -121,14 +124,13 @@ export function VerifyOtpPage() {
         >
           <verifyForm.Field name='email'>
             {(field) => (
-              <label>
-                <span className='field-label-row'>
-                  <span>Email nhận mã</span>
-                </span>
-                <span className='field-hint'>
-                  Nhập đúng email đã đăng ký. Bạn có thể chỉnh sửa lại nếu cần gửi mã tới email khác.
-                </span>
+              <FormField
+                label='Email nhận mã'
+                hint='Nhập đúng email đã đăng ký. Bạn có thể chỉnh sửa lại nếu cần gửi mã tới email khác.'
+                htmlFor={`verify-otp-${field.name}`}
+              >
                 <Input
+                  id={`verify-otp-${field.name}`}
                   name={field.name}
                   type='email'
                   autoComplete='email'
@@ -140,28 +142,27 @@ export function VerifyOtpPage() {
                     if (emailError) setEmailError('');
                   }}
                   aria-invalid={Boolean(emailError)}
-                  aria-describedby={emailError ? 'otp-email-error' : undefined}
+                  aria-describedby={
+                    emailError
+                      ? `otp-email-error verify-otp-${field.name}-hint`
+                      : `verify-otp-${field.name}-hint`
+                  }
                   required
                 />
-              </label>
+              </FormField>
             )}
           </verifyForm.Field>
-          {emailError && (
-            <p className='field-error' id='otp-email-error' role='alert'>
-              {emailError}
-            </p>
-          )}
+          <InputError id='otp-email-error' role='alert' message={emailError} />
           <verifyForm.Field name='code'>
             {(field) => (
-              <label>
-                <span className='field-label-row'>
-                  <span>Mã xác thực OTP</span>
-                  <span className='field-optional'>6 chữ số</span>
-                </span>
-                <span className='field-hint'>
-                  Nhập hoặc dán trực tiếp mã 6 chữ số từ email (kiểm tra thêm mục Thư rác nếu chưa thấy).
-                </span>
+              <FormField
+                label='Mã xác thực OTP'
+                optional='6 chữ số'
+                hint='Nhập hoặc dán trực tiếp mã 6 chữ số từ email (kiểm tra thêm mục Thư rác nếu chưa thấy).'
+                htmlFor={`verify-otp-${field.name}`}
+              >
                 <Input
+                  id={`verify-otp-${field.name}`}
                   name={field.name}
                   className='otp-code-input'
                   type='text'
@@ -177,29 +178,24 @@ export function VerifyOtpPage() {
                     if (codeError) setCodeError('');
                   }}
                   aria-invalid={Boolean(codeError)}
-                  aria-describedby={codeError ? 'otp-code-error' : undefined}
+                  aria-describedby={
+                    codeError
+                      ? `otp-code-error verify-otp-${field.name}-hint`
+                      : `verify-otp-${field.name}-hint`
+                  }
                   required
                 />
-              </label>
+              </FormField>
             )}
           </verifyForm.Field>
-          {codeError && (
-            <p className='field-error' id='otp-code-error' role='alert'>
-              {codeError}
-            </p>
-          )}
+          <InputError id='otp-code-error' role='alert' message={codeError} />
           {notice && (
             <div className='auth-status-banner' role='status' aria-live='polite'>
               <CheckCircle2 className='size-4 shrink-0' aria-hidden='true' />
               <p>{notice}</p>
             </div>
           )}
-          {error && (
-            <div className='form-alert' role='alert' aria-live='polite'>
-              <strong>Không thể xác thực</strong>
-              <p>{error}</p>
-            </div>
-          )}
+          {error && <AlertError title='Không thể xác thực' errors={[error]} />}
           <verifyForm.Subscribe
             selector={(state) => ({
               verifying: state.isSubmitting,
@@ -211,7 +207,11 @@ export function VerifyOtpPage() {
               const waitingCooldown = normalizedCurrent === cooldownEmail && secondsLeft > 0;
               return (
                 <div className='auth-action-stack'>
-                  <Button type='submit' className='auth-submit-btn' disabled={verifying || resending}>
+                  <Button
+                    type='submit'
+                    className='auth-submit-btn'
+                    disabled={verifying || resending}
+                  >
                     {verifying ? (
                       <>
                         <Loader2 className='size-4 animate-spin' aria-hidden='true' />

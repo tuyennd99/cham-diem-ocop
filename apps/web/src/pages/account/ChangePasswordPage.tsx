@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useForm } from '@tanstack/react-form';
 import { Link } from '@tanstack/react-router';
+import AlertError from '@/components/alert-error';
+import { FormField } from '@/components/form-field';
+import PasswordInput from '@/components/password-input';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { authApi } from '../../api';
 import { ApiError, messageOf } from '../../lib/api-error';
 import { setSession, validatePasswordBytes } from '../../lib/auth';
@@ -12,38 +14,29 @@ type PasswordFieldName = 'currentPassword' | 'newPassword' | 'confirmPassword';
 const passwordFields: Array<{
   name: PasswordFieldName;
   label: string;
-  toggleLabel: string;
   autoComplete: string;
   minLength?: number;
 }> = [
   {
     name: 'currentPassword',
     label: 'Mật khẩu hiện tại',
-    toggleLabel: 'mật khẩu hiện tại',
     autoComplete: 'current-password',
   },
   {
     name: 'newPassword',
     label: 'Mật khẩu mới',
-    toggleLabel: 'mật khẩu mới',
     autoComplete: 'new-password',
     minLength: 8,
   },
   {
     name: 'confirmPassword',
     label: 'Nhập lại mật khẩu mới',
-    toggleLabel: 'mật khẩu nhập lại',
     autoComplete: 'new-password',
     minLength: 8,
   },
 ];
 
 export function ChangePasswordPage() {
-  const [show, setShow] = useState<Record<PasswordFieldName, boolean>>({
-    currentPassword: false,
-    newPassword: false,
-    confirmPassword: false,
-  });
   const [error, setError] = useState('');
 
   const form = useForm({
@@ -110,55 +103,35 @@ export function ChangePasswordPage() {
         {passwordFields.map((config) => (
           <form.Field key={config.name} name={config.name}>
             {(field) => (
-              <label htmlFor={`account-password-${config.name}`}>
-                <span>{config.label}</span>
-                <div className='flex items-center gap-2'>
-                  <Input
-                    id={`account-password-${config.name}`}
-                    name={field.name}
-                    type={show[config.name] ? 'text' : 'password'}
-                    autoComplete={config.autoComplete}
-                    minLength={config.minLength}
-                    maxLength={72}
-                    value={field.state.value}
-                    onBlur={field.handleBlur}
-                    onChange={(event) => field.handleChange(event.target.value)}
-                    required
-                  />
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    size='sm'
-                    className='shrink-0'
-                    aria-pressed={show[config.name]}
-                    onClick={() =>
-                      setShow((current) => ({
-                        ...current,
-                        [config.name]: !current[config.name],
-                      }))
-                    }
-                  >
-                    {show[config.name] ? `Ẩn ${config.toggleLabel}` : `Hiện ${config.toggleLabel}`}
-                  </Button>
-                </div>
-              </label>
+              <FormField
+                label={<span>{config.label}</span>}
+                htmlFor={`account-password-${config.name}`}
+              >
+                <PasswordInput
+                  id={`account-password-${config.name}`}
+                  name={field.name}
+                  autoComplete={config.autoComplete}
+                  minLength={config.minLength}
+                  maxLength={72}
+                  value={field.state.value}
+                  onBlur={field.handleBlur}
+                  onChange={(event) => field.handleChange(event.target.value)}
+                  required
+                />
+              </FormField>
             )}
           </form.Field>
         ))}
-        {error && (
-          <p className='form-note' role='alert'>
-            {error}
-          </p>
-        )}
+        {error && <AlertError title='Không thể cập nhật mật khẩu' errors={[error]} />}
         <form.Subscribe selector={(state) => state.isSubmitting}>
           {(busy) => (
             <div className='admin-actions'>
-              <Button type='submit' disabled={busy}>
+              <Button type='submit' loading={busy} disabled={busy}>
                 {busy ? 'Đang cập nhật…' : 'Cập nhật mật khẩu'}
               </Button>
-              <Link className='button button-secondary' to='/account'>
-                Hủy
-              </Link>
+              <Button asChild variant='secondary'>
+                <Link to='/account'>Hủy</Link>
+              </Button>
             </div>
           )}
         </form.Subscribe>

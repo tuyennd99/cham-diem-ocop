@@ -3,7 +3,7 @@ import { parseAdminProductSearch } from '../lib/admin-search';
 import { requirePermission } from '../lib/route-guards';
 import { AdminProductDetailPage } from '../pages/admin/AdminProductDetailPage';
 
-export const Route = createFileRoute('/_app/admin/registrations/$id')({
+export const Route = createFileRoute('/_app/admin/registrations/$id/')({
   beforeLoad: requirePermission('VIEW'),
   validateSearch: parseAdminProductSearch,
   component: RegistrationDetailRoute,

@@ -3,7 +3,14 @@ import type { Criterion, ScoreOption } from '@ocop/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { keyBy, mapValues, maxBy, partition, sumBy } from 'lodash';
+import AlertError from '@/components/alert-error';
+import { ConfirmDialog } from '@/components/confirm-dialog';
+import PageSpin from '@/components/page-spin';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Textarea } from '@/components/ui/textarea';
 import { judgeApi } from '../../api';
 import { queryKeys } from '../../constants/query-key';
 import { messageOf } from '../../lib/api-error';
@@ -37,6 +44,7 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -100,12 +108,15 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
     }
   }
 
-  async function submit() {
+  function requestSubmit() {
     if (!subcriteria.every((sub) => Boolean(selected[sub.id]))) {
       setError('Chọn mức điểm cho mọi tiểu tiêu chí trước khi nộp.');
       return;
     }
-    if (!window.confirm('Nộp phiếu chấm? Sau khi nộp, phiếu sẽ chuyển sang chỉ đọc.')) return;
+    setSubmitConfirmOpen(true);
+  }
+
+  async function submit() {
     setBusy(true);
     setError('');
     try {
@@ -119,6 +130,7 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
             }
           : current,
       );
+      setSubmitConfirmOpen(false);
       setNotice('Đã nộp phiếu chấm.');
       void queryClient.invalidateQueries({ queryKey: queryKeys.judge.all });
       void queryClient.invalidateQueries({ queryKey: queryKeys.admin.all });
@@ -131,25 +143,18 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
 
   if (error && !data)
     return (
-      <section>
+      <section className='space-y-3'>
         <h1>Phiếu chấm</h1>
-        <div className='empty-state' role='alert'>
-          <h2>Chưa tải được phiếu chấm</h2>
-          <p>{error}</p>
+        <AlertError title='Chưa tải được phiếu chấm' errors={[error]} />
+        <Button asChild variant='secondary'>
           <Link to='/judge'>Quay lại hàng chờ</Link>
-        </div>
+        </Button>
       </section>
     );
   if (!data)
     return (
-      <section
-        className='judge-workspace-skeleton'
-        aria-busy='true'
-        aria-label='Đang tải phiếu chấm'
-      >
-        <div className='skeleton-block' />
-        <div className='skeleton-block' />
-        <div className='skeleton-block' />
+      <section aria-busy='true' aria-label='Đang tải phiếu chấm'>
+        <PageSpin />
       </section>
     );
 
@@ -185,25 +190,21 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
           <Link className='text-link' to='/judge'>
             ← Hàng chờ chấm
           </Link>
-          <p className='eyebrow'>
-            {data.product.category.groupName} · {data.product.category.name}
-          </p>
+          <p className='eyebrow'>{data.product.category.name}</p>
           <h1>{data.product.name}</h1>
           <p>
             Mã hồ sơ <code>{data.product.id}</code>
           </p>
         </div>
         <div className='hero-actions'>
-          <Link
-            className='button button-secondary'
-            to='/print/judge/products/$id'
-            params={{ id: productId }}
-          >
-            In phiếu chấm A4
-          </Link>
-          <span className={`badge ${locked ? 'status-completed' : 'badge-category'}`}>
+          <Button asChild variant='secondary'>
+            <Link to='/print/judge/products/$id' params={{ id: productId }}>
+              In phiếu chấm A4
+            </Link>
+          </Button>
+          <Badge variant={locked ? 'default' : 'secondary'}>
             {locked ? 'Đã nộp · chỉ đọc' : 'Phiếu nháp'}
-          </span>
+          </Badge>
         </div>
       </div>
       {locked && <p className='form-note'>Phiếu đã nộp và không thể chỉnh sửa.</p>}
@@ -279,7 +280,7 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
               </h2>
             </div>
             {activeCriterion && (
-              <span className='badge badge-category'>Tối đa {activeCriterion.maxScore} điểm</span>
+              <Badge variant='secondary'>Tối đa {activeCriterion.maxScore} điểm</Badge>
             )}
           </div>
           {activeCriterion ? (
@@ -287,32 +288,39 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
               {activeCriterion.subCriteria.map((sub) => (
                 <fieldset className='score-card' key={sub.id} disabled={locked}>
                   <legend>{sub.content}</legend>
-                  <div className='score-options'>
-                    {sub.options.map((option: ScoreOption) => (
-                      <label
-                        className={`score-option${selected[sub.id] === option.id ? 'is-selected' : ''}`}
-                        key={option.id}
-                      >
-                        <input
-                          type='radio'
-                          name={`score-${sub.id}`}
-                          value={option.id}
-                          checked={selected[sub.id] === option.id}
-                          onChange={() => {
-                            setSelected((current) => ({ ...current, [sub.id]: option.id }));
-                            setNotice('');
-                            setError('');
-                          }}
-                        />
-                        <span>{option.label}</span>
-                        <strong>{option.points} điểm</strong>
-                      </label>
-                    ))}
-                  </div>
+                  <RadioGroup
+                    className='score-options'
+                    value={selected[sub.id] ?? ''}
+                    disabled={locked}
+                    onValueChange={(optionId) => {
+                      setSelected((current) => ({ ...current, [sub.id]: optionId }));
+                      setNotice('');
+                      setError('');
+                    }}
+                  >
+                    {sub.options.map((option: ScoreOption) => {
+                      const optionInputId = `score-${sub.id}-${option.id}`;
+                      return (
+                        <div
+                          className={`score-option relative${selected[sub.id] === option.id ? 'is-selected' : ''}`}
+                          key={option.id}
+                        >
+                          <RadioGroupItem value={option.id} id={optionInputId} />
+                          <Label
+                            htmlFor={optionInputId}
+                            className='cursor-pointer after:absolute after:inset-0'
+                          >
+                            {option.label}
+                          </Label>
+                          <strong>{option.points} điểm</strong>
+                        </div>
+                      );
+                    })}
+                  </RadioGroup>
                   <details className='judge-note'>
                     <summary>Ghi chú của giám khảo</summary>
-                    <label htmlFor={`note-${sub.id}`}>Ghi chú (không bắt buộc)</label>
-                    <textarea
+                    <Label htmlFor={`note-${sub.id}`}>Ghi chú (không bắt buộc)</Label>
+                    <Textarea
                       id={`note-${sub.id}`}
                       rows={3}
                       maxLength={2000}
@@ -367,9 +375,7 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
             ))}
           </div>
           <article className='product-summary'>
-            <span className='badge badge-category'>
-              {data.product.category.groupName} · {data.product.category.name}
-            </span>
+            <Badge variant='secondary'>{data.product.category.name}</Badge>
             <h3>{data.product.name}</h3>
             <p>{String(data.product.formData.entityName ?? 'Chưa có thông tin chủ thể')}</p>
             <p>
@@ -384,13 +390,15 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
               <ul>
                 {documentAttachments.map((file) => (
                   <li key={file.id}>
-                    <button
+                    <Button
                       type='button'
+                      variant='link'
+                      className='h-auto min-h-0 p-0'
                       onClick={() => void openJudgeAttachment(productId, file.id, file.fileName)}
                     >
                       {/\.pdf$/i.test(file.fileName) ? 'PDF · ' : 'Tệp · '}
                       {file.fileName}
-                    </button>
+                    </Button>
                   </li>
                 ))}
               </ul>
@@ -408,22 +416,29 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
         <span className='autosave-state' role='status'>
           {notice || (locked ? 'Phiếu đã nộp' : 'Bản nháp chưa lưu')}
         </span>
-        {error && (
-          <p className='form-note' role='alert'>
-            {error}
-          </p>
-        )}
+        {error && <AlertError title='Không thể lưu hoặc nộp phiếu chấm' errors={[error]} />}
         {!locked && (
           <div className='judge-submit-actions'>
-            <Button variant='secondary' disabled={busy} onClick={() => void save()}>
+            <Button variant='secondary' loading={busy} disabled={busy} onClick={() => void save()}>
               {busy ? 'Đang lưu…' : 'Lưu nháp'}
             </Button>
-            <Button disabled={busy || !data.criteria.length} onClick={() => void submit()}>
+            <Button loading={busy} disabled={busy || !data.criteria.length} onClick={requestSubmit}>
               {busy ? 'Đang nộp…' : 'Nộp phiếu chấm'}
             </Button>
           </div>
         )}
       </footer>
+      <ConfirmDialog
+        open={submitConfirmOpen}
+        onOpenChange={(open) => {
+          if (!open && !busy) setSubmitConfirmOpen(false);
+        }}
+        title='Nộp phiếu chấm?'
+        description='Sau khi nộp, phiếu chấm sẽ được chốt điểm và chuyển sang chế độ chỉ đọc.'
+        confirmLabel='Xác nhận nộp phiếu'
+        pending={busy}
+        onConfirm={() => void submit()}
+      />
     </section>
   );
 }

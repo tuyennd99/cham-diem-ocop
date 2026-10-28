@@ -21,7 +21,6 @@ describe('AdminService dashboard', () => {
           category: {
             id: 'category-1',
             name: 'Thực phẩm',
-            groupName: 'Nông sản',
             assignments: [{ judgeId: 'judge-1' }, { judgeId: 'judge-2' }],
           },
           evaluations: [
@@ -49,7 +48,6 @@ describe('AdminService dashboard', () => {
         category: {
           id: 'category-1',
           name: 'Thực phẩm',
-          groupName: 'Nông sản',
         },
         assignedJudgeCount: 2,
         submittedEvaluationCount: 1,

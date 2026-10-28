@@ -9,6 +9,8 @@ import type {
 import { Link } from '@tanstack/react-router';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import type { AdminProductSearch } from '../../lib/admin-search';
 import { formatExactScore, formatStarRatingLabel } from '../../lib/print-format';
 import { formatFormValue } from '../../lib/utils';
@@ -35,10 +37,12 @@ export function PrintPageToolbar({
 }) {
   return (
     <div className='print-toolbar no-print' role='region' aria-label='Thanh công cụ in A4'>
-      <Link className='button button-secondary' to={backTo} search={backSearch}>
-        <ArrowLeft size={16} aria-hidden='true' />
-        {backLabel}
-      </Link>
+      <Button asChild variant='secondary'>
+        <Link to={backTo} search={backSearch}>
+          <ArrowLeft size={16} aria-hidden='true' />
+          {backLabel}
+        </Link>
+      </Button>
       <strong className='print-toolbar-title'>{title}</strong>
       <div className='print-toolbar-actions'>
         {children}
@@ -62,20 +66,8 @@ export function BlankCriteriaPrintSheet({ data }: { data: BlankCriteriaPrintData
         <h1>PHIẾU ĐÁNH GIÁ, CHẤM ĐIỂM SẢN PHẨM OCOP (MẪU TRẮNG)</h1>
         <dl className='print-meta-grid'>
           <div>
-            <dt>Nhóm sản phẩm:</dt>
-            <dd>
-              {criteriaSet.groupCode} · {criteriaSet.groupName}
-            </dd>
-          </div>
-          <div>
-            <dt>Phân loại sản phẩm:</dt>
-            <dd>
-              {criteriaSet.categoryName} ({criteriaSet.classificationGroup}
-              {criteriaSet.classificationSubgroup
-                ? ` / ${criteriaSet.classificationSubgroup}`
-                : ''}
-              )
-            </dd>
+            <dt>Danh mục sản phẩm:</dt>
+            <dd>{criteriaSet.categoryName}</dd>
           </div>
           <div>
             <dt>Tên bộ tiêu chí:</dt>
@@ -84,8 +76,8 @@ export function BlankCriteriaPrintSheet({ data }: { data: BlankCriteriaPrintData
           <div>
             <dt>Nguồn văn bản &amp; Phiên bản:</dt>
             <dd>
-              {criteriaSet.source ?? 'Quyết định 26/2026/QĐ-TTg'} · Phiên bản v
-              {criteriaSet.version} · Mã bộ: <code>{criteriaSet.id}</code>
+              {criteriaSet.source ?? 'Quyết định 26/2026/QĐ-TTg'} · Phiên bản v{criteriaSet.version}{' '}
+              · Mã bộ: <code>{criteriaSet.id}</code>
             </dd>
           </div>
           <div>
@@ -210,8 +202,8 @@ export function EvaluationPrintSheet({ data }: { data: EvaluationPrintData }) {
         )}
         {!data.isDraft && !data.historicalValuesVerified && (
           <p className='print-warning-banner' role='status'>
-            Lưu ý chất lượng dữ liệu: Phiếu nộp trước thời điểm nâng cấp hệ thống (PRE_UPGRADE),
-            một số thông tin đơn vị/thời điểm lịch sử không được ghi nhận đầy đủ.
+            Lưu ý chất lượng dữ liệu: Phiếu nộp trước thời điểm nâng cấp hệ thống (PRE_UPGRADE), một
+            số thông tin đơn vị/thời điểm lịch sử không được ghi nhận đầy đủ.
           </p>
         )}
         <dl className='print-meta-grid'>
@@ -226,10 +218,8 @@ export function EvaluationPrintSheet({ data }: { data: EvaluationPrintData }) {
             <dd>{data.product.entityName ?? 'Chưa khai báo tên chủ thể'}</dd>
           </div>
           <div>
-            <dt>Nhóm / Phân loại:</dt>
-            <dd>
-              {data.product.groupName} · {data.product.categoryName}
-            </dd>
+            <dt>Danh mục sản phẩm:</dt>
+            <dd>{data.product.categoryName}</dd>
           </div>
           <div>
             <dt>Người chấm / Đơn vị:</dt>
@@ -252,7 +242,10 @@ export function EvaluationPrintSheet({ data }: { data: EvaluationPrintData }) {
               {data.isPartialScope
                 ? `Phân công một phần (Tối đa ${data.scopeMaxScore} điểm)`
                 : `Toàn bộ bộ tiêu chí (Tối đa ${data.scopeMaxScore} điểm)`}{' '}
-              · {data.isDraft ? 'BẢN NHÁP — CHƯA NỘP' : `Đã nộp (${formatViDateTime(data.submittedAt)})`}
+              ·{' '}
+              {data.isDraft
+                ? 'BẢN NHÁP — CHƯA NỘP'
+                : `Đã nộp (${formatViDateTime(data.submittedAt)})`}
             </dd>
           </div>
         </dl>
@@ -285,7 +278,7 @@ export function EvaluationPrintSheet({ data }: { data: EvaluationPrintData }) {
               : null;
             return (
               <tr
-                className={`print-criterion-group${criterion.inScope ? '' : ' is-out-of-scope'}`}
+                className={`print-criterion-group${criterion.inScope ? '' : 'is-out-of-scope'}`}
                 key={criterion.criterionId}
               >
                 <td>
@@ -310,11 +303,8 @@ export function EvaluationPrintSheet({ data }: { data: EvaluationPrintData }) {
                           <strong>{sub.code}:</strong> {sub.content}
                         </p>
                         <p className='print-selected-option'>
-                          Lựa chọn:{' '}
-                          <strong>
-                            {sub.selectedLabel ?? 'Chưa chọn mức điểm'}
-                          </strong>{' '}
-                          ({sub.points !== null ? `${sub.points} điểm` : '—'})
+                          Lựa chọn: <strong>{sub.selectedLabel ?? 'Chưa chọn mức điểm'}</strong> (
+                          {sub.points !== null ? `${sub.points} điểm` : '—'})
                         </p>
                       </div>
                     ))
@@ -367,7 +357,8 @@ export function EvaluationPrintSheet({ data }: { data: EvaluationPrintData }) {
         </div>
       </footer>
       <p className='print-footnote'>
-        Mã phiếu: {data.evaluationId ?? 'Nháp'} · Thời điểm kết xuất: {formatViDateTime(data.generatedAt)}
+        Mã phiếu: {data.evaluationId ?? 'Nháp'} · Thời điểm kết xuất:{' '}
+        {formatViDateTime(data.generatedAt)}
       </p>
     </article>
   );
@@ -402,10 +393,8 @@ export function ProductResultsPrintSheet({ data }: { data: ProductResultsPrintDa
             <dd>{product.entityName ?? 'Chưa khai báo'}</dd>
           </div>
           <div>
-            <dt>Nhóm / Phân loại:</dt>
-            <dd>
-              {product.groupName} · {product.categoryName}
-            </dd>
+            <dt>Danh mục sản phẩm:</dt>
+            <dd>{product.categoryName}</dd>
           </div>
           <div>
             <dt>Địa bàn:</dt>
@@ -434,7 +423,9 @@ export function ProductResultsPrintSheet({ data }: { data: ProductResultsPrintDa
             <dt>Điểm tổng hợp cuối cùng (BE):</dt>
             <dd>
               <strong>
-                {isCompleted ? `${formatExactScore(product.finalScore)} / 100 điểm` : 'Chưa hoàn tất'}
+                {isCompleted
+                  ? `${formatExactScore(product.finalScore)} / 100 điểm`
+                  : 'Chưa hoàn tất'}
               </strong>
             </dd>
           </div>
@@ -680,14 +671,8 @@ export function RegistrationPrintSheet({
             </td>
           </tr>
           <tr>
-            <th scope='row'>Nhóm ngành / Phân loại</th>
-            <td>
-              {data.category.groupName} · {data.category.name} ({data.category.classificationGroup}
-              {data.category.classificationSubgroup
-                ? ` / ${data.category.classificationSubgroup}`
-                : ''}
-              )
-            </td>
+            <th scope='row'>Danh mục sản phẩm</th>
+            <td>{data.category.name}</td>
           </tr>
           <tr>
             <th scope='row'>Loại hình đăng ký &amp; Năm đánh giá</th>
@@ -794,14 +779,16 @@ export function RegistrationPrintSheet({
           <strong>Chọn ảnh minh họa sản phẩm in kèm Mẫu số 01:</strong>
           <div className='hero-actions'>
             {imageAttachments.map((img) => (
-              <label key={img.id}>
-                <input
-                  type='checkbox'
+              <div key={img.id} className='inline-flex items-center gap-2'>
+                <Checkbox
+                  id={`registration-image-${img.id}`}
                   checked={selectedImageIds.includes(img.id)}
-                  onChange={() => toggleImage(img.id)}
-                />{' '}
-                {img.fileName}
-              </label>
+                  onCheckedChange={() => toggleImage(img.id)}
+                />
+                <Label htmlFor={`registration-image-${img.id}`} className='cursor-pointer'>
+                  {img.fileName}
+                </Label>
+              </div>
             ))}
           </div>
         </aside>

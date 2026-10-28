@@ -16,9 +16,15 @@ describe('H5 scoring forms and print-data endpoints', () => {
       for (const item of allSets.body.data) {
         expect(item.maxScore).toBe(100);
         expect(item.criterionCount).toBeGreaterThan(0);
+        expect(item).not.toHaveProperty('groupId');
+        expect(item).not.toHaveProperty('groupName');
+        expect(item).not.toHaveProperty('classificationGroup');
       }
 
       const targetSet = allSets.body.data[0];
+      const filtered = await f.call('viewer', `/admin/criteria-sets?categoryId=${targetSet.categoryId}`);
+      expect(filtered.status).toBe(200);
+      expect(filtered.body.data.map((item: { id: string }) => item.id)).toEqual([targetSet.id]);
       const unassignedScoreList = await f.call(
         'scorer',
         '/admin/criteria-sets?page=1&limit=100',
@@ -165,6 +171,7 @@ describe('H5 scoring forms and print-data endpoints', () => {
         `/admin/products/${productId}/registration-print-data`,
       );
       expect(draftRegPrint.status).toBe(200);
+      expect(draftRegPrint.body.data.category).toEqual({ id: category.id, name: category.name });
       expect(draftRegPrint.body.data).toMatchObject({
         kind: 'REGISTRATION',
         isDraft: true,
@@ -264,7 +271,7 @@ describe('H5 scoring forms and print-data endpoints', () => {
       expect(submittedEvalPrint.body.data).toMatchObject({
         kind: 'EVALUATION',
         isDraft: false,
-        provenance: 'SNAPSHOT_V1',
+        provenance: 'SNAPSHOT_V2',
         isPartialScope: true,
         judge: {
           id: f.scorer.id,

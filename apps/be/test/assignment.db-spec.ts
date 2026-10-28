@@ -66,10 +66,6 @@ async function createFixture(prisma: PrismaService) {
   ]);
   const category = await prisma.productCategory.create({
     data: {
-      group: { connect: { code: 'FOOD' } },
-      groupCode: `assignment-${suffix}`,
-      groupName: 'Test group',
-      classificationGroup: 'Test classification',
       name: `Assignment test ${suffix}`,
       criteriaSet: {
         create: {

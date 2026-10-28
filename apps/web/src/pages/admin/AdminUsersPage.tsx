@@ -1,14 +1,23 @@
-import { useEffect, useState } from 'react';
-import type {
-  AdminUserRecord,
-  OrganizationUnitQuery,
-  StaffPermission,
-} from '@ocop/shared';
+import { useEffect, useMemo, useState } from 'react';
+import type { AdminUserRecord, OrganizationUnitQuery, StaffPermission } from '@ocop/shared';
 import { Filter, RotateCcw } from 'lucide-react';
+import AlertError from '@/components/alert-error';
+import { FormField } from '@/components/form-field';
+import PageSpin from '@/components/page-spin';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { DataTable, type DataTableColumnDef } from '@/components/ui/data-table';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { DEFAULT_PAGE_SIZE } from '../../constants/consts';
+import { ALL, DEFAULT_PAGE_SIZE } from '../../constants/consts';
 import {
   parseAdminUsersSearch,
   toAdminUnitsApiQuery,
@@ -32,61 +41,7 @@ interface AdminUsersPageProps {
   onSearchChange?: (next: AdminUsersSearch) => void;
 }
 
-function UserRow({
-  user,
-  onEdit,
-}: {
-  user: AdminUserRecord;
-  onEdit: (user: AdminUserRecord) => void;
-}) {
-  const unit =
-    user.organizationUnitId === null
-      ? 'Chưa gán đơn vị'
-      : (user.organizationUnit?.name ?? 'Đơn vị hiện tại');
-  return (
-    <tr>
-      <th scope='row'>
-        <div className='font-semibold text-fg'>{user.fullName}</div>
-        <div className='text-xs text-muted'>
-          {user.email}
-          {user.phone ? ` · ${user.phone}` : ''}
-        </div>
-      </th>
-      <td>
-        {user.role === 'REGISTRANT' ? (
-          <span className='status-badge draft'>Chủ thể</span>
-        ) : user.staffPermissions.length > 0 ? (
-          <div className='flex flex-wrap gap-1'>
-            {user.staffPermissions.map((permission) => (
-              <span key={permission} className='cat-tag'>
-                {STAFF_PERMISSION_LABELS[permission]}
-              </span>
-            ))}
-          </div>
-        ) : (
-          <span className='text-xs text-muted'>Chưa cấp quyền</span>
-        )}
-      </td>
-      <td>{unit}</td>
-      <td>{user.verified ? 'Đã xác thực' : 'Chưa xác thực'}</td>
-      <td>
-        <span className={`status-badge ${user.isActive ? 'completed' : 'draft'}`}>
-          {user.isActive ? 'Đang hoạt động' : 'Đã khóa'}
-        </span>
-      </td>
-      <td style={{ textAlign: 'right' }}>
-        <Button type='button' variant='secondary' size='sm' onClick={() => onEdit(user)}>
-          Sửa
-        </Button>
-      </td>
-    </tr>
-  );
-}
-
-export function AdminUsersPage({
-  search: controlledSearch,
-  onSearchChange,
-}: AdminUsersPageProps) {
+export function AdminUsersPage({ search: controlledSearch, onSearchChange }: AdminUsersPageProps) {
   const [fallbackSearch, setFallbackSearch] = useState<AdminUsersSearch>({
     page: 1,
     limit: DEFAULT_PAGE_SIZE,
@@ -107,8 +62,8 @@ export function AdminUsersPage({
   const [showAdvanced, setShowAdvanced] = useState(
     Boolean(
       appliedSearch.permission ||
-        appliedSearch.organizationUnitId ||
-        appliedSearch.verified !== undefined,
+      appliedSearch.organizationUnitId ||
+      appliedSearch.verified !== undefined,
     ),
   );
   const [createOpen, setCreateOpen] = useState(false);
@@ -130,6 +85,93 @@ export function AdminUsersPage({
   const units = unitsQuery.data?.data ?? [];
   const userError = errorText(usersQuery.error);
   const unitError = errorText(unitsQuery.error);
+
+  const userColumns = useMemo<DataTableColumnDef<AdminUserRecord>[]>(
+    () => [
+      {
+        accessorKey: 'fullName',
+        header: 'Người dùng',
+        meta: { isRowHeader: true, cellClassName: 'font-normal' },
+        cell: ({ row }) => {
+          const user = row.original;
+          return (
+            <>
+              <div className='text-fg font-semibold'>{user.fullName}</div>
+              <div className='text-muted text-xs'>
+                {user.email}
+                {user.phone ? ` · ${user.phone}` : ''}
+              </div>
+            </>
+          );
+        },
+      },
+      {
+        id: 'access',
+        header: 'Loại / Quyền',
+        cell: ({ row }) => {
+          const user = row.original;
+          if (user.role === 'REGISTRANT') {
+            return <Badge variant='secondary'>Chủ thể</Badge>;
+          }
+          if (user.staffPermissions.length > 0) {
+            return (
+              <div className='flex flex-wrap gap-1'>
+                {user.staffPermissions.map((permission) => (
+                  <Badge key={permission} variant='outline'>
+                    {STAFF_PERMISSION_LABELS[permission]}
+                  </Badge>
+                ))}
+              </div>
+            );
+          }
+          return <span className='text-muted text-xs'>Chưa cấp quyền</span>;
+        },
+      },
+      {
+        id: 'unit',
+        header: 'Đơn vị',
+        cell: ({ row }) => {
+          const user = row.original;
+          return user.organizationUnitId === null
+            ? 'Chưa gán đơn vị'
+            : (user.organizationUnit?.name ?? 'Đơn vị hiện tại');
+        },
+      },
+      {
+        accessorKey: 'verified',
+        header: 'Xác thực',
+        cell: ({ row }) => (row.original.verified ? 'Đã xác thực' : 'Chưa xác thực'),
+      },
+      {
+        accessorKey: 'isActive',
+        header: 'Trạng thái',
+        cell: ({ row }) => (
+          <Badge variant={row.original.isActive ? 'default' : 'secondary'}>
+            {row.original.isActive ? 'Đang hoạt động' : 'Đã khóa'}
+          </Badge>
+        ),
+      },
+      {
+        id: 'actions',
+        header: 'Thao tác',
+        meta: { align: 'right' },
+        cell: ({ row }) => (
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            onClick={() => {
+              setCreateOpen(false);
+              setSelectedUser(row.original);
+            }}
+          >
+            Sửa
+          </Button>
+        ),
+      },
+    ],
+    [],
+  );
 
   function changeTab(value: string) {
     const nextTab: AdminUsersTab = value === 'units' ? 'units' : 'users';
@@ -207,12 +249,12 @@ export function AdminUsersPage({
               }}
             >
               <div className='admin-filters'>
-                <label
+                <FormField
+                  label='Tìm họ tên, email hoặc số điện thoại'
+                  htmlFor='admin-users-q'
                   className='admin-filter-field'
                   data-filter-width='search'
-                  htmlFor='admin-users-q'
                 >
-                  Tìm họ tên, email hoặc số điện thoại
                   <Input
                     id='admin-users-q'
                     value={draftFilters.q ?? ''}
@@ -224,58 +266,61 @@ export function AdminUsersPage({
                       }))
                     }
                   />
-                </label>
+                </FormField>
 
-                <label
-                  className='admin-filter-field'
-                  data-filter-width='status'
+                <FormField
+                  label='Loại tài khoản'
                   htmlFor='admin-users-kind'
-                >
-                  Loại tài khoản
-                  <select
-                    id='admin-users-kind'
-                    value={draftFilters.kind ?? ''}
-                    onChange={(event) =>
-                      setDraftFilters((old) => ({
-                        ...old,
-                        kind: event.target.value
-                          ? (event.target.value as 'STAFF' | 'REGISTRANT')
-                          : undefined,
-                      }))
-                    }
-                  >
-                    <option value=''>Tất cả loại tài khoản</option>
-                    <option value='STAFF'>Nội bộ (cán bộ / giám khảo)</option>
-                    <option value='REGISTRANT'>Chủ thể sản xuất</option>
-                  </select>
-                </label>
-
-                <label
                   className='admin-filter-field'
                   data-filter-width='status'
-                  htmlFor='admin-users-status'
                 >
-                  Trạng thái hoạt động
-                  <select
-                    id='admin-users-status'
-                    value={
-                      draftFilters.isActive === undefined ? '' : String(draftFilters.isActive)
-                    }
-                    onChange={(event) =>
+                  <Select
+                    value={draftFilters.kind ?? ALL}
+                    onValueChange={(value) =>
                       setDraftFilters((old) => ({
                         ...old,
-                        isActive:
-                          event.target.value === ''
-                            ? undefined
-                            : event.target.value === 'true',
+                        kind: value === ALL ? undefined : (value as 'STAFF' | 'REGISTRANT'),
                       }))
                     }
                   >
-                    <option value=''>Tất cả trạng thái</option>
-                    <option value='true'>Đang hoạt động</option>
-                    <option value='false'>Đã khóa</option>
-                  </select>
-                </label>
+                    <SelectTrigger id='admin-users-kind'>
+                      <SelectValue placeholder='Tất cả loại tài khoản' />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL}>Tất cả loại tài khoản</SelectItem>
+                      <SelectItem value='STAFF'>Nội bộ (cán bộ / giám khảo)</SelectItem>
+                      <SelectItem value='REGISTRANT'>Chủ thể sản xuất</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormField>
+
+                <FormField
+                  label='Trạng thái hoạt động'
+                  htmlFor='admin-users-status'
+                  className='admin-filter-field'
+                  data-filter-width='status'
+                >
+                  <Select
+                    value={
+                      draftFilters.isActive === undefined ? ALL : String(draftFilters.isActive)
+                    }
+                    onValueChange={(value) =>
+                      setDraftFilters((old) => ({
+                        ...old,
+                        isActive: value === ALL ? undefined : value === 'true',
+                      }))
+                    }
+                  >
+                    <SelectTrigger id='admin-users-status'>
+                      <SelectValue placeholder='Tất cả trạng thái' />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL}>Tất cả trạng thái</SelectItem>
+                      <SelectItem value='true'>Đang hoạt động</SelectItem>
+                      <SelectItem value='false'>Đã khóa</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormField>
 
                 <div className='admin-actions admin-filter-actions'>
                   <Button type='submit'>Áp dụng</Button>
@@ -311,6 +356,7 @@ export function AdminUsersPage({
                   <Button
                     type='button'
                     variant='secondary'
+                    loading={usersQuery.isFetching}
                     disabled={usersQuery.isFetching}
                     onClick={() => void usersQuery.refetch()}
                   >
@@ -324,89 +370,91 @@ export function AdminUsersPage({
                 hidden={!showAdvanced}
                 className='advanced-filter-grid'
               >
-                <label htmlFor='admin-users-permission'>
-                  Quyền nội bộ
-                  <select
-                    id='admin-users-permission'
-                    value={draftFilters.permission ?? ''}
-                    onChange={(event) =>
+                <FormField label='Quyền nội bộ' htmlFor='admin-users-permission'>
+                  <Select
+                    value={draftFilters.permission ?? ALL}
+                    onValueChange={(value) =>
                       setDraftFilters((old) => ({
                         ...old,
-                        permission: event.target.value
-                          ? (event.target.value as StaffPermission)
-                          : undefined,
+                        permission: value === ALL ? undefined : (value as StaffPermission),
                       }))
                     }
                   >
-                    <option value=''>Tất cả quyền</option>
-                    {permissions.map((permission) => (
-                      <option key={permission} value={permission}>
-                        {STAFF_PERMISSION_LABELS[permission]} ({permission})
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    <SelectTrigger id='admin-users-permission'>
+                      <SelectValue placeholder='Tất cả quyền' />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL}>Tất cả quyền</SelectItem>
+                      {permissions.map((permission) => (
+                        <SelectItem key={permission} value={permission}>
+                          {STAFF_PERMISSION_LABELS[permission]} ({permission})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormField>
 
-                <label htmlFor='admin-users-unit'>
-                  Đơn vị công tác
-                  <select
-                    id='admin-users-unit'
-                    value={draftFilters.organizationUnitId ?? ''}
-                    onChange={(event) =>
+                <FormField label='Đơn vị công tác' htmlFor='admin-users-unit'>
+                  <Select
+                    value={draftFilters.organizationUnitId ?? ALL}
+                    onValueChange={(value) =>
                       setDraftFilters((old) => ({
                         ...old,
-                        organizationUnitId: event.target.value || undefined,
+                        organizationUnitId: value === ALL ? undefined : value,
                       }))
                     }
                   >
-                    <option value=''>Tất cả đơn vị</option>
-                    {missingSelectedUnit && draftFilters.organizationUnitId && (
-                      <option value={draftFilters.organizationUnitId}>
-                        Mã đơn vị: {draftFilters.organizationUnitId}
-                      </option>
-                    )}
-                    {units.map((unit) => (
-                      <option key={unit.id} value={unit.id}>
-                        {unit.name}
-                        {unit.isActive ? '' : ' (ngừng nhận tài khoản mới)'}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    <SelectTrigger id='admin-users-unit'>
+                      <SelectValue placeholder='Tất cả đơn vị' />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL}>Tất cả đơn vị</SelectItem>
+                      {missingSelectedUnit && draftFilters.organizationUnitId && (
+                        <SelectItem value={draftFilters.organizationUnitId}>
+                          Mã đơn vị: {draftFilters.organizationUnitId}
+                        </SelectItem>
+                      )}
+                      {units.map((unit) => (
+                        <SelectItem key={unit.id} value={unit.id}>
+                          {unit.name}
+                          {unit.isActive ? '' : ' (ngừng nhận tài khoản mới)'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormField>
 
-                <label htmlFor='admin-users-verified'>
-                  Trạng thái xác thực
-                  <select
-                    id='admin-users-verified'
+                <FormField label='Trạng thái xác thực' htmlFor='admin-users-verified'>
+                  <Select
                     value={
-                      draftFilters.verified === undefined ? '' : String(draftFilters.verified)
+                      draftFilters.verified === undefined ? ALL : String(draftFilters.verified)
                     }
-                    onChange={(event) =>
+                    onValueChange={(value) =>
                       setDraftFilters((old) => ({
                         ...old,
-                        verified:
-                          event.target.value === ''
-                            ? undefined
-                            : event.target.value === 'true',
+                        verified: value === ALL ? undefined : value === 'true',
                       }))
                     }
                   >
-                    <option value=''>Tất cả</option>
-                    <option value='true'>Đã xác thực</option>
-                    <option value='false'>Chưa xác thực</option>
-                  </select>
-                </label>
+                    <SelectTrigger id='admin-users-verified'>
+                      <SelectValue placeholder='Tất cả' />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL}>Tất cả</SelectItem>
+                      <SelectItem value='true'>Đã xác thực</SelectItem>
+                      <SelectItem value='false'>Chưa xác thực</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormField>
               </div>
             </form>
 
             {unitError && (
-              <p className='form-note' role='alert'>
-                Chưa tải được danh sách đơn vị: {unitError}
-              </p>
+              <AlertError title='Chưa tải được danh sách đơn vị' errors={[unitError]} />
             )}
             {userError && (
-              <div className='form-note' role='alert'>
-                <p>{userError}</p>
+              <div className='space-y-2'>
+                <AlertError title='Không thể tải danh sách người dùng' errors={[userError]} />
                 <Button
                   type='button'
                   variant='secondary'
@@ -418,14 +466,14 @@ export function AdminUsersPage({
               </div>
             )}
 
-            {usersQuery.isPending && <p aria-live='polite'>Đang tải người dùng…</p>}
+            {usersQuery.isPending && <PageSpin />}
             {!usersQuery.isPending && !usersQuery.error && users.length === 0 && (
-              <div className='admin-table-region empty-card'>
+              <Card className='admin-table-region empty-card'>
                 <h2>Chưa có người dùng phù hợp</h2>
-                <p className='text-sm text-muted'>
+                <p className='text-muted text-sm'>
                   Thử điều chỉnh bộ lọc hoặc tạo tài khoản nội bộ mới.
                 </p>
-              </div>
+              </Card>
             )}
 
             {!usersQuery.isPending && !usersQuery.error && users.length > 0 && (
@@ -435,75 +483,27 @@ export function AdminUsersPage({
                 aria-label='Bảng danh sách người dùng'
                 tabIndex={0}
               >
-                <table className='admin-data-table'>
-                  <thead>
-                    <tr>
-                      <th scope='col'>Người dùng</th>
-                      <th scope='col'>Loại / Quyền</th>
-                      <th scope='col'>Đơn vị</th>
-                      <th scope='col'>Xác thực</th>
-                      <th scope='col'>Trạng thái</th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        Thao tác
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {users.map((user) => (
-                      <UserRow
-                        key={user.id}
-                        user={user}
-                        onEdit={(item) => {
-                          setCreateOpen(false);
-                          setSelectedUser(item);
-                        }}
-                      />
-                    ))}
-                  </tbody>
-                </table>
-
-                <div className='table-footer'>
-                  <div className='page-info'>
-                    Hiển thị <strong>{users.length}</strong> /{' '}
-                    <strong>{usersMeta?.total ?? users.length}</strong> người dùng
-                  </div>
-                  <div className='pagination-actions'>
-                    <Button
-                      type='button'
-                      variant='secondary'
-                      size='sm'
-                      disabled={(appliedSearch.page ?? 1) <= 1}
-                      onClick={() =>
-                        applySearch({
-                          ...appliedSearch,
-                          page: (appliedSearch.page ?? 1) - 1,
-                        })
-                      }
-                    >
-                      Trước
-                    </Button>
-                    <span className='text-xs font-semibold px-2'>
-                      Trang {usersMeta?.page ?? appliedSearch.page ?? 1} /{' '}
-                      {Math.max(1, usersMeta?.totalPages ?? 1)}
-                    </span>
-                    <Button
-                      type='button'
-                      variant='secondary'
-                      size='sm'
-                      disabled={
-                        (appliedSearch.page ?? 1) >= (usersMeta?.totalPages ?? 1)
-                      }
-                      onClick={() =>
-                        applySearch({
-                          ...appliedSearch,
-                          page: (appliedSearch.page ?? 1) + 1,
-                        })
-                      }
-                    >
-                      Sau
-                    </Button>
-                  </div>
-                </div>
+                <DataTable
+                  columns={userColumns}
+                  data={users}
+                  total={usersMeta?.total ?? users.length}
+                  page={usersMeta?.page ?? appliedSearch.page ?? 1}
+                  pageSize={appliedSearch.limit ?? DEFAULT_PAGE_SIZE}
+                  getRowId={(row) => row.id}
+                  onPageChange={(nextPage) =>
+                    applySearch({
+                      ...appliedSearch,
+                      page: nextPage,
+                    })
+                  }
+                  onPageSizeChange={(nextLimit) =>
+                    applySearch({
+                      ...appliedSearch,
+                      page: 1,
+                      limit: nextLimit,
+                    })
+                  }
+                />
               </div>
             )}
           </div>

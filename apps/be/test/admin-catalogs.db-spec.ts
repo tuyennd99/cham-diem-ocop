@@ -8,10 +8,8 @@ import { adminFixture } from './support/admin-fixture';
 const groupsPath = '/admin/product-groups';
 const categoriesPath = '/admin/categories';
 const localitiesPath = '/admin/localities';
-const categoryInput = (groupId: string) => ({
-  groupId,
+const categoryInput = () => ({
   name: 'Test leaf ' + randomUUID(),
-  classificationGroup: 'Test classification',
   order: 1,
   reason: 'Catalog addition',
 });
@@ -410,51 +408,21 @@ describe('H4 product catalogs', () => {
     });
   });
 
-  it('creates groups and inactive categories, and activates only the category with its own complete 100-point set', async () => {
+  it('creates independent inactive categories, and activates only the category with its own complete 100-point set', async () => {
     await withTestApp(async ({ app, prisma, baseUrl }) => {
       const f = await adminFixture(app, prisma, baseUrl);
-      const group = await prisma.productGroup.findFirstOrThrow();
-      const madeGroup = await f.call('manager', groupsPath, 'POST', {
-        code: 'TEST-' + randomUUID(),
-        name: ' Test group ',
-        description: ' Group description ',
-        order: 9,
-        isActive: true,
-        reason: ' Catalog setup ',
-      });
-      expect(madeGroup.status).toBe(201);
-      expect(madeGroup.body.data).toMatchObject({
-        name: 'Test group',
-        description: 'Group description',
-        order: 9,
-        isActive: true,
-      });
+      expect((await f.call('manager', groupsPath)).status).toBe(404);
+      expect((await f.call('manager', groupsPath, 'POST', {})).status).toBe(
+        404,
+      );
       expect(
-        (await f.call('viewer', groupsPath + '?isActive=false')).status,
-      ).toBe(200);
-      expect((await f.call('scorer', groupsPath)).status).toBe(403);
-      expect(
-        (
-          await f.call(
-            'manager',
-            groupsPath + '/' + madeGroup.body.data.id,
-            'PUT',
-            {
-              code: 'TEST-IMMUTABLE',
-              reason: 'Try changing identifier',
-            },
-          )
-        ).status,
-      ).toBe(400);
-
-      const input = categoryInput(group.id);
+        (await f.call('manager', groupsPath + '/removed', 'PUT', {})).status,
+      ).toBe(404);
+      const input = categoryInput();
       const created = await f.call('manager', categoriesPath, 'POST', input);
       expect(created.status).toBe(201);
       expect(created.body.data).toMatchObject({
         id: expect.any(String),
-        groupId: group.id,
-        groupCode: group.code,
-        groupName: group.name,
         name: input.name,
         isActive: false,
         referenceCount: 0,
@@ -482,7 +450,7 @@ describe('H4 product catalogs', () => {
       expect(
         (
           await f.call('manager', categoriesPath, 'POST', {
-            ...categoryInput(group.id),
+            ...categoryInput(),
             criteriaSetId: 'not-allowed',
           })
         ).status,
@@ -642,12 +610,10 @@ describe('H4 product catalogs', () => {
     });
   });
 
-  it('keeps submitted products and evaluation snapshots while mirroring group rename and retiring the category', async () => {
+  it('keeps submitted products and evaluation snapshots while renaming and retiring the category', async () => {
     await withTestApp(async ({ app, prisma, baseUrl }) => {
       const f = await adminFixture(app, prisma, baseUrl);
-      const category = await prisma.productCategory.findFirstOrThrow({
-        include: { group: true },
-      });
+      const category = await prisma.productCategory.findFirstOrThrow();
       const beforeSnapshot = {
         schemaVersion: 1,
         title: 'Historical evaluation label',
@@ -670,24 +636,17 @@ describe('H4 product catalogs', () => {
           total: 100,
         },
       });
-      const renamedGroup = await f.call(
+      const renamed = await f.call(
         'manager',
-        groupsPath + '/' + category.groupId,
+        categoriesPath + '/' + category.id,
         'PUT',
         {
-          name: 'Renamed group',
-          reason: 'Official group rename',
+          name: 'Renamed category',
+          reason: 'Official category rename',
         },
       );
-      expect(renamedGroup.status).toBe(200);
-      expect(
-        await prisma.productCategory.findUniqueOrThrow({
-          where: { id: category.id },
-        }),
-      ).toMatchObject({
-        groupCode: category.groupCode,
-        groupName: 'Renamed group',
-      });
+      expect(renamed.status).toBe(200);
+      expect(renamed.body.data.name).toBe('Renamed category');
       const retired = await f.call(
         'manager',
         categoriesPath + '/' + category.id,
@@ -721,7 +680,7 @@ describe('H4 product catalogs', () => {
     await withTestApp(async ({ app, prisma, baseUrl }) => {
       const f = await adminFixture(app, prisma, baseUrl);
       const category = await prisma.productCategory.findFirstOrThrow({
-        where: { isActive: true, group: { isActive: true } },
+        where: { isActive: true },
         include: {
           criteriaSet: {
             include: {
@@ -872,13 +831,10 @@ describe('H4 product catalogs', () => {
     });
   });
 
-  it('does not move a category that has a submitted product', async () => {
+  it('rejects removed hierarchy fields without changing a category with history', async () => {
     await withTestApp(async ({ app, prisma, baseUrl }) => {
       const f = await adminFixture(app, prisma, baseUrl);
       const category = await prisma.productCategory.findFirstOrThrow();
-      const target = await prisma.productGroup.findFirstOrThrow({
-        where: { id: { not: category.groupId } },
-      });
       await prisma.product.create({
         data: {
           registrantId: f.owner.id,
@@ -893,29 +849,24 @@ describe('H4 product catalogs', () => {
         categoriesPath + '/' + category.id,
         'PUT',
         {
-          groupId: target.id,
+          groupId: 'removed-group',
           reason: 'Attempt move with history',
         },
       );
-      expect(moved.status).toBe(409);
+      expect(moved.status).toBe(400);
       await expect(
         prisma.productCategory.findUniqueOrThrow({
           where: { id: category.id },
         }),
-      ).resolves.toMatchObject({
-        groupId: category.groupId,
-        groupCode: category.groupCode,
-        groupName: category.groupName,
-      });
+      ).resolves.toMatchObject({ id: category.id, name: category.name });
     });
   });
 
   it('rolls category creation back if its audit insert fails', async () => {
     await withTestApp(async ({ app, prisma, baseUrl }) => {
       const f = await adminFixture(app, prisma, baseUrl);
-      const group = await prisma.productGroup.findFirstOrThrow();
       const constraint = 'test_admin_catalog_audit_failure';
-      const input = categoryInput(group.id);
+      const input = categoryInput();
       await prisma.$executeRaw(Prisma.sql`
         ALTER TABLE ${databaseObject('audit_logs')}
         ADD CONSTRAINT ${Prisma.raw('"' + constraint + '"')}

@@ -9,7 +9,7 @@ import type {
   ProductResultsPrintData,
   ProductStatus,
   RegistrationPrintData,
-  RegistrationSnapshotV1,
+  RegistrationSnapshot,
   ScoreOption,
 } from '@ocop/shared';
 import { productRegistrationTypes } from '../constants/products';
@@ -133,7 +133,6 @@ export interface EvaluationPrintBuildInput {
     category: {
       id: string;
       name: string;
-      groupName: string;
       criteriaSet: {
         id: string;
         name: string | null;
@@ -182,7 +181,7 @@ interface ParsedSnapshotScore {
 function parseEvaluationSnapshot(raw: unknown) {
   const snap = asRecord(raw);
   if (!snap) return null;
-  const isV1 = snap.version === 1;
+  const isV1 = snap.version === 1 || snap.version === 2;
   const isPreUpgrade =
     snap.schemaVersion === 1 && snap.provenance === 'PRE_UPGRADE';
   if (!isV1 && !isPreUpgrade) return null;
@@ -191,7 +190,6 @@ function parseEvaluationSnapshot(raw: unknown) {
   const unitRec = asRecord(judgeRec?.organizationUnit);
   const productRec = asRecord(snap.product);
   const catRec = asRecord(productRec?.category);
-  const groupRec = asRecord(catRec?.group);
   const csRec = asRecord(snap.criteriaSet);
   const scopeRec = asRecord(snap.scope);
 
@@ -244,8 +242,9 @@ function parseEvaluationSnapshot(raw: unknown) {
   const formRec = extractSafeApplicationForm(productRec?.formData);
 
   return {
-    provenance: (isPreUpgrade ? 'PRE_UPGRADE' : 'SNAPSHOT_V1') as
+    provenance: (isPreUpgrade ? 'PRE_UPGRADE' : snap.version === 2 ? 'SNAPSHOT_V2' : 'SNAPSHOT_V1') as
       | 'PRE_UPGRADE'
+      | 'SNAPSHOT_V2'
       | 'SNAPSHOT_V1',
     historicalValuesVerified: isPreUpgrade
       ? Boolean(snap.historicalValuesVerified)
@@ -262,7 +261,6 @@ function parseEvaluationSnapshot(raw: unknown) {
       name: asString(productRec?.name),
       entityName: asString(formRec.entityName),
       categoryName: asString(catRec?.name),
-      groupName: asString(groupRec?.name),
     },
     criteriaSet: {
       id: asString(csRec?.id),
@@ -458,9 +456,6 @@ export function buildEvaluationPrintData(
       name: parsedSnap?.product.name ?? input.currentProduct.name,
       categoryName:
         parsedSnap?.product.categoryName ?? input.currentProduct.category.name,
-      groupName:
-        parsedSnap?.product.groupName ??
-        input.currentProduct.category.groupName,
       entityName:
         parsedSnap?.product.entityName ?? currentForm.entityName ?? null,
     },
@@ -486,16 +481,15 @@ export function buildEvaluationPrintData(
   };
 }
 
-function parseRegistrationSnapshot(raw: unknown): RegistrationSnapshotV1 | null {
+function parseRegistrationSnapshot(raw: unknown): RegistrationSnapshot | null {
   const snap = asRecord(raw);
-  if (!snap || snap.version !== 1) return null;
+  if (!snap || (snap.version !== 1 && snap.version !== 2)) return null;
   const prod = asRecord(snap.product);
   const reg = asRecord(snap.registrant);
   const cat = asRecord(snap.category);
-  const grp = asRecord(cat?.group);
   const loc = asRecord(snap.locality);
-  if (!prod || !reg || !cat || !grp || !loc) return null;
-  return snap as unknown as RegistrationSnapshotV1;
+  if (!prod || !reg || !cat || !loc || (snap.version === 1 && !asRecord(cat.group))) return null;
+  return snap as unknown as RegistrationSnapshot;
 }
 
 export function buildRegistrationPrintData(input: {
@@ -522,9 +516,6 @@ export function buildRegistrationPrintData(input: {
     category: {
       id: string;
       name: string;
-      groupName: string;
-      classificationGroup: string;
-      classificationSubgroup: string | null;
     };
     locality: {
       id: string;
@@ -591,9 +582,6 @@ export function buildRegistrationPrintData(input: {
       ? {
           id: snap.category.id,
           name: snap.category.name,
-          groupName: snap.category.group.name,
-          classificationGroup: snap.category.classificationGroup,
-          classificationSubgroup: snap.category.classificationSubgroup,
         }
       : product.category,
     locality: snap ? snap.locality : fallbackLocality,
@@ -627,7 +615,6 @@ export function buildProductResultsPrintData(input: {
     category: {
       id: string;
       name: string;
-      groupName: string;
       criteriaSet: {
         id: string;
         name: string | null;
@@ -779,9 +766,6 @@ export function buildProductResultsPrintData(input: {
         product.locality?.provinceName ??
         null,
       categoryName: regSnap ? regSnap.category.name : product.category.name,
-      groupName: regSnap
-        ? regSnap.category.group.name
-        : product.category.groupName,
       finalScore,
       starRating,
       starLabel,

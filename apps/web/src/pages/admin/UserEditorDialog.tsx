@@ -8,7 +8,11 @@ import type {
   UpdateAdminUserStatusInput,
 } from '@ocop/shared';
 import { useBlocker } from '@tanstack/react-router';
+import AlertError from '@/components/alert-error';
+import { FormField } from '@/components/form-field';
+import PasswordInput from '@/components/password-input';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -17,6 +21,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { staffAccessPayloadForForm, staffPermissionsForForm } from '../../lib/admin-user-form';
 import { messageOf } from '../../lib/api-error';
 import { getSession, validatePasswordBytes } from '../../lib/auth';
@@ -131,9 +143,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
       accessReason.trim().length > 0);
 
   const statusDirty =
-    open &&
-    Boolean(user) &&
-    (statusIsActive !== statusBaseline || statusReason.trim().length > 0);
+    open && Boolean(user) && (statusIsActive !== statusBaseline || statusReason.trim().length > 0);
 
   const passwordDirty =
     open && Boolean(user) && (password.length > 0 || passwordReason.trim().length > 0);
@@ -226,11 +236,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
           {user.verified ? 'Đã xác thực' : 'Chưa xác thực'}
         </DialogDescription>
       </DialogHeader>
-      {error && (
-        <p className='form-note' role='alert'>
-          {error}
-        </p>
-      )}
+      {error && <AlertError title='Không thể thực hiện thao tác' errors={[error]} />}
       <form
         className='admin-form account-form filter-card'
         onSubmit={(event) => {
@@ -249,39 +255,42 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
         }}
       >
         <h3>Hồ sơ</h3>
-        <label>
-          Email
-          <Input value={user.email} readOnly disabled />
-        </label>
-        <label>
-          Họ tên
+        <FormField label='Email' htmlFor='user-editor-1'>
+          <Input id='user-editor-1' value={user.email} readOnly disabled />
+        </FormField>
+        <FormField label='Họ tên' htmlFor='user-editor-2'>
           <Input
+            id='user-editor-2'
             value={fullName}
             onChange={(event) => setFullName(event.target.value)}
             maxLength={255}
             required
           />
-        </label>
-        <label>
-          Số điện thoại
-          <Input value={phone} onChange={(event) => setPhone(event.target.value)} maxLength={30} />
-        </label>
-        <label>
-          Lý do cập nhật hồ sơ
+        </FormField>
+        <FormField label='Số điện thoại' htmlFor='user-editor-3'>
           <Input
+            id='user-editor-3'
+            value={phone}
+            onChange={(event) => setPhone(event.target.value)}
+            maxLength={30}
+          />
+        </FormField>
+        <FormField label='Lý do cập nhật hồ sơ' htmlFor='user-editor-4'>
+          <Input
+            id='user-editor-4'
             value={profileReason}
             onChange={(event) => setProfileReason(event.target.value)}
             maxLength={255}
             required
           />
-        </label>
+        </FormField>
         {profileNotice && (
           <p className='form-message' role='status'>
             {profileNotice}
           </p>
         )}
         <div className='admin-actions'>
-          <Button type='submit' variant='secondary' disabled={busy}>
+          <Button type='submit' variant='secondary' loading={busy} disabled={busy}>
             {busy ? 'Đang lưu…' : 'Lưu hồ sơ'}
           </Button>
         </div>
@@ -319,69 +328,70 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
           }}
         >
           <h3>Quyền và đơn vị</h3>
-          <p className='text-xs text-muted'>
+          <p className='text-muted text-xs'>
             Quyền Quản lý (MANAGE) tự bao hàm Xem dữ liệu (VIEW), không tự bao hàm Chấm điểm
             (SCORE).
           </p>
           <div role='group' aria-label='Quyền nội bộ' className='grid gap-2'>
             {(['MANAGE', 'VIEW', 'SCORE'] as const).map((permission) => (
-              <label key={permission} className='inline-flex items-center gap-2 cursor-pointer'>
-                <input
-                  type='checkbox'
+              <div key={permission} className='inline-flex items-center gap-2'>
+                <Checkbox
+                  id={`user-editor-permission-${permission}`}
                   checked={permissions.includes(permission)}
                   disabled={busy || (permission === 'VIEW' && permissions.includes('MANAGE'))}
-                  onChange={(event) => togglePermission(permission, event.target.checked)}
+                  onCheckedChange={(checked) => togglePermission(permission, checked === true)}
                 />
-                <span>
+                <Label htmlFor={`user-editor-permission-${permission}`} className='cursor-pointer'>
                   {STAFF_PERMISSION_LABELS[permission]} ({permission})
                   {permission === 'VIEW' && permissions.includes('MANAGE')
                     ? ' — được bao hàm bởi Quản lý'
                     : ''}
-                </span>
-              </label>
+                </Label>
+              </div>
             ))}
           </div>
-          <label>
-            Đơn vị công tác
-            <select
-              value={organizationUnitId}
-              onChange={(event) => setOrganizationUnitId(event.target.value)}
+          <FormField label='Đơn vị công tác' htmlFor='user-editor-5'>
+            <Select
+              value={organizationUnitId || undefined}
+              onValueChange={setOrganizationUnitId}
               disabled={busy}
             >
-              <option value='' disabled={Boolean(user.organizationUnitId)}>
-                Chưa gán đơn vị
-              </option>
-              {props.units.map((unit) => (
-                <option key={unit.id} value={unit.id} disabled={!unit.isActive}>
-                  {unit.name}
-                  {unit.isActive ? '' : ' (ngừng nhận tài khoản mới)'}
-                </option>
-              ))}
-              {user.organizationUnitId &&
-                !props.units.some((unit) => unit.id === user.organizationUnitId) && (
-                  <option value={user.organizationUnitId} disabled>
-                    {user.organizationUnit?.name ?? 'Đơn vị hiện tại'} (đang được giữ trên tài
-                    khoản)
-                  </option>
-                )}
-            </select>
-          </label>
-          <label>
-            Lý do thay đổi quyền/đơn vị
+              <SelectTrigger id='user-editor-5'>
+                <SelectValue placeholder='Chưa gán đơn vị' />
+              </SelectTrigger>
+              <SelectContent>
+                {props.units.map((unit) => (
+                  <SelectItem key={unit.id} value={unit.id} disabled={!unit.isActive}>
+                    {unit.name}
+                    {unit.isActive ? '' : ' (ngừng nhận tài khoản mới)'}
+                  </SelectItem>
+                ))}
+                {user.organizationUnitId &&
+                  !props.units.some((unit) => unit.id === user.organizationUnitId) && (
+                    <SelectItem value={user.organizationUnitId} disabled>
+                      {user.organizationUnit?.name ?? 'Đơn vị hiện tại'} (đang được giữ trên tài
+                      khoản)
+                    </SelectItem>
+                  )}
+              </SelectContent>
+            </Select>
+          </FormField>
+          <FormField label='Lý do thay đổi quyền/đơn vị' htmlFor='user-editor-6'>
             <Input
+              id='user-editor-6'
               value={accessReason}
               onChange={(event) => setAccessReason(event.target.value)}
               maxLength={255}
               required
             />
-          </label>
+          </FormField>
           {accessNotice && (
             <p className='form-message' role='status'>
               {accessNotice}
             </p>
           )}
           <div className='admin-actions'>
-            <Button type='submit' variant='secondary' disabled={busy}>
+            <Button type='submit' variant='secondary' loading={busy} disabled={busy}>
               {busy ? 'Đang lưu…' : 'Lưu quyền và đơn vị'}
             </Button>
           </div>
@@ -408,31 +418,33 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
         }}
       >
         <h3>Trạng thái</h3>
-        <label className='inline-flex items-center gap-2 cursor-pointer'>
-          <input
-            type='checkbox'
+        <div className='inline-flex items-center gap-2'>
+          <Checkbox
+            id='user-editor-7'
             checked={statusIsActive}
-            onChange={(event) => setStatusIsActive(event.target.checked)}
+            onCheckedChange={(checked) => setStatusIsActive(checked === true)}
             disabled={busy}
           />
-          <span>Đang hoạt động</span>
-        </label>
-        <label>
-          Lý do thay đổi trạng thái
+          <Label htmlFor='user-editor-7' className='cursor-pointer'>
+            Đang hoạt động
+          </Label>
+        </div>
+        <FormField label='Lý do thay đổi trạng thái' htmlFor='user-editor-8'>
           <Input
+            id='user-editor-8'
             value={statusReason}
             onChange={(event) => setStatusReason(event.target.value)}
             maxLength={255}
             required
           />
-        </label>
+        </FormField>
         {statusNotice && (
           <p className='form-message' role='status'>
             {statusNotice}
           </p>
         )}
         <div className='admin-actions'>
-          <Button type='submit' variant='secondary' disabled={busy}>
+          <Button type='submit' variant='secondary' loading={busy} disabled={busy}>
             {busy ? 'Đang lưu…' : 'Lưu trạng thái'}
           </Button>
         </div>
@@ -454,10 +466,12 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
         }}
       >
         <h3>Đặt lại mật khẩu</h3>
-        <label>
-          Mật khẩu mới ({isStaff ? 'tối thiểu 12 ký tự' : 'tối thiểu 8 ký tự'})
-          <Input
-            type='password'
+        <FormField
+          label={<>Mật khẩu mới ({isStaff ? 'tối thiểu 12 ký tự' : 'tối thiểu 8 ký tự'})</>}
+          htmlFor='user-editor-9'
+        >
+          <PasswordInput
+            id='user-editor-9'
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             minLength={isStaff ? 12 : 8}
@@ -465,23 +479,23 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
             autoComplete='new-password'
             required
           />
-        </label>
-        <label>
-          Lý do đặt lại mật khẩu
+        </FormField>
+        <FormField label='Lý do đặt lại mật khẩu' htmlFor='user-editor-10'>
           <Input
+            id='user-editor-10'
             value={passwordReason}
             onChange={(event) => setPasswordReason(event.target.value)}
             maxLength={255}
             required
           />
-        </label>
+        </FormField>
         {passwordNotice && (
           <p className='form-message' role='status'>
             {passwordNotice}
           </p>
         )}
         <div className='admin-actions'>
-          <Button type='submit' variant='secondary' disabled={busy}>
+          <Button type='submit' variant='secondary' loading={busy} disabled={busy}>
             {busy ? 'Đang lưu…' : 'Đặt lại mật khẩu'}
           </Button>
         </div>
@@ -493,11 +507,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
         <DialogTitle>Tạo tài khoản nội bộ</DialogTitle>
         <DialogDescription>Chọn đơn vị đang hoạt động và ít nhất một quyền.</DialogDescription>
       </DialogHeader>
-      {error && (
-        <p className='form-note' role='alert'>
-          {error}
-        </p>
-      )}
+      {error && <AlertError title='Không thể thực hiện thao tác' errors={[error]} />}
       <form
         className='admin-form account-form'
         onSubmit={(event) => {
@@ -524,9 +534,9 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
           });
         }}
       >
-        <label>
-          Email
+        <FormField label='Email' htmlFor='user-editor-11'>
           <Input
+            id='user-editor-11'
             type='email'
             value={createForm.email}
             onChange={(event) => setCreateForm({ ...createForm, email: event.target.value })}
@@ -534,29 +544,28 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
             autoComplete='off'
             required
           />
-        </label>
-        <label>
-          Họ tên
+        </FormField>
+        <FormField label='Họ tên' htmlFor='user-editor-12'>
           <Input
+            id='user-editor-12'
             value={createForm.fullName}
             onChange={(event) => setCreateForm({ ...createForm, fullName: event.target.value })}
             maxLength={255}
             required
           />
-        </label>
-        <label>
-          Số điện thoại
+        </FormField>
+        <FormField label='Số điện thoại' htmlFor='user-editor-13'>
           <Input
+            id='user-editor-13'
             type='tel'
             value={createForm.phone}
             onChange={(event) => setCreateForm({ ...createForm, phone: event.target.value })}
             maxLength={30}
           />
-        </label>
-        <label>
-          Mật khẩu tạm thời (tối thiểu 12 ký tự)
-          <Input
-            type='password'
+        </FormField>
+        <FormField label='Mật khẩu tạm thời (tối thiểu 12 ký tự)' htmlFor='user-editor-14'>
+          <PasswordInput
+            id='user-editor-14'
             value={createForm.password}
             onChange={(event) => setCreateForm({ ...createForm, password: event.target.value })}
             minLength={12}
@@ -564,83 +573,80 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
             autoComplete='new-password'
             required
           />
-        </label>
-        <label>
-          Đơn vị công tác
-          <select
-            value={createForm.organizationUnitId}
-            onChange={(event) =>
-              setCreateForm({ ...createForm, organizationUnitId: event.target.value })
-            }
-            required
+        </FormField>
+        <FormField label='Đơn vị công tác' htmlFor='user-editor-15'>
+          <Select
+            value={createForm.organizationUnitId || undefined}
+            onValueChange={(value) => setCreateForm({ ...createForm, organizationUnitId: value })}
           >
-            <option value=''>Chọn đơn vị</option>
-            {props.units
-              .filter((unit) => unit.isActive)
-              .map((unit) => (
-                <option key={unit.id} value={unit.id}>
-                  {unit.name}
-                </option>
-              ))}
-          </select>
-        </label>
+            <SelectTrigger id='user-editor-15'>
+              <SelectValue placeholder='Chọn đơn vị' />
+            </SelectTrigger>
+            <SelectContent>
+              {props.units
+                .filter((unit) => unit.isActive)
+                .map((unit) => (
+                  <SelectItem key={unit.id} value={unit.id}>
+                    {unit.name}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+        </FormField>
         <fieldset className='account-form'>
-          <legend className='font-semibold text-sm'>Quyền nội bộ</legend>
+          <legend className='text-sm font-semibold'>Quyền nội bộ</legend>
           {(['MANAGE', 'VIEW', 'SCORE'] as const).map((permission) => (
-            <label key={permission} className='inline-flex items-center gap-2 cursor-pointer'>
-              <input
-                type='checkbox'
+            <div key={permission} className='inline-flex items-center gap-2'>
+              <Checkbox
+                id={`user-create-permission-${permission}`}
                 checked={createForm.staffPermissions.includes(permission)}
                 disabled={
                   busy || (permission === 'VIEW' && createForm.staffPermissions.includes('MANAGE'))
                 }
-                onChange={(event) =>
+                onCheckedChange={(checked) =>
                   setCreateForm({
                     ...createForm,
                     staffPermissions: staffPermissionsForForm(
-                      event.target.checked
+                      checked === true
                         ? [...createForm.staffPermissions, permission]
                         : createForm.staffPermissions.filter((item) => item !== permission),
                     ),
                   })
                 }
               />
-              <span>
+              <Label htmlFor={`user-create-permission-${permission}`} className='cursor-pointer'>
                 {STAFF_PERMISSION_LABELS[permission]} ({permission})
                 {permission === 'VIEW' && createForm.staffPermissions.includes('MANAGE')
                   ? ' — được bao hàm bởi Quản lý'
                   : ''}
-              </span>
-            </label>
+              </Label>
+            </div>
           ))}
         </fieldset>
-        <label>
-          Lý do tạo tài khoản
+        <FormField label='Lý do tạo tài khoản' htmlFor='user-editor-16'>
           <Input
+            id='user-editor-16'
             value={createForm.reason}
             onChange={(event) => setCreateForm({ ...createForm, reason: event.target.value })}
             maxLength={255}
             required
           />
-        </label>
+        </FormField>
         {noActiveUnit && (
-          <div className='form-note' role='alert'>
-            <p>Cần có đơn vị đang hoạt động trước khi tạo tài khoản nội bộ.</p>
+          <div className='space-y-2'>
+            <AlertError
+              title='Chưa có đơn vị hoạt động'
+              errors={['Cần có đơn vị đang hoạt động trước khi tạo tài khoản nội bộ.']}
+            />
             {props.onManageUnits && (
-              <Button
-                type='button'
-                variant='secondary'
-                size='sm'
-                className='mt-2'
-                onClick={handleManageUnitsClick}
-              >
+              <Button type='button' variant='secondary' size='sm' onClick={handleManageUnitsClick}>
                 Quản lý đơn vị
               </Button>
             )}
           </div>
         )}
         <div className='admin-actions'>
-          <Button type='submit' disabled={busy || noActiveUnit}>
+          <Button type='submit' loading={busy} disabled={busy || noActiveUnit}>
             {busy ? 'Đang tạo…' : 'Tạo tài khoản'}
           </Button>
           <Button

@@ -1,4 +1,5 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute } from '@tanstack/react-router';
+import AdminFilterError from '@/components/admin-filter-error';
 import { parseAdminProductSearch } from '../lib/admin-search';
 import { requirePermission } from '../lib/route-guards';
 import { AdminProductsPage } from '../pages/admin/AdminProductsPage';
@@ -25,21 +26,5 @@ function RegistrationsRoute() {
 }
 
 function RegistrationsFilterError() {
-  return (
-    <section className='admin-page' role='alert'>
-      <div className='admin-page-heading'>
-        <div>
-          <h1>Bộ lọc không hợp lệ</h1>
-          <p className='route-intro'>
-            Điều kiện tìm kiếm trên địa chỉ trang không đúng định dạng hoặc có xung đột.
-          </p>
-        </div>
-      </div>
-      <div className='admin-actions'>
-        <Link className='button button-primary' to='/admin/registrations' search={{}}>
-          Về danh sách phiếu đăng ký
-        </Link>
-      </div>
-    </section>
-  );
+  return <AdminFilterError mode='registrations' />;
 }

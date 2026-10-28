@@ -27,8 +27,11 @@ export function DialogOverlay({
 export function DialogContent({
   className,
   children,
+  showCloseButton = true,
   ...props
-}: ComponentProps<typeof DialogPrimitive.Content>) {
+}: ComponentProps<typeof DialogPrimitive.Content> & {
+  showCloseButton?: boolean;
+}) {
   return (
     <DialogPortal>
       <DialogOverlay />
@@ -41,10 +44,12 @@ export function DialogContent({
         {...props}
       >
         {children}
-        <DialogPrimitive.Close className='focus:ring-ring absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:outline-none disabled:pointer-events-none'>
-          <XIcon className='size-4' />
-          <span className='sr-only'>Đóng</span>
-        </DialogPrimitive.Close>
+        {showCloseButton && (
+          <DialogPrimitive.Close className='focus:ring-ring absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:outline-none disabled:pointer-events-none'>
+            <XIcon className='size-4' />
+            <span className='sr-only'>Đóng</span>
+          </DialogPrimitive.Close>
+        )}
       </DialogPrimitive.Content>
     </DialogPortal>
   );

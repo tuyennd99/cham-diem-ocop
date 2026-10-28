@@ -8,7 +8,7 @@ describe('admin product mutations and registration snapshots', () => {
     await withTestApp(async ({ app, prisma, baseUrl }) => {
       const f = await adminFixture(app, prisma, baseUrl);
       const category = await prisma.productCategory.findFirstOrThrow({
-        where: { isActive: true, group: { isActive: true } },
+        where: { isActive: true },
       });
       const created = await f.call('manager', '/admin/products', 'POST', {
         ...draftPayload(category.id, f.locality.id),
@@ -39,7 +39,7 @@ describe('admin product mutations and registration snapshots', () => {
         localityNameAtSubmit: f.locality.name,
       });
       expect(before.registrationSnapshot).toMatchObject({
-        version: 1,
+        version: 2,
         registrant: { id: f.owner.id, fullName: f.owner.fullName },
         category: { id: category.id, name: category.name },
         locality: { id: f.locality.id, name: f.locality.name },
@@ -56,10 +56,6 @@ describe('admin product mutations and registration snapshots', () => {
       await prisma.productCategory.update({
         where: { id: category.id },
         data: { name: 'Renamed category' },
-      });
-      await prisma.productGroup.update({
-        where: { id: category.groupId },
-        data: { name: 'Renamed group' },
       });
       const after = await prisma.product.findUniqueOrThrow({ where: { id } });
       expect(after.registrationSnapshot).toEqual(before.registrationSnapshot);
@@ -110,7 +106,7 @@ describe('admin product mutations and registration snapshots', () => {
     await withTestApp(async ({ app, prisma, baseUrl }) => {
       const f = await adminFixture(app, prisma, baseUrl);
       const category = await prisma.productCategory.findFirstOrThrow({
-        where: { isActive: true, group: { isActive: true } },
+        where: { isActive: true },
       });
       const created = await f.call('owner', '/my/products', 'POST', {
         categoryId: category.id,
@@ -161,7 +157,7 @@ describe('admin product mutations and registration snapshots', () => {
     await withTestApp(async ({ app, prisma, baseUrl }) => {
       const f = await adminFixture(app, prisma, baseUrl);
       const category = await prisma.productCategory.findFirstOrThrow({
-        where: { isActive: true, group: { isActive: true } },
+        where: { isActive: true },
       });
       const retired = await prisma.locality.create({
         data: {
@@ -214,7 +210,7 @@ describe('admin product mutations and registration snapshots', () => {
     await withTestApp(async ({ app, prisma, baseUrl }) => {
       const f = await adminFixture(app, prisma, baseUrl);
       const category = await prisma.productCategory.findFirstOrThrow({
-        where: { isActive: true, group: { isActive: true } },
+        where: { isActive: true },
       });
       const unverified = await prisma.user.create({
         data: {
@@ -335,7 +331,7 @@ describe('admin product mutations and registration snapshots', () => {
     await withTestApp(async ({ app, prisma, baseUrl }) => {
       const f = await adminFixture(app, prisma, baseUrl);
       const category = await prisma.productCategory.findFirstOrThrow({
-        where: { isActive: true, group: { isActive: true } },
+        where: { isActive: true },
       });
       const created = await f.call('manager', '/admin/products', 'POST', {
         ...draftPayload(category.id, f.locality.id),
@@ -368,7 +364,7 @@ describe('admin product mutations and registration snapshots', () => {
     await withTestApp(async ({ app, prisma, baseUrl }) => {
       const f = await adminFixture(app, prisma, baseUrl);
       const category = await prisma.productCategory.findFirstOrThrow({
-        where: { isActive: true, group: { isActive: true } },
+        where: { isActive: true },
       });
       const created = await f.call('manager', '/admin/products', 'POST', {
         ...draftPayload(category.id, f.locality.id),
@@ -535,7 +531,7 @@ describe('admin product mutations and registration snapshots', () => {
     await withTestApp(async ({ app, prisma, baseUrl }) => {
       const f = await adminFixture(app, prisma, baseUrl);
       const category = await prisma.productCategory.findFirstOrThrow({
-        where: { isActive: true, group: { isActive: true } },
+        where: { isActive: true },
       });
       const periodStart = new Date('2026-10-01T00:00:00+07:00');
       const periodEnd = new Date('2026-10-02T00:00:00+07:00');
@@ -638,7 +634,6 @@ describe('admin product mutations and registration snapshots', () => {
 
       const filters = new URLSearchParams({
         q: 'Needle entity',
-        groupId: category.groupId,
         categoryId: category.id,
         registrantId: f.owner.id,
         registrantQ: 'Test user',
@@ -739,7 +734,7 @@ describe('admin product mutations and registration snapshots', () => {
     await withTestApp(async ({ app, prisma, baseUrl }) => {
       const f = await adminFixture(app, prisma, baseUrl);
       const category = await prisma.productCategory.findFirstOrThrow({
-        where: { isActive: true, group: { isActive: true } },
+        where: { isActive: true },
       });
 
       // REG-01: Minimal draft save (only name + categoryId, sampleQuantity = 0, no localityId, declarationAccepted = false)

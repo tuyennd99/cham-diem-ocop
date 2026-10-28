@@ -19,7 +19,7 @@ describe('EvaluationsRepository.getEvaluation', () => {
       id: 'product-1', name: 'Product', description: 'Description', formData: { entityName: 'Entity' },
       status: ProductStatus.SCORING, completedAt: null, categoryId: 'category-1', attachments: [],
       category: {
-        id: 'category-1', name: 'Category', group: { id: 'group-1', code: 'FOOD', name: 'Food' },
+        id: 'category-1', name: 'Category',
         criteriaSet: { id: 'set-1', name: 'Criteria', source: 'official', version: 'v1', sourceHash: 'abc', criteria: [criterion] },
       },
     };
@@ -49,10 +49,11 @@ describe('EvaluationsRepository.getEvaluation', () => {
       const update = tx.evaluation.update.mock.calls[0][0];
       const snapshot = update.data.submissionSnapshot;
       expect(update.data.submittedAt).toBeInstanceOf(Date);
+      expect(snapshot.product.category).toEqual({ id: 'category-1', name: 'Category' });
       expect(snapshot).toMatchObject({
-        version: 1,
+        version: 2,
         submittedAt: update.data.submittedAt.toISOString(),
-        product: { id: 'product-1', name: 'Product', category: { id: 'category-1', group: { id: 'group-1', code: 'FOOD', name: 'Food' } } },
+        product: { id: 'product-1', name: 'Product', category: { id: 'category-1' } },
         criteriaSet: { id: 'set-1', source: 'official', version: 'v1', sourceHash: 'abc' },
         judge: { id: 'judge-1', fullName: 'Judge', organizationUnit: unit },
         assignedCriterionIds: ['criterion-1'],
@@ -76,7 +77,6 @@ describe('EvaluationsRepository.getEvaluation', () => {
       category: {
         id: 'category-1',
         name: 'Thực phẩm',
-        groupName: 'Nông sản',
         criteriaSet: {
           criteria: [
             { id: 'criterion-1', code: '1', name: 'Tiêu chí được giao', subCriteria: [] },
@@ -97,7 +97,7 @@ describe('EvaluationsRepository.getEvaluation', () => {
 
     expect(result.evaluation.status).toBe(EvaluationStatus.SUBMITTED);
     expect(result.criteria.map(({ id }) => id)).toEqual(['criterion-1']);
-    expect(result.product.category).toEqual({ id: 'category-1', name: 'Thực phẩm', groupName: 'Nông sản' });
+    expect(result.product.category).toEqual({ id: 'category-1', name: 'Thực phẩm' });
     expect(result.product.category).not.toHaveProperty('criteriaSet');
   });
 

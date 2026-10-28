@@ -10,14 +10,14 @@ const product = {
   id: '00000000-0000-4000-8000-000000000001', name: 'Sản phẩm kiểm thử bản in OCOP',
   description: 'Dữ liệu minh họa dành riêng cho kiểm tra bố cục, không phải hồ sơ thực tế.',
   status: 'COMPLETED', submittedAt: timestamp, completedAt: timestamp, createdAt: timestamp,
-  entityName: 'Hợp tác xã kiểm thử', categoryName: 'Sản phẩm chế biến', groupName: 'Thực phẩm',
+  entityName: 'Hợp tác xã kiểm thử', categoryName: 'Sản phẩm chế biến',
   localityName: 'Xã kiểm thử', provinceName: 'Tỉnh kiểm thử', finalScore: 89.99,
   starRating: 4, starLabel: 'Mức điểm 4 sao',
 };
 const registration = {
   kind: 'REGISTRATION', generatedAt: timestamp, isDraft: false, hasSubmissionSnapshot: true, product,
   registrant: { id: 'owner', fullName: 'Nguyễn Văn Kiểm Thử', email: 'test@example.com', phone: '0900000000' },
-  category: { id: 'category', name: product.categoryName, groupName: product.groupName, classificationGroup: '1', classificationSubgroup: null },
+  category: { id: 'category', name: product.categoryName },
   locality: { id: 'locality', code: 'TEST', name: product.localityName, provinceName: product.provinceName, type: 'COMMUNE' },
   formData: {
     entityName: product.entityName, representativeName: 'Nguyễn Văn Kiểm Thử', representativeTitle: 'Giám đốc',
@@ -52,7 +52,7 @@ async function main() {
     await context.addInitScript(() => localStorage.setItem('ocop-session', JSON.stringify({
       accessToken: 'local-print-fixture', user: { id: 'test', role: 'ADMIN', fullName: 'Kiểm thử bản in', verified: true },
     })));
-    await context.route('**/api/**', async (route) => {
+    await context.route((url) => url.pathname.startsWith('/api/'), async (route) => {
       const path = new URL(route.request().url()).pathname;
       if (path.endsWith('/registration-print-data')) return route.fulfill({ json: { data: registration } });
       if (path.endsWith('/results/print-data')) return route.fulfill({ json: { data: results } });

@@ -43,9 +43,10 @@ async function copySeedData(client: Client, schema: string) {
     }
     await client.query(`SET search_path TO "${schema}"`);
     await client.query('BEGIN');
-    await client.query('INSERT INTO "product_groups" SELECT * FROM public."product_groups" ON CONFLICT DO NOTHING');
+    await client.query(
+      'INSERT INTO "product_categories" ("id", "name", "description", "order", "isActive", "createdAt", "updatedAt") SELECT "id", "name", "description", "order", "isActive", "createdAt", "updatedAt" FROM public."product_categories"',
+    );
     for (const table of [
-      'product_categories',
       'criteria_sets',
       'criteria',
       'sub_criteria',

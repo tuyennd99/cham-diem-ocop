@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { publicAttachmentUrl } from '../../constants/api';
 import { PUBLIC_PRODUCT_STATUS_TONE } from '../../constants/product-status';
 import { ApiError } from '../../lib/api-error';
@@ -80,14 +82,14 @@ export function PublicProductDetailPage({ id }: { id: string }) {
           <div className='public-product-error' role='alert'>
             <h1>Chưa tải được sản phẩm</h1>
             <p>Kiểm tra kết nối rồi thử lại.</p>
-            <button
-              className='button button-primary'
+            <Button
               type='button'
+              loading={isFetching}
               onClick={() => void refetch()}
               disabled={isFetching}
             >
               {isFetching ? 'Đang thử lại…' : 'Thử lại'}
-            </button>
+            </Button>
           </div>
         </div>
       </main>
@@ -112,9 +114,12 @@ export function PublicProductDetailPage({ id }: { id: string }) {
               ← Danh sách sản phẩm
             </Link>
             <div className='public-product-detail-heading'>
-              <span className={'badge status-badge ' + PUBLIC_PRODUCT_STATUS_TONE[product.status]}>
+              <Badge
+                variant='outline'
+                className={'status-badge ' + PUBLIC_PRODUCT_STATUS_TONE[product.status]}
+              >
                 {statusCopy.label}
-              </span>
+              </Badge>
               <h1 id='public-product-title'>{product.name}</h1>
               <p className='public-product-category'>{product.category.name}</p>
               <p className='public-product-status-copy'>{statusCopy.description}</p>
@@ -124,14 +129,15 @@ export function PublicProductDetailPage({ id }: { id: string }) {
           {loadError && (
             <div className='public-product-refresh-error' role='status'>
               <p>Không thể cập nhật sản phẩm lúc này. Nội dung đã tải vẫn được giữ lại.</p>
-              <button
-                className='button button-secondary'
+              <Button
+                variant='secondary'
                 type='button'
+                loading={isFetching}
                 onClick={() => void refetch()}
                 disabled={isFetching}
               >
                 {isFetching ? 'Đang thử lại…' : 'Thử lại'}
-              </button>
+              </Button>
             </div>
           )}
 

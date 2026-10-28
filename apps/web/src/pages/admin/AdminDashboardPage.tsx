@@ -1,32 +1,39 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type {
+  AdminAnalyticsDashboardResponse,
   AdminReportFilterQuery,
   DashboardKpiId,
+  DashboardKpiItem,
   LocalityType,
   ProductRegistrationType,
 } from '@ocop/shared';
 import { Link } from '@tanstack/react-router';
 import { Filter, RotateCcw } from 'lucide-react';
+import AlertError from '@/components/alert-error';
+import { FormField } from '@/components/form-field';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { DataTable, type DataTableColumnDef } from '@/components/ui/data-table';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { ALL } from '../../constants/consts';
 import { ADMIN_DASHBOARD_STATUS_LABEL } from '../../constants/product-status';
 import { currentVietnameseYear } from '../../lib/admin-date';
 import { parseAdminDashboardSearch } from '../../lib/admin-search';
 import { errorText } from '../../lib/api-error';
 import { useSession } from '../../lib/auth';
 import { formatExactScore } from '../../lib/print-format';
-import {
-  dashboardKpiLinkLabel,
-  formatKpiDeltaText,
-  formatKpiValue,
-} from '../../lib/report-format';
+import { dashboardKpiLinkLabel, formatKpiDeltaText, formatKpiValue } from '../../lib/report-format';
 import { hasStaffPermission } from '../../lib/session-contract';
 import { useAdminDashboard } from '../../queries/admin';
-import {
-  useAdminCategories,
-  useAdminLocalities,
-  useAdminProductGroups,
-} from '../../queries/admin-catalogs';
+import { useAdminCategories, useAdminLocalities } from '../../queries/admin-catalogs';
 
 interface AdminDashboardPageProps {
   search?: AdminReportFilterQuery;
@@ -39,6 +46,11 @@ const operationalIds: DashboardKpiId[] = [
   'openBacklogAtAsOf',
   'underAssignedBacklogAtAsOf',
 ];
+
+type DashboardJudgeItem = AdminAnalyticsDashboardResponse['judges'][number];
+type DashboardMonthlyTrendPoint = AdminAnalyticsDashboardResponse['charts']['monthlyTrend'][number];
+type DashboardStarDistributionItem =
+  AdminAnalyticsDashboardResponse['charts']['starDistribution'][number];
 
 export function AdminDashboardPage({
   search: controlledSearch,
@@ -66,26 +78,23 @@ export function AdminDashboardPage({
   const [showAdvanced, setShowAdvanced] = useState(
     Boolean(
       appliedSearch.categoryId ||
-        appliedSearch.localityType ||
-        appliedSearch.localityId ||
-        appliedSearch.registrationType ||
-        appliedSearch.assessmentYear,
+      appliedSearch.localityType ||
+      appliedSearch.localityId ||
+      appliedSearch.registrationType ||
+      appliedSearch.assessmentYear,
     ),
   );
-  const [groupMetricMode, setGroupMetricMode] = useState<'registered' | 'completed'>(
+  const [categoryMetricMode, setCategoryMetricMode] = useState<'registered' | 'completed'>(
     'registered',
   );
-  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
 
   useEffect(() => {
     setDraftFilters(appliedSearch);
   }, [appliedSearch]);
 
-  const groupsQuery = useAdminProductGroups({ page: 1, limit: 100 });
   const categoriesQuery = useAdminCategories({
     page: 1,
     limit: 100,
-    groupId: draftFilters.groupId,
   });
   const localitiesQuery = useAdminLocalities({
     page: 1,
@@ -102,26 +111,223 @@ export function AdminDashboardPage({
   } = useAdminDashboard(appliedSearch);
   const error = errorText(loadError);
 
-  const groups = groupsQuery.data?.data ?? [];
   const categories = categoriesQuery.data?.data ?? [];
   const localities = localitiesQuery.data?.data ?? [];
 
-  const operationalKpis = data
-    ? data.kpis.filter((item) => operationalIds.includes(item.id))
-    : [];
-  const analyticalKpis = data
-    ? data.kpis.filter((item) => !operationalIds.includes(item.id))
-    : [];
+  const operationalKpis = data ? data.kpis.filter((item) => operationalIds.includes(item.id)) : [];
+  const analyticalKpis = data ? data.kpis.filter((item) => !operationalIds.includes(item.id)) : [];
+
+  const judgeColumns = useMemo<DataTableColumnDef<DashboardJudgeItem>[]>(
+    () => [
+      {
+        accessorKey: 'fullName',
+        header: 'Giám khảo',
+        meta: { isRowHeader: true },
+      },
+      {
+        id: 'submitted',
+        header: 'Đã nộp',
+        meta: {
+          align: 'right',
+          cellStyle: { fontVariantNumeric: 'tabular-nums' },
+        },
+        cell: ({ row }) => `${row.original.submitted} / ${row.original.assigned}`,
+      },
+      {
+        accessorKey: 'pending',
+        header: 'Chưa hoàn tất',
+        meta: {
+          align: 'right',
+          cellStyle: { fontVariantNumeric: 'tabular-nums' },
+        },
+      },
+      {
+        id: 'progress',
+        header: 'Tiến độ',
+        cell: ({ row }) => {
+          const judge = row.original;
+          const percent = judge.assigned ? Math.round((judge.submitted / judge.assigned) * 100) : 0;
+          return (
+            <div>
+              <div
+                className='progress-track'
+                role='progressbar'
+                aria-label={`Tiến độ của ${judge.fullName}`}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={percent}
+              >
+                <span style={{ width: `${percent}%` }} />
+              </div>
+              <span className='text-xs'>{percent}%</span>
+            </div>
+          );
+        },
+      },
+    ],
+    [],
+  );
+
+  const monthlyTrendColumns = useMemo<DataTableColumnDef<DashboardMonthlyTrendPoint>[]>(
+    () => [
+      {
+        accessorKey: 'label',
+        header: 'Tháng',
+        meta: { isRowHeader: true },
+      },
+      {
+        accessorKey: 'registeredCount',
+        header: 'Đăng ký mới',
+        meta: {
+          align: 'right',
+          cellStyle: { fontVariantNumeric: 'tabular-nums' },
+        },
+        cell: ({ row }) => {
+          const m = row.original;
+          return (
+            <Link
+              className='text-link'
+              to='/admin/products'
+              search={{
+                dateBasis: 'submittedAt',
+                from: m.from,
+                toExclusive: m.toExclusive,
+              }}
+            >
+              {m.registeredCount} hồ sơ
+            </Link>
+          );
+        },
+      },
+      {
+        accessorKey: 'completedCount',
+        header: 'Hoàn tất chấm',
+        meta: {
+          align: 'right',
+          cellStyle: { fontVariantNumeric: 'tabular-nums' },
+        },
+        cell: ({ row }) => {
+          const m = row.original;
+          return (
+            <Link
+              className='text-link'
+              to='/admin/products'
+              search={{
+                dateBasis: 'completedAt',
+                status: 'COMPLETED',
+                from: m.from,
+                toExclusive: m.toExclusive,
+              }}
+            >
+              {m.completedCount} hồ sơ
+            </Link>
+          );
+        },
+      },
+    ],
+    [],
+  );
+
+  const starDistributionColumns = useMemo<DataTableColumnDef<DashboardStarDistributionItem>[]>(
+    () => [
+      {
+        accessorKey: 'label',
+        header: 'Mức sao theo điểm',
+        meta: { isRowHeader: true },
+      },
+      {
+        accessorKey: 'count',
+        header: 'Số lượng',
+        meta: {
+          align: 'right',
+          cellStyle: { fontVariantNumeric: 'tabular-nums' },
+        },
+        cell: ({ row }) => {
+          const item = row.original;
+          return (
+            <Link
+              className='text-link'
+              to='/admin/products'
+              search={{
+                status: 'COMPLETED',
+                starRating: item.stars,
+                dateBasis: 'completedAt',
+                from: data?.period.from,
+                toExclusive: data?.period.toExclusive,
+              }}
+            >
+              {item.count}
+            </Link>
+          );
+        },
+      },
+      {
+        accessorKey: 'percentage',
+        header: 'Tỷ trọng',
+        meta: {
+          align: 'right',
+          cellStyle: { fontVariantNumeric: 'tabular-nums' },
+        },
+        cell: ({ row }) =>
+          row.original.percentage !== null ? `${formatExactScore(row.original.percentage)}%` : '—',
+      },
+    ],
+    [data?.period.from, data?.period.toExclusive],
+  );
+
+  const comparisonColumns = useMemo<DataTableColumnDef<DashboardKpiItem>[]>(
+    () => [
+      {
+        accessorKey: 'label',
+        header: 'Chỉ tiêu KPI',
+        meta: { isRowHeader: true },
+      },
+      {
+        accessorKey: 'basisLabel',
+        header: 'Căn cứ',
+      },
+      {
+        id: 'current',
+        header: 'Kỳ này',
+        meta: {
+          align: 'right',
+          cellStyle: { fontVariantNumeric: 'tabular-nums' },
+        },
+        cell: ({ row }) => <strong>{formatKpiValue(row.original)}</strong>,
+      },
+      {
+        id: 'previous',
+        header: 'Kỳ trước',
+        meta: {
+          align: 'right',
+          cellStyle: { fontVariantNumeric: 'tabular-nums' },
+        },
+        cell: ({ row }) => {
+          const item = row.original;
+          return item.previousValue !== null
+            ? item.unit === 'PERCENT'
+              ? `${formatExactScore(item.previousValue)}%`
+              : item.previousValue
+            : '—';
+        },
+      },
+      {
+        id: 'delta',
+        header: 'Chênh lệch',
+        cell: ({ row }) => formatKpiDeltaText(row.original),
+      },
+    ],
+    [],
+  );
 
   const hasExtraFilters = Boolean(
     appliedSearch.month ||
-      appliedSearch.groupId ||
-      appliedSearch.categoryId ||
-      appliedSearch.localityType ||
-      appliedSearch.localityId ||
-      appliedSearch.registrationType ||
-      appliedSearch.assessmentYear ||
-      (appliedSearch.year && appliedSearch.year !== defaultYear),
+    appliedSearch.categoryId ||
+    appliedSearch.localityType ||
+    appliedSearch.localityId ||
+    appliedSearch.registrationType ||
+    appliedSearch.assessmentYear ||
+    (appliedSearch.year && appliedSearch.year !== defaultYear),
   );
 
   return (
@@ -134,12 +340,15 @@ export function AdminDashboardPage({
           </p>
         </div>
         <div className='admin-actions'>
-          <Link className='button button-secondary' to='/admin/reports' search={appliedSearch}>
-            Báo cáo thống kê
-          </Link>
+          <Button asChild variant='secondary'>
+            <Link to='/admin/reports' search={appliedSearch}>
+              Báo cáo thống kê
+            </Link>
+          </Button>
           <Button
             type='button'
             variant='secondary'
+            loading={isFetching}
             disabled={isFetching}
             onClick={() => void refetch()}
           >
@@ -157,12 +366,12 @@ export function AdminDashboardPage({
         }}
       >
         <div className='admin-filters'>
-          <label
+          <FormField
+            label='Năm báo cáo'
+            htmlFor='dashboard-year'
             className='admin-filter-field'
             data-filter-width='year'
-            htmlFor='dashboard-year'
           >
-            Năm báo cáo
             <Input
               id='dashboard-year'
               type='number'
@@ -176,62 +385,35 @@ export function AdminDashboardPage({
                 }))
               }
             />
-          </label>
-          <label
+          </FormField>
+          <FormField
+            label='Tháng'
+            htmlFor='dashboard-month'
             className='admin-filter-field'
             data-filter-width='month'
-            htmlFor='dashboard-month'
           >
-            Tháng
-            <select
-              id='dashboard-month'
-              value={draftFilters.month ?? ''}
-              onChange={(event) =>
+            <Select
+              value={draftFilters.month ? String(draftFilters.month) : ALL}
+              onValueChange={(value) =>
                 setDraftFilters((old) => ({
                   ...old,
-                  month: event.target.value ? Number(event.target.value) : undefined,
+                  month: value === ALL ? undefined : Number(value),
                 }))
               }
             >
-              <option value=''>Cả năm</option>
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => (
-                <option key={m} value={m}>
-                  Tháng {m}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label
-            className='admin-filter-field'
-            data-filter-width='group'
-            htmlFor='dashboard-group'
-          >
-            Nhóm sản phẩm lớn
-            <select
-              id='dashboard-group'
-              value={draftFilters.groupId ?? ''}
-              onChange={(event) => {
-                const nextGroupId = event.target.value || undefined;
-                const keepCategory =
-                  !nextGroupId ||
-                  categories.some(
-                    (cat) => cat.id === draftFilters.categoryId && cat.groupId === nextGroupId,
-                  );
-                setDraftFilters((old) => ({
-                  ...old,
-                  groupId: nextGroupId,
-                  categoryId: keepCategory ? old.categoryId : undefined,
-                }));
-              }}
-            >
-              <option value=''>Tất cả nhóm lớn</option>
-              {groups.map((grp) => (
-                <option key={grp.id} value={grp.id}>
-                  {grp.code} · {grp.name}
-                </option>
-              ))}
-            </select>
-          </label>
+              <SelectTrigger id='dashboard-month'>
+                <SelectValue placeholder='Cả năm' />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Cả năm</SelectItem>
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => (
+                  <SelectItem key={m} value={String(m)}>
+                    Tháng {m}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormField>
 
           <div className='admin-actions admin-filter-actions'>
             <Button type='submit'>Áp dụng</Button>
@@ -263,34 +445,35 @@ export function AdminDashboardPage({
           hidden={!showAdvanced}
           className='advanced-filter-grid'
         >
-          <label htmlFor='dashboard-category'>
-            Phân loại sản phẩm
-            <select
-              id='dashboard-category'
-              value={draftFilters.categoryId ?? ''}
-              onChange={(event) =>
+          <FormField label='Danh mục sản phẩm' htmlFor='dashboard-category'>
+            <Select
+              value={draftFilters.categoryId ?? ALL}
+              onValueChange={(value) =>
                 setDraftFilters((old) => ({
                   ...old,
-                  categoryId: event.target.value || undefined,
+                  categoryId: value === ALL ? undefined : value,
                 }))
               }
             >
-              <option value=''>Tất cả phân loại</option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
-                </option>
-              ))}
-            </select>
-          </label>
+              <SelectTrigger id='dashboard-category'>
+                <SelectValue placeholder='Tất cả danh mục' />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Tất cả danh mục</SelectItem>
+                {categories.map((cat) => (
+                  <SelectItem key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormField>
 
-          <label htmlFor='dashboard-locality-type'>
-            Loại địa bàn
-            <select
-              id='dashboard-locality-type'
-              value={draftFilters.localityType ?? ''}
-              onChange={(event) => {
-                const nextType = (event.target.value || undefined) as LocalityType | undefined;
+          <FormField label='Loại địa bàn' htmlFor='dashboard-locality-type'>
+            <Select
+              value={draftFilters.localityType ?? ALL}
+              onValueChange={(value) => {
+                const nextType = (value === ALL ? undefined : value) as LocalityType | undefined;
                 const keepLocality =
                   !nextType ||
                   localities.some(
@@ -303,56 +486,65 @@ export function AdminDashboardPage({
                 }));
               }}
             >
-              <option value=''>Tất cả loại địa bàn</option>
-              <option value='COMMUNE'>Xã</option>
-              <option value='WARD'>Phường</option>
-            </select>
-          </label>
+              <SelectTrigger id='dashboard-locality-type'>
+                <SelectValue placeholder='Tất cả loại địa bàn' />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Tất cả loại địa bàn</SelectItem>
+                <SelectItem value='COMMUNE'>Xã</SelectItem>
+                <SelectItem value='WARD'>Phường</SelectItem>
+              </SelectContent>
+            </Select>
+          </FormField>
 
-          <label htmlFor='dashboard-locality-id'>
-            Địa bàn hành chính
-            <select
-              id='dashboard-locality-id'
-              value={draftFilters.localityId ?? ''}
-              onChange={(event) =>
+          <FormField label='Địa bàn hành chính' htmlFor='dashboard-locality-id'>
+            <Select
+              value={draftFilters.localityId ?? ALL}
+              onValueChange={(value) =>
                 setDraftFilters((old) => ({
                   ...old,
-                  localityId: event.target.value || undefined,
+                  localityId: value === ALL ? undefined : value,
                 }))
               }
             >
-              <option value=''>Tất cả địa bàn</option>
-              {localities.map((loc) => (
-                <option key={loc.id} value={loc.id}>
-                  {loc.name} · {loc.provinceName}
-                </option>
-              ))}
-            </select>
-          </label>
+              <SelectTrigger id='dashboard-locality-id'>
+                <SelectValue placeholder='Tất cả địa bàn' />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Tất cả địa bàn</SelectItem>
+                {localities.map((loc) => (
+                  <SelectItem key={loc.id} value={loc.id}>
+                    {loc.name} · {loc.provinceName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormField>
 
-          <label htmlFor='dashboard-registration-type'>
-            Loại đăng ký
-            <select
-              id='dashboard-registration-type'
-              value={draftFilters.registrationType ?? ''}
-              onChange={(event) =>
+          <FormField label='Loại đăng ký' htmlFor='dashboard-registration-type'>
+            <Select
+              value={draftFilters.registrationType ?? ALL}
+              onValueChange={(value) =>
                 setDraftFilters((old) => ({
                   ...old,
-                  registrationType: (event.target.value || undefined) as
-                    | ProductRegistrationType
-                    | undefined,
+                  registrationType: (value === ALL ? undefined : value) as
+                    ProductRegistrationType | undefined,
                 }))
               }
             >
-              <option value=''>Tất cả</option>
-              <option value='FIRST'>Lần đầu</option>
-              <option value='UPGRADE'>Nâng hạng</option>
-              <option value='REASSESSMENT'>Đánh giá lại</option>
-            </select>
-          </label>
+              <SelectTrigger id='dashboard-registration-type'>
+                <SelectValue placeholder='Tất cả' />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Tất cả</SelectItem>
+                <SelectItem value='FIRST'>Lần đầu</SelectItem>
+                <SelectItem value='UPGRADE'>Nâng hạng</SelectItem>
+                <SelectItem value='REASSESSMENT'>Đánh giá lại</SelectItem>
+              </SelectContent>
+            </Select>
+          </FormField>
 
-          <label htmlFor='dashboard-assessment-year'>
-            Năm đánh giá hồ sơ
+          <FormField label='Năm đánh giá hồ sơ' htmlFor='dashboard-assessment-year'>
             <Input
               id='dashboard-assessment-year'
               type='number'
@@ -367,7 +559,7 @@ export function AdminDashboardPage({
                 }))
               }
             />
-          </label>
+          </FormField>
         </div>
       </form>
 
@@ -387,16 +579,17 @@ export function AdminDashboardPage({
       )}
 
       {error && (
-        <div className='admin-table-region empty-card' role='alert'>
-          <h2>Chưa tải được dữ liệu tổng quan</h2>
-          <p className='text-sm text-muted mt-1'>{error}</p>
-          <div className='admin-actions justify-center mt-4'>
+        <div className='space-y-2'>
+          <AlertError title='Chưa tải được dữ liệu tổng quan' errors={[error]} />
+          <div className='admin-actions'>
             <Button type='button' variant='secondary' onClick={() => void refetch()}>
               Thử lại
             </Button>
-            <Link className='button button-secondary' to='/admin/products' search={{}}>
-              Mở danh sách sản phẩm
-            </Link>
+            <Button asChild variant='secondary'>
+              <Link to='/admin/products' search={{}}>
+                Mở danh sách sản phẩm
+              </Link>
+            </Button>
           </div>
         </div>
       )}
@@ -404,14 +597,14 @@ export function AdminDashboardPage({
       {data && (
         <>
           {data.period && (
-            <div className='admin-table-region p-4 text-sm' role='status'>
+            <Card className='admin-table-region p-4 text-sm' role='status'>
               <strong>Kỳ đang xem:</strong> {data.period.label} · Mốc chốt số liệu:{' '}
               {new Date(data.period.asOf).toLocaleString('vi-VN')} · Cập nhật lúc:{' '}
               {new Date(data.period.generatedAt).toLocaleString('vi-VN')}
               {data.period.isPartialPeriod
                 ? ' · Kỳ hiện tại chưa kết thúc (so sánh tương ứng cùng khoảng thời gian kỳ trước).'
                 : ''}
-            </div>
+            </Card>
           )}
 
           {data.dataQuality &&
@@ -460,11 +653,11 @@ export function AdminDashboardPage({
           )}
 
           <div className='admin-step-grid'>
-            <section className='admin-table-region p-5'>
+            <Card className='admin-table-region p-5'>
               <div className='admin-page-heading' style={{ marginBottom: '12px' }}>
                 <div>
                   <h2>Hồ sơ cần xử lý tiếp</h2>
-                  <p className='text-xs text-muted'>
+                  <p className='text-muted text-xs'>
                     Hồ sơ đang chờ hoặc đang trong quá trình chấm, sắp theo ngày nộp lâu nhất.
                   </p>
                 </div>
@@ -481,11 +674,9 @@ export function AdminDashboardPage({
                   {data.needsAttention.map((product) => (
                     <article className='record-row' key={product.id}>
                       <div className='record-main'>
-                        <span className='cat-tag'>
-                          {product.category.groupName} · {product.category.name}
-                        </span>
+                        <Badge variant='secondary'>{product.category.name}</Badge>
                         <h3 className='mt-1'>{product.name}</h3>
-                        <p className='text-xs text-muted'>
+                        <p className='text-muted text-xs'>
                           {product.status === 'SUBMITTED' ? 'Đã nộp' : 'Đang chấm'} ·{' '}
                           {product.assignedJudgeCount === 0 || product.missingCriteriaCount > 0
                             ? 'Thiếu phân công phủ tiêu chí'
@@ -493,113 +684,61 @@ export function AdminDashboardPage({
                         </p>
                       </div>
                       <div className='record-result'>
-                        <span className='text-xs text-muted'>
+                        <span className='text-muted text-xs'>
                           {product.submittedEvaluationCount} / {product.assignedJudgeCount} phiếu
                         </span>
-                        <Link
-                          className='button button-secondary button-sm'
-                          to='/admin/products/$id'
-                          params={{ id: product.id }}
-                        >
-                          Mở hồ sơ
-                        </Link>
+                        <Button asChild variant='secondary' size='sm'>
+                          <Link to='/admin/products/$id' params={{ id: product.id }}>
+                            Mở hồ sơ
+                          </Link>
+                        </Button>
                       </div>
                     </article>
                   ))}
                 </div>
               ) : (
-                <div className='py-6 text-center text-muted'>
-                  <h3 className='text-base font-semibold text-fg'>Không có hồ sơ chờ xử lý</h3>
-                  <p className='text-xs mt-1'>
+                <div className='text-muted py-6 text-center'>
+                  <h3 className='text-fg text-base font-semibold'>Không có hồ sơ chờ xử lý</h3>
+                  <p className='mt-1 text-xs'>
                     Danh sách này sẽ cập nhật khi có hồ sơ đã nộp hoặc đang chấm.
                   </p>
                 </div>
               )}
-            </section>
+            </Card>
 
             {canManage && (
-              <section className='admin-table-region p-5'>
+              <Card className='admin-table-region p-5'>
                 <div className='admin-page-heading' style={{ marginBottom: '12px' }}>
                   <div>
                     <h2>Tiến độ giám khảo</h2>
-                    <p className='text-xs text-muted'>
-                      Phiếu đã nộp trên tổng số hồ sơ được giao.
-                    </p>
+                    <p className='text-muted text-xs'>Phiếu đã nộp trên tổng số hồ sơ được giao.</p>
                   </div>
                   <Link className='text-link text-sm' to='/admin/assignments'>
                     Phân công
                   </Link>
                 </div>
                 {data.judges.length ? (
-                  <div className='table-container'>
-                    <table className='admin-data-table'>
-                      <thead>
-                        <tr>
-                          <th scope='col'>Giám khảo</th>
-                          <th scope='col' style={{ textAlign: 'right' }}>
-                            Đã nộp
-                          </th>
-                          <th scope='col' style={{ textAlign: 'right' }}>
-                            Chưa hoàn tất
-                          </th>
-                          <th scope='col'>Tiến độ</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {data.judges.map((judge) => {
-                          const percent = judge.assigned
-                            ? Math.round((judge.submitted / judge.assigned) * 100)
-                            : 0;
-                          return (
-                            <tr key={judge.judgeId}>
-                              <th scope='row'>{judge.fullName}</th>
-                              <td
-                                style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
-                              >
-                                {judge.submitted} / {judge.assigned}
-                              </td>
-                              <td
-                                style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
-                              >
-                                {judge.pending}
-                              </td>
-                              <td>
-                                <div
-                                  className='progress-track'
-                                  role='progressbar'
-                                  aria-label={`Tiến độ của ${judge.fullName}`}
-                                  aria-valuemin={0}
-                                  aria-valuemax={100}
-                                  aria-valuenow={percent}
-                                >
-                                  <span style={{ width: `${percent}%` }} />
-                                </div>
-                                <span className='text-xs'>{percent}%</span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                  <DataTable
+                    columns={judgeColumns}
+                    data={data.judges}
+                    manual={false}
+                    paginated={false}
+                    getRowId={(row) => row.judgeId}
+                  />
                 ) : (
-                  <div className='py-6 text-center text-muted'>
-                    <h3 className='text-base font-semibold text-fg'>
-                      Chưa có giám khảo hoạt động
-                    </h3>
-                    <p className='text-xs mt-1 mb-3'>
+                  <div className='text-muted py-6 text-center'>
+                    <h3 className='text-fg text-base font-semibold'>Chưa có giám khảo hoạt động</h3>
+                    <p className='mt-1 mb-3 text-xs'>
                       Dữ liệu tiến độ sẽ xuất hiện sau khi có phân công.
                     </p>
-                    <Link
-                      className='button button-secondary button-sm'
-                      to='/admin/users'
-                      search={{ permission: 'SCORE' }}
-                    >
-                      Quản lý giám khảo
-                    </Link>
+                    <Button asChild variant='secondary' size='sm'>
+                      <Link to='/admin/users' search={{ permission: 'SCORE' }}>
+                        Quản lý giám khảo
+                      </Link>
+                    </Button>
                   </div>
                 )}
-              </section>
+              </Card>
             )}
           </div>
 
@@ -607,8 +746,8 @@ export function AdminDashboardPage({
             <div>
               <h2>Phân tích trong kỳ</h2>
               <p className='route-intro'>
-                Các chỉ tiêu chất lượng kết quả, xu hướng theo tháng, cơ cấu nhóm sản phẩm và mức
-                sao theo điểm.
+                Các chỉ tiêu chất lượng kết quả, xu hướng theo tháng, cơ cấu danh mục sản phẩm và
+                mức sao theo điểm.
               </p>
             </div>
 
@@ -641,7 +780,7 @@ export function AdminDashboardPage({
 
             {data.charts && (
               <div className='dashboard-charts-grid' aria-label='4 vùng phân tích'>
-                <article className='admin-table-region p-5'>
+                <Card className='admin-table-region p-5'>
                   <h2>Xu hướng đăng ký và hoàn tất theo tháng ({data.period.year})</h2>
                   <p className='form-note'>
                     Hai chuỗi độc lập: Đăng ký tính theo Ngày nộp, Hoàn tất tính theo Ngày hoàn tất
@@ -650,142 +789,66 @@ export function AdminDashboardPage({
                   {data.charts.monthlyTrend.every(
                     (m) => m.registeredCount === 0 && m.completedCount === 0,
                   ) && (
-                    <p className='text-xs text-muted mb-2' role='status'>
+                    <p className='text-muted mb-2 text-xs' role='status'>
                       Chưa phát sinh hồ sơ đăng ký hoặc hoàn tất trong kỳ đang chọn.
                     </p>
                   )}
-                  <div className='table-container'>
-                    <table className='admin-data-table'>
-                      <thead>
-                        <tr>
-                          <th scope='col'>Tháng</th>
-                          <th scope='col' style={{ textAlign: 'right' }}>
-                            Đăng ký mới
-                          </th>
-                          <th scope='col' style={{ textAlign: 'right' }}>
-                            Hoàn tất chấm
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {data.charts.monthlyTrend.map((m) => (
-                          <tr key={m.month}>
-                            <th scope='row'>{m.label}</th>
-                            <td
-                              style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
-                            >
-                              <Link
-                                className='text-link'
-                                to='/admin/products'
-                                search={{
-                                  dateBasis: 'submittedAt',
-                                  from: m.from,
-                                  toExclusive: m.toExclusive,
-                                }}
-                              >
-                                {m.registeredCount} hồ sơ
-                              </Link>
-                            </td>
-                            <td
-                              style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
-                            >
-                              <Link
-                                className='text-link'
-                                to='/admin/products'
-                                search={{
-                                  dateBasis: 'completedAt',
-                                  status: 'COMPLETED',
-                                  from: m.from,
-                                  toExclusive: m.toExclusive,
-                                }}
-                              >
-                                {m.completedCount} hồ sơ
-                              </Link>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </article>
+                  <DataTable
+                    columns={monthlyTrendColumns}
+                    data={data.charts.monthlyTrend}
+                    manual={false}
+                    paginated={false}
+                    getRowId={(row) => String(row.month)}
+                  />
+                </Card>
 
-                <article className='admin-table-region p-5'>
+                <Card className='admin-table-region p-5'>
                   <div className='admin-page-heading' style={{ marginBottom: '12px' }}>
                     <div>
-                      <h2>Hồ sơ theo nhóm sản phẩm</h2>
-                      <p className='text-xs text-muted'>
-                        Chọn một nhóm để xem số lượng theo từng phân loại sản phẩm.
-                      </p>
+                      <h2>Hồ sơ theo danh mục sản phẩm</h2>
+                      <p className='text-muted text-xs'>Chọn danh mục để xem các hồ sơ sản phẩm.</p>
                     </div>
                     <div className='admin-actions'>
                       <Button
                         type='button'
                         size='sm'
-                        variant={groupMetricMode === 'registered' ? 'default' : 'secondary'}
-                        onClick={() => setGroupMetricMode('registered')}
+                        variant={categoryMetricMode === 'registered' ? 'default' : 'secondary'}
+                        onClick={() => setCategoryMetricMode('registered')}
                       >
                         Theo số đăng ký
                       </Button>
                       <Button
                         type='button'
                         size='sm'
-                        variant={groupMetricMode === 'completed' ? 'default' : 'secondary'}
-                        onClick={() => setGroupMetricMode('completed')}
+                        variant={categoryMetricMode === 'completed' ? 'default' : 'secondary'}
+                        onClick={() => setCategoryMetricMode('completed')}
                       >
                         Theo số hoàn tất
                       </Button>
                     </div>
                   </div>
                   <div className='record-list'>
-                    {data.charts.byProductGroup.map((grp) => {
-                      const count =
-                        groupMetricMode === 'registered'
-                          ? grp.registeredCount
-                          : grp.completedCount;
-                      const isExpanded = expandedGroupId === grp.groupId;
-                      return (
-                        <div className='assignment-category' key={grp.groupId}>
-                          <div className='assignment-category-heading'>
-                            <button
-                              type='button'
-                              className='text-link'
-                              aria-expanded={isExpanded}
-                              onClick={() =>
-                                setExpandedGroupId(isExpanded ? null : grp.groupId)
-                              }
-                            >
-                              <strong>
-                                {grp.groupCode} · {grp.groupName}
-                              </strong>
-                            </button>
-                            <strong style={{ fontVariantNumeric: 'tabular-nums' }}>
-                              {count} hồ sơ (
-                              {groupMetricMode === 'registered' ? 'đăng ký' : 'hoàn tất'})
-                            </strong>
-                          </div>
-                          {isExpanded && (
-                            <ul className='mt-2 pl-5 text-sm'>
-                              {grp.categories.map((cat) => (
-                                <li key={cat.categoryId}>
-                                  <Link
-                                    className='text-link'
-                                    to='/admin/products'
-                                    search={{ categoryId: cat.categoryId }}
-                                  >
-                                    {cat.categoryName}
-                                  </Link>
-                                  : {cat.registeredCount} đăng ký · {cat.completedCount} hoàn tất
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      );
-                    })}
+                    {data.charts.byCategory.map((category) => (
+                      <div className='record-row' key={category.categoryId}>
+                        <Link
+                          className='text-link'
+                          to='/admin/products'
+                          search={{ categoryId: category.categoryId }}
+                        >
+                          {category.categoryName}
+                        </Link>
+                        <strong style={{ fontVariantNumeric: 'tabular-nums' }}>
+                          {categoryMetricMode === 'registered'
+                            ? category.registeredCount
+                            : category.completedCount}{' '}
+                          hồ sơ
+                        </strong>
+                      </div>
+                    ))}
                   </div>
-                </article>
+                </Card>
 
-                <article className='admin-table-region p-5'>
+                <Card className='admin-table-region p-5'>
                   <h2>Tiến độ của hồ sơ đăng ký trong kỳ</h2>
                   <p className='form-note'>
                     Đối chiếu tổng với chỉ tiêu Đăng ký trong kỳ (
@@ -826,70 +889,31 @@ export function AdminDashboardPage({
                       </div>
                     )}
                   </dl>
-                </article>
+                </Card>
 
-                <article className='admin-table-region p-5'>
+                <Card className='admin-table-region p-5'>
                   <h2>Cơ cấu mức sao theo điểm (Kết quả hoàn tất trong kỳ)</h2>
                   <p className='form-note'>
                     Phân bố 1–5 sao theo điểm của các hồ sơ hoàn tất hợp lệ trong kỳ (chưa đồng
                     nghĩa quyết định công nhận chính thức).
                   </p>
-                  <div className='table-container'>
-                    <table className='admin-data-table'>
-                      <thead>
-                        <tr>
-                          <th scope='col'>Mức sao theo điểm</th>
-                          <th scope='col' style={{ textAlign: 'right' }}>
-                            Số lượng
-                          </th>
-                          <th scope='col' style={{ textAlign: 'right' }}>
-                            Tỷ trọng
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {data.charts.starDistribution.map((item) => (
-                          <tr key={item.stars}>
-                            <th scope='row'>{item.label}</th>
-                            <td
-                              style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
-                            >
-                              <Link
-                                className='text-link'
-                                to='/admin/products'
-                                search={{
-                                  status: 'COMPLETED',
-                                  starRating: item.stars,
-                                  dateBasis: 'completedAt',
-                                  from: data.period.from,
-                                  toExclusive: data.period.toExclusive,
-                                }}
-                              >
-                                {item.count}
-                              </Link>
-                            </td>
-                            <td
-                              style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
-                            >
-                              {item.percentage !== null
-                                ? `${formatExactScore(item.percentage)}%`
-                                : '—'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </article>
+                  <DataTable
+                    columns={starDistributionColumns}
+                    data={data.charts.starDistribution}
+                    manual={false}
+                    paginated={false}
+                    getRowId={(row) => String(row.stars)}
+                  />
+                </Card>
               </div>
             )}
 
             {data.comparisonTable && (
-              <section className='admin-table-region p-5'>
+              <Card className='admin-table-region p-5'>
                 <div className='admin-page-heading' style={{ marginBottom: '12px' }}>
                   <div>
                     <h2>Bảng đối chiếu chỉ tiêu với kỳ trước</h2>
-                    <p className='text-xs text-muted'>
+                    <p className='text-muted text-xs'>
                       So sánh {data.period.label} với {data.period.previousPeriod.label}.
                     </p>
                   </div>
@@ -897,43 +921,14 @@ export function AdminDashboardPage({
                     Xem báo cáo chi tiết
                   </Link>
                 </div>
-                <div className='table-container'>
-                  <table className='admin-data-table'>
-                    <thead>
-                      <tr>
-                        <th scope='col'>Chỉ tiêu KPI</th>
-                        <th scope='col'>Căn cứ</th>
-                        <th scope='col' style={{ textAlign: 'right' }}>
-                          Kỳ này
-                        </th>
-                        <th scope='col' style={{ textAlign: 'right' }}>
-                          Kỳ trước
-                        </th>
-                        <th scope='col'>Chênh lệch</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.comparisonTable.map((row) => (
-                        <tr key={row.id}>
-                          <th scope='row'>{row.label}</th>
-                          <td>{row.basisLabel}</td>
-                          <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                            <strong>{formatKpiValue(row)}</strong>
-                          </td>
-                          <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                            {row.previousValue !== null
-                              ? row.unit === 'PERCENT'
-                                ? `${formatExactScore(row.previousValue)}%`
-                                : row.previousValue
-                              : '—'}
-                          </td>
-                          <td>{formatKpiDeltaText(row)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
+                <DataTable
+                  columns={comparisonColumns}
+                  data={data.comparisonTable}
+                  manual={false}
+                  paginated={false}
+                  getRowId={(row) => row.id}
+                />
+              </Card>
             )}
 
             <section className='dashboard-section'>

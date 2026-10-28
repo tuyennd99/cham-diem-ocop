@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useForm } from '@tanstack/react-form';
 import { Link, useNavigate } from '@tanstack/react-router';
+import AlertError from '@/components/alert-error';
+import { FormField } from '@/components/form-field';
+import PasswordInput from '@/components/password-input';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { authApi } from '../../api';
@@ -11,7 +14,6 @@ import { AuthFrame } from './AuthFrame';
 export function LoginPage() {
   const navigate = useNavigate();
   const [error, setError] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm({
     defaultValues: { email: '', password: 'OcopTest@2026!' },
@@ -93,9 +95,9 @@ export function LoginPage() {
       >
         <form.Field name='email'>
           {(field) => (
-            <label>
-              <span className='field-label-row'>Email</span>
+            <FormField label='Email' htmlFor={`login-${field.name}`}>
               <Input
+                id={`login-${field.name}`}
                 name={field.name}
                 type='email'
                 autoComplete='email'
@@ -105,45 +107,29 @@ export function LoginPage() {
                 onChange={(event) => field.handleChange(event.target.value)}
                 required
               />
-            </label>
+            </FormField>
           )}
         </form.Field>
         <form.Field name='password'>
           {(field) => (
-            <label>
-              <span className='field-label-row'>Mật khẩu</span>
-              <div className='password-input-group'>
-                <Input
-                  name={field.name}
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete='current-password'
-                  placeholder='Nhập mật khẩu của bạn'
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                  required
-                />
-                <button
-                  type='button'
-                  className='password-visibility-btn'
-                  aria-pressed={showPassword}
-                  onClick={() => setShowPassword((value) => !value)}
-                >
-                  {showPassword ? 'Ẩn' : 'Hiện'}
-                </button>
-              </div>
-            </label>
+            <FormField label='Mật khẩu' htmlFor={`login-${field.name}`}>
+              <PasswordInput
+                id={`login-${field.name}`}
+                name={field.name}
+                autoComplete='current-password'
+                placeholder='Nhập mật khẩu của bạn'
+                value={field.state.value}
+                onBlur={field.handleBlur}
+                onChange={(event) => field.handleChange(event.target.value)}
+                required
+              />
+            </FormField>
           )}
         </form.Field>
-        {error && (
-          <div className='form-alert' role='alert'>
-            <strong>Không thể đăng nhập</strong>
-            <p>{error}</p>
-          </div>
-        )}
+        {error && <AlertError title='Không thể đăng nhập' errors={[error]} />}
         <form.Subscribe selector={(state) => state.isSubmitting}>
           {(busy) => (
-            <Button type='submit' className='auth-submit-btn' disabled={busy}>
+            <Button type='submit' className='auth-submit-btn' loading={busy} disabled={busy}>
               {busy ? 'Đang đăng nhập…' : 'Đăng nhập'}
             </Button>
           )}

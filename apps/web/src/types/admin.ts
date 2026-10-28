@@ -39,7 +39,6 @@ export interface AssignmentInput {
 }
 
 export type AdminCategory = ProductCategoryView & {
-  groupCode: string;
   criteriaSet?: { criteria: SharedCriterion[] } | null;
 };
 
@@ -48,7 +47,7 @@ export interface Assignment {
   categoryId: string;
   criterionIds: string[];
   judge: Pick<AdminJudge, 'id' | 'email' | 'fullName' | 'isActive'>;
-  category: Pick<AdminCategory, 'id' | 'name' | 'groupCode' | 'groupName'>;
+  category: Pick<AdminCategory, 'id' | 'name'>;
 }
 
 export type AdminProduct = AdminProductListItem;

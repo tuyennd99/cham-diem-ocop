@@ -14,6 +14,8 @@ export interface SessionUser {
   organizationUnit: OrganizationUnitSummary | null;
 }
 
+export type User = SessionUser;
+
 export interface Session {
   accessToken: string;
   user: SessionUser;

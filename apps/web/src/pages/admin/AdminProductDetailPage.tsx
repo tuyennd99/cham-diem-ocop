@@ -2,6 +2,10 @@ import { useRef, useState } from 'react';
 import type { ProductStatus } from '@ocop/shared';
 import { Link, Outlet, useBlocker, useNavigate } from '@tanstack/react-router';
 import { ArrowLeft } from 'lucide-react';
+import AlertError from '@/components/alert-error';
+import { FormField } from '@/components/form-field';
+import PageSpin from '@/components/page-spin';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -69,9 +73,7 @@ export function AdminProductDetailPage({
   const [fallbackTab, setFallbackTab] = useState<AdminProductDetailTab>('information');
 
   const rawTab = search.tab ?? fallbackTab;
-  const selectedTab: AdminProductDetailTab = VALID_TABS.includes(rawTab)
-    ? rawTab
-    : 'information';
+  const selectedTab: AdminProductDetailTab = VALID_TABS.includes(rawTab) ? rawTab : 'information';
   const listSearch = toAdminProductApiQuery(search);
   const listPath = mode === 'products' ? '/admin/products' : '/admin/registrations';
   const printSearch = { ...search, returnMode: mode };
@@ -175,7 +177,7 @@ export function AdminProductDetailPage({
   if (isPending && !product) {
     return (
       <section className='admin-page' aria-busy='true'>
-        <p role='status'>Đang tải hồ sơ…</p>
+        <PageSpin />
       </section>
     );
   }
@@ -183,16 +185,19 @@ export function AdminProductDetailPage({
   if (!product) {
     return (
       <section className='admin-page'>
-        <p role='alert' className='form-note'>
-          {visibleError || 'Không tìm thấy hồ sơ hoặc bạn không có quyền xem.'}
-        </p>
+        <AlertError
+          title='Không thể tải hồ sơ'
+          errors={[visibleError || 'Không tìm thấy hồ sơ hoặc bạn không có quyền xem.']}
+        />
         <div className='admin-actions'>
           <Button type='button' variant='secondary' onClick={() => void refetch()}>
             Thử lại
           </Button>
-          <Link className='button button-secondary' to={listPath} search={listSearch}>
-            Quay lại danh sách
-          </Link>
+          <Button asChild variant='secondary'>
+            <Link to={listPath} search={listSearch}>
+              Quay lại danh sách
+            </Link>
+          </Button>
         </div>
       </section>
     );
@@ -200,14 +205,8 @@ export function AdminProductDetailPage({
 
   const isDraft = product.status === 'DRAFT';
   const formEntries = formatFormEntries(product.formData);
-  const statusTone =
-    product.status === 'DRAFT'
-      ? 'draft'
-      : product.status === 'SUBMITTED'
-        ? 'submitted'
-        : product.status === 'SCORING'
-          ? 'scoring'
-          : 'completed';
+  const statusVariant =
+    product.status === 'DRAFT' ? 'secondary' : product.status === 'SCORING' ? 'outline' : 'default';
 
   return (
     <section className='admin-page'>
@@ -219,16 +218,14 @@ export function AdminProductDetailPage({
 
       <div className='admin-page-heading'>
         <div>
-          <div className='flex items-center gap-3 flex-wrap'>
+          <div className='flex flex-wrap items-center gap-3'>
             <h1>{product.name}</h1>
-            <span className={`status-badge ${statusTone}`}>
-              {formatStatusLabel(product.status)}
-            </span>
+            <Badge variant={statusVariant}>{formatStatusLabel(product.status)}</Badge>
           </div>
           <p className='route-intro'>
             Mã hồ sơ: <span className='font-mono text-xs'>{product.id}</span> · Chủ thể:{' '}
-            <strong>{product.registrant.fullName}</strong> ({product.registrant.email}) · Phân
-            loại: {product.category.groupName} / {product.category.name}
+            <strong>{product.registrant.fullName}</strong> ({product.registrant.email}) · Phân loại:{' '}
+            {product.category.name}
             {product.submittedAt
               ? ` · Ngày nộp: ${new Date(product.submittedAt).toLocaleString('vi-VN')}`
               : ''}
@@ -236,34 +233,37 @@ export function AdminProductDetailPage({
         </div>
 
         <div className='admin-actions'>
-          <Link
-            className='button button-secondary'
-            to='/print/products/$id/registration'
-            params={{ id: product.id }}
-            search={printSearch}
-          >
-            In phiếu đăng ký (Mẫu 01)
-          </Link>
-          {!isDraft && (
+          <Button asChild variant='secondary'>
             <Link
-              className='button button-secondary'
-              to='/print/products/$id/results'
+              to='/print/products/$id/registration'
               params={{ id: product.id }}
               search={printSearch}
             >
-              In bảng tổng hợp kết quả
+              In phiếu đăng ký (Mẫu 01)
             </Link>
+          </Button>
+          {!isDraft && (
+            <Button asChild variant='secondary'>
+              <Link
+                to='/print/products/$id/results'
+                params={{ id: product.id }}
+                search={printSearch}
+              >
+                In bảng tổng hợp kết quả
+              </Link>
+            </Button>
           )}
           {canManage && isDraft && (
             <>
-              <Link
-                className='button button-primary'
-                to='/admin/registrations/$id/edit'
-                params={{ id: product.id }}
-                search={listSearch}
-              >
-                Sửa phiếu
-              </Link>
+              <Button asChild>
+                <Link
+                  to='/admin/registrations/$id/edit'
+                  params={{ id: product.id }}
+                  search={listSearch}
+                >
+                  Sửa phiếu
+                </Link>
+              </Button>
               <Button
                 type='button'
                 variant='secondary'
@@ -298,9 +298,7 @@ export function AdminProductDetailPage({
       )}
 
       {visibleError && confirmAction === null && removingAttachment === null && (
-        <p role='alert' className='form-note'>
-          {visibleError}
-        </p>
+        <AlertError title='Không thể thực hiện thao tác' errors={[visibleError]} />
       )}
 
       <Dialog
@@ -323,8 +321,7 @@ export function AdminProductDetailPage({
             </DialogDescription>
           </DialogHeader>
           <div className='admin-form'>
-            <label htmlFor='admin-product-action-reason'>
-              Lý do thao tác
+            <FormField label='Lý do thao tác' htmlFor='admin-product-action-reason'>
               <Input
                 id='admin-product-action-reason'
                 value={reason}
@@ -333,16 +330,13 @@ export function AdminProductDetailPage({
                 onChange={(event) => setReason(event.target.value)}
                 required
               />
-            </label>
-            {error && (
-              <p className='form-note' role='alert'>
-                {error}
-              </p>
-            )}
+            </FormField>
+            {error && <AlertError title='Không thể thực hiện thao tác' errors={[error]} />}
             <div className='admin-actions'>
               {confirmAction === 'submit' ? (
                 <Button
                   type='button'
+                  loading={busy}
                   disabled={busy || !reason.trim()}
                   onClick={() =>
                     void run(
@@ -358,6 +352,7 @@ export function AdminProductDetailPage({
                 <Button
                   type='button'
                   variant='destructive'
+                  loading={busy}
                   disabled={busy || !reason.trim()}
                   onClick={() =>
                     void run((confirmedReason) => actions.remove(confirmedReason), true)
@@ -390,13 +385,10 @@ export function AdminProductDetailPage({
             <DialogTitle>
               Xóa tệp đính kèm: {removingAttachment?.fileName ?? ''} ({product.name})
             </DialogTitle>
-            <DialogDescription>
-              Nhập lý do xóa tệp khỏi bản nháp hồ sơ sản phẩm.
-            </DialogDescription>
+            <DialogDescription>Nhập lý do xóa tệp khỏi bản nháp hồ sơ sản phẩm.</DialogDescription>
           </DialogHeader>
           <div className='admin-form'>
-            <label htmlFor='admin-attachment-remove-reason'>
-              Lý do xóa tệp
+            <FormField label='Lý do xóa tệp' htmlFor='admin-attachment-remove-reason'>
               <Input
                 id='admin-attachment-remove-reason'
                 value={reason}
@@ -405,16 +397,13 @@ export function AdminProductDetailPage({
                 onChange={(event) => setReason(event.target.value)}
                 required
               />
-            </label>
-            {error && (
-              <p className='form-note' role='alert'>
-                {error}
-              </p>
-            )}
+            </FormField>
+            {error && <AlertError title='Không thể xóa tệp' errors={[error]} />}
             <div className='admin-actions'>
               <Button
                 type='button'
                 variant='destructive'
+                loading={busy}
                 disabled={busy || !reason.trim() || !removingAttachment}
                 onClick={() =>
                   removingAttachment &&
@@ -469,10 +458,8 @@ export function AdminProductDetailPage({
                 <dd>{product.createdBy?.fullName ?? 'Chủ thể tự nhập'}</dd>
               </div>
               <div>
-                <dt>Nhóm lớn & Phân loại</dt>
-                <dd>
-                  {product.category.groupName} · {product.category.name}
-                </dd>
+                <dt>Danh mục sản phẩm</dt>
+                <dd>{product.category.name}</dd>
               </div>
               <div>
                 <dt>Địa bàn hành chính</dt>
@@ -504,9 +491,9 @@ export function AdminProductDetailPage({
               </div>
             </dl>
             {product.description && (
-              <div className='mt-4 pt-4 border-t border-border'>
-                <h2 className='text-base font-semibold mb-1'>Mô tả sản phẩm</h2>
-                <p className='text-sm text-fg'>{product.description}</p>
+              <div className='border-border mt-4 border-t pt-4'>
+                <h2 className='mb-1 text-base font-semibold'>Mô tả sản phẩm</h2>
+                <p className='text-fg text-sm'>{product.description}</p>
               </div>
             )}
           </div>
@@ -518,10 +505,10 @@ export function AdminProductDetailPage({
               <>
                 <div className='mb-4'>
                   <h2>Thông tin lưu tại thời điểm nộp</h2>
-                  <p className='text-sm text-muted'>
+                  <p className='text-muted text-sm'>
                     Thời điểm chốt hồ sơ:{' '}
-                    {new Date(product.registrationSnapshot.submittedAt).toLocaleString('vi-VN')} (chỉ
-                    đọc).
+                    {new Date(product.registrationSnapshot.submittedAt).toLocaleString('vi-VN')}{' '}
+                    (chỉ đọc).
                   </p>
                 </div>
                 <dl className='detail-facts'>
@@ -550,7 +537,7 @@ export function AdminProductDetailPage({
                       ? 'Thông tin bản nháp phiếu đăng ký hiện tại'
                       : 'Thông tin phiếu đăng ký hiện tại'}
                   </h2>
-                  <p className='text-sm text-muted' role='status'>
+                  <p className='text-muted text-sm' role='status'>
                     {isDraft
                       ? 'Hồ sơ đang ở trạng thái Bản nháp, chưa có bản chụp tại thời điểm nộp.'
                       : 'Hồ sơ này chưa có bản chụp tại thời điểm nộp; đang hiển thị dữ liệu khai báo hiện lưu trên hồ sơ.'}
@@ -576,7 +563,7 @@ export function AdminProductDetailPage({
               <ul className='record-list' style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                 {product.attachments.map((file) => (
                   <li className='record-row items-center' key={file.id}>
-                    <div className='flex items-center gap-3 min-w-0'>
+                    <div className='flex min-w-0 items-center gap-3'>
                       {file.type === 'IMAGE' && (
                         <PrivateAttachmentThumbnail
                           mode='admin'
@@ -592,7 +579,7 @@ export function AdminProductDetailPage({
                           attachmentId={file.id}
                           name={file.fileName}
                         />
-                        <p className='text-xs text-muted mt-0.5'>
+                        <p className='text-muted mt-0.5 text-xs'>
                           {formatAttachmentType(file.type)}
                         </p>
                       </div>
@@ -615,7 +602,7 @@ export function AdminProductDetailPage({
                 ))}
               </ul>
             ) : (
-              <p className='text-sm text-muted'>Hồ sơ chưa có tệp đính kèm.</p>
+              <p className='text-muted text-sm'>Hồ sơ chưa có tệp đính kèm.</p>
             )}
           </div>
         </TabsContent>
@@ -626,12 +613,12 @@ export function AdminProductDetailPage({
             {product.statusEvents.length > 0 ? (
               <ol className='record-list' style={{ paddingLeft: '20px', margin: 0 }}>
                 {product.statusEvents.map((event) => (
-                  <li className='py-2 border-b border-border last:border-b-0' key={event.sequence}>
+                  <li className='border-border border-b py-2 last:border-b-0' key={event.sequence}>
                     <div>
                       <strong>{formatStatusLabel(event.fromStatus)}</strong> →{' '}
                       <strong>{formatStatusLabel(event.toStatus)}</strong>
                     </div>
-                    <div className='text-xs text-muted mt-0.5'>
+                    <div className='text-muted mt-0.5 text-xs'>
                       {new Date(event.createdAt).toLocaleString('vi-VN')}
                       {event.reason ? ` · Lý do: ${event.reason}` : ''}
                     </div>
@@ -639,7 +626,7 @@ export function AdminProductDetailPage({
                 ))}
               </ol>
             ) : (
-              <p className='text-sm text-muted'>Chưa có sự kiện thay đổi trạng thái nào.</p>
+              <p className='text-muted text-sm'>Chưa có sự kiện thay đổi trạng thái nào.</p>
             )}
           </div>
         </TabsContent>

@@ -154,7 +154,6 @@ describe('built API OpenAPI document', () => {
           'page',
           'limit',
           'q',
-          'groupId',
           'categoryId',
           'registrantId',
           'registrantQ',

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
-import baseRequest from '../src/api/base-request';
 import { adminApi } from '../src/api/admin';
+import baseRequest from '../src/api/base-request';
 import { dashboardKpiLinkLabel, formatComparisonDelta } from '../src/lib/report-format';
 
 it('calls registrations report, results report, and filtered dashboard through the shared transport', async () => {
@@ -30,7 +30,7 @@ it('calls registrations report, results report, and filtered dashboard through t
     await adminApi.resultsReport({
       year: 2026,
       month: 2,
-      groupBy: 'group',
+      groupBy: 'category',
     });
     await adminApi.dashboard({
       year: 2026,
@@ -49,7 +49,7 @@ it('calls registrations report, results report, and filtered dashboard through t
     assert.deepEqual(captured[1]?.params, {
       year: 2026,
       month: 2,
-      groupBy: 'group',
+      groupBy: 'category',
     });
     assert.equal(captured[2]?.url, '/admin/dashboard');
     assert.deepEqual(captured[2]?.params, {

@@ -4,12 +4,7 @@ import type { RegistrantProduct } from './registrant';
 const summary = {
   id: 'category-1',
   name: 'Phân loại',
-  groupCode: 'A',
-  groupName: 'Nhóm',
-  classificationGroup: 'Nông nghiệp',
-  classificationSubgroup: null,
   isActive: true,
-  group: { isActive: true },
   criteriaSet: { isActive: true },
 } satisfies RegistrantProduct['category'];
 
@@ -19,7 +14,7 @@ const evaluation = {
     name: 'Hồ sơ',
     description: null,
     formData: {},
-    category: { id: 'category-1', name: 'Phân loại', groupName: 'Nhóm' },
+    category: { id: 'category-1', name: 'Phân loại' },
     attachments: [{ id: 'file-1', type: 'EVIDENCE', fileName: 'proof.pdf' }],
   },
   criteria: [],

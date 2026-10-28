@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useForm } from '@tanstack/react-form';
 import { Link, useNavigate } from '@tanstack/react-router';
+import AlertError from '@/components/alert-error';
+import { FormField } from '@/components/form-field';
+import PasswordInput from '@/components/password-input';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { authApi } from '../../api';
@@ -13,7 +16,6 @@ import { writePendingEmail } from './pending-email';
 export function RegisterPage() {
   const navigate = useNavigate();
   const [error, setError] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm({
     defaultValues: { fullName: '', email: '', phone: '', password: '' },
@@ -101,12 +103,13 @@ export function RegisterPage() {
       >
         <form.Field name='fullName'>
           {(field) => (
-            <label>
-              <span className='field-label-row'>Tên chủ thể</span>
-              <span className='field-hint'>
-                Ghi đúng tên hợp tác xã, doanh nghiệp hoặc hộ sản xuất kinh doanh trên giấy phép.
-              </span>
+            <FormField
+              label='Tên chủ thể'
+              hint='Ghi đúng tên hợp tác xã, doanh nghiệp hoặc hộ sản xuất kinh doanh trên giấy phép.'
+              htmlFor={`register-${field.name}`}
+            >
               <Input
+                id={`register-${field.name}`}
                 name={field.name}
                 autoComplete='organization'
                 placeholder='Ví dụ: Hợp tác xã Chè Shan Tuyết Pà Cò'
@@ -114,19 +117,21 @@ export function RegisterPage() {
                 value={field.state.value}
                 onBlur={field.handleBlur}
                 onChange={(event) => field.handleChange(event.target.value)}
+                aria-describedby={`register-${field.name}-hint`}
                 required
               />
-            </label>
+            </FormField>
           )}
         </form.Field>
         <form.Field name='email'>
           {(field) => (
-            <label>
-              <span className='field-label-row'>Email</span>
-              <span className='field-hint'>
-                Hệ thống sẽ gửi mã OTP gồm 6 chữ số tới địa chỉ email này để kích hoạt tài khoản.
-              </span>
+            <FormField
+              label='Email'
+              hint='Hệ thống sẽ gửi mã OTP gồm 6 chữ số tới địa chỉ email này để kích hoạt tài khoản.'
+              htmlFor={`register-${field.name}`}
+            >
               <Input
+                id={`register-${field.name}`}
                 name={field.name}
                 type='email'
                 autoComplete='email'
@@ -134,22 +139,22 @@ export function RegisterPage() {
                 value={field.state.value}
                 onBlur={field.handleBlur}
                 onChange={(event) => field.handleChange(event.target.value)}
+                aria-describedby={`register-${field.name}-hint`}
                 required
               />
-            </label>
+            </FormField>
           )}
         </form.Field>
         <form.Field name='phone'>
           {(field) => (
-            <label>
-              <span className='field-label-row'>
-                <span>Số điện thoại</span>
-                <span className='field-optional'>(không bắt buộc)</span>
-              </span>
-              <span className='field-hint'>
-                Dùng để hội đồng chấm điểm liên hệ khi cần đối chiếu bổ sung hồ sơ minh chứng.
-              </span>
+            <FormField
+              label='Số điện thoại'
+              optional='(không bắt buộc)'
+              hint='Dùng để hội đồng chấm điểm liên hệ khi cần đối chiếu bổ sung hồ sơ minh chứng.'
+              htmlFor={`register-${field.name}`}
+            >
               <Input
+                id={`register-${field.name}`}
                 name={field.name}
                 type='tel'
                 autoComplete='tel'
@@ -158,45 +163,38 @@ export function RegisterPage() {
                 value={field.state.value}
                 onBlur={field.handleBlur}
                 onChange={(event) => field.handleChange(event.target.value)}
+                aria-describedby={`register-${field.name}-hint`}
               />
-            </label>
+            </FormField>
           )}
         </form.Field>
         <form.Field name='password'>
           {(field) => (
-            <label>
-              <span className='field-label-row'>Mật khẩu</span>
-              <span className='field-hint'>Tối thiểu 8 ký tự (tối đa 72 ký tự).</span>
-              <div className='password-input-group'>
-                <Input
-                  name={field.name}
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete='new-password'
-                  placeholder='Nhập mật khẩu từ 8 ký tự trở lên'
-                  minLength={8}
-                  maxLength={72}
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                  required
-                />
-                <button
-                  type='button'
-                  className='password-visibility-btn'
-                  aria-pressed={showPassword}
-                  onClick={() => setShowPassword((value) => !value)}
-                >
-                  {showPassword ? 'Ẩn' : 'Hiện'}
-                </button>
-              </div>
-            </label>
+            <FormField
+              label='Mật khẩu'
+              hint='Tối thiểu 8 ký tự (tối đa 72 ký tự).'
+              htmlFor={`register-${field.name}`}
+            >
+              <PasswordInput
+                id={`register-${field.name}`}
+                name={field.name}
+                autoComplete='new-password'
+                placeholder='Nhập mật khẩu từ 8 ký tự trở lên'
+                minLength={8}
+                maxLength={72}
+                value={field.state.value}
+                onBlur={field.handleBlur}
+                onChange={(event) => field.handleChange(event.target.value)}
+                aria-describedby={`register-${field.name}-hint`}
+                required
+              />
+            </FormField>
           )}
         </form.Field>
         {error && (
-          <div className='form-alert' role='alert'>
-            <strong>Không thể hoàn tất đăng ký</strong>
-            <p>{error}</p>
-            <p>
+          <div className='space-y-2'>
+            <AlertError title='Không thể hoàn tất đăng ký' errors={[error]} />
+            <p className='text-sm'>
               <Link className='text-link' to='/verify-otp'>
                 Xác thực email hoặc gửi lại mã →
               </Link>
@@ -205,7 +203,7 @@ export function RegisterPage() {
         )}
         <form.Subscribe selector={(state) => state.isSubmitting}>
           {(busy) => (
-            <Button type='submit' className='auth-submit-btn' disabled={busy}>
+            <Button type='submit' className='auth-submit-btn' loading={busy} disabled={busy}>
               {busy ? 'Đang gửi…' : 'Tạo tài khoản'}
             </Button>
           )}

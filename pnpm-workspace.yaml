@@ -7,6 +7,7 @@ allowBuilds:
   '@prisma/engines': true
   '@scarf/scarf': true
   esbuild: true
+  node-pty: set this to true or false
   prisma: true
   unrs-resolver: true
 minimumReleaseAgeExclude:

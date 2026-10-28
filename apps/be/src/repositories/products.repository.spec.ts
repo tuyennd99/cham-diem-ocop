@@ -14,15 +14,11 @@ describe('ProductsRepository history and category availability', () => {
       $queryRaw: jest.fn().mockResolvedValue([]),
       productCategory: {
         count: jest.fn().mockResolvedValue(1),
-        findMany: jest.fn(
-          ({ where }: { where?: { id?: { in?: string[] } } }) =>
-            Promise.resolve(
-              where?.id?.in?.map((id) => ({ id, groupId: 'group' })) ?? [],
-            ),
+        findMany: jest.fn(({ where }: { where?: { id?: { in?: string[] } } }) =>
+          Promise.resolve(where?.id?.in?.map((id) => ({ id })) ?? []),
         ),
         findUnique: jest.fn().mockResolvedValue({
           isActive: true,
-          group: { isActive: true },
           criteriaSet: {
             isActive: true,
             criteria: [
@@ -58,12 +54,15 @@ describe('ProductsRepository history and category availability', () => {
   });
 
   it('creates the DRAFT event and creator atomically with the product', async () => {
-    await repository.create({
-      registrantId: 'registrant',
-      categoryId: 'category',
-      name: 'Product',
-      formData: {},
-    }, { kind: 'OWNER', id: 'registrant' });
+    await repository.create(
+      {
+        registrantId: 'registrant',
+        categoryId: 'category',
+        name: 'Product',
+        formData: {},
+      },
+      { kind: 'OWNER', id: 'registrant' },
+    );
     expect(tx.product.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ createdById: 'registrant' }),
@@ -81,29 +80,25 @@ describe('ProductsRepository history and category availability', () => {
     });
   });
 
-  it('filters new-registration choices by active group/category/criteria set', async () => {
+  it('filters new-registration choices by active category/criteria set', async () => {
     await repository.listCategories();
     expect(tx.productCategory.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
           isActive: true,
-          group: { isActive: true },
           criteriaSet: { is: { isActive: true } },
         },
+        orderBy: [{ order: 'asc' }, { id: 'asc' }],
       }),
     );
   });
 
-  it('keeps the /categories response shape while omitting unready active sets', async () => {
+  it('returns flat /categories while omitting unready active sets', async () => {
     const incompleteCriteria = [
       { maxScore: 99, subCriteria: [{ options: [{ id: 'option' }] }] },
     ];
     const unready = {
       id: 'category',
-      groupCode: 'GROUP',
-      groupName: 'Group',
-      classificationGroup: 'Classification',
-      classificationSubgroup: null,
       name: 'Category',
       description: null,
       criteriaSet: {
@@ -130,10 +125,6 @@ describe('ProductsRepository history and category availability', () => {
     expect(choices).toHaveLength(1);
     expect(choices[0]).toEqual({
       id: 'category',
-      groupCode: 'GROUP',
-      groupName: 'Group',
-      classificationGroup: 'Classification',
-      classificationSubgroup: null,
       name: 'Category',
       description: null,
       criteriaSet: {
@@ -147,7 +138,6 @@ describe('ProductsRepository history and category availability', () => {
   it('rejects a category whose active criteria set is incomplete or does not total 100', async () => {
     tx.productCategory.findUnique = jest.fn().mockResolvedValue({
       isActive: true,
-      group: { isActive: true },
       criteriaSet: {
         isActive: true,
         criteria: [
@@ -156,28 +146,39 @@ describe('ProductsRepository history and category availability', () => {
       },
     });
     await expect(
-      repository.create({
-        registrantId: 'registrant',
-        categoryId: 'category',
-        name: 'Product',
-        formData: {},
-      }, { kind: 'OWNER', id: 'registrant' }),
+      repository.create(
+        {
+          registrantId: 'registrant',
+          categoryId: 'category',
+          name: 'Product',
+          formData: {},
+        },
+        { kind: 'OWNER', id: 'registrant' },
+      ),
     ).rejects.toThrow(ConflictException);
   });
 
   it('keeps an inactive category on an existing draft but rejects switching to another unavailable category', async () => {
     tx.productCategory.findUnique.mockResolvedValue(null);
     await expect(
-      repository.updateDraft('product', { kind: 'OWNER', id: 'registrant' }, {
-        categoryId: 'old-category',
-        name: 'Edited',
-      }),
+      repository.updateDraft(
+        'product',
+        { kind: 'OWNER', id: 'registrant' },
+        {
+          categoryId: 'old-category',
+          name: 'Edited',
+        },
+      ),
     ).resolves.toEqual({ id: 'product' });
     expect(tx.productCategory.count).not.toHaveBeenCalled();
     await expect(
-      repository.updateDraft('product', { kind: 'OWNER', id: 'registrant' }, {
-        categoryId: 'inactive-category',
-      }),
+      repository.updateDraft(
+        'product',
+        { kind: 'OWNER', id: 'registrant' },
+        {
+          categoryId: 'inactive-category',
+        },
+      ),
     ).rejects.toThrow(ConflictException);
   });
 });
@@ -207,11 +208,15 @@ describe('ProductsRepository.addAttachment', () => {
     process.env.DATABASE_URL = 'postgresql://127.0.0.1/ocop_test?schema=public';
     try {
       await expect(
-        repository.addAttachment('prod-1', { kind: 'OWNER', id: 'user-1' }, {
-          type: 'IMAGE',
-          fileName: 'test.png',
-          filePath: 'storage-1',
-        }),
+        repository.addAttachment(
+          'prod-1',
+          { kind: 'OWNER', id: 'user-1' },
+          {
+            type: 'IMAGE',
+            fileName: 'test.png',
+            filePath: 'storage-1',
+          },
+        ),
       ).rejects.toThrow(ConflictException);
       expect(tx.attachment.create).not.toHaveBeenCalled();
     } finally {

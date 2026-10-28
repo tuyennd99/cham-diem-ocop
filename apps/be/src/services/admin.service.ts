@@ -58,7 +58,7 @@ export class AdminService {
         category: {
           id: product.category.id,
           name: product.category.name,
-          groupName: product.category.groupName,
+
         },
         assignedJudgeCount: assignedJudgeIds.size,
         submittedEvaluationCount: submitted.size,
@@ -78,7 +78,7 @@ export class AdminService {
     const analytics = buildAnalyticsDashboard({
       query: query ?? {},
       products: snap.products,
-      groups: snap.groups,
+
       categories: snap.categories,
       localities: snap.localities,
       coveredCategoryIdsAtNow: snap.coveredCategoryIdsAtNow,
@@ -114,7 +114,7 @@ export class AdminService {
     return buildRegistrationReport({
       query,
       products: snap.products,
-      groups: snap.groups,
+
       categories: snap.categories,
       localities: snap.localities,
       now: snap.generatedAt,
@@ -128,7 +128,7 @@ export class AdminService {
     return buildResultsReport({
       query,
       products: snap.products,
-      groups: snap.groups,
+
       categories: snap.categories,
       localities: snap.localities,
       now: snap.generatedAt,

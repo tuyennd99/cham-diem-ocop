@@ -11,12 +11,9 @@ import { seedSampleOcopData } from './sample-data';
 
 type CategorySeed = {
   id: string;
-  groupCode: string;
-  groupName: string;
-  classificationGroup: string;
-  classificationSubgroup: string | null;
   name: string;
   criteriaSetKey: string;
+  order: number;
 };
 
 type CriteriaSeed = {
@@ -320,79 +317,13 @@ async function main() {
   const categoryByKey = new Map<string, string>();
   const setsByKey = new Map(criteriaSets.map((set) => [set.categoryKey, set]));
   const categoryIds = catalog.categories.map(({ id }) => id);
-  const groupCodes = [
-    ...new Set(catalog.categories.map(({ groupCode }) => groupCode)),
-  ].sort();
   await prisma.$transaction(
     async (tx) => {
-      const existingCategories = await tx.productCategory.findMany({
-        where: { id: { in: categoryIds } },
-        select: { groupId: true },
-      });
-      const existingGroupIds = [
-        ...new Set(existingCategories.map(({ groupId }) => groupId)),
-      ];
-      const groupsToLock = await tx.productGroup.findMany({
-        where: {
-          OR: [{ code: { in: groupCodes } }, { id: { in: existingGroupIds } }],
-        },
-        select: { id: true },
-        orderBy: { id: 'asc' },
-      });
-      const lockedGroupIds = groupsToLock.map(({ id }) => id);
-      if (lockedGroupIds.length) {
-        await tx.$queryRaw(Prisma.sql`
-        SELECT "id" FROM ${databaseObject('product_groups')}
-        WHERE "id" IN (${Prisma.join(lockedGroupIds)})
-        ORDER BY "id" FOR UPDATE
-      `);
-      }
-      const groupsByCode = new Map<
-        string,
-        { id: string; code: string; name: string }
-      >();
-      const groups = [
-        ...new Map(
-          catalog.categories.map(({ groupCode, groupName }) => [
-            groupCode,
-            groupName,
-          ]),
-        ),
-      ].sort(([a], [b]) => a.localeCompare(b));
-      for (const [index, [code, name]] of groups.entries()) {
-        const group = await tx.productGroup.upsert({
-          where: { code },
-          update: {},
-          create: {
-            id: 'product-group-' + code,
-            code,
-            name,
-            order: index + 1,
-            isActive: true,
-          },
-          select: { id: true, code: true, name: true },
-        });
-        groupsByCode.set(code, group);
-      }
       await tx.$queryRaw(Prisma.sql`
         SELECT "id" FROM ${databaseObject('product_categories')}
         WHERE "id" IN (${Prisma.join(categoryIds)})
         ORDER BY "id" FOR UPDATE
       `);
-
-      const currentCategories = await tx.productCategory.findMany({
-        where: { id: { in: categoryIds } },
-        select: { id: true, groupId: true },
-      });
-      if (
-        currentCategories.some(
-          ({ groupId }) => !lockedGroupIds.includes(groupId),
-        )
-      ) {
-        throw new Error(
-          'Catalog group relation changed while seeding; retry after catalog updates finish',
-        );
-      }
 
       const usedCategories = await tx.productCategory.findMany({
         where: {
@@ -448,20 +379,14 @@ async function main() {
         }
       }
 
-      for (const [index, category] of catalog.categories.entries()) {
-        const group = groupsByCode.get(category.groupCode)!;
+      for (const category of catalog.categories) {
         const row = await tx.productCategory.upsert({
           where: { id: category.id },
           update: {},
           create: {
             id: category.id,
-            groupId: group.id,
-            groupCode: group.code,
-            groupName: group.name,
-            classificationGroup: category.classificationGroup,
-            classificationSubgroup: category.classificationSubgroup,
             name: category.name,
-            order: index + 1,
+            order: category.order,
             isActive: true,
           },
           select: { id: true },

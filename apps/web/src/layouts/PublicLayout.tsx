@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, Outlet } from '@tanstack/react-router';
+import { Button } from '@/components/ui/button';
 import { homeFor, useSession } from '../lib/auth';
 
 export function SiteHeader() {
@@ -46,29 +47,33 @@ export function SiteHeader() {
             Tiêu chí đánh giá
           </Link>
           <div className='mobile-nav-actions'>
-            <Link
-              className='button button-secondary mobile-login'
-              to={signedIn ? workPath : '/login'}
-              onClick={() => setMenuOpen(false)}
-            >
-              {signedIn ? 'Khu vực làm việc' : 'Đăng nhập'}
-            </Link>
-            <Link
-              className='button button-primary mobile-cta'
-              to={signedIn ? workPath : '/register'}
-              onClick={() => setMenuOpen(false)}
-            >
-              {signedIn ? 'Mở hồ sơ' : 'Tạo tài khoản chủ thể'}
-            </Link>
+            <Button asChild variant='secondary' className='mobile-login'>
+              <Link
+                to={signedIn ? workPath : '/login'}
+                onClick={() => setMenuOpen(false)}
+              >
+                {signedIn ? 'Khu vực làm việc' : 'Đăng nhập'}
+              </Link>
+            </Button>
+            <Button asChild className='mobile-cta'>
+              <Link
+                to={signedIn ? workPath : '/register'}
+                onClick={() => setMenuOpen(false)}
+              >
+                {signedIn ? 'Mở hồ sơ' : 'Tạo tài khoản chủ thể'}
+              </Link>
+            </Button>
           </div>
         </nav>
         <div className='header-actions'>
           <Link className='header-login' to={signedIn ? workPath : '/login'}>
             {signedIn ? session?.user.fullName : 'Đăng nhập'}
           </Link>
-          <Link className='button button-primary header-cta' to={signedIn ? workPath : '/register'}>
-            {signedIn ? 'Khu vực làm việc' : 'Tạo tài khoản chủ thể'}
-          </Link>
+          <Button asChild className='header-cta'>
+            <Link to={signedIn ? workPath : '/register'}>
+              {signedIn ? 'Khu vực làm việc' : 'Tạo tài khoản chủ thể'}
+            </Link>
+          </Button>
         </div>
       </div>
     </header>

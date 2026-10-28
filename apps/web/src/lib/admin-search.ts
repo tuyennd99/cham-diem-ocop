@@ -18,28 +18,15 @@ import type {
 import { currentVietnameseYear, isValidIsoWithOffset } from './admin-date';
 
 export type AdminProductDetailTab =
-  | 'information'
-  | 'registration'
-  | 'files'
-  | 'progress'
-  | 'results';
+  'information' | 'registration' | 'files' | 'progress' | 'results';
 
 export type AdminProductSearch = AdminProductQuery & {
   tab?: AdminProductDetailTab;
   returnMode?: 'products' | 'registrations';
 };
 
-const PRODUCT_STATUSES: readonly ProductStatus[] = [
-  'DRAFT',
-  'SUBMITTED',
-  'SCORING',
-  'COMPLETED',
-];
-const REGISTRATION_TYPES: readonly ProductRegistrationType[] = [
-  'FIRST',
-  'UPGRADE',
-  'REASSESSMENT',
-];
+const PRODUCT_STATUSES: readonly ProductStatus[] = ['DRAFT', 'SUBMITTED', 'SCORING', 'COMPLETED'];
+const REGISTRATION_TYPES: readonly ProductRegistrationType[] = ['FIRST', 'UPGRADE', 'REASSESSMENT'];
 const DETAIL_TABS: readonly AdminProductDetailTab[] = [
   'information',
   'registration',
@@ -86,9 +73,7 @@ function parseEnum<T extends string>(value: unknown, allowed: readonly T[]): T |
   return (allowed as readonly string[]).includes(value) ? (value as T) : undefined;
 }
 
-export function parseAdminProductSearch(
-  search: Record<string, unknown>,
-): AdminProductSearch {
+export function parseAdminProductSearch(search: Record<string, unknown>): AdminProductSearch {
   const result: AdminProductSearch = {
     page: parseScalarInt(search.page, 1, 100000, 1) ?? 1,
     limit: parseScalarInt(search.limit, 1, 100, 20) ?? 20,
@@ -96,9 +81,6 @@ export function parseAdminProductSearch(
 
   const q = parseScalarString(search.q, 100);
   if (q !== undefined) result.q = q;
-
-  const groupId = parseScalarString(search.groupId, 100);
-  if (groupId !== undefined) result.groupId = groupId;
 
   const categoryId = parseScalarString(search.categoryId, 100);
   if (categoryId !== undefined) result.categoryId = categoryId;
@@ -173,12 +155,11 @@ export function parseAdminProductSearch(
   return result;
 }
 
-export function parseAdminProductPrintSearch(
-  search: Record<string, unknown>,
-): AdminProductSearch {
+export function parseAdminProductPrintSearch(search: Record<string, unknown>): AdminProductSearch {
   const result = parseAdminProductSearch(search);
   if (search.page === undefined || search.page === null || search.page === '') delete result.page;
-  if (search.limit === undefined || search.limit === null || search.limit === '') delete result.limit;
+  if (search.limit === undefined || search.limit === null || search.limit === '')
+    delete result.limit;
   return result;
 }
 
@@ -187,19 +168,17 @@ export function toAdminProductApiQuery(search: AdminProductSearch): AdminProduct
   return query;
 }
 
-export type AdminCatalogTab = 'catalog' | 'groups' | 'localities';
+export type AdminCatalogTab = 'catalog' | 'localities';
 
 export type AdminCatalogSearch = AdminCategoryQuery &
   Pick<LocalityQuery, 'type' | 'provinceName'> & {
     tab?: AdminCatalogTab;
   };
 
-const CATALOG_TABS: readonly AdminCatalogTab[] = ['catalog', 'groups', 'localities'];
+const CATALOG_TABS: readonly AdminCatalogTab[] = ['catalog', 'localities'];
 const LOCALITY_TYPES: readonly LocalityType[] = ['COMMUNE', 'WARD'];
 
-export function parseAdminCatalogSearch(
-  search: Record<string, unknown>,
-): AdminCatalogSearch {
+export function parseAdminCatalogSearch(search: Record<string, unknown>): AdminCatalogSearch {
   const result: AdminCatalogSearch = {
     page: parseScalarInt(search.page, 1, 100000, 1) ?? 1,
     limit: parseScalarInt(search.limit, 1, 100, 20) ?? 20,
@@ -210,9 +189,6 @@ export function parseAdminCatalogSearch(
 
   const isActive = parseScalarBoolean(search.isActive);
   if (isActive !== undefined) result.isActive = isActive;
-
-  const groupId = parseScalarString(search.groupId, 100);
-  if (groupId !== undefined) result.groupId = groupId;
 
   const type = parseEnum(search.type, LOCALITY_TYPES);
   if (type !== undefined) result.type = type;
@@ -233,7 +209,6 @@ export function toAdminCategoryApiQuery(search: AdminCatalogSearch): AdminCatego
   };
   if (search.q !== undefined) query.q = search.q;
   if (search.isActive !== undefined) query.isActive = search.isActive;
-  if (search.groupId !== undefined) query.groupId = search.groupId;
   return query;
 }
 
@@ -259,9 +234,7 @@ const STAFF_PERMISSIONS: readonly StaffPermission[] = ['MANAGE', 'VIEW', 'SCORE'
 const USER_KINDS = ['STAFF', 'REGISTRANT'] as const;
 const USERS_TABS: readonly AdminUsersTab[] = ['users', 'units'];
 
-export function parseAdminUsersSearch(
-  search: Record<string, unknown>,
-): AdminUsersSearch {
+export function parseAdminUsersSearch(search: Record<string, unknown>): AdminUsersSearch {
   const result: AdminUsersSearch = {
     page: parseScalarInt(search.page, 1, 100000, 1) ?? 1,
     limit: parseScalarInt(search.limit, 1, 100, 20) ?? 20,
@@ -298,8 +271,7 @@ export function toAdminUsersApiQuery(search: AdminUsersSearch): AdminUserQuery {
   };
   if (search.q !== undefined) query.q = search.q;
   if (search.permission !== undefined) query.permission = search.permission;
-  if (search.organizationUnitId !== undefined)
-    query.organizationUnitId = search.organizationUnitId;
+  if (search.organizationUnitId !== undefined) query.organizationUnitId = search.organizationUnitId;
   if (search.isActive !== undefined) query.isActive = search.isActive;
   if (search.verified !== undefined) query.verified = search.verified;
   if (search.kind !== undefined) query.kind = search.kind;
@@ -326,9 +298,7 @@ export type AdminScoringSearch = AdminCriteriaSetQuery &
 const SCORING_TABS: readonly AdminScoringTab[] = ['sets', 'evaluations'];
 const EVALUATION_STATUSES: readonly EvaluationRecordStatus[] = ['IN_PROGRESS', 'SUBMITTED'];
 
-export function parseAdminScoringSearch(
-  search: Record<string, unknown>,
-): AdminScoringSearch {
+export function parseAdminScoringSearch(search: Record<string, unknown>): AdminScoringSearch {
   const result: AdminScoringSearch = {
     page: parseScalarInt(search.page, 1, 100000, 1) ?? 1,
     limit: parseScalarInt(search.limit, 1, 100, 20) ?? 20,
@@ -336,9 +306,6 @@ export function parseAdminScoringSearch(
 
   const q = parseScalarString(search.q, 100);
   if (q !== undefined) result.q = q;
-
-  const groupId = parseScalarString(search.groupId, 100);
-  if (groupId !== undefined) result.groupId = groupId;
 
   const categoryId = parseScalarString(search.categoryId, 100);
   if (categoryId !== undefined) result.categoryId = categoryId;
@@ -361,29 +328,24 @@ export function parseAdminScoringSearch(
   return result;
 }
 
-export function toAdminCriteriaSetsApiQuery(
-  search: AdminScoringSearch,
-): AdminCriteriaSetQuery {
+export function toAdminCriteriaSetsApiQuery(search: AdminScoringSearch): AdminCriteriaSetQuery {
   const query: AdminCriteriaSetQuery = {
     page: search.page ?? 1,
     limit: search.limit ?? 20,
   };
   if (search.q !== undefined) query.q = search.q;
-  if (search.groupId !== undefined) query.groupId = search.groupId;
+  if (search.categoryId !== undefined) query.categoryId = search.categoryId;
   if (search.isActive !== undefined) query.isActive = search.isActive;
   return query;
 }
 
-export function toAdminEvaluationsApiQuery(
-  search: AdminScoringSearch,
-): AdminEvaluationQuery {
+export function toAdminEvaluationsApiQuery(search: AdminScoringSearch): AdminEvaluationQuery {
   const query: AdminEvaluationQuery = {
     page: search.page ?? 1,
     limit: search.limit ?? 20,
   };
   if (search.q !== undefined) query.q = search.q;
   if (search.productId !== undefined) query.productId = search.productId;
-  if (search.groupId !== undefined) query.groupId = search.groupId;
   if (search.categoryId !== undefined) query.categoryId = search.categoryId;
   if (search.judgeId !== undefined) query.judgeId = search.judgeId;
   if (search.status !== undefined) query.status = search.status;
@@ -391,17 +353,12 @@ export function toAdminEvaluationsApiQuery(
 }
 
 export interface AdminAssignmentSearch {
-  groupId?: string;
   categoryId?: string;
   uncoveredOnly?: boolean;
 }
 
-export function parseAdminAssignmentSearch(
-  search: Record<string, unknown>,
-): AdminAssignmentSearch {
+export function parseAdminAssignmentSearch(search: Record<string, unknown>): AdminAssignmentSearch {
   const result: AdminAssignmentSearch = {};
-  const groupId = parseScalarString(search.groupId, 100);
-  if (groupId !== undefined) result.groupId = groupId;
   const categoryId = parseScalarString(search.categoryId, 100);
   if (categoryId !== undefined) result.categoryId = categoryId;
   const uncoveredOnly = parseScalarBoolean(search.uncoveredOnly);
@@ -409,9 +366,7 @@ export function parseAdminAssignmentSearch(
   return result;
 }
 
-export function parseAdminDashboardSearch(
-  search: Record<string, unknown>,
-): AdminReportFilterQuery {
+export function parseAdminDashboardSearch(search: Record<string, unknown>): AdminReportFilterQuery {
   const defaultYear = currentVietnameseYear();
   const result: AdminReportFilterQuery = {
     year: parseScalarInt(search.year, 2020, 2100, defaultYear) ?? defaultYear,
@@ -425,9 +380,6 @@ export function parseAdminDashboardSearch(
 
   const localityId = parseScalarString(search.localityId, 100);
   if (localityId !== undefined) result.localityId = localityId;
-
-  const groupId = parseScalarString(search.groupId, 100);
-  if (groupId !== undefined) result.groupId = groupId;
 
   const categoryId = parseScalarString(search.categoryId, 100);
   if (categoryId !== undefined) result.categoryId = categoryId;
@@ -447,18 +399,10 @@ export type AdminReportsSearch = AdminReportQuery & {
   tab?: AdminReportTab;
 };
 
-const REPORT_GROUP_BYS: readonly ReportGroupBy[] = [
-  'month',
-  'year',
-  'locality',
-  'group',
-  'category',
-];
+const REPORT_GROUP_BYS: readonly ReportGroupBy[] = ['month', 'year', 'locality', 'category'];
 const REPORT_TABS: readonly AdminReportTab[] = ['registrations', 'results'];
 
-export function parseAdminReportsSearch(
-  search: Record<string, unknown>,
-): AdminReportsSearch {
+export function parseAdminReportsSearch(search: Record<string, unknown>): AdminReportsSearch {
   const base = parseAdminDashboardSearch(search);
   const result: AdminReportsSearch = {
     ...base,

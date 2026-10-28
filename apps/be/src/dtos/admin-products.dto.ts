@@ -55,14 +55,6 @@ export class AdminProductQueryDto {
   @IsString()
   @MinLength(1)
   @MaxLength(100)
-  groupId?: string;
-
-  @ApiPropertyOptional({ maxLength: 100 })
-  @IsOptional()
-  @Transform(trimText)
-  @IsString()
-  @MinLength(1)
-  @MaxLength(100)
   categoryId?: string;
 
   @ApiPropertyOptional({ maxLength: 100 })

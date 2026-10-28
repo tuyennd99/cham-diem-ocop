@@ -14,12 +14,12 @@ import { Route as R404RouteImport } from './routes/404'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as PublicRouteImport } from './routes/_public'
-import { Route as AppAccountRouteImport } from './routes/_app.account'
 import { Route as AuthForgotPasswordRouteImport } from './routes/_auth.forgot-password'
 import { Route as AuthLoginRouteImport } from './routes/_auth.login'
 import { Route as AuthRegisterRouteImport } from './routes/_auth.register'
 import { Route as AuthVerifyOtpRouteImport } from './routes/_auth.verify-otp'
 import { Route as PublicIndexRouteImport } from './routes/_public.index'
+import { Route as AppAccountIndexRouteImport } from './routes/_app.account.index'
 import { Route as AppAccountPasswordRouteImport } from './routes/_app.account.password'
 import { Route as AppAdminIndexRouteImport } from './routes/_app.admin.index'
 import { Route as AppAdminAssignmentsRouteImport } from './routes/_app.admin.assignments'
@@ -34,15 +34,15 @@ import { Route as PublicProductsIdRouteImport } from './routes/_public.products.
 import { Route as AppAdminProductsIndexRouteImport } from './routes/_app.admin.products.index'
 import { Route as AppAdminProductsIdRouteImport } from './routes/_app.admin.products.$id'
 import { Route as AppAdminRegistrationsIndexRouteImport } from './routes/_app.admin.registrations.index'
-import { Route as AppAdminRegistrationsIdRouteImport } from './routes/_app.admin.registrations.$id'
 import { Route as AppAdminRegistrationsNewRouteImport } from './routes/_app.admin.registrations.new'
 import { Route as AppJudgeProductsIdRouteImport } from './routes/_app.judge.products.$id'
 import { Route as AppMyProductsIndexRouteImport } from './routes/_app.my.products.index'
-import { Route as AppMyProductsIdRouteImport } from './routes/_app.my.products.$id'
 import { Route as AppMyProductsNewRouteImport } from './routes/_app.my.products.new'
 import { Route as AppPrintCriteriaSetsIdRouteImport } from './routes/_app.print.criteria-sets.$id'
 import { Route as AppPrintEvaluationsIdRouteImport } from './routes/_app.print.evaluations.$id'
+import { Route as AppAdminRegistrationsIdIndexRouteImport } from './routes/_app.admin.registrations.$id.index'
 import { Route as AppAdminRegistrationsIdEditRouteImport } from './routes/_app.admin.registrations.$id.edit'
+import { Route as AppMyProductsIdIndexRouteImport } from './routes/_app.my.products.$id.index'
 import { Route as AppMyProductsIdEditRouteImport } from './routes/_app.my.products.$id.edit'
 import { Route as AppPrintJudgeProductsIdRouteImport } from './routes/_app.print.judge.products.$id'
 import { Route as AppPrintProductsIdRegistrationRouteImport } from './routes/_app.print.products.$id.registration'
@@ -70,11 +70,6 @@ const PublicRoute = PublicRouteImport.update({
   id: '/_public',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AppAccountRoute = AppAccountRouteImport.update({
-  id: '/account',
-  path: '/account',
-  getParentRoute: () => AppRoute,
-} as any)
 const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
   id: '/forgot-password',
   path: '/forgot-password',
@@ -100,10 +95,15 @@ const PublicIndexRoute = PublicIndexRouteImport.update({
   path: '/',
   getParentRoute: () => PublicRoute,
 } as any)
+const AppAccountIndexRoute = AppAccountIndexRouteImport.update({
+  id: '/account/',
+  path: '/account/',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAccountPasswordRoute = AppAccountPasswordRouteImport.update({
-  id: '/password',
-  path: '/password',
-  getParentRoute: () => AppAccountRoute,
+  id: '/account/password',
+  path: '/account/password',
+  getParentRoute: () => AppRoute,
 } as any)
 const AppAdminIndexRoute = AppAdminIndexRouteImport.update({
   id: '/admin/',
@@ -171,11 +171,6 @@ const AppAdminRegistrationsIndexRoute =
     path: '/admin/registrations/',
     getParentRoute: () => AppRoute,
   } as any)
-const AppAdminRegistrationsIdRoute = AppAdminRegistrationsIdRouteImport.update({
-  id: '/admin/registrations/$id',
-  path: '/admin/registrations/$id',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppAdminRegistrationsNewRoute =
   AppAdminRegistrationsNewRouteImport.update({
     id: '/admin/registrations/new',
@@ -190,11 +185,6 @@ const AppJudgeProductsIdRoute = AppJudgeProductsIdRouteImport.update({
 const AppMyProductsIndexRoute = AppMyProductsIndexRouteImport.update({
   id: '/my/products/',
   path: '/my/products/',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppMyProductsIdRoute = AppMyProductsIdRouteImport.update({
-  id: '/my/products/$id',
-  path: '/my/products/$id',
   getParentRoute: () => AppRoute,
 } as any)
 const AppMyProductsNewRoute = AppMyProductsNewRouteImport.update({
@@ -212,16 +202,27 @@ const AppPrintEvaluationsIdRoute = AppPrintEvaluationsIdRouteImport.update({
   path: '/print/evaluations/$id',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAdminRegistrationsIdIndexRoute =
+  AppAdminRegistrationsIdIndexRouteImport.update({
+    id: '/admin/registrations/$id/',
+    path: '/admin/registrations/$id/',
+    getParentRoute: () => AppRoute,
+  } as any)
 const AppAdminRegistrationsIdEditRoute =
   AppAdminRegistrationsIdEditRouteImport.update({
-    id: '/edit',
-    path: '/edit',
-    getParentRoute: () => AppAdminRegistrationsIdRoute,
+    id: '/admin/registrations/$id/edit',
+    path: '/admin/registrations/$id/edit',
+    getParentRoute: () => AppRoute,
   } as any)
+const AppMyProductsIdIndexRoute = AppMyProductsIdIndexRouteImport.update({
+  id: '/my/products/$id/',
+  path: '/my/products/$id/',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppMyProductsIdEditRoute = AppMyProductsIdEditRouteImport.update({
-  id: '/edit',
-  path: '/edit',
-  getParentRoute: () => AppMyProductsIdRoute,
+  id: '/my/products/$id/edit',
+  path: '/my/products/$id/edit',
+  getParentRoute: () => AppRoute,
 } as any)
 const AppPrintJudgeProductsIdRoute = AppPrintJudgeProductsIdRouteImport.update({
   id: '/print/judge/products/$id',
@@ -245,7 +246,6 @@ export interface FileRoutesByFullPath {
   '/403': typeof R403Route
   '/404': typeof R404Route
   '/': typeof PublicIndexRoute
-  '/account': typeof AppAccountRouteWithChildren
   '/forgot-password': typeof AuthForgotPasswordRoute
   '/login': typeof AuthLoginRoute
   '/register': typeof AuthRegisterRoute
@@ -258,14 +258,13 @@ export interface FileRoutesByFullPath {
   '/admin/scoring-forms': typeof AppAdminScoringFormsRoute
   '/admin/users': typeof AppAdminUsersRoute
   '/products/$id': typeof PublicProductsIdRoute
+  '/account/': typeof AppAccountIndexRoute
   '/admin/': typeof AppAdminIndexRoute
   '/judge/': typeof AppJudgeIndexRoute
   '/products/': typeof PublicProductsIndexRoute
   '/admin/products/$id': typeof AppAdminProductsIdRoute
-  '/admin/registrations/$id': typeof AppAdminRegistrationsIdRouteWithChildren
   '/admin/registrations/new': typeof AppAdminRegistrationsNewRoute
   '/judge/products/$id': typeof AppJudgeProductsIdRoute
-  '/my/products/$id': typeof AppMyProductsIdRouteWithChildren
   '/my/products/new': typeof AppMyProductsNewRoute
   '/print/criteria-sets/$id': typeof AppPrintCriteriaSetsIdRoute
   '/print/evaluations/$id': typeof AppPrintEvaluationsIdRoute
@@ -277,12 +276,13 @@ export interface FileRoutesByFullPath {
   '/print/judge/products/$id': typeof AppPrintJudgeProductsIdRoute
   '/print/products/$id/registration': typeof AppPrintProductsIdRegistrationRoute
   '/print/products/$id/results': typeof AppPrintProductsIdResultsRoute
+  '/admin/registrations/$id/': typeof AppAdminRegistrationsIdIndexRoute
+  '/my/products/$id/': typeof AppMyProductsIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/403': typeof R403Route
   '/404': typeof R404Route
   '/': typeof PublicIndexRoute
-  '/account': typeof AppAccountRouteWithChildren
   '/forgot-password': typeof AuthForgotPasswordRoute
   '/login': typeof AuthLoginRoute
   '/register': typeof AuthRegisterRoute
@@ -295,14 +295,13 @@ export interface FileRoutesByTo {
   '/admin/scoring-forms': typeof AppAdminScoringFormsRoute
   '/admin/users': typeof AppAdminUsersRoute
   '/products/$id': typeof PublicProductsIdRoute
+  '/account': typeof AppAccountIndexRoute
   '/admin': typeof AppAdminIndexRoute
   '/judge': typeof AppJudgeIndexRoute
   '/products': typeof PublicProductsIndexRoute
   '/admin/products/$id': typeof AppAdminProductsIdRoute
-  '/admin/registrations/$id': typeof AppAdminRegistrationsIdRouteWithChildren
   '/admin/registrations/new': typeof AppAdminRegistrationsNewRoute
   '/judge/products/$id': typeof AppJudgeProductsIdRoute
-  '/my/products/$id': typeof AppMyProductsIdRouteWithChildren
   '/my/products/new': typeof AppMyProductsNewRoute
   '/print/criteria-sets/$id': typeof AppPrintCriteriaSetsIdRoute
   '/print/evaluations/$id': typeof AppPrintEvaluationsIdRoute
@@ -314,6 +313,8 @@ export interface FileRoutesByTo {
   '/print/judge/products/$id': typeof AppPrintJudgeProductsIdRoute
   '/print/products/$id/registration': typeof AppPrintProductsIdRegistrationRoute
   '/print/products/$id/results': typeof AppPrintProductsIdResultsRoute
+  '/admin/registrations/$id': typeof AppAdminRegistrationsIdIndexRoute
+  '/my/products/$id': typeof AppMyProductsIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -322,7 +323,6 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/_auth': typeof AuthRouteWithChildren
   '/_public': typeof PublicRouteWithChildren
-  '/_app/account': typeof AppAccountRouteWithChildren
   '/_auth/forgot-password': typeof AuthForgotPasswordRoute
   '/_auth/login': typeof AuthLoginRoute
   '/_auth/register': typeof AuthRegisterRoute
@@ -336,14 +336,13 @@ export interface FileRoutesById {
   '/_app/admin/scoring-forms': typeof AppAdminScoringFormsRoute
   '/_app/admin/users': typeof AppAdminUsersRoute
   '/_public/products/$id': typeof PublicProductsIdRoute
+  '/_app/account/': typeof AppAccountIndexRoute
   '/_app/admin/': typeof AppAdminIndexRoute
   '/_app/judge/': typeof AppJudgeIndexRoute
   '/_public/products/': typeof PublicProductsIndexRoute
   '/_app/admin/products/$id': typeof AppAdminProductsIdRoute
-  '/_app/admin/registrations/$id': typeof AppAdminRegistrationsIdRouteWithChildren
   '/_app/admin/registrations/new': typeof AppAdminRegistrationsNewRoute
   '/_app/judge/products/$id': typeof AppJudgeProductsIdRoute
-  '/_app/my/products/$id': typeof AppMyProductsIdRouteWithChildren
   '/_app/my/products/new': typeof AppMyProductsNewRoute
   '/_app/print/criteria-sets/$id': typeof AppPrintCriteriaSetsIdRoute
   '/_app/print/evaluations/$id': typeof AppPrintEvaluationsIdRoute
@@ -355,6 +354,8 @@ export interface FileRoutesById {
   '/_app/print/judge/products/$id': typeof AppPrintJudgeProductsIdRoute
   '/_app/print/products/$id/registration': typeof AppPrintProductsIdRegistrationRoute
   '/_app/print/products/$id/results': typeof AppPrintProductsIdResultsRoute
+  '/_app/admin/registrations/$id/': typeof AppAdminRegistrationsIdIndexRoute
+  '/_app/my/products/$id/': typeof AppMyProductsIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -362,7 +363,6 @@ export interface FileRouteTypes {
     | '/403'
     | '/404'
     | '/'
-    | '/account'
     | '/forgot-password'
     | '/login'
     | '/register'
@@ -375,14 +375,13 @@ export interface FileRouteTypes {
     | '/admin/scoring-forms'
     | '/admin/users'
     | '/products/$id'
+    | '/account/'
     | '/admin/'
     | '/judge/'
     | '/products/'
     | '/admin/products/$id'
-    | '/admin/registrations/$id'
     | '/admin/registrations/new'
     | '/judge/products/$id'
-    | '/my/products/$id'
     | '/my/products/new'
     | '/print/criteria-sets/$id'
     | '/print/evaluations/$id'
@@ -394,12 +393,13 @@ export interface FileRouteTypes {
     | '/print/judge/products/$id'
     | '/print/products/$id/registration'
     | '/print/products/$id/results'
+    | '/admin/registrations/$id/'
+    | '/my/products/$id/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/403'
     | '/404'
     | '/'
-    | '/account'
     | '/forgot-password'
     | '/login'
     | '/register'
@@ -412,14 +412,13 @@ export interface FileRouteTypes {
     | '/admin/scoring-forms'
     | '/admin/users'
     | '/products/$id'
+    | '/account'
     | '/admin'
     | '/judge'
     | '/products'
     | '/admin/products/$id'
-    | '/admin/registrations/$id'
     | '/admin/registrations/new'
     | '/judge/products/$id'
-    | '/my/products/$id'
     | '/my/products/new'
     | '/print/criteria-sets/$id'
     | '/print/evaluations/$id'
@@ -431,6 +430,8 @@ export interface FileRouteTypes {
     | '/print/judge/products/$id'
     | '/print/products/$id/registration'
     | '/print/products/$id/results'
+    | '/admin/registrations/$id'
+    | '/my/products/$id'
   id:
     | '__root__'
     | '/403'
@@ -438,7 +439,6 @@ export interface FileRouteTypes {
     | '/_app'
     | '/_auth'
     | '/_public'
-    | '/_app/account'
     | '/_auth/forgot-password'
     | '/_auth/login'
     | '/_auth/register'
@@ -452,14 +452,13 @@ export interface FileRouteTypes {
     | '/_app/admin/scoring-forms'
     | '/_app/admin/users'
     | '/_public/products/$id'
+    | '/_app/account/'
     | '/_app/admin/'
     | '/_app/judge/'
     | '/_public/products/'
     | '/_app/admin/products/$id'
-    | '/_app/admin/registrations/$id'
     | '/_app/admin/registrations/new'
     | '/_app/judge/products/$id'
-    | '/_app/my/products/$id'
     | '/_app/my/products/new'
     | '/_app/print/criteria-sets/$id'
     | '/_app/print/evaluations/$id'
@@ -471,6 +470,8 @@ export interface FileRouteTypes {
     | '/_app/print/judge/products/$id'
     | '/_app/print/products/$id/registration'
     | '/_app/print/products/$id/results'
+    | '/_app/admin/registrations/$id/'
+    | '/_app/my/products/$id/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -518,13 +519,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PublicRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_app/account': {
-      id: '/_app/account'
-      path: '/account'
-      fullPath: '/account'
-      preLoaderRoute: typeof AppAccountRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_auth/forgot-password': {
       id: '/_auth/forgot-password'
       path: '/forgot-password'
@@ -560,12 +554,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PublicIndexRouteImport
       parentRoute: typeof PublicRoute
     }
+    '/_app/account/': {
+      id: '/_app/account/'
+      path: '/account'
+      fullPath: '/account/'
+      preLoaderRoute: typeof AppAccountIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/account/password': {
       id: '/_app/account/password'
-      path: '/password'
+      path: '/account/password'
       fullPath: '/account/password'
       preLoaderRoute: typeof AppAccountPasswordRouteImport
-      parentRoute: typeof AppAccountRoute
+      parentRoute: typeof AppRoute
     }
     '/_app/admin/': {
       id: '/_app/admin/'
@@ -658,13 +659,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminRegistrationsIndexRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/admin/registrations/$id': {
-      id: '/_app/admin/registrations/$id'
-      path: '/admin/registrations/$id'
-      fullPath: '/admin/registrations/$id'
-      preLoaderRoute: typeof AppAdminRegistrationsIdRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/admin/registrations/new': {
       id: '/_app/admin/registrations/new'
       path: '/admin/registrations/new'
@@ -684,13 +678,6 @@ declare module '@tanstack/react-router' {
       path: '/my/products'
       fullPath: '/my/products/'
       preLoaderRoute: typeof AppMyProductsIndexRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/my/products/$id': {
-      id: '/_app/my/products/$id'
-      path: '/my/products/$id'
-      fullPath: '/my/products/$id'
-      preLoaderRoute: typeof AppMyProductsIdRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/my/products/new': {
@@ -714,19 +701,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppPrintEvaluationsIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/admin/registrations/$id/': {
+      id: '/_app/admin/registrations/$id/'
+      path: '/admin/registrations/$id'
+      fullPath: '/admin/registrations/$id/'
+      preLoaderRoute: typeof AppAdminRegistrationsIdIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/admin/registrations/$id/edit': {
       id: '/_app/admin/registrations/$id/edit'
-      path: '/edit'
+      path: '/admin/registrations/$id/edit'
       fullPath: '/admin/registrations/$id/edit'
       preLoaderRoute: typeof AppAdminRegistrationsIdEditRouteImport
-      parentRoute: typeof AppAdminRegistrationsIdRoute
+      parentRoute: typeof AppRoute
+    }
+    '/_app/my/products/$id/': {
+      id: '/_app/my/products/$id/'
+      path: '/my/products/$id'
+      fullPath: '/my/products/$id/'
+      preLoaderRoute: typeof AppMyProductsIdIndexRouteImport
+      parentRoute: typeof AppRoute
     }
     '/_app/my/products/$id/edit': {
       id: '/_app/my/products/$id/edit'
-      path: '/edit'
+      path: '/my/products/$id/edit'
       fullPath: '/my/products/$id/edit'
       preLoaderRoute: typeof AppMyProductsIdEditRouteImport
-      parentRoute: typeof AppMyProductsIdRoute
+      parentRoute: typeof AppRoute
     }
     '/_app/print/judge/products/$id': {
       id: '/_app/print/judge/products/$id'
@@ -752,94 +753,62 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface AppAccountRouteChildren {
-  AppAccountPasswordRoute: typeof AppAccountPasswordRoute
-}
-
-const AppAccountRouteChildren: AppAccountRouteChildren = {
-  AppAccountPasswordRoute: AppAccountPasswordRoute,
-}
-
-const AppAccountRouteWithChildren = AppAccountRoute._addFileChildren(
-  AppAccountRouteChildren,
-)
-
-interface AppAdminRegistrationsIdRouteChildren {
-  AppAdminRegistrationsIdEditRoute: typeof AppAdminRegistrationsIdEditRoute
-}
-
-const AppAdminRegistrationsIdRouteChildren: AppAdminRegistrationsIdRouteChildren =
-  {
-    AppAdminRegistrationsIdEditRoute: AppAdminRegistrationsIdEditRoute,
-  }
-
-const AppAdminRegistrationsIdRouteWithChildren =
-  AppAdminRegistrationsIdRoute._addFileChildren(
-    AppAdminRegistrationsIdRouteChildren,
-  )
-
-interface AppMyProductsIdRouteChildren {
-  AppMyProductsIdEditRoute: typeof AppMyProductsIdEditRoute
-}
-
-const AppMyProductsIdRouteChildren: AppMyProductsIdRouteChildren = {
-  AppMyProductsIdEditRoute: AppMyProductsIdEditRoute,
-}
-
-const AppMyProductsIdRouteWithChildren = AppMyProductsIdRoute._addFileChildren(
-  AppMyProductsIdRouteChildren,
-)
-
 interface AppRouteChildren {
-  AppAccountRoute: typeof AppAccountRouteWithChildren
+  AppAccountPasswordRoute: typeof AppAccountPasswordRoute
   AppAdminAssignmentsRoute: typeof AppAdminAssignmentsRoute
   AppAdminJudgesRoute: typeof AppAdminJudgesRoute
   AppAdminProductGroupsRoute: typeof AppAdminProductGroupsRoute
   AppAdminReportsRoute: typeof AppAdminReportsRoute
   AppAdminScoringFormsRoute: typeof AppAdminScoringFormsRoute
   AppAdminUsersRoute: typeof AppAdminUsersRoute
+  AppAccountIndexRoute: typeof AppAccountIndexRoute
   AppAdminIndexRoute: typeof AppAdminIndexRoute
   AppJudgeIndexRoute: typeof AppJudgeIndexRoute
   AppAdminProductsIdRoute: typeof AppAdminProductsIdRoute
-  AppAdminRegistrationsIdRoute: typeof AppAdminRegistrationsIdRouteWithChildren
   AppAdminRegistrationsNewRoute: typeof AppAdminRegistrationsNewRoute
   AppJudgeProductsIdRoute: typeof AppJudgeProductsIdRoute
-  AppMyProductsIdRoute: typeof AppMyProductsIdRouteWithChildren
   AppMyProductsNewRoute: typeof AppMyProductsNewRoute
   AppPrintCriteriaSetsIdRoute: typeof AppPrintCriteriaSetsIdRoute
   AppPrintEvaluationsIdRoute: typeof AppPrintEvaluationsIdRoute
   AppAdminProductsIndexRoute: typeof AppAdminProductsIndexRoute
   AppAdminRegistrationsIndexRoute: typeof AppAdminRegistrationsIndexRoute
   AppMyProductsIndexRoute: typeof AppMyProductsIndexRoute
+  AppAdminRegistrationsIdEditRoute: typeof AppAdminRegistrationsIdEditRoute
+  AppMyProductsIdEditRoute: typeof AppMyProductsIdEditRoute
   AppPrintJudgeProductsIdRoute: typeof AppPrintJudgeProductsIdRoute
   AppPrintProductsIdRegistrationRoute: typeof AppPrintProductsIdRegistrationRoute
   AppPrintProductsIdResultsRoute: typeof AppPrintProductsIdResultsRoute
+  AppAdminRegistrationsIdIndexRoute: typeof AppAdminRegistrationsIdIndexRoute
+  AppMyProductsIdIndexRoute: typeof AppMyProductsIdIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
-  AppAccountRoute: AppAccountRouteWithChildren,
+  AppAccountPasswordRoute: AppAccountPasswordRoute,
   AppAdminAssignmentsRoute: AppAdminAssignmentsRoute,
   AppAdminJudgesRoute: AppAdminJudgesRoute,
   AppAdminProductGroupsRoute: AppAdminProductGroupsRoute,
   AppAdminReportsRoute: AppAdminReportsRoute,
   AppAdminScoringFormsRoute: AppAdminScoringFormsRoute,
   AppAdminUsersRoute: AppAdminUsersRoute,
+  AppAccountIndexRoute: AppAccountIndexRoute,
   AppAdminIndexRoute: AppAdminIndexRoute,
   AppJudgeIndexRoute: AppJudgeIndexRoute,
   AppAdminProductsIdRoute: AppAdminProductsIdRoute,
-  AppAdminRegistrationsIdRoute: AppAdminRegistrationsIdRouteWithChildren,
   AppAdminRegistrationsNewRoute: AppAdminRegistrationsNewRoute,
   AppJudgeProductsIdRoute: AppJudgeProductsIdRoute,
-  AppMyProductsIdRoute: AppMyProductsIdRouteWithChildren,
   AppMyProductsNewRoute: AppMyProductsNewRoute,
   AppPrintCriteriaSetsIdRoute: AppPrintCriteriaSetsIdRoute,
   AppPrintEvaluationsIdRoute: AppPrintEvaluationsIdRoute,
   AppAdminProductsIndexRoute: AppAdminProductsIndexRoute,
   AppAdminRegistrationsIndexRoute: AppAdminRegistrationsIndexRoute,
   AppMyProductsIndexRoute: AppMyProductsIndexRoute,
+  AppAdminRegistrationsIdEditRoute: AppAdminRegistrationsIdEditRoute,
+  AppMyProductsIdEditRoute: AppMyProductsIdEditRoute,
   AppPrintJudgeProductsIdRoute: AppPrintJudgeProductsIdRoute,
   AppPrintProductsIdRegistrationRoute: AppPrintProductsIdRegistrationRoute,
   AppPrintProductsIdResultsRoute: AppPrintProductsIdResultsRoute,
+  AppAdminRegistrationsIdIndexRoute: AppAdminRegistrationsIdIndexRoute,
+  AppMyProductsIdIndexRoute: AppMyProductsIdIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

@@ -78,35 +78,6 @@ export interface ResetAdminUserPasswordInput {
   password: string;
   reason: string;
 }
-export interface ProductGroupRecord {
-  id: string;
-  code: string;
-  name: string;
-  description: string | null;
-  order: number;
-  isActive: boolean;
-}
-export interface ProductGroupQuery {
-  page?: number;
-  limit?: number;
-  q?: string;
-  isActive?: boolean;
-}
-export interface CreateProductGroupInput {
-  code: string;
-  name: string;
-  description?: string | null;
-  order: number;
-  isActive: boolean;
-  reason: string;
-}
-export interface UpdateProductGroupInput {
-  name?: string;
-  description?: string | null;
-  order?: number;
-  isActive?: boolean;
-  reason: string;
-}
 export type LocalityType = "COMMUNE" | "WARD";
 export interface LocalityRecord {
   id: string;
@@ -166,15 +137,10 @@ export interface CatalogCriterion extends Omit<Criterion, "subCriteria"> {
 }
 export interface AdminCategoryRecord {
   id: string;
-  groupId: string;
-  groupCode: string;
-  groupName: string;
   name: string;
   description: string | null;
   order: number;
   isActive: boolean;
-  classificationGroup: string;
-  classificationSubgroup: string | null;
   referenceCount: number;
   submittedReferenceCount: number;
   criteriaSet: AdminCriteriaSetSummary | null;
@@ -186,23 +152,20 @@ export interface AdminCategoryDetail extends Omit<
   criteriaSet:
     (AdminCriteriaSetSummary & { criteria: CatalogCriterion[] }) | null;
 }
-export interface AdminCategoryQuery extends ProductGroupQuery {
-  groupId?: string;
+export interface AdminCategoryQuery {
+  page?: number;
+  limit?: number;
+  q?: string;
+  isActive?: boolean;
 }
 export interface CreateAdminCategoryInput {
-  groupId: string;
   name: string;
-  classificationGroup: string;
-  classificationSubgroup?: string | null;
   description?: string | null;
   order?: number;
   reason: string;
 }
 export interface UpdateAdminCategoryInput {
-  groupId?: string;
   name?: string;
-  classificationGroup?: string;
-  classificationSubgroup?: string | null;
   description?: string | null;
   order?: number;
   isActive?: boolean;
@@ -252,13 +215,16 @@ export interface RegistrationSnapshotV1 {
   formData: ProductApplicationForm;
 }
 
+export interface RegistrationSnapshotV2 extends Omit<RegistrationSnapshotV1, "version" | "category"> {
+  version: 2;
+  category: { id: string; name: string };
+}
+
+export type RegistrationSnapshot = RegistrationSnapshotV1 | RegistrationSnapshotV2;
+
 export interface ProductCategory {
   id: string;
   name: string;
-  groupCode?: string;
-  groupName?: string;
-  classificationGroup?: string;
-  classificationSubgroup?: string | null;
 }
 
 export interface ProductAttachment {
@@ -287,7 +253,6 @@ export interface AdminProductQuery {
   page?: number;
   limit?: number;
   q?: string;
-  groupId?: string;
   categoryId?: string;
   registrantId?: string;
   registrantQ?: string;
@@ -304,12 +269,7 @@ export interface AdminProductQuery {
   sortDirection?: "asc" | "desc";
 }
 
-export interface AdminProductCategory extends ProductCategory {
-  groupId: string;
-  classificationGroup: string;
-  classificationSubgroup: string | null;
-  group: { id: string; code: string; name: string };
-}
+export type AdminProductCategory = ProductCategory;
 
 export interface AdminProductListItem {
   id: string;
@@ -330,7 +290,7 @@ export interface AdminProductListItem {
 }
 
 export interface AdminProductDetail extends Omit<AdminProductListItem, "registrant"> {
-  registrationSnapshot: RegistrationSnapshotV1 | null;
+  registrationSnapshot: RegistrationSnapshot | null;
   registrant: { id: string; fullName: string; email: string; phone: string | null };
   createdBy: { id: string; fullName: string } | null;
   statusEvents: {
@@ -382,7 +342,7 @@ export interface AdminCriteriaSetQuery {
   page?: number;
   limit?: number;
   q?: string;
-  groupId?: string;
+  categoryId?: string;
   isActive?: boolean;
 }
 
@@ -390,11 +350,6 @@ export interface AdminCriteriaSetRecord {
   id: string;
   categoryId: string;
   categoryName: string;
-  groupId: string;
-  groupCode: string;
-  groupName: string;
-  classificationGroup: string;
-  classificationSubgroup: string | null;
   name: string | null;
   source: string | null;
   version: string;
@@ -415,7 +370,6 @@ export interface AdminEvaluationQuery {
   limit?: number;
   q?: string;
   productId?: string;
-  groupId?: string;
   categoryId?: string;
   judgeId?: string;
   status?: EvaluationRecordStatus;
@@ -437,8 +391,6 @@ export interface AdminEvaluationRecord {
     status: ProductStatus;
     categoryId: string;
     categoryName: string;
-    groupId: string;
-    groupName: string;
   };
   judge: {
     id: string;
@@ -483,14 +435,13 @@ export interface EvaluationPrintData {
   evaluationId: string | null;
   status: EvaluationRecordStatus;
   isDraft: boolean;
-  provenance: "SNAPSHOT_V1" | "PRE_UPGRADE" | "LIVE_DRAFT";
+  provenance: "SNAPSHOT_V1" | "SNAPSHOT_V2" | "PRE_UPGRADE" | "LIVE_DRAFT";
   historicalValuesVerified: boolean;
   submittedAt: string | null;
   product: {
     id: string;
     name: string;
     categoryName: string;
-    groupName: string;
     entityName: string | null;
   };
   judge: {
@@ -545,7 +496,6 @@ export interface ProductResultsPrintData {
     localityName: string | null;
     provinceName: string | null;
     categoryName: string;
-    groupName: string;
     finalScore: number | null;
     starRating: number | null;
     starLabel: string | null;
@@ -582,9 +532,6 @@ export interface RegistrationPrintData {
   category: {
     id: string;
     name: string;
-    groupName: string;
-    classificationGroup: string;
-    classificationSubgroup: string | null;
   };
   locality: {
     id: string;
@@ -601,7 +548,6 @@ export const reportGroupByValues = [
   "month",
   "year",
   "locality",
-  "group",
   "category",
 ] as const;
 export type ReportGroupBy = (typeof reportGroupByValues)[number];
@@ -611,7 +557,6 @@ export interface AdminReportFilterQuery {
   month?: number;
   localityType?: LocalityType;
   localityId?: string;
-  groupId?: string;
   categoryId?: string;
   registrationType?: ProductRegistrationType;
   assessmentYear?: number;
@@ -772,18 +717,11 @@ export interface AdminAnalyticsDashboardResponse {
       from: string;
       toExclusive: string;
     }>;
-    byProductGroup: Array<{
-      groupId: string;
-      groupCode: string;
-      groupName: string;
+    byCategory: Array<{
+      categoryId: string;
+      categoryName: string;
       registeredCount: number;
       completedCount: number;
-      categories: Array<{
-        categoryId: string;
-        categoryName: string;
-        registeredCount: number;
-        completedCount: number;
-      }>;
     }>;
     cohortProgress: {
       registeredCount: number;
@@ -813,7 +751,7 @@ export interface AdminAnalyticsDashboardResponse {
     name: string;
     status: "SUBMITTED" | "SCORING";
     submittedAt: string | null;
-    category: { id: string; name: string; groupName: string };
+    category: { id: string; name: string };
     assignedJudgeCount: number;
     submittedEvaluationCount: number;
     pendingEvaluationCount: number;

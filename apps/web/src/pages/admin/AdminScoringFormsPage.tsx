@@ -1,8 +1,18 @@
-import { useEffect, useState } from 'react';
-import type { EvaluationRecordStatus } from '@ocop/shared';
+import { useEffect, useMemo, useState } from 'react';
+import type {
+  AdminCriteriaSetRecord,
+  AdminEvaluationRecord,
+  EvaluationRecordStatus,
+} from '@ocop/shared';
 import { Link } from '@tanstack/react-router';
 import { Filter, RotateCcw } from 'lucide-react';
+import AlertError from '@/components/alert-error';
+import { FormField } from '@/components/form-field';
+import PageSpin from '@/components/page-spin';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { DataTable, type DataTableColumnDef } from '@/components/ui/data-table';
 import {
   Dialog,
   DialogContent,
@@ -11,8 +21,15 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { DEFAULT_PAGE_SIZE } from '../../constants/consts';
+import { ALL, DEFAULT_PAGE_SIZE } from '../../constants/consts';
 import {
   parseAdminScoringSearch,
   toAdminCriteriaSetsApiQuery,
@@ -24,7 +41,7 @@ import { errorText } from '../../lib/api-error';
 import { useSession } from '../../lib/auth';
 import { formatExactScore } from '../../lib/print-format';
 import { hasStaffPermission } from '../../lib/session-contract';
-import { useAdminProductGroups } from '../../queries/admin-catalogs';
+import { useAdminCategories } from '../../queries/admin-catalogs';
 import {
   useAdminCriteriaSetDetail,
   useAdminCriteriaSets,
@@ -78,12 +95,12 @@ export function AdminScoringFormsPage({
   const setsApiQuery = toAdminCriteriaSetsApiQuery(appliedSearch);
   const evalsApiQuery = toAdminEvaluationsApiQuery(appliedSearch);
 
-  const groupsQuery = useAdminProductGroups({ page: 1, limit: 100 });
+  const categoriesQuery = useAdminCategories({ page: 1, limit: 100 });
   const setsQuery = useAdminCriteriaSets(setsApiQuery);
   const setDetailQuery = useAdminCriteriaSetDetail(selectedSetId);
   const evaluationsQuery = useAdminEvaluations(evalsApiQuery);
 
-  const groups = groupsQuery.data?.data ?? [];
+  const categories = categoriesQuery.data?.data ?? [];
   const sets = setsQuery.data?.data ?? [];
   const setsMeta = setsQuery.data?.meta;
   const selectedSet = setDetailQuery.data?.data ?? null;
@@ -93,6 +110,197 @@ export function AdminScoringFormsPage({
   const setsError = errorText(setsQuery.error);
   const setDetailError = errorText(setDetailQuery.error);
   const evaluationsError = errorText(evaluationsQuery.error);
+
+  const setColumns = useMemo<DataTableColumnDef<AdminCriteriaSetRecord>[]>(
+    () => [
+      {
+        accessorKey: 'categoryName',
+        header: 'Danh mục sản phẩm',
+        meta: { isRowHeader: true, cellClassName: 'font-normal' },
+        cell: ({ row }) => {
+          const set = row.original;
+          return (
+            <>
+              <div className='text-fg font-semibold'>{set.categoryName}</div>
+              <div className='text-muted mt-0.5 text-xs'>
+                <code className='font-mono'>{set.categoryId}</code>
+              </div>
+            </>
+          );
+        },
+      },
+      {
+        id: 'source',
+        header: 'Nguồn / Phiên bản',
+        cell: ({ row }) => {
+          const set = row.original;
+          return (
+            <div>
+              <div>
+                {set.source ?? 'Quyết định 26/2026/QĐ-TTg'} · v{set.version}
+              </div>
+              <div className='text-muted text-xs'>
+                Mã bộ: <code className='font-mono'>{set.id}</code>
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: 'criterionCount',
+        header: 'Số tiêu chí',
+        meta: {
+          align: 'right',
+          cellStyle: { fontVariantNumeric: 'tabular-nums' },
+        },
+        cell: ({ row }) => `${row.original.criterionCount} tiêu chí`,
+      },
+      {
+        accessorKey: 'maxScore',
+        header: 'Tổng điểm tối đa',
+        meta: {
+          align: 'right',
+          cellStyle: { fontVariantNumeric: 'tabular-nums' },
+        },
+        cell: ({ row }) => <strong>{row.original.maxScore} điểm</strong>,
+      },
+      {
+        id: 'actions',
+        header: 'Thao tác',
+        meta: { align: 'right' },
+        cell: ({ row }) => {
+          const set = row.original;
+          return (
+            <div className='admin-actions justify-end'>
+              <Button
+                type='button'
+                variant='secondary'
+                size='sm'
+                onClick={() => setSelectedSetId(set.id)}
+              >
+                Xem cấu trúc
+              </Button>
+              <Button asChild variant='secondary' size='sm'>
+                <Link to='/print/criteria-sets/$id' params={{ id: set.id }}>
+                  In mẫu trắng
+                </Link>
+              </Button>
+            </div>
+          );
+        },
+      },
+    ],
+    [],
+  );
+
+  const evaluationColumns = useMemo<DataTableColumnDef<AdminEvaluationRecord>[]>(
+    () => [
+      {
+        id: 'product',
+        header: 'Sản phẩm / Nhóm',
+        meta: { isRowHeader: true, cellClassName: 'font-normal' },
+        cell: ({ row }) => {
+          const ev = row.original;
+          return (
+            <>
+              <div className='text-fg font-semibold'>{ev.product.name}</div>
+              <div className='text-muted mt-0.5 text-xs'>
+                <code className='font-mono'>{ev.product.id}</code> · {ev.product.categoryName}
+              </div>
+            </>
+          );
+        },
+      },
+      {
+        id: 'judge',
+        header: 'Người chấm & Đơn vị (khi nộp)',
+        cell: ({ row }) => {
+          const ev = row.original;
+          return (
+            <div>
+              <div className='font-semibold'>{ev.judge.fullName}</div>
+              <div className='text-muted text-xs'>
+                {ev.judge.organizationUnitName ?? 'Chưa gán đơn vị'} · {ev.judge.email}
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        id: 'scope',
+        header: 'Phạm vi phân công',
+        cell: ({ row }) => {
+          const ev = row.original;
+          return ev.isPartialScope
+            ? `${ev.assignedCriterionCount}/${ev.totalCriterionCount} tiêu chí (Tối đa ${ev.scopeMaxScore} điểm)`
+            : `Toàn bộ (${ev.totalCriterionCount} tiêu chí · ${ev.scopeMaxScore} điểm)`;
+        },
+      },
+      {
+        accessorKey: 'status',
+        header: 'Trạng thái',
+        cell: ({ row }) => (
+          <Badge variant={row.original.status === 'SUBMITTED' ? 'default' : 'secondary'}>
+            {row.original.status === 'SUBMITTED' ? 'Đã nộp' : 'Bản nháp'}
+          </Badge>
+        ),
+      },
+      {
+        accessorKey: 'submittedAt',
+        header: 'Ngày nộp',
+        cell: ({ row }) =>
+          row.original.submittedAt
+            ? new Date(row.original.submittedAt).toLocaleString('vi-VN')
+            : 'Chưa nộp',
+      },
+      {
+        accessorKey: 'total',
+        header: 'Tổng điểm trong phạm vi',
+        meta: {
+          align: 'right',
+          cellStyle: { fontVariantNumeric: 'tabular-nums' },
+        },
+        cell: ({ row }) => {
+          const ev = row.original;
+          return (
+            <div>
+              <strong>
+                {ev.total !== null
+                  ? `${formatExactScore(ev.total)} / ${ev.scopeMaxScore} điểm`
+                  : '—'}
+              </strong>
+              {ev.isPartialScope && <div className='text-muted text-xs'>Phạm vi một phần</div>}
+            </div>
+          );
+        },
+      },
+      {
+        id: 'actions',
+        header: 'Thao tác',
+        meta: { align: 'right' },
+        cell: ({ row }) => {
+          const ev = row.original;
+          return (
+            <div className='admin-actions justify-end'>
+              <Button asChild variant='secondary' size='sm'>
+                <Link to='/print/evaluations/$id' params={{ id: ev.id }}>
+                  In phiếu chấm
+                </Link>
+              </Button>
+              {canView && (
+                <Button asChild variant='secondary' size='sm'>
+                  <Link to='/print/products/$id/results' params={{ id: ev.product.id }}>
+                    In tổng hợp
+                  </Link>
+                </Button>
+              )}
+            </div>
+          );
+        },
+      },
+    ],
+    [canView],
+  );
 
   function changeTab(value: string) {
     const nextTab: AdminScoringTab = value === 'evaluations' ? 'evaluations' : 'sets';
@@ -115,9 +323,9 @@ export function AdminScoringFormsPage({
         </div>
         {canView && (
           <div className='admin-actions'>
-            <Link className='button button-secondary' to='/admin/assignments'>
-              Quản lý phân công giám khảo
-            </Link>
+            <Button asChild variant='secondary'>
+              <Link to='/admin/assignments'>Quản lý phân công giám khảo</Link>
+            </Button>
           </div>
         )}
       </div>
@@ -139,22 +347,22 @@ export function AdminScoringFormsPage({
                   page: 1,
                   limit: appliedSearch.limit ?? DEFAULT_PAGE_SIZE,
                   q: draftFilters.q,
-                  groupId: draftFilters.groupId,
+                  categoryId: draftFilters.categoryId,
                   isActive: draftFilters.isActive,
                 });
               }}
             >
               <div className='admin-filters'>
-                <label
+                <FormField
+                  label='Tìm theo tên danh mục, mã bộ hoặc nguồn'
+                  htmlFor='scoring-sets-q'
                   className='admin-filter-field'
                   data-filter-width='search'
-                  htmlFor='scoring-sets-q'
                 >
-                  Tìm theo tên phân loại, mã bộ hoặc nguồn
                   <Input
                     id='scoring-sets-q'
                     value={draftFilters.q ?? ''}
-                    placeholder='Nhập tên phân loại, mã bộ phiếu hoặc nguồn…'
+                    placeholder='Nhập tên danh mục, mã bộ phiếu hoặc nguồn…'
                     onChange={(event) =>
                       setDraftFilters((old) => ({
                         ...old,
@@ -162,62 +370,67 @@ export function AdminScoringFormsPage({
                       }))
                     }
                   />
-                </label>
-                <label
+                </FormField>
+                <FormField
+                  label='Danh mục sản phẩm'
+                  htmlFor='scoring-sets-category'
                   className='admin-filter-field'
                   data-filter-width='group'
-                  htmlFor='scoring-sets-group'
                 >
-                  Nhóm sản phẩm lớn
-                  <select
-                    id='scoring-sets-group'
-                    value={draftFilters.groupId ?? ''}
-                    onChange={(event) =>
+                  <Select
+                    value={draftFilters.categoryId ?? ALL}
+                    onValueChange={(value) =>
                       setDraftFilters((old) => ({
                         ...old,
-                        groupId: event.target.value || undefined,
+                        categoryId: value === ALL ? undefined : value,
                       }))
                     }
                   >
-                    <option value=''>Tất cả nhóm</option>
-                    {groups.map((group) => (
-                      <option key={group.id} value={group.id}>
-                        {group.code} · {group.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label
+                    <SelectTrigger id='scoring-sets-category'>
+                      <SelectValue placeholder='Tất cả danh mục' />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL}>Tất cả danh mục</SelectItem>
+                      {categories.map((category) => (
+                        <SelectItem key={category.id} value={category.id}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormField>
+                <FormField
+                  label='Trạng thái'
+                  htmlFor='scoring-sets-status'
                   className='admin-filter-field'
                   data-filter-width='status'
-                  htmlFor='scoring-sets-status'
                 >
-                  Trạng thái
-                  <select
-                    id='scoring-sets-status'
+                  <Select
                     value={
-                      draftFilters.isActive === undefined ? '' : String(draftFilters.isActive)
+                      draftFilters.isActive === undefined ? ALL : String(draftFilters.isActive)
                     }
-                    onChange={(event) =>
+                    onValueChange={(value) =>
                       setDraftFilters((old) => ({
                         ...old,
-                        isActive:
-                          event.target.value === ''
-                            ? undefined
-                            : event.target.value === 'true',
+                        isActive: value === ALL ? undefined : value === 'true',
                       }))
                     }
                   >
-                    <option value=''>Tất cả</option>
-                    <option value='true'>Đang áp dụng</option>
-                    <option value='false'>Ngừng áp dụng</option>
-                  </select>
-                </label>
+                    <SelectTrigger id='scoring-sets-status'>
+                      <SelectValue placeholder='Tất cả' />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL}>Tất cả</SelectItem>
+                      <SelectItem value='true'>Đang áp dụng</SelectItem>
+                      <SelectItem value='false'>Ngừng áp dụng</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormField>
 
                 <div className='admin-actions admin-filter-actions'>
                   <Button type='submit'>Áp dụng</Button>
                   {(appliedSearch.q !== undefined ||
-                    appliedSearch.groupId !== undefined ||
+                    appliedSearch.categoryId !== undefined ||
                     appliedSearch.isActive !== undefined) && (
                     <Button
                       type='button'
@@ -237,6 +450,7 @@ export function AdminScoringFormsPage({
                   <Button
                     type='button'
                     variant='secondary'
+                    loading={setsQuery.isFetching}
                     disabled={setsQuery.isFetching}
                     onClick={() => void setsQuery.refetch()}
                   >
@@ -246,19 +460,15 @@ export function AdminScoringFormsPage({
               </div>
             </form>
 
-            {setsError && (
-              <p className='form-note' role='alert'>
-                {setsError}
-              </p>
-            )}
-            {setsQuery.isPending && <p>Đang tải danh mục bộ phiếu…</p>}
+            {setsError && <AlertError title='Không thể tải bộ phiếu' errors={[setsError]} />}
+            {setsQuery.isPending && <PageSpin />}
             {!setsQuery.isPending && !setsError && sets.length === 0 && (
-              <div className='admin-table-region empty-card'>
+              <Card className='admin-table-region empty-card'>
                 <h2>Không có bộ phiếu phù hợp</h2>
-                <p className='text-sm text-muted'>
+                <p className='text-muted text-sm'>
                   Kiểm tra bộ lọc hoặc phạm vi phân công hiện tại.
                 </p>
-              </div>
+              </Card>
             )}
 
             {!setsQuery.isPending && !setsError && sets.length > 0 && (
@@ -268,118 +478,27 @@ export function AdminScoringFormsPage({
                 aria-label='Bảng danh mục bộ phiếu tiêu chí'
                 tabIndex={0}
               >
-                <table className='admin-data-table'>
-                  <thead>
-                    <tr>
-                      <th scope='col'>Nhóm lớn</th>
-                      <th scope='col'>Phân loại sản phẩm</th>
-                      <th scope='col'>Nguồn / Phiên bản</th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        Số tiêu chí
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        Tổng điểm tối đa
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        Thao tác
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sets.map((set) => (
-                      <tr key={set.id}>
-                        <td>
-                          {set.groupCode} · {set.groupName}
-                        </td>
-                        <th scope='row'>
-                          <div className='font-semibold text-fg'>{set.categoryName}</div>
-                          <div className='text-xs text-muted mt-0.5'>
-                            <code className='font-mono'>{set.categoryId}</code> ·{' '}
-                            {set.classificationGroup}
-                            {set.classificationSubgroup
-                              ? ` / ${set.classificationSubgroup}`
-                              : ''}
-                          </div>
-                        </th>
-                        <td>
-                          <div>
-                            {set.source ?? 'Quyết định 26/2026/QĐ-TTg'} · v{set.version}
-                          </div>
-                          <div className='text-xs text-muted'>
-                            Mã bộ: <code className='font-mono'>{set.id}</code>
-                          </div>
-                        </td>
-                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                          {set.criterionCount} tiêu chí
-                        </td>
-                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                          <strong>{set.maxScore} điểm</strong>
-                        </td>
-                        <td style={{ textAlign: 'right' }}>
-                          <div className='admin-actions justify-end'>
-                            <Button
-                              type='button'
-                              variant='secondary'
-                              size='sm'
-                              onClick={() => setSelectedSetId(set.id)}
-                            >
-                              Xem cấu trúc
-                            </Button>
-                            <Link
-                              className='button button-secondary button-sm'
-                              to='/print/criteria-sets/$id'
-                              params={{ id: set.id }}
-                            >
-                              In mẫu trắng
-                            </Link>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-
-                <div className='table-footer'>
-                  <div className='page-info'>
-                    Tổng số: <strong>{setsMeta?.total ?? sets.length}</strong> bộ phiếu
-                  </div>
-                  <div className='pagination-actions'>
-                    <Button
-                      type='button'
-                      variant='secondary'
-                      size='sm'
-                      disabled={(appliedSearch.page ?? 1) <= 1}
-                      onClick={() =>
-                        applySearch({
-                          ...appliedSearch,
-                          page: (appliedSearch.page ?? 1) - 1,
-                        })
-                      }
-                    >
-                      Trước
-                    </Button>
-                    <span className='text-xs font-semibold px-2'>
-                      Trang {setsMeta?.page ?? appliedSearch.page ?? 1} /{' '}
-                      {Math.max(1, setsMeta?.totalPages ?? 1)}
-                    </span>
-                    <Button
-                      type='button'
-                      variant='secondary'
-                      size='sm'
-                      disabled={
-                        (appliedSearch.page ?? 1) >= (setsMeta?.totalPages ?? 1)
-                      }
-                      onClick={() =>
-                        applySearch({
-                          ...appliedSearch,
-                          page: (appliedSearch.page ?? 1) + 1,
-                        })
-                      }
-                    >
-                      Sau
-                    </Button>
-                  </div>
-                </div>
+                <DataTable
+                  columns={setColumns}
+                  data={sets}
+                  total={setsMeta?.total ?? sets.length}
+                  page={setsMeta?.page ?? appliedSearch.page ?? 1}
+                  pageSize={appliedSearch.limit ?? DEFAULT_PAGE_SIZE}
+                  getRowId={(row) => row.id}
+                  onPageChange={(nextPage) =>
+                    applySearch({
+                      ...appliedSearch,
+                      page: nextPage,
+                    })
+                  }
+                  onPageSizeChange={(nextLimit) =>
+                    applySearch({
+                      ...appliedSearch,
+                      page: 1,
+                      limit: nextLimit,
+                    })
+                  }
+                />
               </div>
             )}
           </div>
@@ -396,7 +515,7 @@ export function AdminScoringFormsPage({
                   page: 1,
                   limit: appliedSearch.limit ?? DEFAULT_PAGE_SIZE,
                   q: draftFilters.q,
-                  groupId: draftFilters.groupId,
+                  categoryId: draftFilters.categoryId,
                   status: draftFilters.status,
                   productId: draftFilters.productId,
                   judgeId: draftFilters.judgeId,
@@ -404,12 +523,12 @@ export function AdminScoringFormsPage({
               }}
             >
               <div className='admin-filters'>
-                <label
+                <FormField
+                  label='Từ khóa (sản phẩm, người chấm, mã phiếu)'
+                  htmlFor='scoring-evals-q'
                   className='admin-filter-field'
                   data-filter-width='search'
-                  htmlFor='scoring-evals-q'
                 >
-                  Từ khóa (sản phẩm, người chấm, mã phiếu)
                   <Input
                     id='scoring-evals-q'
                     value={draftFilters.q ?? ''}
@@ -421,56 +540,62 @@ export function AdminScoringFormsPage({
                       }))
                     }
                   />
-                </label>
+                </FormField>
 
-                <label
+                <FormField
+                  label='Danh mục sản phẩm'
+                  htmlFor='scoring-evals-category'
                   className='admin-filter-field'
                   data-filter-width='group'
-                  htmlFor='scoring-evals-group'
                 >
-                  Nhóm sản phẩm
-                  <select
-                    id='scoring-evals-group'
-                    value={draftFilters.groupId ?? ''}
-                    onChange={(event) =>
+                  <Select
+                    value={draftFilters.categoryId ?? ALL}
+                    onValueChange={(value) =>
                       setDraftFilters((old) => ({
                         ...old,
-                        groupId: event.target.value || undefined,
+                        categoryId: value === ALL ? undefined : value,
                       }))
                     }
                   >
-                    <option value=''>Tất cả nhóm</option>
-                    {groups.map((group) => (
-                      <option key={group.id} value={group.id}>
-                        {group.code} · {group.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    <SelectTrigger id='scoring-evals-category'>
+                      <SelectValue placeholder='Tất cả danh mục' />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL}>Tất cả danh mục</SelectItem>
+                      {categories.map((category) => (
+                        <SelectItem key={category.id} value={category.id}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormField>
 
-                <label
+                <FormField
+                  label='Trạng thái phiếu'
+                  htmlFor='scoring-evals-status'
                   className='admin-filter-field'
                   data-filter-width='status'
-                  htmlFor='scoring-evals-status'
                 >
-                  Trạng thái phiếu
-                  <select
-                    id='scoring-evals-status'
-                    value={draftFilters.status ?? ''}
-                    onChange={(event) =>
+                  <Select
+                    value={draftFilters.status ?? ALL}
+                    onValueChange={(value) =>
                       setDraftFilters((old) => ({
                         ...old,
-                        status: (event.target.value || undefined) as
-                          | EvaluationRecordStatus
-                          | undefined,
+                        status: value === ALL ? undefined : (value as EvaluationRecordStatus),
                       }))
                     }
                   >
-                    <option value=''>Tất cả</option>
-                    <option value='SUBMITTED'>Đã nộp</option>
-                    {canManage && <option value='IN_PROGRESS'>Đang chấm nháp</option>}
-                  </select>
-                </label>
+                    <SelectTrigger id='scoring-evals-status'>
+                      <SelectValue placeholder='Tất cả' />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL}>Tất cả</SelectItem>
+                      <SelectItem value='SUBMITTED'>Đã nộp</SelectItem>
+                      {canManage && <SelectItem value='IN_PROGRESS'>Đang chấm nháp</SelectItem>}
+                    </SelectContent>
+                  </Select>
+                </FormField>
 
                 <div className='admin-actions admin-filter-actions'>
                   <Button type='submit'>Áp dụng</Button>
@@ -485,7 +610,7 @@ export function AdminScoringFormsPage({
                     <span>Bộ lọc khác</span>
                   </Button>
                   {(appliedSearch.q !== undefined ||
-                    appliedSearch.groupId !== undefined ||
+                    appliedSearch.categoryId !== undefined ||
                     appliedSearch.status !== undefined ||
                     appliedSearch.productId !== undefined ||
                     appliedSearch.judgeId !== undefined) && (
@@ -507,6 +632,7 @@ export function AdminScoringFormsPage({
                   <Button
                     type='button'
                     variant='secondary'
+                    loading={evaluationsQuery.isFetching}
                     disabled={evaluationsQuery.isFetching}
                     onClick={() => void evaluationsQuery.refetch()}
                   >
@@ -520,8 +646,7 @@ export function AdminScoringFormsPage({
                 hidden={!showEvalAdvanced}
                 className='advanced-filter-grid'
               >
-                <label htmlFor='scoring-evals-product-id'>
-                  Mã sản phẩm
+                <FormField label='Mã sản phẩm' htmlFor='scoring-evals-product-id'>
                   <Input
                     id='scoring-evals-product-id'
                     value={draftFilters.productId ?? ''}
@@ -533,9 +658,8 @@ export function AdminScoringFormsPage({
                       }))
                     }
                   />
-                </label>
-                <label htmlFor='scoring-evals-judge-id'>
-                  Mã người chấm
+                </FormField>
+                <FormField label='Mã người chấm' htmlFor='scoring-evals-judge-id'>
                   <Input
                     id='scoring-evals-judge-id'
                     value={draftFilters.judgeId ?? ''}
@@ -547,23 +671,21 @@ export function AdminScoringFormsPage({
                       }))
                     }
                   />
-                </label>
+                </FormField>
               </div>
             </form>
 
             {evaluationsError && (
-              <p className='form-note' role='alert'>
-                {evaluationsError}
-              </p>
+              <AlertError title='Không thể tải phiếu chấm' errors={[evaluationsError]} />
             )}
-            {evaluationsQuery.isPending && <p>Đang tải danh sách phiếu chấm…</p>}
+            {evaluationsQuery.isPending && <PageSpin />}
             {!evaluationsQuery.isPending && !evaluationsError && evaluations.length === 0 && (
-              <div className='admin-table-region empty-card'>
+              <Card className='admin-table-region empty-card'>
                 <h2>Chưa có phiếu chấm phù hợp</h2>
-                <p className='text-sm text-muted'>
+                <p className='text-muted text-sm'>
                   Chưa có phiếu chấm nào khớp với điều kiện lọc hiện tại.
                 </p>
-              </div>
+              </Card>
             )}
 
             {!evaluationsQuery.isPending && !evaluationsError && evaluations.length > 0 && (
@@ -573,132 +695,27 @@ export function AdminScoringFormsPage({
                 aria-label='Bảng danh sách phiếu chấm thực tế'
                 tabIndex={0}
               >
-                <table className='admin-data-table'>
-                  <thead>
-                    <tr>
-                      <th scope='col'>Sản phẩm / Nhóm</th>
-                      <th scope='col'>Người chấm &amp; Đơn vị (khi nộp)</th>
-                      <th scope='col'>Phạm vi phân công</th>
-                      <th scope='col'>Trạng thái</th>
-                      <th scope='col'>Ngày nộp</th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        Tổng điểm trong phạm vi
-                      </th>
-                      <th scope='col' style={{ textAlign: 'right' }}>
-                        Thao tác
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {evaluations.map((ev) => (
-                      <tr key={ev.id}>
-                        <th scope='row'>
-                          <div className='font-semibold text-fg'>{ev.product.name}</div>
-                          <div className='text-xs text-muted mt-0.5'>
-                            <code className='font-mono'>{ev.product.id}</code> ·{' '}
-                            {ev.product.groupName} · {ev.product.categoryName}
-                          </div>
-                        </th>
-                        <td>
-                          <div className='font-semibold'>{ev.judge.fullName}</div>
-                          <div className='text-xs text-muted'>
-                            {ev.judge.organizationUnitName ?? 'Chưa gán đơn vị'} · {ev.judge.email}
-                          </div>
-                        </td>
-                        <td>
-                          {ev.isPartialScope
-                            ? `${ev.assignedCriterionCount}/${ev.totalCriterionCount} tiêu chí (Tối đa ${ev.scopeMaxScore} điểm)`
-                            : `Toàn bộ (${ev.totalCriterionCount} tiêu chí · ${ev.scopeMaxScore} điểm)`}
-                        </td>
-                        <td>
-                          <span
-                            className={`status-badge ${ev.status === 'SUBMITTED' ? 'completed' : 'draft'}`}
-                          >
-                            {ev.status === 'SUBMITTED' ? 'Đã nộp' : 'Bản nháp'}
-                          </span>
-                        </td>
-                        <td>
-                          {ev.submittedAt
-                            ? new Date(ev.submittedAt).toLocaleString('vi-VN')
-                            : 'Chưa nộp'}
-                        </td>
-                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                          <strong>
-                            {ev.total !== null
-                              ? `${formatExactScore(ev.total)} / ${ev.scopeMaxScore} điểm`
-                              : '—'}
-                          </strong>
-                          {ev.isPartialScope && (
-                            <div className='text-xs text-muted'>Phạm vi một phần</div>
-                          )}
-                        </td>
-                        <td style={{ textAlign: 'right' }}>
-                          <div className='admin-actions justify-end'>
-                            <Link
-                              className='button button-secondary button-sm'
-                              to='/print/evaluations/$id'
-                              params={{ id: ev.id }}
-                            >
-                              In phiếu chấm
-                            </Link>
-                            {canView && (
-                              <Link
-                                className='button button-secondary button-sm'
-                                to='/print/products/$id/results'
-                                params={{ id: ev.product.id }}
-                              >
-                                In tổng hợp
-                              </Link>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-
-                <div className='table-footer'>
-                  <div className='page-info'>
-                    Hiển thị <strong>{evaluations.length}</strong> /{' '}
-                    <strong>{evalsMeta?.total ?? evaluations.length}</strong> phiếu chấm
-                  </div>
-                  <div className='pagination-actions'>
-                    <Button
-                      type='button'
-                      variant='secondary'
-                      size='sm'
-                      disabled={(appliedSearch.page ?? 1) <= 1}
-                      onClick={() =>
-                        applySearch({
-                          ...appliedSearch,
-                          page: (appliedSearch.page ?? 1) - 1,
-                        })
-                      }
-                    >
-                      Trước
-                    </Button>
-                    <span className='text-xs font-semibold px-2'>
-                      Trang {evalsMeta?.page ?? appliedSearch.page ?? 1} /{' '}
-                      {Math.max(1, evalsMeta?.totalPages ?? 1)}
-                    </span>
-                    <Button
-                      type='button'
-                      variant='secondary'
-                      size='sm'
-                      disabled={
-                        (appliedSearch.page ?? 1) >= (evalsMeta?.totalPages ?? 1)
-                      }
-                      onClick={() =>
-                        applySearch({
-                          ...appliedSearch,
-                          page: (appliedSearch.page ?? 1) + 1,
-                        })
-                      }
-                    >
-                      Sau
-                    </Button>
-                  </div>
-                </div>
+                <DataTable
+                  columns={evaluationColumns}
+                  data={evaluations}
+                  total={evalsMeta?.total ?? evaluations.length}
+                  page={evalsMeta?.page ?? appliedSearch.page ?? 1}
+                  pageSize={appliedSearch.limit ?? DEFAULT_PAGE_SIZE}
+                  getRowId={(row) => row.id}
+                  onPageChange={(nextPage) =>
+                    applySearch({
+                      ...appliedSearch,
+                      page: nextPage,
+                    })
+                  }
+                  onPageSizeChange={(nextLimit) =>
+                    applySearch({
+                      ...appliedSearch,
+                      page: 1,
+                      limit: nextLimit,
+                    })
+                  }
+                />
               </div>
             )}
           </div>
@@ -711,15 +728,15 @@ export function AdminScoringFormsPage({
             <DialogTitle>Cấu trúc bộ phiếu</DialogTitle>
             <DialogDescription>
               {selectedSet
-                ? `${selectedSet.groupCode} · ${selectedSet.groupName} — ${selectedSet.categoryName}`
+                ? selectedSet.categoryName
                 : 'Đang tải cấu trúc chi tiết bộ phiếu tiêu chí.'}
             </DialogDescription>
           </DialogHeader>
 
-          {setDetailQuery.isPending && <p>Đang tải cấu trúc bộ phiếu…</p>}
+          {setDetailQuery.isPending && <PageSpin />}
           {setDetailError && (
-            <div className='form-note' role='alert'>
-              <p>{setDetailError}</p>
+            <div className='space-y-2'>
+              <AlertError title='Không thể tải cấu trúc bộ phiếu' errors={[setDetailError]} />
               <Button
                 type='button'
                 variant='secondary'
@@ -734,21 +751,19 @@ export function AdminScoringFormsPage({
           {selectedSet && (
             <div className='grid gap-4'>
               <div className='admin-actions justify-between'>
-                <p className='text-sm text-muted'>
+                <p className='text-muted text-sm'>
                   {selectedSet.source ?? 'Quyết định 26/2026/QĐ-TTg'} · Phiên bản v
                   {selectedSet.version} · {selectedSet.criterionCount} tiêu chí · Tổng tối đa{' '}
                   {selectedSet.maxScore} điểm
                 </p>
-                <Link
-                  className='button button-primary button-sm'
-                  to='/print/criteria-sets/$id'
-                  params={{ id: selectedSet.id }}
-                >
-                  In mẫu trắng A4
-                </Link>
+                <Button asChild size='sm'>
+                  <Link to='/print/criteria-sets/$id' params={{ id: selectedSet.id }}>
+                    In mẫu trắng A4
+                  </Link>
+                </Button>
               </div>
               {selectedSet.criteria.map((criterion) => (
-                <article className='score-card' key={criterion.id}>
+                <Card className='score-card p-4' key={criterion.id}>
                   <h3>
                     Phần {criterion.sectionCode} ({criterion.sectionName}) — {criterion.code}.{' '}
                     {criterion.name} (Tối đa {criterion.maxScore} điểm)
@@ -767,7 +782,7 @@ export function AdminScoringFormsPage({
                       </ul>
                     </div>
                   ))}
-                </article>
+                </Card>
               ))}
             </div>
           )}

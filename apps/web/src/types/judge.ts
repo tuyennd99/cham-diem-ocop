@@ -20,7 +20,7 @@ export type QueueProduct = Pick<
 export interface EvaluationData {
   product: Pick<Product, 'id' | 'name' | 'description'> & {
     formData: Record<string, unknown>;
-    category: Pick<Category, 'id' | 'name' | 'groupName'>;
+    category: Pick<Category, 'id' | 'name'>;
     attachments: Required<Pick<ProductAttachment, 'id' | 'fileName' | 'type'>>[];
   };
   criteria: Criterion[];

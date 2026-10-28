@@ -14,10 +14,6 @@ export function optionalText(value: string): string | undefined {
   return _.trim(value) || undefined;
 }
 
-export function formatCategoryPath(parts: Array<string | null | undefined>): string {
-  return _.compact(parts).join(' · ');
-}
-
 export const ENTITY_FORM_KEYS = [
   'entityName',
   'representativeName',

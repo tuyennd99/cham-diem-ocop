@@ -26,7 +26,6 @@ export const reportGroupByValues = [
   'month',
   'year',
   'locality',
-  'group',
   'category',
 ] as const satisfies readonly ReportGroupBy[];
 
@@ -62,14 +61,6 @@ export class AdminDashboardQueryDto implements AdminReportFilterQuery {
   @MinLength(1)
   @MaxLength(100)
   localityId?: string;
-
-  @ApiPropertyOptional({ maxLength: 100 })
-  @IsOptional()
-  @Transform(trimString)
-  @IsString()
-  @MinLength(1)
-  @MaxLength(100)
-  groupId?: string;
 
   @ApiPropertyOptional({ maxLength: 100 })
   @IsOptional()
