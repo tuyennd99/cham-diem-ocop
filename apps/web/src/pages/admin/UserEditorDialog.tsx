@@ -232,7 +232,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
       <DialogHeader>
         <DialogTitle>Thông tin người dùng: {user.fullName}</DialogTitle>
         <DialogDescription>
-          {user.email} · {user.role === 'REGISTRANT' ? 'Tài khoản chủ thể' : 'Tài khoản nội bộ'} ·{' '}
+          {user.email} · {user.role === 'REGISTRANT' ? 'Tài khoản người đăng ký' : 'Tài khoản nội bộ'} ·{' '}
           {user.verified ? 'Đã xác thực' : 'Chưa xác thực'}
         </DialogDescription>
       </DialogHeader>

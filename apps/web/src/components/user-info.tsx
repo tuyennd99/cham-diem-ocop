@@ -6,7 +6,7 @@ const ROLE_LABEL: Record<string, string> = {
   ADMIN: 'Quản trị viên',
   VIEWER: 'Cán bộ tra cứu',
   JUDGE: 'Giám khảo',
-  REGISTRANT: 'Chủ thể OCOP',
+  REGISTRANT: 'Người đăng ký',
 };
 
 export function UserInfo({ user, showEmail = false }: { user: User; showEmail?: boolean }) {

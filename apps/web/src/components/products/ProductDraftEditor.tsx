@@ -142,7 +142,7 @@ const stepZeroTextFields: Array<{
   autoComplete?: string;
 }> = [
   { name: 'provinceName', label: 'Tỉnh/thành phố đăng ký', maxLength: 100 },
-  { name: 'entityName', label: 'Tên chủ thể đăng ký', maxLength: 255 },
+  { name: 'entityName', label: 'Tên đơn vị sản xuất', maxLength: 255 },
   { name: 'representativeName', label: 'Người đại diện theo pháp luật', maxLength: 255 },
   { name: 'representativeTitle', label: 'Chức danh người đại diện', maxLength: 255 },
   { name: 'phone', label: 'Số điện thoại', maxLength: 30, type: 'tel', autoComplete: 'tel' },
@@ -219,7 +219,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
       try {
         const selectedFiles = files;
         if (mode === 'admin' && !product && !registrantId) {
-          throw new Error('Chọn chủ thể đăng ký trước khi lưu hồ sơ.');
+          throw new Error('Chọn người đăng ký trước khi lưu hồ sơ.');
         }
         if (mode === 'admin' && !reason.trim()) {
           throw new Error('Nhập lý do thao tác trước khi lưu hồ sơ.');
@@ -454,7 +454,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
     ? `${adminProductQuery.data?.data.registrant.fullName ?? ''} (${adminProductQuery.data?.data.registrant.email ?? ''})`
     : selectedRegistrant
       ? `${selectedRegistrant.fullName} (${selectedRegistrant.email})`
-      : 'Chưa chọn chủ thể';
+      : 'Chưa chọn người đăng ký';
 
   return (
     <section className={editorClassName}>
@@ -471,14 +471,14 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
             </Link>
             <h1 className='mt-2'>{productId ? 'Sửa phiếu đăng ký' : 'Nhập phiếu đăng ký'}</h1>
             <p className='route-intro'>
-              Chủ thể: <strong>{activeRegistrantSummary}</strong> · Trạng thái: Bản nháp. Ảnh và tài
+              Người đăng ký: <strong>{activeRegistrantSummary}</strong> · Trạng thái: Bản nháp. Ảnh và tài
               liệu minh chứng tùy chọn (tối đa 20 tệp, mỗi tệp 10 MiB).
             </p>
           </div>
         </div>
       ) : (
         <>
-          <p className='eyebrow'>KHU VỰC CHỦ THỂ · MẪU 01</p>
+          <p className='eyebrow'>KHU VỰC NGƯỜI ĐĂNG KÝ · MẪU 01</p>
           <h1>{productId ? 'Sửa hồ sơ nháp' : 'Tạo hồ sơ sản phẩm'}</h1>
           <p>
             Hoàn thành phiếu đăng ký theo từng bước. Ảnh và tài liệu minh chứng là tùy chọn; mỗi tệp
@@ -494,7 +494,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
             {!product ? (
               <>
                 <FormField
-                  label='Tìm chủ thể đã xác minh (tên hoặc email)'
+                  label='Tìm người đăng ký đã xác minh (tên hoặc email)'
                   htmlFor='admin-draft-registrant-search'
                 >
                   <Input
@@ -505,12 +505,12 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                       setRegistrantPage(1);
                     }}
                     maxLength={100}
-                    placeholder='Nhập tên hoặc email chủ thể…'
+                    placeholder='Nhập tên hoặc email người đăng ký…'
                   />
                 </FormField>
                 <div className='form-group'>
                   <Label htmlFor='admin-draft-registrant-select'>
-                    Chọn chủ thể đăng ký (bắt buộc)
+                    Chọn người đăng ký (bắt buộc)
                   </Label>
                   <Select
                     value={registrantId || ALL}
@@ -523,10 +523,10 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                     }}
                   >
                     <SelectTrigger id='admin-draft-registrant-select'>
-                      <SelectValue placeholder='Chọn chủ thể đăng ký' />
+                      <SelectValue placeholder='Chọn người đăng ký' />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={ALL}>Chọn chủ thể đăng ký</SelectItem>
+                      <SelectItem value={ALL}>Chọn người đăng ký</SelectItem>
                       {selectedRegistrant &&
                         !registrantLookup.data?.data.some(
                           ({ id }) => id === selectedRegistrant.id,
@@ -544,7 +544,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                   </Select>
                   {registrantLookup.error && (
                     <AlertError
-                      title='Không tải được danh sách chủ thể'
+                      title='Không tải được danh sách người đăng ký'
                       errors={[messageOf(registrantLookup.error)]}
                     />
                   )}
@@ -561,7 +561,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                     <span className='text-muted text-xs'>
                       {registrantTotalPages > 0
                         ? `Trang ${registrantPage} / ${registrantTotalPages}`
-                        : 'Chưa có chủ thể phù hợp'}
+                        : 'Chưa có người đăng ký phù hợp'}
                     </span>
                     <Button
                       variant='secondary'
@@ -581,7 +581,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
               </>
             ) : (
               <div>
-                <span className='text-sm font-semibold'>Chủ thể sở hữu hồ sơ</span>
+                <span className='text-sm font-semibold'>Người đăng ký sở hữu hồ sơ</span>
                 <p className='text-muted mt-1 text-sm'>
                   {adminProductQuery.data?.data.registrant.fullName} ·{' '}
                   {adminProductQuery.data?.data.registrant.email}
@@ -594,7 +594,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                 id='admin-draft-reason'
                 value={reason}
                 maxLength={255}
-                placeholder='Ghi rõ lý do nhập hoặc chỉnh sửa hộ chủ thể…'
+                placeholder='Ghi rõ lý do nhập hoặc chỉnh sửa hộ người đăng ký…'
                 onChange={(event) => setReason(event.target.value)}
                 required
               />

@@ -223,7 +223,7 @@ export function AdminProductDetailPage({
             <Badge variant={statusVariant}>{formatStatusLabel(product.status)}</Badge>
           </div>
           <p className='route-intro'>
-            Mã hồ sơ: <span className='font-mono text-xs'>{product.id}</span> · Chủ thể:{' '}
+            Mã hồ sơ: <span className='font-mono text-xs'>{product.id}</span> · Người đăng ký:{' '}
             <strong>{product.registrant.fullName}</strong> ({product.registrant.email}) · Phân loại:{' '}
             {product.category.name}
             {product.submittedAt
@@ -311,7 +311,7 @@ export function AdminProductDetailPage({
           <DialogHeader>
             <DialogTitle>
               {confirmAction === 'submit'
-                ? `Nộp hồ sơ thay chủ thể: ${product.name}`
+                ? `Nộp hồ sơ thay người đăng ký: ${product.name}`
                 : `Xóa bản nháp: ${product.name}`}
             </DialogTitle>
             <DialogDescription>
@@ -342,11 +342,11 @@ export function AdminProductDetailPage({
                     void run(
                       (confirmedReason) => actions.submit(confirmedReason),
                       false,
-                      'Đã nộp hồ sơ thay chủ thể.',
+                      'Đã nộp hồ sơ thay người đăng ký.',
                     )
                   }
                 >
-                  {busy ? 'Đang nộp…' : 'Nộp hồ sơ thay chủ thể'}
+                  {busy ? 'Đang nộp…' : 'Nộp hồ sơ thay người đăng ký'}
                 </Button>
               ) : (
                 <Button
@@ -447,7 +447,7 @@ export function AdminProductDetailPage({
                 <dd className='font-mono text-xs'>{product.id}</dd>
               </div>
               <div>
-                <dt>Chủ thể đăng ký</dt>
+                <dt>Người đăng ký</dt>
                 <dd>
                   {product.registrant.fullName} · {product.registrant.email} ·{' '}
                   {product.registrant.phone ?? 'Chưa có điện thoại'}
@@ -455,7 +455,7 @@ export function AdminProductDetailPage({
               </div>
               <div>
                 <dt>Người tạo hồ sơ</dt>
-                <dd>{product.createdBy?.fullName ?? 'Chủ thể tự nhập'}</dd>
+                <dd>{product.createdBy?.fullName ?? 'Người đăng ký tự nhập'}</dd>
               </div>
               <div>
                 <dt>Danh mục sản phẩm</dt>

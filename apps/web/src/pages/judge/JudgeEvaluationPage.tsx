@@ -377,12 +377,12 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
           <article className='product-summary'>
             <Badge variant='secondary'>{data.product.category.name}</Badge>
             <h3>{data.product.name}</h3>
-            <p>{String(data.product.formData.entityName ?? 'Chưa có thông tin chủ thể')}</p>
+            <p>{String(data.product.formData.entityName ?? 'Chưa có thông tin đơn vị sản xuất')}</p>
             <p>
               Mã hồ sơ <code>{data.product.id}</code>
             </p>
           </article>
-          {renderFormSection('Thông tin chủ thể', entityEntries)}
+          {renderFormSection('Thông tin đơn vị sản xuất', entityEntries)}
           {renderFormSection('Thông tin sản phẩm (Mẫu 01)', productEntries)}
           <section className='evidence-files'>
             <h3>Tệp minh chứng</h3>

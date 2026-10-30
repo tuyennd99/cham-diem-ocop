@@ -39,8 +39,8 @@ export function LoginPage() {
       </p>
       <ol className='auth-steps'>
         <li className='auth-step'>
-          <span className='step-number'>VAI TRÒ · CHỦ THỂ</span>
-          <h3>Chủ thể sản xuất (Hợp tác xã, hộ kinh doanh, doanh nghiệp)</h3>
+          <span className='step-number'>VAI TRÒ · NGƯỜI ĐĂNG KÝ</span>
+          <h3>Người đăng ký (hợp tác xã, hộ kinh doanh, doanh nghiệp)</h3>
           <p>
             Quản lý danh mục sản phẩm của đơn vị, tạo hồ sơ mới, tải lên tài liệu minh chứng và xem
             phiếu tổng hợp điểm.

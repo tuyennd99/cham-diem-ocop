@@ -44,7 +44,7 @@ export function useProductDraftCommands(
   const create = useMutation<ApiResult<RegistrantProduct>, unknown, ProductWriteInput>({
     mutationFn: (payload) => {
       if (mode === 'owner') return myProductsApi.create(payload);
-      if (!options.registrantId) throw new Error('Chọn chủ thể đăng ký trước khi lưu.');
+      if (!options.registrantId) throw new Error('Chọn người đăng ký trước khi lưu.');
       if (!options.reason?.trim()) throw new Error('Nhập lý do thao tác trước khi lưu.');
       return adminProductsApi.create({
         ...payload,

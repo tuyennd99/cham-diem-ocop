@@ -111,7 +111,7 @@ export function AdminUsersPage({ search: controlledSearch, onSearchChange }: Adm
         cell: ({ row }) => {
           const user = row.original;
           if (user.role === 'REGISTRANT') {
-            return <Badge variant='secondary'>Chủ thể</Badge>;
+            return <Badge variant='secondary'>Người đăng ký</Badge>;
           }
           if (user.staffPermissions.length > 0) {
             return (
@@ -211,7 +211,7 @@ export function AdminUsersPage({ search: controlledSearch, onSearchChange }: Adm
         <div>
           <h1>Người dùng &amp; đơn vị</h1>
           <p className='route-intro'>
-            Quản lý tài khoản nội bộ, tài khoản chủ thể đăng ký và đơn vị công tác.
+            Quản lý tài khoản nội bộ, tài khoản người đăng ký và đơn vị công tác.
           </p>
         </div>
         {selectedTab === 'users' && (
@@ -289,7 +289,7 @@ export function AdminUsersPage({ search: controlledSearch, onSearchChange }: Adm
                     <SelectContent>
                       <SelectItem value={ALL}>Tất cả loại tài khoản</SelectItem>
                       <SelectItem value='STAFF'>Nội bộ (cán bộ / giám khảo)</SelectItem>
-                      <SelectItem value='REGISTRANT'>Chủ thể sản xuất</SelectItem>
+                      <SelectItem value='REGISTRANT'>Người đăng ký</SelectItem>
                     </SelectContent>
                   </Select>
                 </FormField>

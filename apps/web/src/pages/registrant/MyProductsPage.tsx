@@ -60,7 +60,7 @@ export function MyProductsPage() {
     <section>
       <div className='section-heading'>
         <div>
-          <p className='eyebrow'>KHU VỰC CHỦ THỂ</p>
+          <p className='eyebrow'>KHU VỰC NGƯỜI ĐĂNG KÝ</p>
           <h1>Hồ sơ của tôi</h1>
         </div>
         <Button asChild>

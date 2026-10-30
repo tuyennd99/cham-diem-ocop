@@ -434,12 +434,12 @@ export function AdminReportsPage({
       },
       {
         id: 'meta',
-        header: 'Chủ thể & Dữ liệu',
+        header: 'Người đăng ký & Dữ liệu',
         meta: { align: 'center' },
         columns: [
           {
             accessorKey: 'distinctRegistrantCount',
-            header: 'Chủ thể',
+            header: 'Người đăng ký',
             meta: NUMERIC_CELL_META,
           },
           {
@@ -566,12 +566,12 @@ export function AdminReportsPage({
       },
       {
         id: 'meta',
-        header: 'Chủ thể & Dữ liệu',
+        header: 'Người đăng ký & Dữ liệu',
         meta: { align: 'center' },
         columns: [
           {
             accessorKey: 'distinctRegistrantCount',
-            header: 'Chủ thể',
+            header: 'Người đăng ký',
             meta: NUMERIC_CELL_META,
           },
           {

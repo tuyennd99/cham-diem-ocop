@@ -27,7 +27,7 @@ export const ENTITY_FORM_KEYS = [
 const entityKeySet = new Set<string>(ENTITY_FORM_KEYS);
 
 export const formLabels: Record<string, string> = {
-  entityName: 'Tên chủ thể',
+  entityName: 'Tên đơn vị sản xuất',
   representativeName: 'Người đại diện',
   representativeTitle: 'Chức danh',
   contactAddress: 'Địa chỉ liên hệ',

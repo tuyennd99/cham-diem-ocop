@@ -70,7 +70,7 @@ export const AppSidebar = memo(function AppSidebar() {
           </div>
         )}
         {role === 'REGISTRANT' && (
-          <NavMainCollapsible label='Chủ thể OCOP' items={registrantNavItems} groups={[]} />
+          <NavMainCollapsible label='Người đăng ký' items={registrantNavItems} groups={[]} />
         )}
         {canView && <NavMainCollapsible label='Làm việc' items={mainNavItems} groups={[]} />}
         {evalItems.length > 0 && (

@@ -94,7 +94,7 @@ export function MyProductDetailPage({ productId }: { productId: string }) {
       <Link className='text-link' to='/my/products'>
         ← Hồ sơ của tôi
       </Link>
-      <p className='eyebrow'>HỒ SƠ CHỦ THỂ · {statusLabel}</p>
+      <p className='eyebrow'>HỒ SƠ NGƯỜI ĐĂNG KÝ · {statusLabel}</p>
       <h1>{product.name}</h1>
       <p>{product.category.name}</p>
       {product.submittedAt && (

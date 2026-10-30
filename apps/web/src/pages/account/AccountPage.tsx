@@ -13,7 +13,7 @@ const ROLE_LABELS: Record<Role, string> = {
   ADMIN: 'Quản trị viên (ADMIN)',
   VIEWER: 'Cán bộ tra cứu & báo cáo (VIEWER)',
   JUDGE: 'Giám khảo hội đồng (JUDGE)',
-  REGISTRANT: 'Chủ thể sản xuất (REGISTRANT)',
+  REGISTRANT: 'Người đăng ký (REGISTRANT)',
 };
 
 const PERMISSION_LABELS: Record<StaffPermission, string> = {
@@ -107,7 +107,7 @@ export function AccountPage() {
               <dt>Quyền làm việc</dt>
               <dd>
                 {user.role === 'REGISTRANT' ? (
-                  <Badge variant='secondary'>Chủ thể đăng ký hồ sơ</Badge>
+                  <Badge variant='secondary'>Người đăng ký hồ sơ</Badge>
                 ) : user.staffPermissions.length > 0 ? (
                   <span className='flex flex-wrap gap-1.5 mt-1'>
                     {user.staffPermissions.map((permission) => (
@@ -127,7 +127,7 @@ export function AccountPage() {
                 {user.organizationUnit
                   ? `${user.organizationUnit.code} · ${user.organizationUnit.name}`
                   : user.role === 'REGISTRANT'
-                    ? 'Tài khoản chủ thể độc lập'
+                    ? 'Tài khoản người đăng ký độc lập'
                     : 'Chưa gán đơn vị'}
               </dd>
             </div>

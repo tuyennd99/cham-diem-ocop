@@ -39,11 +39,11 @@ export function RegisterPage() {
   });
 
   const registerAside = (
-    <aside className='auth-aside' aria-label='Hướng dẫn đăng ký tài khoản chủ thể OCOP'>
-      <p className='eyebrow'>HƯỚNG DẪN CHỦ THỂ</p>
+    <aside className='auth-aside' aria-label='Hướng dẫn đăng ký tài khoản người đăng ký'>
+      <p className='eyebrow'>HƯỚNG DẪN NGƯỜI ĐĂNG KÝ</p>
       <h2>3 bước chuẩn bị và nộp hồ sơ OCOP</h2>
       <p className='auth-aside-lead'>
-        Tài khoản chủ thể giúp hợp tác xã, doanh nghiệp và hộ sản xuất lưu trữ hồ sơ trực tuyến và
+        Tài khoản người đăng ký giúp hợp tác xã, doanh nghiệp và hộ sản xuất lưu trữ hồ sơ trực tuyến và
         theo dõi kết quả chấm điểm minh bạch.
       </p>
       <ol className='auth-steps'>
@@ -52,7 +52,7 @@ export function RegisterPage() {
           <h3>Xác thực email nhận thông báo</h3>
           <p>
             Sau khi gửi biểu mẫu đăng ký, nhập mã gồm 6 chữ số được gửi tới hộp thư để kích hoạt tài
-            khoản chủ thể.
+            khoản người đăng ký.
           </p>
         </li>
         <li className='auth-step'>
@@ -90,7 +90,7 @@ export function RegisterPage() {
     <AuthFrame
       eyebrow='TÀI KHOẢN OCOP'
       title='Đăng ký tài khoản'
-      intro='Tạo tài khoản chủ thể để lập và gửi hồ sơ sản phẩm OCOP.'
+      intro='Tạo tài khoản người đăng ký để lập và gửi hồ sơ sản phẩm OCOP.'
       mode='register'
       aside={registerAside}
     >
@@ -104,7 +104,7 @@ export function RegisterPage() {
         <form.Field name='fullName'>
           {(field) => (
             <FormField
-              label='Tên chủ thể'
+              label='Tên người đăng ký hoặc đơn vị'
               hint='Ghi đúng tên hợp tác xã, doanh nghiệp hoặc hộ sản xuất kinh doanh trên giấy phép.'
               htmlFor={`register-${field.name}`}
             >

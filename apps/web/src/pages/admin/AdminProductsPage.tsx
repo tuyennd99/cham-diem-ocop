@@ -214,7 +214,7 @@ export function AdminProductsPage({
       },
       {
         id: 'registrant',
-        header: 'Chủ thể',
+        header: 'Người đăng ký',
         cell: ({ row }) => {
           const product = row.original;
           return (
@@ -401,7 +401,7 @@ export function AdminProductsPage({
     appliedChips.push({ key: 'categoryId', label: `Phân loại: ${catLabel}` });
   }
   if (appliedSearch.registrantQ) {
-    appliedChips.push({ key: 'registrantQ', label: `Chủ thể: ${appliedSearch.registrantQ}` });
+    appliedChips.push({ key: 'registrantQ', label: `Người đăng ký: ${appliedSearch.registrantQ}` });
   }
   if (appliedSearch.registrationType) {
     appliedChips.push({
@@ -462,7 +462,7 @@ export function AdminProductsPage({
           <p className='route-intro'>
             {mode === 'products'
               ? 'Theo dõi hồ sơ, tiến độ chấm và mức sao theo điểm.'
-              : 'Nhập và quản lý phiếu đăng ký cho chủ thể.'}
+              : 'Nhập và quản lý phiếu đăng ký cho người đăng ký.'}
           </p>
         </div>
         {canManage && (
@@ -574,10 +574,10 @@ export function AdminProductsPage({
         </div>
 
         <div id='admin-product-advanced' hidden={!showAdvanced} className='advanced-filter-grid'>
-          <FormField label='Từ khóa chủ thể (tên hoặc email)' htmlFor='admin-product-registrant-q'>
+          <FormField label='Từ khóa người đăng ký (tên hoặc email)' htmlFor='admin-product-registrant-q'>
             <Input
               id='admin-product-registrant-q'
-              placeholder='Nhập tên hoặc email chủ thể…'
+              placeholder='Nhập tên hoặc email người đăng ký…'
               value={draftFilters.registrantQ ?? ''}
               maxLength={100}
               onChange={(event) =>
@@ -952,8 +952,8 @@ export function AdminProductsPage({
                   </h2>
                   <p className='text-muted text-sm'>
                     {mode === 'products'
-                      ? 'Khi chủ thể nộp hồ sơ hoặc quản trị viên nhập hộ phiếu đăng ký, sản phẩm sẽ hiển thị tại đây.'
-                      : 'Bắt đầu bằng cách nhập phiếu đăng ký mới cho chủ thể sản xuất.'}
+                      ? 'Khi người đăng ký nộp hồ sơ hoặc quản trị viên nhập hộ phiếu đăng ký, sản phẩm sẽ hiển thị tại đây.'
+                      : 'Bắt đầu bằng cách nhập phiếu đăng ký mới cho người đăng ký.'}
                   </p>
                   {canManage && (
                     <div className='admin-actions mt-4 justify-center'>

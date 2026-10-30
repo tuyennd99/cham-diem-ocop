@@ -97,7 +97,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       <div className='admin-nav-groups'>
         {role === 'REGISTRANT' && (
           <div className='admin-nav-group'>
-            <span className='admin-nav-group-label'>Chủ thể OCOP</span>
+            <span className='admin-nav-group-label'>Người đăng ký</span>
             <AdminNavTooltip label='Hồ sơ của tôi' enabled={tooltipEnabled}>
               <Link to='/my/products' title='Hồ sơ của tôi' onClick={closeMobileMenu}>
                 <Package className='size-4' aria-hidden='true' />

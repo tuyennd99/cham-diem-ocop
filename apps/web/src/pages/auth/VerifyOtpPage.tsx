@@ -93,7 +93,7 @@ export function VerifyOtpPage() {
     <AuthFrame
       eyebrow='TÀI KHOẢN OCOP'
       title='Xác thực email'
-      intro='Nhập mã OTP gồm 6 chữ số được gửi tới hộp thư để kích hoạt tài khoản chủ thể.'
+      intro='Nhập mã OTP gồm 6 chữ số được gửi tới hộp thư để kích hoạt tài khoản người đăng ký.'
       backTo='/login'
       backLabel='Quay lại trang đăng nhập'
     >
@@ -103,7 +103,7 @@ export function VerifyOtpPage() {
             <CheckCircle2 className='size-5 shrink-0' aria-hidden='true' />
             <div>
               <strong>Email đã được xác thực thành công</strong>
-              <p>Tài khoản chủ thể đã sẵn sàng. Tiếp tục đăng nhập để tạo và quản lý hồ sơ OCOP.</p>
+              <p>Tài khoản người đăng ký đã sẵn sàng. Tiếp tục đăng nhập để tạo và quản lý hồ sơ OCOP.</p>
             </div>
           </div>
           <Button
