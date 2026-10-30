@@ -55,25 +55,24 @@ export function SiteHeader() {
                 {signedIn ? 'Khu vực làm việc' : 'Đăng nhập'}
               </Link>
             </Button>
-            <Button asChild className='mobile-cta'>
-              <Link
-                to={signedIn ? workPath : '/register'}
-                onClick={() => setMenuOpen(false)}
-              >
-                {signedIn ? 'Mở hồ sơ' : 'Tạo tài khoản chủ thể'}
-              </Link>
-            </Button>
+            {signedIn && (
+              <Button asChild className='mobile-cta'>
+                <Link to={workPath} onClick={() => setMenuOpen(false)}>
+                  Mở hồ sơ
+                </Link>
+              </Button>
+            )}
           </div>
         </nav>
         <div className='header-actions'>
           <Link className='header-login' to={signedIn ? workPath : '/login'}>
             {signedIn ? session?.user.fullName : 'Đăng nhập'}
           </Link>
-          <Button asChild className='header-cta'>
-            <Link to={signedIn ? workPath : '/register'}>
-              {signedIn ? 'Khu vực làm việc' : 'Tạo tài khoản chủ thể'}
-            </Link>
-          </Button>
+          {signedIn && (
+            <Button asChild className='header-cta'>
+              <Link to={workPath}>Khu vực làm việc</Link>
+            </Button>
+          )}
         </div>
       </div>
     </header>

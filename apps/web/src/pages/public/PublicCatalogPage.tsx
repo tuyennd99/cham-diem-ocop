@@ -174,7 +174,7 @@ export function PublicCatalogPage() {
             {!hasAppliedFilters && !session && (
               <div className='state-actions'>
                 <Button asChild>
-                  <Link to='/register'>Tạo tài khoản chủ thể</Link>
+                  <Link to='/register'>Tạo tài khoản</Link>
                 </Button>
               </div>
             )}

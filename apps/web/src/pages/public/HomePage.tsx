@@ -58,7 +58,7 @@ export function HomePage() {
             <div className='hero-actions'>
               <Button asChild>
                 <Link to={session ? workPath : '/register'}>
-                  {session ? 'Vào khu vực làm việc' : 'Tạo tài khoản chủ thể'}
+                  {session ? 'Vào khu vực làm việc' : 'Tạo tài khoản'}
                 </Link>
               </Button>
               <Button asChild variant='secondary'>
@@ -66,8 +66,8 @@ export function HomePage() {
               </Button>
             </div>
           </div>
-          <aside className='hero-aside' aria-label='Dành cho chủ thể OCOP'>
-            <p className='eyebrow'>DÀNH CHO CHỦ THỂ</p>
+          <aside className='hero-aside' aria-label='Dành cho người đăng ký OCOP'>
+            <p className='eyebrow'>DÀNH CHO NGƯỜI ĐĂNG KÝ</p>
             <h2>Hồ sơ và tiến độ trong một tài khoản</h2>
             <p>
               Lưu bản nháp, bổ sung tài liệu, nộp hồ sơ và xem kết quả khi hội đồng hoàn tất đánh
@@ -177,7 +177,7 @@ export function HomePage() {
               <div className='state-actions'>
                 <Button asChild>
                   <Link to={session ? workPath : '/register'}>
-                    {session ? 'Vào khu vực làm việc' : 'Tạo tài khoản chủ thể'}
+                    {session ? 'Vào khu vực làm việc' : 'Tạo tài khoản'}
                   </Link>
                 </Button>
               </div>
@@ -269,14 +269,14 @@ export function HomePage() {
               <h2 id='workflow-title'>Từ hồ sơ đến kết quả xếp hạng</h2>
             </div>
             <p className='section-intro'>
-              Các bước xử lý được ghi nhận trên hồ sơ để chủ thể và giám khảo theo dõi.
+              Các bước xử lý được ghi nhận trên hồ sơ để người đăng ký và giám khảo theo dõi.
             </p>
           </div>
           <div className='steps-grid'>
             <article className='step-item'>
               <span className='step-number'>01</span>
               <h3>Gửi hồ sơ</h3>
-              <p>Chủ thể đăng ký nhập thông tin sản phẩm và tải tài liệu minh chứng.</p>
+              <p>Người đăng ký nhập thông tin sản phẩm và tải tài liệu minh chứng.</p>
             </article>
             <article className='step-item'>
               <span className='step-number'>02</span>
