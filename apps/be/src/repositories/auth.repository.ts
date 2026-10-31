@@ -97,6 +97,20 @@ export class AuthRepository {
     return this.prisma.pendingAuth.findUnique({ where: { tokenHash, kind: { in: kinds } } });
   }
 
+  async pendingRegistrationStatus(tokenHash: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<PendingAuth[]>(Prisma.sql`
+        SELECT * FROM ${databaseObject('pending_auth')}
+        WHERE "tokenHash" = ${tokenHash} AND "kind" IN ('EMAIL_REGISTER', 'GOOGLE_REGISTER', 'GOOGLE_LINK')
+        FOR UPDATE
+      `);
+      const pending = rows[0];
+      if (!pending || pending.expiresAt <= new Date()) return { status: 'invalid' as const };
+      if (pending.attempts >= OTP_MAX_ATTEMPTS) return { status: 'locked' as const };
+      return { status: 'ok' as const, pending };
+    });
+  }
+
   async startGoogleRegistration(tokenHash: string, profile: { fullName: string; phone: string | null }, otpHash: string) {
     return this.prisma.$transaction(async (tx) => {
       const rows = await tx.$queryRaw<PendingAuth[]>(Prisma.sql`
@@ -122,13 +136,14 @@ export class AuthRepository {
       `);
       const pending = rows[0];
       const now = new Date();
+      if (pending && pending.attempts >= OTP_MAX_ATTEMPTS) return { status: 'locked' as const };
       if (!pending || pending.expiresAt <= now || !pending.otpExpiresAt || pending.otpExpiresAt <= now ||
-        !pending.otpHash || pending.attempts >= OTP_MAX_ATTEMPTS || !pending.userId || !pending.email || !pending.googleSub) {
+        !pending.otpHash || !pending.userId || !pending.email || !pending.googleSub) {
         return { status: 'invalid' as const };
       }
       if (!this.equal(pending.otpHash, codeHash)) {
         await tx.pendingAuth.update({ where: { id: pending.id }, data: { attempts: { increment: 1 } } });
-        return { status: 'invalid' as const };
+        return { status: pending.attempts + 1 >= OTP_MAX_ATTEMPTS ? 'locked' as const : 'invalid' as const };
       }
       await tx.$queryRaw(Prisma.sql`SELECT "id" FROM ${databaseObject('users')} WHERE "id" = ${pending.userId} FOR UPDATE`);
       const include = { organizationUnit: { select: { id: true, code: true, name: true } } };
@@ -151,12 +166,13 @@ export class AuthRepository {
       `);
       const pending = rows[0];
       const now = new Date();
+      if (pending && pending.attempts >= OTP_MAX_ATTEMPTS) return 'locked' as const;
       if (!pending || pending.expiresAt <= now || !pending.otpExpiresAt || pending.otpExpiresAt <= now ||
-        !pending.otpHash || pending.attempts >= OTP_MAX_ATTEMPTS) return false;
+        !pending.otpHash) return false;
       if (!this.equal(pending.otpHash, codeHash)) {
         // Return instead of throwing so the failed attempt is committed.
         await tx.pendingAuth.update({ where: { id: pending.id }, data: { attempts: { increment: 1 } } });
-        return false;
+        return pending.attempts + 1 >= OTP_MAX_ATTEMPTS ? 'locked' as const : false;
       }
       if (!pending.email || !pending.fullName ||
         (pending.kind === PendingAuthKind.EMAIL_REGISTER ? !pending.passwordHash : !pending.googleSub)) return false;
@@ -180,12 +196,13 @@ export class AuthRepository {
       `);
       const pending = rows[0];
       const now = new Date();
+      if (pending && pending.attempts >= OTP_MAX_ATTEMPTS) return { status: 'locked' as const };
       if (!pending || pending.expiresAt <= now) return { status: 'invalid' as const };
       if (pending.resendAvailableAt && pending.resendAvailableAt > now) return { status: 'cooldown' as const };
       const updated = await tx.pendingAuth.update({
         where: { id: pending.id },
         data: {
-          otpHash, attempts: 0,
+          otpHash,
           otpExpiresAt: new Date(Math.min(now.getTime() + OTP_TTL_MS, pending.expiresAt.getTime())),
           resendAvailableAt: new Date(now.getTime() + 60_000),
         },

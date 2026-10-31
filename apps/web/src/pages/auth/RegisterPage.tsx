@@ -12,7 +12,7 @@ import { ApiError, messageOf } from '../../lib/api-error';
 import { validatePasswordBytes } from '../../lib/auth';
 import { normalizeEmail, optionalText } from '../../lib/utils';
 import { AuthFrame } from './AuthFrame';
-import { writePendingEmail } from './pending-email';
+import { clearPendingEmail, writePendingEmail } from './pending-email';
 
 export function RegisterPage() {
   const navigate = useNavigate();
@@ -21,6 +21,7 @@ export function RegisterPage() {
   const form = useForm({
     defaultValues: { fullName: '', email: '', phone: '', password: '' },
     onSubmit: async ({ value }) => {
+      clearPendingEmail();
       setError('');
       const emailValue = normalizeEmail(value.email);
       try {
@@ -210,7 +211,7 @@ export function RegisterPage() {
         <form.Subscribe selector={(state) => state.isSubmitting}>
           {(busy) => (
             <Button type='submit' className='auth-submit-btn' loading={busy} disabled={busy}>
-              {busy ? 'Đang gửi…' : 'Tạo tài khoản'}
+              {busy ? 'Đang gửi…' : 'Gửi mã xác thực'}
             </Button>
           )}
         </form.Subscribe>

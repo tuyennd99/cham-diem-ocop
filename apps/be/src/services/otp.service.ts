@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Injectable, UnauthorizedException } from '@nestjs/common';
+import { GoneException, HttpException, HttpStatus, Injectable, UnauthorizedException } from '@nestjs/common';
 import { OtpPurpose, PendingAuthKind } from '@prisma/client';
 import { createHash, createHmac, randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { OTP_TTL_MS } from '../constants/auth';
@@ -38,13 +38,16 @@ export class OtpService {
     const pending = await this.repository.findPendingRegistration(tokenHash, [PendingAuthKind.GOOGLE_LINK]);
     if (!pending) throw new UnauthorizedException('Invalid or expired verification code');
     const result = await this.repository.consumeGoogleLink(tokenHash, this.hash(pending.id, 'GOOGLE_LINK', code));
+    if (result.status === 'locked') throw new GoneException('Invalid or expired registration; restart Google sign-in');
     if (result.status === 'invalid') throw new UnauthorizedException('Invalid or expired verification code');
     return result;
   }
 
   async registrationStatus(registrationToken: string) {
-    const pending = await this.repository.findPendingRegistration(this.hashToken(registrationToken), [PendingAuthKind.EMAIL_REGISTER, PendingAuthKind.GOOGLE_REGISTER, PendingAuthKind.GOOGLE_LINK]);
-    if (!pending || pending.expiresAt <= new Date()) throw new UnauthorizedException('Invalid or expired registration');
+    const result = await this.repository.pendingRegistrationStatus(this.hashToken(registrationToken));
+    if (result.status === 'locked') throw new GoneException('Invalid or expired registration; restart verification');
+    if (result.status !== 'ok') throw new UnauthorizedException('Invalid or expired registration');
+    const pending = result.pending;
     return { mode: pending.kind === PendingAuthKind.GOOGLE_LINK ? 'google-link' as const : 'register' as const, email: pending.email, expiresAt: pending.expiresAt,
       otpExpiresAt: pending.otpExpiresAt, resendAvailableAt: pending.resendAvailableAt };
   }
@@ -53,6 +56,7 @@ export class OtpService {
     const tokenHash = this.hashToken(registrationToken);
     const pending = await this.repository.findPendingRegistration(tokenHash);
     const valid = pending && await this.repository.consumePendingRegistration(tokenHash, this.hash(pending.id, OtpPurpose.REGISTER, code));
+    if (valid === 'locked') throw new GoneException('Invalid or expired registration; register again');
     if (!valid) throw new UnauthorizedException('Invalid or expired verification code');
   }
 
@@ -68,6 +72,7 @@ export class OtpService {
       otpHash = this.hash(pending.id, purpose, code);
     } while (otpHash === pending.otpHash);
     const result = await this.repository.replacePendingRegistrationOtp(tokenHash, otpHash, kinds);
+    if (result.status === 'locked') throw new GoneException('Invalid or expired registration; restart verification');
     if (result.status === 'cooldown') throw new HttpException('Please wait before requesting another code', HttpStatus.TOO_MANY_REQUESTS);
     if (result.status !== 'ok') throw new UnauthorizedException('Invalid or expired registration');
     return { pending: result.pending, code };

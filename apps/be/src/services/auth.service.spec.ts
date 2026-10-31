@@ -11,7 +11,6 @@ import { AuthController } from '../controllers/auth.controller';
 
 describe('AuthService', () => {
   const repository = {
-    createRegistrant: jest.fn(),
     findUserByEmail: jest.fn(),
     findCredentialsById: jest.fn(),
     changePassword: jest.fn(),
@@ -77,15 +76,15 @@ describe('AuthService', () => {
     expect(mailService.sendOtp).toHaveBeenCalledWith('person@example.com', '012345', 'REGISTER');
   });
 
-  it('does not create a user when registration mail fails', async () => {
+  it('rejects registration after issuing a pending snapshot when mail fails', async () => {
     repository.findUserByEmail.mockResolvedValue(null);
-    repository.createRegistrant.mockResolvedValue({ id: 'user-1' });
     otpService.issueRegistration.mockResolvedValue({ registrationToken: 'opaque-token', pending: { email: 'person@example.com', expiresAt: new Date(), otpExpiresAt: new Date(), resendAvailableAt: new Date() }, code: '012345' });
     mailService.sendOtp.mockRejectedValueOnce(new Error('smtp unavailable'));
     await expect(service.register({
       email: 'Person@example.com', password: 'Password1!', fullName: 'Person',
     })).rejects.toThrow('Could not send verification email');
-    expect(repository.createRegistrant).not.toHaveBeenCalled();
+    expect(otpService.issueRegistration).toHaveBeenCalledWith(expect.objectContaining({ email: 'person@example.com', fullName: 'Person' }));
+    expect(mailService.sendOtp).toHaveBeenCalledWith('person@example.com', '012345', 'REGISTER');
   });
 
   it('returns only the registration token and public timing fields after SMTP succeeds', async () => {
@@ -97,7 +96,6 @@ describe('AuthService', () => {
     const snapshot = otpService.issueRegistration.mock.calls[0][0];
     expect(snapshot).toMatchObject({ email: 'person@example.com', fullName: 'Person', phone: '123' });
     expect(await bcrypt.compare('Password1!', snapshot.passwordHash)).toBe(true);
-    expect(repository.createRegistrant).not.toHaveBeenCalled();
   });
 
   it('rejects registration for an existing account without replacing its password', async () => {
@@ -196,7 +194,7 @@ describe('AuthService', () => {
 
 describe('pending registration OTP', () => {
   const repository = {
-    createPendingRegistration: jest.fn(), findPendingRegistration: jest.fn(), consumePendingRegistration: jest.fn(), replacePendingRegistrationOtp: jest.fn(),
+    createPendingRegistration: jest.fn(), findPendingRegistration: jest.fn(), pendingRegistrationStatus: jest.fn(), consumePendingRegistration: jest.fn(), replacePendingRegistrationOtp: jest.fn(),
   };
   const otp = new OtpService(repository as unknown as AuthRepository);
   const previousEnv = { ...process.env };
@@ -221,7 +219,7 @@ describe('pending registration OTP', () => {
   });
 
   it('refuses expired status without exposing a snapshot', async () => {
-    repository.findPendingRegistration.mockResolvedValue({ expiresAt: new Date(0) });
+    repository.pendingRegistrationStatus.mockResolvedValue({ status: 'invalid' });
     await expect(otp.registrationStatus('token')).rejects.toThrow('Invalid or expired');
   });
 

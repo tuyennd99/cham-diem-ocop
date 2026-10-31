@@ -5,6 +5,30 @@ import { createServer } from 'vite';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const server = await createServer({
   root, configFile: false, envDir: false, appType: 'custom',
+  plugins: [{
+    name: 'auth-ui-check',
+    enforce: 'pre',
+    resolveId: (id) => id === 'virtual:auth-ui-check' ? '\0auth-ui-check' : undefined,
+    load: (id) => id === '\0auth-ui-check' ? `
+      export const useState = (...args) => globalThis.authUiCheck.useState(...args);
+      export const useEffect = (...args) => globalThis.authUiCheck.useEffect(...args);
+      export const useRef = (...args) => globalThis.authUiCheck.useRef(...args);
+      export const useForm = (...args) => globalThis.authUiCheck.useForm(...args);
+      export const useNavigate = () => globalThis.authUiCheck.navigate;
+      export const useLoaderData = () => globalThis.authUiCheck.loaderData;
+      export const useRouter = () => ({ invalidate: async () => {} });
+    ` : undefined,
+    transform(code, id) {
+      if (!/\/(google-sign-in|RegisterPage|VerifyOtpPage)\.tsx$/.test(id.replaceAll('\\', '/'))) return;
+      return code
+        .replace(/import \{ (useEffect, useRef, useState|useEffect, useState|useState) \} from 'react';/, (value, names) => `import { ${names} } from 'virtual:auth-ui-check';`)
+        .replace("import { useForm } from '@tanstack/react-form';", "import { useForm } from 'virtual:auth-ui-check';")
+        .replace("import { useNavigate } from '@tanstack/react-router';", "import { useNavigate } from 'virtual:auth-ui-check';")
+        .replace("import { Link, useNavigate } from '@tanstack/react-router';", "import { Link } from '@tanstack/react-router'; import { useNavigate } from 'virtual:auth-ui-check';")
+        .replace("import { Link, useLoaderData, useNavigate, useRouter } from '@tanstack/react-router';", "import { Link } from '@tanstack/react-router'; import { useLoaderData, useNavigate, useRouter } from 'virtual:auth-ui-check';")
+        .replace('import.meta.env.VITE_GOOGLE_CLIENT_ID', 'globalThis.authUiCheck?.clientId');
+    },
+  }],
   resolve: { alias: { '@': fileURLToPath(new URL('../src', import.meta.url)) } },
   ssr: { optimizeDeps: { include: ['react', 'react-dom', 'zustand', '@tanstack/react-query', '@tanstack/react-form', 'axios', 'lodash'] } },
   server: { middlewareMode: true, watch: null, hmr: false },
@@ -227,7 +251,185 @@ try {
         assert.equal(first, window.google.accounts.id);
         assert.equal(second, first);
         assert.equal(scripts, 1);
+
+        // Run the actual auth component handlers with local hooks/GIS, without a DOM library.
+        const states = [];
+        const effects = [];
+        const forms = [];
+        const navigations = [];
+        let cursor = 0;
+        let effectCursor = 0;
+        let formCursor = 0;
+        let rendered;
+        const flush = () => new Promise((resolve) => setImmediate(resolve));
+        const container = { replaceChildren() {} };
+        globalThis.authUiCheck = {
+          clientId: 'local-ui-client',
+          useState(initial) {
+            const index = cursor++;
+            if (!(index in states)) states[index] = typeof initial === 'function' ? initial() : initial;
+            return [states[index], (value) => { states[index] = typeof value === 'function' ? value(states[index]) : value; }];
+          },
+          useRef: () => ({ current: container }),
+          useEffect(callback, deps) {
+            const index = effectCursor++;
+            if (!effects[index] || deps.some((value, i) => value !== effects[index].deps[i])) {
+              effects[index]?.cleanup?.();
+              effects[index] = { deps, cleanup: callback() };
+            }
+          },
+          useForm(options) {
+            const form = forms[formCursor++] ?? options;
+            if (!forms.includes(form)) forms.push(form);
+            form.onSubmit = options.onSubmit;
+            return { state: { values: form.defaultValues, isSubmitting: false }, Field() {}, Subscribe() {}, handleSubmit() {}, setFieldValue(name, value) { form.defaultValues[name] = value; } };
+          },
+          navigate: async (to) => { navigations.push(to); },
+        };
+        const reset = () => {
+          for (const effect of effects) effect.cleanup?.();
+          effects.length = states.length = forms.length = navigations.length = 0;
+        };
+        const render = (Component, props = {}) => {
+          cursor = effectCursor = formCursor = 0;
+          rendered = Component(props);
+          return rendered;
+        };
+        const elements = (node) => !node || typeof node !== 'object' ? []
+          : [node, ...[node.props?.children].flat(Infinity).flatMap(elements)];
+        const button = (label) => elements(rendered).find((node) => node.props?.children === label);
+        const { RegisterPage } = await server.ssrLoadModule('/src/pages/auth/RegisterPage.tsx');
+        reset();
+        writePendingEmail(pending);
+        render(RegisterPage);
+        reply(500, { message: 'Registration failed' }, () => assert.equal(readPendingEmail(), null));
+        await forms.at(-1).onSubmit({ value: { email: 'second@example.invalid', fullName: 'Second', phone: '', password: 'ValidPassword1!' } });
+        assert.equal(readPendingEmail(), null, 'failed registration B must not reopen session A');
+        assert.deepEqual(navigations, []);
+        reply(200, { data: registrationResult });
+        await forms.at(-1).onSubmit({ value: { email: pending.email, fullName: 'Second', phone: '', password: 'ValidPassword1!' } });
+        assert.deepEqual(readPendingEmail(), pending);
+        assert.equal(navigations.at(-1).to, '/verify-otp');
+        for (const mode of ['register', 'google-link']) {
+          writePendingEmail({ ...pending, mode });
+          reply(410, { message: 'Verification session locked' });
+          await assert.rejects(Route.options.loader({ deps: { legacy: false } }), (error) =>
+            error.options?.to === (mode === 'google-link' ? '/login' : '/register'));
+          assert.equal(readPendingEmail(), null);
+        }
+        const { VerifyOtpPage } = await server.ssrLoadModule('/src/pages/auth/VerifyOtpPage.tsx');
+        window.setInterval = () => 1;
+        window.clearInterval = () => {};
+        for (const mode of ['register', 'google-link']) {
+          for (const action of ['verify', 'resend', 'abandon']) {
+            reset();
+            const live = { ...pending, mode, resendAvailableAt: '2000-01-01T00:00:00.000Z' };
+            writePendingEmail(live);
+            globalThis.authUiCheck.loaderData = { kind: 'pending', pending: live };
+            const page = render(VerifyOtpPage);
+            const form = elements(page).find((node) => node.props?.initial);
+            reset();
+            render(form.type, form.props);
+            reply(410, { message: 'Verification session locked' });
+            if (action === 'verify') {
+              await forms.at(-1).onSubmit({ value: { email: live.email, code: '123456' } });
+            } else {
+              const subscribe = elements(rendered).find((node) => node.type?.name === 'Subscribe');
+              rendered = subscribe.props.children({ verifying: false, email: live.email });
+              if (action === 'resend') {
+                elements(rendered).find((node) => node.props?.variant === 'secondary').props.onClick();
+                await flush();
+              } else {
+                const link = elements(rendered).find((node) => node.props?.to === (mode === 'google-link' ? '/login' : '/register'));
+                link.props.onClick();
+              }
+            }
+            assert.equal(readPendingEmail(), null, `${mode} ${action} must discard the old session`);
+            if (action !== 'abandon') assert.equal(navigations.at(-1).to, mode === 'google-link' ? '/login' : '/register');
+          }
+        }
+        reset();
+        delete window.setInterval;
+        delete window.clearInterval;
+
+        const callbacks = [];
+        const clicks = [];
+        window.google.accounts.id = {
+          initialize(config) { assert.equal(config.client_id, 'local-ui-client'); assert.equal(config.nonce, 'ui-nonce'); callbacks.push(config.callback); },
+          renderButton(element, config) { assert.equal(element, container); clicks.push(config.click_listener); },
+        };
+        const configured = () => GoogleSignIn({ intent: 'login' });
+        const renderGoogle = () => { const element = configured(); return render(element.type, element.props); };
+        const prepare = async () => {
+          reply(200, { data: { challengeToken: 'ui-challenge', nonce: 'ui-nonce' } });
+          renderGoogle(); await flush(); renderGoogle();
+        };
+        for (const result of [
+          sessionResult,
+          { kind: 'profile', registrationToken: 'profile-ui', email: pending.email, suggestedName: 'Suggested' },
+          { ...registrationResult, kind: 'link_otp' },
+        ]) {
+          reset(); clearPendingEmail(); setSession(null);
+          await prepare();
+          reply(200, { data: result }, (config) => {
+            assert.equal(config.url, '/auth/google');
+            assert.deepEqual(JSON.parse(config.data), { challengeToken: 'ui-challenge', credential: 'local-mock-credential', intent: 'login' });
+          });
+          callbacks.at(-1)({ credential: 'local-mock-credential' });
+          await flush(); renderGoogle();
+          if (result.kind === 'session') {
+            assert.equal(getSession().accessToken, result.accessToken);
+            assert.equal(navigations.at(-1).to, '/my/products');
+            assert.equal(readPendingEmail(), null);
+          } else if (result.kind === 'profile') {
+            assert.equal(elements(rendered).find((node) => node.props?.id === 'google-profile-email')?.props.readOnly, true);
+            assert.equal(forms.at(-1).defaultValues.fullName, 'Suggested');
+            assert.equal(readPendingEmail(), null);
+            reply(200, { data: registrationResult });
+            await forms.at(-1).onSubmit({ value: { fullName: 'Confirmed', phone: '' } });
+            assert.deepEqual(readPendingEmail(), pending);
+            assert.equal(navigations.at(-1).to, '/verify-otp');
+          } else {
+            assert.deepEqual(readPendingEmail(), { ...pending, mode: 'google-link' });
+            assert.equal(navigations.at(-1).to, '/verify-otp');
+          }
+          assert.ok(![...storage.values()].some((value) => value.includes('local-mock-credential')));
+        }
+        reset(); clearPendingEmail(); setSession(null);
+        await prepare();
+        clicks.at(-1)(); renderGoogle();
+        const abandoned = callbacks.at(-1);
+        button('Hủy và thử lại').props.onClick();
+        await prepare();
+        let exchanges = 0;
+        reply(500, { message: 'Try again' }, () => { exchanges++; });
+        abandoned({ credential: 'abandoned-local-credential' });
+        await flush();
+        assert.equal(exchanges, 0);
+        callbacks.at(-1)({}); renderGoogle();
+        assert.ok(button('Thử lại đăng nhập Google'));
+        button('Thử lại đăng nhập Google').props.onClick();
+        await prepare();
+        reply(500, { message: 'Try again' }, () => { exchanges++; });
+        callbacks.at(-1)({ credential: 'local-mock-credential' });
+        await flush(); renderGoogle();
+        assert.equal(exchanges, 1);
+        assert.ok(button('Thử lại đăng nhập Google'));
+        const failed = callbacks.at(-1);
+        button('Thử lại đăng nhập Google').props.onClick();
+        await prepare();
+        reply(200, { data: sessionResult }, () => { exchanges++; });
+        failed({ credential: 'abandoned-local-credential' });
+        callbacks.at(-1)({ credential: 'local-mock-credential' });
+        callbacks.at(-1)({ credential: 'local-mock-credential' });
+        await flush();
+        assert.equal(exchanges, 2, 'retry uses one new challenge; old and duplicate callbacks are ignored');
+        assert.equal(navigations.length, 1);
+        reset(); delete globalThis.authUiCheck;
+        setSession(session);
+        console.log('PASS configured GIS callbacks: session, profile, link OTP, cancellation, retry, abandoned/duplicate callbacks');
       } finally {
+        delete globalThis.authUiCheck;
         delete window.google;
         if (previousDocument) Object.defineProperty(globalThis, 'document', previousDocument);
         else delete globalThis.document;

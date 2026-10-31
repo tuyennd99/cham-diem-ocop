@@ -13,6 +13,7 @@ import { homeFor, setSession } from '../../lib/auth';
 import { normalizeEmail } from '../../lib/utils';
 import { AuthFrame } from './AuthFrame';
 import {
+  clearPendingEmail,
   verifyPendingRegistration,
   writePendingEmail,
   type VerificationState,
@@ -50,10 +51,15 @@ export function VerifyOtpPage() {
               Kiểm tra lại phiên xác thực
             </Button>
           )}
-          <Link className='text-link' to='/register'>
+          <Link className='text-link' to='/register' onClick={clearPendingEmail}>
             Đăng ký lại
           </Link>
-          <Link className='text-link' to='/verify-otp' search={{ legacy: true }}>
+          <Link
+            className='text-link'
+            to='/verify-otp'
+            search={{ legacy: true }}
+            onClick={clearPendingEmail}
+          >
             Xác thực tài khoản đã đăng ký trước đây bằng email
           </Link>
         </div>
@@ -124,7 +130,13 @@ function VerificationForm({ initial }: { initial: Exclude<VerificationState, { k
           setSuccess(true);
         }
       } catch (cause) {
-        if (cause instanceof ApiError && cause.status === 409)
+        if (pending && cause instanceof ApiError && cause.status === 410) {
+          clearPendingEmail();
+          await navigate({
+            to: pending.mode === 'google-link' ? '/login' : '/register',
+            replace: true,
+          });
+        } else if (cause instanceof ApiError && cause.status === 409)
           setError('Tài khoản hoặc email này đã được dùng. Vui lòng đăng nhập.');
         else if (cause instanceof ApiError && cause.status === 401)
           setCodeError(
@@ -176,6 +188,14 @@ function VerificationForm({ initial }: { initial: Exclude<VerificationState, { k
       setCodeError('');
       setNow(Date.now());
     } catch (cause) {
+      if (pending && cause instanceof ApiError && cause.status === 410) {
+        clearPendingEmail();
+        await navigate({
+          to: pending.mode === 'google-link' ? '/login' : '/register',
+          replace: true,
+        });
+        return;
+      }
       setError(
         cause instanceof ApiError && cause.status === 429
           ? 'Vui lòng chờ trước khi gửi lại mã.'
@@ -336,12 +356,23 @@ function VerificationForm({ initial }: { initial: Exclude<VerificationState, { k
                     : 'Gửi lại mã OTP'}
               </Button>
               {pending && (
-                <Link className='text-link' to='/verify-otp' search={{ legacy: true }}>
+                <Link
+                  className='text-link'
+                  to='/verify-otp'
+                  search={{ legacy: true }}
+                  onClick={clearPendingEmail}
+                >
                   Xác thực tài khoản đã đăng ký trước đây bằng email
                 </Link>
               )}
-              <Link className='text-link' to='/register'>
-                Đăng ký lại với email khác
+              <Link
+                className='text-link'
+                to={pending?.mode === 'google-link' ? '/login' : '/register'}
+                onClick={clearPendingEmail}
+              >
+                {pending?.mode === 'google-link'
+                  ? 'Đăng nhập Google lại'
+                  : 'Đăng ký lại với email khác'}
               </Link>
             </div>
           );

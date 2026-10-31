@@ -25,6 +25,16 @@ For new email/Google registration, keep the opaque `registrationToken` from the 
 
 Monitor mail failures (5xx/request IDs), OTP mismatches/expiry and exhausted attempts, resend throttling (429), and Google configuration/origin failures. Pending sessions last 15 minutes; OTPs last at most five minutes, allow five incorrect attempts, and resends have a 60-second cooldown plus endpoint rate limits. Use server timing fields in the UI. Failed requests must not be described as successful delivery; help users check spam, wait for the resend time, restart expired registrations, or contact administrators for locked accounts. Do not log codes, password hashes, Google credentials or full pending tokens while investigating.
 
+Operators must clean expired pending sessions **at least daily**, and check the expired-row count before and after cleanup. Alert/investigate if the count keeps growing or the daily cleanup fails. Run the following against the intended application schema during the normal maintenance procedure; record counts and duration, never snapshot contents:
+
+```sql
+SELECT COUNT(*) AS expired_pending_sessions FROM "pending_auth" WHERE "expiresAt" <= NOW();
+DELETE FROM "pending_auth" WHERE "expiresAt" <= NOW();
+SELECT COUNT(*) AS expired_pending_sessions FROM "pending_auth" WHERE "expiresAt" <= NOW();
+```
+
+This deletes **only expired pending sessions**, including abandoned registration snapshots containing email, name, phone and password hashes. It does not touch users, user relations, future-expiry sessions or live credentials. The API rejects expired sessions even before cleanup. Resending does not reset failed attempts; the fifth wrong code locks that session, requiring a new registration or a fresh Google login/link flow. This is an operator procedure, with no application scheduler added or production cleanup executed by this change.
+
 Before calling a release live-validated, an operator with authorized test Google accounts and mailboxes must run these checks on the configured deployment:
 
 - Register by email, receive the actual OTP, verify, sign in and call `/api/auth/me`; repeat verification must fail. Wrong/expired codes and abandoned/failed registration must create no user.

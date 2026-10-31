@@ -85,7 +85,7 @@ export async function verifyPendingRegistration(
 export type VerificationState =
   | { kind: 'legacy'; email: string }
   | { kind: 'pending'; pending: PendingRegistration }
-  | { kind: 'error'; message: string; retryable: boolean };
+  | { kind: 'error'; message: string; retryable: boolean; restartTo?: '/register' | '/login' };
 
 export async function loadPendingRegistration(legacy = false): Promise<VerificationState> {
   let raw: string | null;
@@ -120,6 +120,10 @@ export async function loadPendingRegistration(legacy = false): Promise<Verificat
     writePendingEmail(checked);
     return { kind: 'pending', pending: checked };
   } catch (cause) {
+    if (cause instanceof ApiError && cause.status === 410) {
+      clearPendingEmail();
+      return { ...invalid, restartTo: pending.mode === 'google-link' ? '/login' : '/register' };
+    }
     if (cause instanceof ApiError && [400, 401, 404].includes(cause.status)) return invalid;
     return {
       kind: 'error',
