@@ -3,6 +3,7 @@ import { useForm } from '@tanstack/react-form';
 import { Link, useNavigate } from '@tanstack/react-router';
 import AlertError from '@/components/alert-error';
 import { FormField } from '@/components/form-field';
+import { GoogleSignIn } from '@/components/google-sign-in';
 import PasswordInput from '@/components/password-input';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -86,6 +87,7 @@ export function LoginPage() {
       mode='login'
       aside={loginAside}
     >
+      <GoogleSignIn intent='login' />
       <form
         className='account-form'
         onSubmit={(event) => {

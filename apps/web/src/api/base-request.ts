@@ -6,10 +6,14 @@ import { getSession, setSession } from '../stores/session-store';
 import type { ApiResult } from '../types/api';
 
 const baseRequest = axios.create({ baseURL: API_BASE });
+const publicAuthUrls = new Set<string>(
+  Object.values(API.auth).filter((url) => url !== API.auth.me && url !== API.auth.changePassword),
+);
 
 baseRequest.interceptors.request.use((config) => {
   const token = getSession()?.accessToken;
-  if (token) config.headers.set('Authorization', `Bearer ${token}`);
+  if (publicAuthUrls.has(config.url ?? '')) config.headers.delete('Authorization');
+  else if (token) config.headers.set('Authorization', `Bearer ${token}`);
   if (config.data instanceof FormData) config.headers.setContentType(false);
   return config;
 });

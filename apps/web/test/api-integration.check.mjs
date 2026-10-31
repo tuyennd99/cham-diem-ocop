@@ -5,10 +5,12 @@ import { createServer } from 'vite';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const server = await createServer({
   root, configFile: false, envDir: false, appType: 'custom',
+  resolve: { alias: { '@': fileURLToPath(new URL('../src', import.meta.url)) } },
   ssr: { optimizeDeps: { include: ['react', 'react-dom', 'zustand', '@tanstack/react-query', '@tanstack/react-form', 'axios', 'lodash'] } },
   server: { middlewareMode: true, watch: null, hmr: false },
 });
 const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+const previousLocalStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
 let restoreAxiosAdapter = () => {};
 const storage = new Map();
 const redirects = [];
@@ -25,6 +27,7 @@ Object.defineProperty(globalThis, 'window', { configurable: true, value: {
   },
   location: { replace: (url) => redirects.push(url) },
 } });
+Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: window.localStorage });
 try {
   const { validateProductFile, PRODUCT_FILE_ACCEPT } = await server.ssrLoadModule('/src/lib/attachments.ts');
   assert.equal(typeof validateProductFile, 'function');
@@ -51,7 +54,7 @@ try {
     declarationAccepted: true,
     phone: '',
   }), [
-    { key: 'entityName', label: 'Tên chủ thể', value: 'HTX Chè' },
+    { key: 'entityName', label: 'Tên đơn vị sản xuất', value: 'HTX Chè' },
     { key: 'registrationType', label: 'Loại đăng ký', value: 'Lần đầu' },
     { key: 'sampleQuantity', label: 'Số lượng mẫu', value: '2' },
     { key: 'declarationAccepted', label: 'Cam kết hồ sơ', value: 'Có' },
@@ -61,8 +64,10 @@ try {
   const { DEFAULT_PAGE_SIZE } = await server.ssrLoadModule('/src/constants/consts.ts');
   assert.equal(authConstants.SESSION_STORAGE_KEY, 'ocop-session');
   assert.equal(authConstants.PENDING_EMAIL_STORAGE_KEY, 'ocop.pendingEmail');
-  assert.equal(DEFAULT_PAGE_SIZE, 20);
+  assert.equal(DEFAULT_PAGE_SIZE, 10);
   assert.deepEqual(Object.keys(authConstants).sort(), [
+    'AUTH_ACCESS_TOKEN_STORAGE_KEY', 'AUTH_REFRESH_TOKEN_STORAGE_KEY',
+    'AUTH_TOKEN_STORAGE_KEY', 'AUTH_USER_STORAGE_KEY',
     'PENDING_EMAIL_STORAGE_KEY', 'SESSION_STORAGE_KEY',
   ]);
   console.log('PASS file contract');
@@ -106,6 +111,128 @@ try {
         if (status >= 400) throw new AxiosError('HTTP failure', undefined, config, null, response);
         return response;
       };
+    }
+    {
+      const { authApi } = await server.ssrLoadModule('/src/api/auth.ts');
+      setSession(session);
+      redirects.length = 0;
+      reply(200, { data: { challengeToken: 'challenge', nonce: 'nonce' } }, (config) => {
+        assert.equal(config.url, '/auth/google/challenge');
+        assert.equal(config.method, 'post');
+        assert.equal(config.headers.get('Authorization'), undefined);
+      });
+      assert.equal((await authApi.googleChallenge()).data.nonce, 'nonce');
+      const pending = {
+        registrationToken: 'opaque-registration', email: 'owner@example.invalid',
+        expiresAt: '2099-01-01T00:15:00.000Z', otpExpiresAt: '2099-01-01T00:05:00.000Z',
+        resendAvailableAt: '2099-01-01T00:01:00.000Z', mode: 'register',
+      };
+      const sessionResult = { kind: 'session', accessToken: 'google-session', user: session.user, expiresIn: 3600 };
+      const { mode, ...registrationResult } = pending;
+      const { registrationToken, ...statusResult } = pending;
+      for (const [method, url, input, output] of [
+        ['google', '/auth/google', { challengeToken: 'challenge', credential: 'private-google-credential', intent: 'login' }, sessionResult],
+        ['google', '/auth/google', { challengeToken: 'challenge', credential: 'private-google-credential', intent: 'register' }, { kind: 'profile', registrationToken: 'profile', email: pending.email, suggestedName: 'Owner' }],
+        ['google', '/auth/google', { challengeToken: 'challenge', credential: 'private-google-credential', intent: 'login' }, { ...registrationResult, kind: 'link_otp' }],
+        ['register', '/auth/register', { email: pending.email, password: 'private-password', fullName: 'Owner' }, registrationResult],
+        ['googleRegister', '/auth/google/register', { registrationToken: 'profile', fullName: 'Confirmed owner', phone: '0123456789' }, registrationResult],
+        ['registrationStatus', '/auth/registration-status', { registrationToken: pending.registrationToken }, statusResult],
+        ['verifyOtp', '/auth/verify-otp', { registrationToken: 'test', code: '123456' }, { message: 'Registration completed' }],
+        ['resendOtp', '/auth/resend-otp', { registrationToken: 'test' }, { message: 'Verification code sent', otpExpiresAt: pending.otpExpiresAt, resendAvailableAt: pending.resendAvailableAt }],
+        ['googleLinkVerify', '/auth/google/link/verify', { registrationToken: 'test', code: '123456' }, sessionResult],
+        ['googleLinkResend', '/auth/google/link/resend', { registrationToken: 'test' }, { message: 'Verification code sent', otpExpiresAt: pending.otpExpiresAt, resendAvailableAt: pending.resendAvailableAt }],
+        ['legacyVerifyOtp', '/auth/legacy-registration/verify', { email: pending.email, code: '123456' }, { message: 'Account verified' }],
+        ['legacyResendOtp', '/auth/legacy-registration/resend', { email: pending.email }, { message: 'If an unverified account exists, a verification code has been sent' }],
+        ['resetPassword', '/auth/reset-password', { email: pending.email, code: '123456', newPassword: 'private-password' }, { message: 'Password reset' }],
+      ]) {
+        reply(200, { data: output }, (config) => {
+          assert.equal(config.url, url);
+          assert.equal(config.method, 'post');
+          assert.deepEqual(JSON.parse(config.data), input);
+          assert.equal(config.headers.get('Authorization'), undefined);
+          assert.match(config.headers.getContentType(), /application\/json/);
+        });
+        assert.deepEqual((await authApi[method](input)).data, output);
+      }
+      reply(401, { message: 'Invalid or expired registration' });
+      await assert.rejects(authApi.googleLinkVerify({ registrationToken: 'test', code: '123456' }), { status: 401 });
+      assert.equal(getSession().accessToken, session.accessToken);
+      assert.deepEqual(redirects, []);
+      const { readPendingEmail, writePendingEmail, clearPendingEmail, loadPendingRegistration, verifyPendingRegistration } =
+        await server.ssrLoadModule('/src/pages/auth/pending-email.ts');
+      clearPendingEmail();
+      assert.deepEqual(await loadPendingRegistration(), { kind: 'legacy', email: '' });
+      writePendingEmail({ ...pending, password: 'private-password', credential: 'private-google-credential', code: '123456' });
+      const stored = storage.get('ocop.pendingEmail');
+      assert.deepEqual(JSON.parse(stored), pending);
+      assert.ok(!stored.includes('private-password') && !stored.includes('private-google-credential') && !stored.includes('123456'));
+      assert.deepEqual(readPendingEmail(), pending);
+      const status = { ...statusResult, mode: 'google-link', email: 'server-owned@example.invalid' };
+      reply(200, { data: status }, (config) => {
+        assert.equal(config.url, '/auth/registration-status');
+        assert.deepEqual(JSON.parse(config.data), { registrationToken: 'opaque-registration' });
+      });
+      assert.deepEqual(await loadPendingRegistration(), { kind: 'pending', pending: { ...status, registrationToken } });
+      reply(200, { data: { ...status, expiresAt: '2000-01-01T00:00:00.000Z' } });
+      assert.equal((await loadPendingRegistration()).kind, 'error');
+      reply(401, { message: 'Invalid or expired registration' });
+      assert.equal((await loadPendingRegistration()).kind, 'error');
+      assert.equal((await loadPendingRegistration()).retryable, false);
+      baseRequest.defaults.adapter = async () => { throw new Error('Network Error'); };
+      assert.equal((await loadPendingRegistration()).retryable, true);
+      assert.deepEqual(await loadPendingRegistration(true), { kind: 'legacy', email: status.email });
+      storage.set('ocop.pendingEmail', JSON.stringify({ registrationToken: 'broken' }));
+      assert.equal(readPendingEmail(), null);
+      assert.equal((await loadPendingRegistration()).kind, 'error');
+      storage.set('ocop.pendingEmail', 'legacy@example.invalid');
+      assert.deepEqual(await loadPendingRegistration(), { kind: 'legacy', email: 'legacy@example.invalid' });
+      const { Route } = await server.ssrLoadModule('/src/routes/_auth.verify-otp.tsx');
+      assert.deepEqual(Route.options.validateSearch({ legacy: 'true', registrationToken: 'never-a-search-field' }), { legacy: true });
+      assert.deepEqual(await Route.options.loader({ deps: { legacy: false } }), { kind: 'legacy', email: 'legacy@example.invalid' });
+      for (const [current, url, input, output] of [
+        [pending, '/auth/verify-otp', { registrationToken: pending.registrationToken, code: '123456' }, { message: 'Registration completed' }],
+        [{ ...pending, mode: 'google-link' }, '/auth/google/link/verify', { registrationToken: pending.registrationToken, code: '123456' }, sessionResult],
+        [null, '/auth/legacy-registration/verify', { email: 'legacy@example.invalid', code: '123456' }, { message: 'Account verified' }],
+      ]) {
+        writePendingEmail(pending);
+        reply(401, { message: 'Invalid verification code' });
+        await assert.rejects(verifyPendingRegistration(current, 'legacy@example.invalid', '123456'), { status: 401 });
+        assert.ok(readPendingEmail());
+        reply(200, { data: output }, (config) => {
+          assert.equal(config.url, url);
+          assert.deepEqual(JSON.parse(config.data), input);
+        });
+        const result = await verifyPendingRegistration(current, 'legacy@example.invalid', '123456');
+        assert.deepEqual(result, current?.mode === 'google-link' ? sessionResult : null);
+        assert.equal(readPendingEmail(), null);
+        assert.equal(storage.has('ocop.pendingEmail'), false);
+      }
+      const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
+      const { loadGoogleIdentity, GoogleSignIn } = await server.ssrLoadModule('/src/components/google-sign-in.tsx');
+      const { renderToString } = await import('react-dom/server');
+      const { createElement } = await import('react');
+      assert.equal(renderToString(createElement(GoogleSignIn, { intent: 'login' })), '');
+      let scripts = 0;
+      Object.defineProperty(globalThis, 'document', { configurable: true, value: {
+        createElement: () => ({ remove() {} }),
+        head: { appendChild: (script) => {
+          scripts += 1;
+          assert.equal(script.src, 'https://accounts.google.com/gsi/client');
+          window.google = { accounts: { id: { initialize() {}, renderButton() {} } } };
+          queueMicrotask(() => script.onload());
+        } },
+      } });
+      try {
+        const [first, second] = await Promise.all([loadGoogleIdentity(), loadGoogleIdentity()]);
+        assert.equal(first, window.google.accounts.id);
+        assert.equal(second, first);
+        assert.equal(scripts, 1);
+      } finally {
+        delete window.google;
+        if (previousDocument) Object.defineProperty(globalThis, 'document', previousDocument);
+        else delete globalThis.document;
+      }
+      console.log('PASS Google/registration contracts: public JSON POST, OTP modes, status guard, safe pending storage');
     }
     reply(201, { statusCode: 201, data: { id: 'p1' } }, (config) => {
       assert.equal(config.baseURL, '/api');
@@ -253,5 +380,7 @@ try {
   restoreAxiosAdapter();
   if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
   else delete globalThis.window;
+  if (previousLocalStorage) Object.defineProperty(globalThis, 'localStorage', previousLocalStorage);
+  else delete globalThis.localStorage;
   await server.close();
 }

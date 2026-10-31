@@ -3,11 +3,12 @@ import { useForm } from '@tanstack/react-form';
 import { Link, useNavigate } from '@tanstack/react-router';
 import AlertError from '@/components/alert-error';
 import { FormField } from '@/components/form-field';
+import { GoogleSignIn } from '@/components/google-sign-in';
 import PasswordInput from '@/components/password-input';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { authApi } from '../../api';
-import { messageOf } from '../../lib/api-error';
+import { ApiError, messageOf } from '../../lib/api-error';
 import { validatePasswordBytes } from '../../lib/auth';
 import { normalizeEmail, optionalText } from '../../lib/utils';
 import { AuthFrame } from './AuthFrame';
@@ -24,16 +25,20 @@ export function RegisterPage() {
       const emailValue = normalizeEmail(value.email);
       try {
         validatePasswordBytes(value.password);
-        writePendingEmail(emailValue);
-        await authApi.register({
+        const { data } = await authApi.register({
           email: emailValue,
           fullName: value.fullName,
           phone: optionalText(value.phone),
           password: value.password,
         });
-        await navigate({ to: '/verify-otp' });
+        writePendingEmail({ ...data, mode: 'register' });
+        await navigate({ to: '/verify-otp', search: {} });
       } catch (cause) {
-        setError(messageOf(cause));
+        setError(
+          cause instanceof ApiError && cause.status === 409
+            ? 'Email này đã được dùng. Vui lòng đăng nhập.'
+            : messageOf(cause),
+        );
       }
     },
   });
@@ -43,8 +48,8 @@ export function RegisterPage() {
       <p className='eyebrow'>HƯỚNG DẪN NGƯỜI ĐĂNG KÝ</p>
       <h2>3 bước chuẩn bị và nộp hồ sơ OCOP</h2>
       <p className='auth-aside-lead'>
-        Tài khoản người đăng ký giúp hợp tác xã, doanh nghiệp và hộ sản xuất lưu trữ hồ sơ trực tuyến và
-        theo dõi kết quả chấm điểm minh bạch.
+        Tài khoản người đăng ký giúp hợp tác xã, doanh nghiệp và hộ sản xuất lưu trữ hồ sơ trực
+        tuyến và theo dõi kết quả chấm điểm minh bạch.
       </p>
       <ol className='auth-steps'>
         <li className='auth-step'>
@@ -94,6 +99,7 @@ export function RegisterPage() {
       mode='register'
       aside={registerAside}
     >
+      <GoogleSignIn intent='register' />
       <form
         className='account-form'
         onSubmit={(event) => {
