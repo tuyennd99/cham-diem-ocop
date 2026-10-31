@@ -41,6 +41,27 @@ describe('built API OpenAPI document', () => {
       ]);
       expect(schemas.RegisterDto).toHaveProperty('properties.email');
       expect(schemas.RegisterDto).toHaveProperty('properties.password');
+      for (const [path, dto, fields] of [
+        ['/api/auth/verify-otp', 'VerifyOtpDto', ['code', 'registrationToken']],
+        ['/api/auth/resend-otp', 'RegistrationTokenDto', ['registrationToken']],
+        ['/api/auth/registration-status', 'RegistrationTokenDto', ['registrationToken']],
+        ['/api/auth/google/register', 'GoogleRegisterDto', ['fullName', 'registrationToken']],
+        ['/api/auth/google/link/verify', 'VerifyOtpDto', ['code', 'registrationToken']],
+        ['/api/auth/google/link/resend', 'RegistrationTokenDto', ['registrationToken']],
+        ['/api/auth/legacy-registration/verify', 'LegacyVerifyOtpDto', ['code', 'email']],
+        ['/api/auth/legacy-registration/resend', 'EmailDto', ['email']],
+        ['/api/auth/reset-password', 'ResetPasswordDto', ['code', 'email', 'newPassword']],
+      ] as const) {
+        const request = document.paths[path]?.post?.requestBody as {
+          content: { 'application/json': { schema: { $ref: string } } };
+        };
+        expect(request.content['application/json'].schema.$ref).toBe(`#/components/schemas/${dto}`);
+        const schema = schemas[dto] as { properties: Record<string, unknown>; required: string[] };
+        expect([...schema.required].sort()).toEqual([...fields]);
+        if (fields.some((field) => field === 'registrationToken')) expect(schema.properties).not.toHaveProperty('email');
+        else expect(schema.properties).not.toHaveProperty('registrationToken');
+      }
+      expect(Object.keys((schemas.ResetPasswordDto as { properties: object }).properties).sort()).toEqual(['code', 'email', 'newPassword']);
       expect(schemas.RegisterDto).toHaveProperty(
         'properties.phone.nullable',
         true,

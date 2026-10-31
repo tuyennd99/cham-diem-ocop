@@ -151,7 +151,7 @@ it('migrates and serves the isolated database with seed data', async () => {
       registrant.id,
     );
     expect(
-      (await apiRequest(baseUrl, '/auth/verify-otp', {
+      (await apiRequest(baseUrl, '/auth/legacy-registration/verify', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ email: registrant.email, code: otp }),
@@ -248,7 +248,7 @@ describe('HTTP production journey', () => {
         expect(purpose).toBe('REGISTER');
         sentCodes.push(code);
       });
-      const registration = await apiRequest(baseUrl, '/auth/register', {
+      const registration = await apiRequest<{ data: { registrationToken: string } }>(baseUrl, '/auth/register', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -259,10 +259,11 @@ describe('HTTP production journey', () => {
       });
       expect(registration.status).toBe(200);
       expect(sentCodes).toHaveLength(1);
+      expect(await prisma.user.findUnique({ where: { email } })).toBeNull();
       expect(
         (
           await post(baseUrl, '/auth/verify-otp', '', {
-            email,
+            registrationToken: registration.body.data.registrationToken,
             code: sentCodes[0],
           })
         ).status,
@@ -270,7 +271,7 @@ describe('HTTP production journey', () => {
       expect(
         (
           await post(baseUrl, '/auth/verify-otp', '', {
-            email,
+            registrationToken: registration.body.data.registrationToken,
             code: sentCodes[0],
           })
         ).status,
@@ -734,7 +735,7 @@ describe('HTTP production journey', () => {
       });
       const concurrentCode = await app.get(OtpService).issue(concurrentEmail, OtpPurpose.REGISTER, pending.id);
       const consume = () =>
-        apiRequest(baseUrl, '/auth/verify-otp', {
+        apiRequest(baseUrl, '/auth/legacy-registration/verify', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ email: concurrentEmail, code: concurrentCode }),

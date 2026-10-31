@@ -1,4 +1,5 @@
-import { OtpPurpose, ProductStatus, Role } from '@prisma/client';
+import { ProductStatus, Role } from '@prisma/client';
+import { createHash } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { MailService } from '../src/services/mail.service';
 import { apiRequest, withTestApp } from './support/db-app';
@@ -87,7 +88,7 @@ describe('OCOP E2E honey flow, judge scoring, and public privacy (E2E-01..06, JD
       const registrantEmail = 'htx.uminh@ocop.test';
       const registrantPassword = 'Chuthe@2026';
 
-      const regRes = await apiRequest(baseUrl, '/auth/register', {
+      const regRes = await apiRequest<{ data: { registrationToken: string } }>(baseUrl, '/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -99,23 +100,19 @@ describe('OCOP E2E honey flow, judge scoring, and public privacy (E2E-01..06, JD
       });
       expect(regRes.status).toBe(200);
 
-      const otpRecord = await prisma.otpCode.findFirstOrThrow({
-        where: {
-          email: registrantEmail,
-          purpose: OtpPurpose.REGISTER,
-          usedAt: null,
-        },
-        orderBy: { createdAt: 'desc' },
+      expect(await prisma.user.findUnique({ where: { email: registrantEmail } })).toBeNull();
+      const pending = await prisma.pendingAuth.findUniqueOrThrow({
+        where: { tokenHash: createHash('sha256').update(regRes.body.data.registrationToken).digest('hex') },
       });
-      expect(otpRecord.code).toBeTruthy();
-
       const otpCode = otpInbox.get(`${registrantEmail}:REGISTER`);
       expect(otpCode).toMatch(/^\d{6}$/);
+      expect(pending.otpHash).toBeTruthy();
+      expect(pending.otpHash).not.toBe(otpCode);
 
       const verifyRes = await apiRequest(baseUrl, '/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: registrantEmail, code: otpCode }),
+        body: JSON.stringify({ registrationToken: regRes.body.data.registrationToken, code: otpCode }),
       });
       expect(verifyRes.status).toBe(200);
 

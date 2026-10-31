@@ -13,6 +13,17 @@ import { apiRequest, withTestApp } from './support/db-app';
 const currentPassword = 'CurrentPassword1!';
 const nextPassword = 'NewPassword2!';
 
+function expectPublicAuth(body: unknown, secrets: string[] = []) {
+  if (body && typeof body === 'object') {
+    for (const [key, value] of Object.entries(body)) {
+      expect(key).not.toMatch(/password|hash|credential|^(otp|code)$/i);
+      expectPublicAuth(value);
+    }
+  }
+  const serialized = JSON.stringify(body);
+  for (const secret of secrets) expect(serialized).not.toContain(secret);
+}
+
 async function createUser(prisma: PrismaService, email: string, role: Role = Role.REGISTRANT) {
   return prisma.user.create({
     data: {
@@ -33,21 +44,26 @@ async function login(baseUrl: string, email: string, password: string) {
     body: JSON.stringify({ email, password }),
   });
   expect(result.status).toBe(200);
+  expectPublicAuth(result.body, [password]);
   return result.body.data.accessToken;
 }
 
 async function me(baseUrl: string, token: string) {
-  return apiRequest(baseUrl, '/auth/me', { headers: { Authorization: `Bearer ${token}` } });
+  const response = await apiRequest(baseUrl, '/auth/me', { headers: { Authorization: `Bearer ${token}` } });
+  expectPublicAuth(response.body);
+  return response;
 }
 
 type Registration = {
   registrationToken: string; email: string; expiresAt: string; otpExpiresAt: string; resendAvailableAt: string;
 };
 
-function post<T = unknown>(baseUrl: string, path: string, body: object) {
-  return apiRequest<{ data: T }>(baseUrl, path, {
+async function post<T = unknown>(baseUrl: string, path: string, body: object) {
+  const response = await apiRequest<{ data: T }>(baseUrl, path, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   });
+  expectPublicAuth(response.body);
+  return response;
 }
 
 async function register(baseUrl: string, email: string, password = 'ValidPassword1!', fullName = 'HTX A') {
@@ -58,10 +74,12 @@ async function register(baseUrl: string, email: string, password = 'ValidPasswor
 
 const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex');
 
-function googlePost<T = any>(baseUrl: string, path: string, body: object, origin = 'http://localhost:5173', contentType = 'application/json') {
-  return apiRequest<{ data: T; message?: string }>(baseUrl, path, {
+async function googlePost<T = any>(baseUrl: string, path: string, body: object, origin = 'http://localhost:5173', contentType = 'application/json') {
+  const response = await apiRequest<{ data: T; message?: string }>(baseUrl, path, {
     method: 'POST', headers: { 'Content-Type': contentType, ...(origin ? { Origin: origin } : {}) }, body: JSON.stringify(body),
   });
+  expectPublicAuth(response.body);
+  return response;
 }
 
 describe('Google identity login', () => {
@@ -264,9 +282,17 @@ describe('Google identity login', () => {
       let code = '';
       app.get(MailService).sendOtp = jest.fn(async (_email, sentCode) => { code = sentCode; });
       expect((await post(baseUrl, '/auth/forgot-password', { email: user.email })).status).toBe(200);
-      expect((await post(baseUrl, '/auth/reset-password', { email: user.email, code, newPassword: nextPassword })).status).toBe(200);
-      expect((await me(baseUrl, token)).status).toBe(401);
-      await login(baseUrl, user.email, nextPassword);
+      const reset = await post(baseUrl, '/auth/reset-password', { email: user.email, code, newPassword: nextPassword });
+      expect(reset.status).toBe(200);
+      expectPublicAuth(reset.body, [code, nextPassword]);
+      const revoked = await me(baseUrl, token);
+      expect(revoked.status).toBe(401);
+      expectPublicAuth(revoked.body, [code, nextPassword]);
+      const replacement = await login(baseUrl, user.email, nextPassword);
+      const account = await me(baseUrl, replacement);
+      expect(account.status).toBe(200);
+      expect(account.body).toMatchObject({ data: { id: user.id, email: user.email } });
+      expectPublicAuth(account.body, [code, nextPassword]);
       expect(await prisma.user.findUnique({ where: { id: user.id } })).toMatchObject({ googleSub: identity.sub, tokenVersion: 1 });
     });
   });
@@ -279,6 +305,7 @@ describe('registration creates an account only after OTP', () => {
       let code = '';
       app.get(MailService).sendOtp = jest.fn(async (_email, sentCode) => { code = sentCode; });
       const data = await register(baseUrl, email);
+      expectPublicAuth(data, [code, 'ValidPassword1!']);
       expect(await prisma.user.findUnique({ where: { email } })).toBeNull();
       const pending = await prisma.pendingAuth.findUniqueOrThrow({ where: { tokenHash: tokenHash(data.registrationToken) } });
       expect(pending.tokenHash).not.toBe(data.registrationToken);
@@ -292,12 +319,19 @@ describe('registration creates an account only after OTP', () => {
       const wrongCode = code === '000000' ? '111111' : '000000';
       expect((await post(baseUrl, '/auth/verify-otp', { ...request, code: wrongCode })).status).toBe(401);
       expect(await prisma.user.findUnique({ where: { email } })).toBeNull();
-      expect((await post(baseUrl, '/auth/verify-otp', request)).status).toBe(200);
+      const verified = await post(baseUrl, '/auth/verify-otp', request);
+      expect(verified.status).toBe(200);
+      expectPublicAuth(verified.body, [code, 'ValidPassword1!']);
       expect(await prisma.user.findUnique({ where: { email } })).toMatchObject({ verified: true, fullName: 'HTX A' });
       expect(await prisma.pendingAuth.findUnique({ where: { tokenHash: tokenHash(data.registrationToken) } })).toBeNull();
       expect((await post(baseUrl, '/auth/verify-otp', request)).status).toBe(401);
       expect((await post(baseUrl, '/auth/registration-status', { registrationToken: data.registrationToken })).status).toBe(401);
       expect(await prisma.user.count({ where: { email } })).toBe(1);
+      const token = await login(baseUrl, email, 'ValidPassword1!');
+      const account = await me(baseUrl, token);
+      expect(account.status).toBe(200);
+      expect(account.body).toMatchObject({ data: { email, fullName: 'HTX A', verified: true } });
+      expectPublicAuth(account.body, [code, 'ValidPassword1!', pending.passwordHash!, pending.otpHash!]);
     });
   });
 
@@ -706,6 +740,7 @@ describe('Google registration and OTP linking', () => {
       const session = await start(context);
       expect(session.deliveries).toHaveLength(0);
       const data = await profile(baseUrl, session.registrationToken);
+      expectPublicAuth(data, [session.deliveries[0].code]);
       expect(data.registrationToken).toBe(session.registrationToken);
       expect(data.email).toBe(identity.email);
       expect(await prisma.user.count()).toBe(0);
@@ -719,6 +754,16 @@ describe('Google registration and OTP linking', () => {
       });
       expect((await post(baseUrl, '/auth/verify-otp', request)).status).toBe(401);
       expect(await prisma.pendingAuth.count()).toBe(0);
+      const challenge = await googlePost(baseUrl, '/auth/google/challenge', {});
+      const signedIn = await googlePost(baseUrl, '/auth/google', { challengeToken: challenge.body.data.challengeToken, credential: 'verified-google', intent: 'login' });
+      expect(signedIn.status).toBe(200);
+      expect(signedIn.body.data).toMatchObject({ kind: 'session', user: { email: identity.email, fullName: 'Confirmed OCOP unit', verified: true } });
+      const account = await me(baseUrl, signedIn.body.data.accessToken);
+      expect(account.status).toBe(200);
+      expect(account.body).toMatchObject({ data: { id: signedIn.body.data.user.id, email: identity.email } });
+      expectPublicAuth(signedIn.body, [session.deliveries[0].code, 'verified-google']);
+      expectPublicAuth(account.body, [session.deliveries[0].code, 'verified-google']);
+      expect(await prisma.user.count()).toBe(1);
     });
   });
 
@@ -810,6 +855,7 @@ describe('Google registration and OTP linking', () => {
       const responses = await Promise.all([1, 2].map(() => googlePost(baseUrl, '/auth/google/link/verify', { ...request, code })));
       expect(responses.map((response) => response.status).sort()).toEqual([200, 401]);
       const success = responses.find((response) => response.status === 200)!;
+      expectPublicAuth(success.body, [code, currentPassword, session.user!.password!]);
       expect(success.body.data).toMatchObject({ kind: 'session', user: { id: session.user!.id, role: Role.ADMIN, staffPermissions: ['MANAGE', 'VIEW'] } });
       expect((await me(baseUrl, success.body.data.accessToken)).status).toBe(200);
       expect(await prisma.user.findUniqueOrThrow({ where: { id: session.user!.id } })).toMatchObject({
@@ -818,6 +864,13 @@ describe('Google registration and OTP linking', () => {
       const challenge = await googlePost(baseUrl, '/auth/google/challenge', {});
       const login = await googlePost(baseUrl, '/auth/google', { challengeToken: challenge.body.data.challengeToken, credential: 'verified-google', intent: 'login' });
       expect(login.body.data).toMatchObject({ kind: 'session', user: { id: session.user!.id } });
+      expect(login.status).toBe(200);
+      expectPublicAuth(login.body, [code, currentPassword, session.user!.password!, 'verified-google']);
+      const account = await me(baseUrl, login.body.data.accessToken);
+      expect(account.status).toBe(200);
+      expect(account.body).toMatchObject({ data: { id: session.user!.id, email: identity.email } });
+      expectPublicAuth(account.body, [code, currentPassword, session.user!.password!]);
+      expect(await prisma.user.count()).toBe(1);
       expect(session.deliveries).toHaveLength(1);
       expect(await prisma.pendingAuth.count()).toBe(0);
     });
