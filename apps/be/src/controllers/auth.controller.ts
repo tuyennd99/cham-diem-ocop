@@ -1,9 +1,10 @@
-import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Headers, HttpCode, Post, UnsupportedMediaTypeException } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { Public } from '../decorators/public.decorator';
-import { ChangePasswordDto, EmailDto, LegacyVerifyOtpDto, LoginDto, RegisterDto, RegistrationTokenDto, ResetPasswordDto, VerifyOtpDto } from '../dtos/auth.dto';
+import { ChangePasswordDto, EmailDto, GoogleLoginDto, LegacyVerifyOtpDto, LoginDto, RegisterDto, RegistrationTokenDto, ResetPasswordDto, VerifyOtpDto } from '../dtos/auth.dto';
+import { env } from '../config/env';
 import { AuthService } from '../services/auth.service';
 import type { AccessTokenPayload } from '../types/auth';
 
@@ -11,6 +12,29 @@ import type { AccessTokenPayload } from '../types/auth';
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
+
+  @Public()
+  @Post('google/challenge')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  googleChallenge(@Headers('origin') origin: string, @Headers('content-type') contentType: string) {
+    this.assertGoogleRequest(origin, contentType);
+    return this.authService.googleChallenge();
+  }
+
+  @Public()
+  @Post('google')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  google(@Body() body: GoogleLoginDto, @Headers('origin') origin: string, @Headers('content-type') contentType: string) {
+    this.assertGoogleRequest(origin, contentType);
+    return this.authService.google(body);
+  }
+
+  private assertGoogleRequest(origin: string, contentType: string) {
+    if (!origin || !env(process.env).allowedOrigins.includes(origin)) throw new ForbiddenException('Origin is not allowed');
+    if (contentType?.split(';')[0].trim().toLowerCase() !== 'application/json') throw new UnsupportedMediaTypeException('Google sign-in requires JSON');
+  }
 
   @Public()
   @Post('register')

@@ -9,6 +9,8 @@ import { resolve } from 'node:path';
 import { Client } from 'pg';
 import { configureApp } from '../../src/config/app';
 import { MailService } from '../../src/services/mail.service';
+import { GoogleIdentityService } from '../../src/services/google-identity.service';
+import { UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../../src/prisma/prisma.service';
 
 let sharedSchema: string | undefined;
@@ -111,6 +113,8 @@ export async function withTestApp(
   const overrides: NodeJS.ProcessEnv = {
     DATABASE_URL: testUrl.toString(),
     JWT_SECRET: 'isolated-test-jwt-secret-at-least-32-bytes',
+    GOOGLE_CLIENT_ID: 'isolated-test-client.apps.googleusercontent.com',
+    CORS_ORIGINS: 'http://localhost:5173',
     SMTP_HOST: '127.0.0.1',
     SMTP_PORT: '1',
     SMTP_USER: 'test',
@@ -184,6 +188,8 @@ export async function withTestApp(
     });
     // Never send real email, even when a test forgets to replace this mock.
     app.get(MailService).sendOtp = async () => {};
+    // Never verify a real Google credential from a database test.
+    app.get(GoogleIdentityService).verify = async () => { throw new UnauthorizedException('Invalid Google credential'); };
     configureApp(app);
     await app.listen(0, '127.0.0.1');
     await run({

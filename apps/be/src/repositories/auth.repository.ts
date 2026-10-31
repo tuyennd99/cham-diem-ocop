@@ -15,6 +15,58 @@ export class AuthRepository {
     return this.prisma.user.findUnique({ where: { email }, include: { organizationUnit: { select: { id: true, code: true, name: true } } } });
   }
 
+  createGoogleChallenge(data: Prisma.PendingAuthUncheckedCreateInput) {
+    return this.prisma.pendingAuth.create({ data });
+  }
+
+  findGoogleChallenge(tokenHash: string) {
+    return this.prisma.pendingAuth.findUnique({ where: { tokenHash, kind: PendingAuthKind.GOOGLE_CHALLENGE } });
+  }
+
+  async consumeGoogleChallenge(
+    tokenHash: string,
+    identity: { sub: string; email: string; authoritative: boolean },
+    intent: 'login' | 'register',
+    nextPending: Prisma.PendingAuthUncheckedCreateInput,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<PendingAuth[]>(Prisma.sql`
+        SELECT * FROM ${databaseObject('pending_auth')}
+        WHERE "tokenHash" = ${tokenHash} AND "kind" = 'GOOGLE_CHALLENGE'
+        FOR UPDATE
+      `);
+      const challenge = rows[0];
+      if (!challenge || challenge.expiresAt <= new Date()) return { status: 'invalid' as const };
+      const include = { organizationUnit: { select: { id: true, code: true, name: true } } };
+      const linked = await tx.user.findUnique({ where: { googleSub: identity.sub }, include });
+      if (linked && intent === 'register') return { status: 'used_sub' as const };
+      const user = linked ?? await tx.user.findUnique({ where: { email: identity.email }, include });
+      if (user && intent === 'register') return { status: 'email_exists' as const };
+      if (user && (!user.verified || !user.isActive)) return { status: 'unavailable' as const };
+      if (user && !linked && user.googleSub) return { status: 'collision' as const };
+
+      if (user && (linked || identity.authoritative)) {
+        if (!linked) {
+          const updated = await tx.user.updateMany({
+            where: { id: user.id, googleSub: null, verified: true, isActive: true },
+            data: { googleSub: identity.sub },
+          });
+          if (updated.count !== 1) return { status: 'collision' as const };
+        }
+        await tx.pendingAuth.delete({ where: { id: challenge.id } });
+        return { status: 'session' as const, user };
+      }
+      const pending = await tx.pendingAuth.create({ data: {
+        ...nextPending,
+        kind: user ? PendingAuthKind.GOOGLE_LINK : PendingAuthKind.GOOGLE_PROFILE,
+        userId: user?.id ?? null,
+        ...(!user ? { otpHash: null, otpExpiresAt: null, resendAvailableAt: null } : {}),
+      } });
+      await tx.pendingAuth.delete({ where: { id: challenge.id } });
+      return { status: 'pending' as const, pending };
+    });
+  }
+
   findUserById(id: string): Promise<(PublicUser & { isActive: boolean; tokenVersion: number }) | null> {
     return this.prisma.user.findUnique({
       where: { id },

@@ -4,13 +4,14 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { OtpPurpose, Role, StaffPermission } from '@prisma/client';
+import { OtpPurpose, PendingAuthKind, Role, StaffPermission } from '@prisma/client';
 import type { OrganizationUnitSummary } from '@ocop/shared';
 import bcrypt from 'bcryptjs';
-import { randomBytes } from 'node:crypto';
+import { createHash, createHmac, randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { env } from '../config/env';
 import {
   ACCESS_TOKEN_TTL_SECONDS,
@@ -18,10 +19,12 @@ import {
   JWT_ISSUER,
   PASSWORD_MAX_BYTES,
   PASSWORD_ROUNDS,
+  OTP_TTL_MS,
 } from '../constants/auth';
 import { AuthRepository } from '../repositories/auth.repository';
 import { MailService } from './mail.service';
 import { OtpService } from './otp.service';
+import { GoogleIdentityService } from './google-identity.service';
 import type { AccessTokenPayload, PublicUser } from '../types/auth';
 import { effectiveStaffPermissions } from '../utils/staff-permissions';
 
@@ -36,7 +39,71 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly otpService: OtpService,
     private readonly mailService: MailService,
+    private readonly googleIdentityService: GoogleIdentityService,
   ) {}
+
+  async googleChallenge() {
+    if (!env(process.env).googleClientId) throw new ServiceUnavailableException('Google sign-in is not configured');
+    const challengeToken = randomBytes(32).toString('hex');
+    const nonce = randomBytes(32).toString('hex');
+    const now = new Date();
+    await this.repository.createGoogleChallenge({
+      kind: PendingAuthKind.GOOGLE_CHALLENGE, tokenHash: this.hashToken(challengeToken), nonceHash: this.hashToken(nonce),
+      createdAt: now, expiresAt: new Date(now.getTime() + 5 * 60_000),
+    });
+    return { challengeToken, nonce };
+  }
+
+  async google(input: { challengeToken: string; credential: string; intent: 'login' | 'register' }) {
+    if (!env(process.env).googleClientId) throw new ServiceUnavailableException('Google sign-in is not configured');
+    const tokenHash = this.hashToken(input.challengeToken);
+    const challenge = await this.repository.findGoogleChallenge(tokenHash);
+    if (!challenge?.nonceHash || challenge.expiresAt <= new Date()) throw new UnauthorizedException('Invalid or expired Google challenge');
+    const identity = await this.googleIdentityService.verify(input.credential, challenge.nonceHash);
+    const registrationToken = randomBytes(32).toString('hex');
+    const id = randomUUID();
+    const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
+    const now = new Date();
+    let result: Awaited<ReturnType<AuthRepository['consumeGoogleChallenge']>>;
+    try {
+      result = await this.repository.consumeGoogleChallenge(tokenHash, identity, input.intent, {
+        id, kind: PendingAuthKind.GOOGLE_PROFILE, tokenHash: this.hashToken(registrationToken),
+        email: identity.email, googleSub: identity.sub, fullName: identity.suggestedName,
+        otpHash: createHmac('sha256', env(process.env).jwtSecret).update(`${id}:GOOGLE_LINK:${code}`).digest('hex'),
+        createdAt: now, expiresAt: new Date(now.getTime() + 15 * 60_000),
+        otpExpiresAt: new Date(now.getTime() + OTP_TTL_MS), resendAvailableAt: new Date(now.getTime() + 60_000),
+      });
+    } catch (error) {
+      if (this.isUniqueConstraint(error)) throw new ConflictException('Google account is already linked; sign in again');
+      throw error;
+    }
+    if (result.status === 'used_sub') throw new ConflictException('Tài khoản Google này đã được dùng');
+    if (result.status === 'email_exists') throw new ConflictException('Email đã được đăng ký; hãy đăng nhập để liên kết tài khoản Google');
+    if (result.status === 'collision') throw new ConflictException('Google account is already linked; sign in again');
+    if (result.status === 'invalid') throw new UnauthorizedException('Invalid or expired Google challenge');
+    if (result.status === 'unavailable') throw new UnauthorizedException('Account is unavailable');
+    if (result.status === 'session') {
+      const user = result.user;
+      return { kind: 'session' as const, ...await this.issueToken({
+        sub: user.id, email: user.email, role: user.role, tokenVersion: user.tokenVersion,
+      }, this.publicUser(user)) };
+    }
+    const pending = result.pending;
+    if (pending.kind === PendingAuthKind.GOOGLE_PROFILE) {
+      return { kind: 'profile' as const, registrationToken, email: pending.email, suggestedName: pending.fullName };
+    }
+    try {
+      await this.mailService.sendOtp(pending.email!, code, 'GOOGLE_LINK');
+    } catch {
+      throw new InternalServerErrorException('Could not send verification email');
+    }
+    return { kind: 'link_otp' as const, registrationToken, email: pending.email, expiresAt: pending.expiresAt,
+      otpExpiresAt: pending.otpExpiresAt, resendAvailableAt: pending.resendAvailableAt };
+  }
+
+  private hashToken(token: string) {
+    return createHash('sha256').update(token).digest('hex');
+  }
 
   async register(input: {
     email: string;
@@ -106,7 +173,7 @@ export class AuthService {
   async login(rawEmail: string, password: string) {
     const email = this.normalizeEmail(rawEmail);
     const user = await this.repository.findUserByEmail(email);
-    if (!user) {
+    if (!user?.password) {
       await bcrypt.compare(password, DUMMY_BCRYPT_HASH);
       throw new UnauthorizedException('Invalid email or password');
     }
@@ -151,6 +218,7 @@ export class AuthService {
     this.assertPassword(currentPassword);
     this.assertPassword(newPassword);
     const user = await this.repository.findCredentialsById(userId);
+    if (user?.verified && user.isActive && !user.password) throw new BadRequestException('Use forgot password to set an application password');
     if (!user?.verified || !user.isActive || !(await bcrypt.compare(currentPassword, user.password))) {
       throw new UnauthorizedException('Current password is incorrect');
     }

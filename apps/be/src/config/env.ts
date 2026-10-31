@@ -34,6 +34,7 @@ export function env(values: NodeJS.ProcessEnv) {
     jwtSecret: requireSecret('JWT_SECRET', values.JWT_SECRET),
     trustProxyHops,
     allowedOrigins,
+    googleClientId: values.GOOGLE_CLIENT_ID?.trim() || undefined,
     smtpHost,
     smtpPort,
     smtpUser,

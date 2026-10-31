@@ -2,6 +2,7 @@ import { Transform } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsEmail,
+  IsIn,
   IsOptional,
   IsString,
   Matches,
@@ -17,6 +18,24 @@ export class EmailDto {
   @IsEmail()
   @MaxLength(320)
   email!: string;
+}
+
+export class GoogleLoginDto {
+  @ApiProperty()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(256)
+  challengeToken!: string;
+
+  @ApiProperty()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(16384)
+  credential!: string;
+
+  @ApiProperty({ enum: ['login', 'register'] })
+  @IsIn(['login', 'register'])
+  intent!: 'login' | 'register';
 }
 
 export class RegisterDto extends EmailDto {

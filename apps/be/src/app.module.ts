@@ -11,6 +11,7 @@ import { appServices } from './services';
 import { appRepositories } from './repositories';
 import { MailService } from './services/mail.service';
 import { OtpService } from './services/otp.service';
+import { GoogleIdentityService } from './services/google-identity.service';
 
 @Module({
   imports: appModules,
@@ -21,6 +22,7 @@ import { OtpService } from './services/otp.service';
     PrismaService,
     MailService,
     OtpService,
+    GoogleIdentityService,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: UserThrottlerGuard },
     { provide: APP_GUARD, useClass: AccountGuard },

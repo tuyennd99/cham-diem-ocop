@@ -21,14 +21,14 @@ export class MailService {
     return this.transporter;
   }
 
-  async sendOtp(email: string, code: string, purpose: 'REGISTER' | 'RESET_PASSWORD') {
+  async sendOtp(email: string, code: string, purpose: 'REGISTER' | 'RESET_PASSWORD' | 'GOOGLE_LINK') {
     const config = env(process.env);
     if (config.smtpHost === 'smtp.example.com' && process.env.NODE_ENV !== 'production') {
-      // shortcut: log OTP in local dev when placeholder SMTP_HOST is set; configure real SMTP in production
-      this.logger.log(`[DEV OTP] ${purpose} for ${email}: ${code}`);
+      // shortcut: skip delivery with placeholder SMTP in development; configure real SMTP to receive codes.
+      this.logger.log(`[DEV OTP] ${purpose} delivery skipped for ${email}`);
       return;
     }
-    const action = purpose === 'REGISTER' ? 'xác thực tài khoản' : 'đặt lại mật khẩu';
+    const action = purpose === 'REGISTER' ? 'xác thực tài khoản' : purpose === 'GOOGLE_LINK' ? 'liên kết tài khoản Google với tài khoản' : 'đặt lại mật khẩu';
     await this.getTransporter().sendMail({
       from: config.smtpFrom,
       to: email,
