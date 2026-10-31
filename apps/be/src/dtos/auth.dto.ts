@@ -49,14 +49,29 @@ export class LoginDto extends EmailDto {
   password!: string;
 }
 
-export class VerifyOtpDto extends EmailDto {
+export class RegistrationTokenDto {
+  @ApiProperty()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(256)
+  registrationToken!: string;
+}
+
+export class VerifyOtpDto extends RegistrationTokenDto {
   @ApiProperty({ pattern: '^\\d{6}$' })
   @IsString()
   @Matches(/^\d{6}$/)
   code!: string;
 }
 
-export class ResetPasswordDto extends VerifyOtpDto {
+export class LegacyVerifyOtpDto extends EmailDto {
+  @ApiProperty({ pattern: '^\\d{6}$' })
+  @IsString()
+  @Matches(/^\d{6}$/)
+  code!: string;
+}
+
+export class ResetPasswordDto extends LegacyVerifyOtpDto {
   @ApiProperty({ minLength: 8, maxLength: 72 })
   @IsString()
   @MinLength(8)

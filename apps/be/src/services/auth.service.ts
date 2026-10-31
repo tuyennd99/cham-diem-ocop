@@ -46,34 +46,50 @@ export class AuthService {
   }) {
     const email = this.normalizeEmail(input.email);
     this.assertPassword(input.password);
-    let user;
+    if (await this.repository.findUserByEmail(email)) throw new ConflictException('Email is already registered');
+    const { registrationToken, pending, code } = await this.otpService.issueRegistration({
+      email, passwordHash: await bcrypt.hash(input.password, PASSWORD_ROUNDS),
+      fullName: input.fullName.trim(), phone: input.phone?.trim() || null,
+    });
+    await this.sendRegistrationOtp(email, code);
+    return { registrationToken, email, expiresAt: pending.expiresAt,
+      otpExpiresAt: pending.otpExpiresAt, resendAvailableAt: pending.resendAvailableAt };
+  }
+
+  registrationStatus(registrationToken: string) {
+    return this.otpService.registrationStatus(registrationToken);
+  }
+
+  async verifyOtp(registrationToken: string, code: string) {
     try {
-      user = await this.repository.createRegistrant({
-        email,
-        password: await bcrypt.hash(input.password, PASSWORD_ROUNDS),
-        fullName: input.fullName.trim(),
-        phone: input.phone?.trim() || null,
-      });
+      await this.otpService.verifyRegistration(registrationToken, code);
     } catch (error) {
       if (this.isUniqueConstraint(error)) throw new ConflictException('Email is already registered');
       throw error;
     }
+    return { message: 'Registration completed' };
+  }
 
-    const code = await this.otpService.issue(email, OtpPurpose.REGISTER, user.id);
+  async resendRegistrationOtp(registrationToken: string) {
+    const { pending, code } = await this.otpService.resendRegistration(registrationToken);
+    await this.sendRegistrationOtp(pending.email!, code);
+    return { message: 'Verification code sent', otpExpiresAt: pending.otpExpiresAt, resendAvailableAt: pending.resendAvailableAt };
+  }
+
+  private async sendRegistrationOtp(email: string, code: string) {
     try {
       await this.mailService.sendOtp(email, code, 'REGISTER');
     } catch {
       throw new InternalServerErrorException('Could not send verification email');
     }
-    return { message: 'Verification code sent' };
   }
 
-  async verifyOtp(email: string, code: string) {
+  async verifyLegacyRegistration(email: string, code: string) {
     await this.otpService.verify(this.normalizeEmail(email), OtpPurpose.REGISTER, code);
     return { message: 'Account verified' };
   }
 
-  async resendRegistrationOtp(rawEmail: string) {
+  async resendLegacyRegistrationOtp(rawEmail: string) {
     const email = this.normalizeEmail(rawEmail);
     const user = await this.repository.findUserByEmail(email);
     if (user?.role === Role.REGISTRANT && !user.verified && user.isActive) {

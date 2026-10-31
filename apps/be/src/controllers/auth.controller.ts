@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { Public } from '../decorators/public.decorator';
-import { ChangePasswordDto, EmailDto, LoginDto, RegisterDto, ResetPasswordDto, VerifyOtpDto } from '../dtos/auth.dto';
+import { ChangePasswordDto, EmailDto, LegacyVerifyOtpDto, LoginDto, RegisterDto, RegistrationTokenDto, ResetPasswordDto, VerifyOtpDto } from '../dtos/auth.dto';
 import { AuthService } from '../services/auth.service';
 import type { AccessTokenPayload } from '../types/auth';
 
@@ -25,15 +25,38 @@ export class AuthController {
   @HttpCode(200)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   verifyOtp(@Body() body: VerifyOtpDto) {
-    return this.authService.verifyOtp(body.email, body.code);
+    return this.authService.verifyOtp(body.registrationToken, body.code);
   }
 
   @Public()
   @Post('resend-otp')
   @HttpCode(200)
   @Throttle({ default: { limit: 3, ttl: 15 * 60_000 } })
-  resendOtp(@Body() body: EmailDto) {
-    return this.authService.resendRegistrationOtp(body.email);
+  resendOtp(@Body() body: RegistrationTokenDto) {
+    return this.authService.resendRegistrationOtp(body.registrationToken);
+  }
+
+  @Public()
+  @Post('registration-status')
+  @HttpCode(200)
+  registrationStatus(@Body() body: RegistrationTokenDto) {
+    return this.authService.registrationStatus(body.registrationToken);
+  }
+
+  @Public()
+  @Post('legacy-registration/verify')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  verifyLegacyRegistration(@Body() body: LegacyVerifyOtpDto) {
+    return this.authService.verifyLegacyRegistration(body.email, body.code);
+  }
+
+  @Public()
+  @Post('legacy-registration/resend')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 3, ttl: 15 * 60_000 } })
+  resendLegacyRegistration(@Body() body: EmailDto) {
+    return this.authService.resendLegacyRegistrationOtp(body.email);
   }
 
   @Public()

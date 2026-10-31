@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { OtpPurpose, Prisma, Role } from '@prisma/client';
-import type { User } from '@prisma/client';
+import { OtpPurpose, PendingAuthKind, Prisma, Role } from '@prisma/client';
+import type { PendingAuth } from '@prisma/client';
 import { timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { databaseObject } from '../prisma/sql';
@@ -37,9 +37,60 @@ export class AuthRepository {
     });
   }
 
-  createRegistrant(data: Pick<User, 'email' | 'password' | 'fullName' | 'phone'>) {
-    return this.prisma.user.create({
-      data: { ...data, role: Role.REGISTRANT, verified: false },
+  createPendingRegistration(data: Prisma.PendingAuthUncheckedCreateInput) {
+    return this.prisma.pendingAuth.create({ data });
+  }
+
+  findPendingRegistration(tokenHash: string) {
+    return this.prisma.pendingAuth.findUnique({ where: { tokenHash, kind: PendingAuthKind.EMAIL_REGISTER } });
+  }
+
+  async consumePendingRegistration(tokenHash: string, codeHash: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<PendingAuth[]>(Prisma.sql`
+        SELECT * FROM ${databaseObject('pending_auth')}
+        WHERE "tokenHash" = ${tokenHash} AND "kind" = 'EMAIL_REGISTER'
+        FOR UPDATE
+      `);
+      const pending = rows[0];
+      const now = new Date();
+      if (!pending || pending.expiresAt <= now || !pending.otpExpiresAt || pending.otpExpiresAt <= now ||
+        !pending.otpHash || pending.attempts >= OTP_MAX_ATTEMPTS) return false;
+      if (!this.equal(pending.otpHash, codeHash)) {
+        // Return instead of throwing so the failed attempt is committed.
+        await tx.pendingAuth.update({ where: { id: pending.id }, data: { attempts: { increment: 1 } } });
+        return false;
+      }
+      if (!pending.email || !pending.fullName || !pending.passwordHash) return false;
+      await tx.user.create({ data: {
+        email: pending.email, fullName: pending.fullName, phone: pending.phone,
+        password: pending.passwordHash, role: Role.REGISTRANT, verified: true,
+      } });
+      await tx.pendingAuth.delete({ where: { id: pending.id } });
+      return true;
+    });
+  }
+
+  async replacePendingRegistrationOtp(tokenHash: string, otpHash: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<PendingAuth[]>(Prisma.sql`
+        SELECT * FROM ${databaseObject('pending_auth')}
+        WHERE "tokenHash" = ${tokenHash} AND "kind" = 'EMAIL_REGISTER'
+        FOR UPDATE
+      `);
+      const pending = rows[0];
+      const now = new Date();
+      if (!pending || pending.expiresAt <= now) return { status: 'invalid' as const };
+      if (pending.resendAvailableAt && pending.resendAvailableAt > now) return { status: 'cooldown' as const };
+      const updated = await tx.pendingAuth.update({
+        where: { id: pending.id },
+        data: {
+          otpHash, attempts: 0,
+          otpExpiresAt: new Date(Math.min(now.getTime() + OTP_TTL_MS, pending.expiresAt.getTime())),
+          resendAvailableAt: new Date(now.getTime() + 60_000),
+        },
+      });
+      return { status: 'ok' as const, pending: updated };
     });
   }
 
@@ -89,7 +140,7 @@ export class AuthRepository {
       await tx.otpCode.update({ where: { id: otp.id }, data: { usedAt: now } });
       if (purpose === OtpPurpose.REGISTER) {
         const result = await tx.user.updateMany({
-          where: { email, role: Role.REGISTRANT, verified: false },
+          where: { email, role: Role.REGISTRANT, verified: false, isActive: true },
           data: { verified: true },
         });
         return result.count === 1;

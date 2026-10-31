@@ -23,6 +23,7 @@ async function clearExistingData(client: Client) {
   await client.query('DELETE FROM "localities"');
   await client.query('DELETE FROM "otp_codes"');
   await client.query('DELETE FROM "audit_logs"');
+  await client.query('DELETE FROM "pending_auth"');
   await client.query('DELETE FROM "users"');
   await client.query('DELETE FROM "organization_units"');
 }

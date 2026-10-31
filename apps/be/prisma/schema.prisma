@@ -29,6 +29,14 @@ enum OtpPurpose {
   RESET_PASSWORD
 }
 
+enum PendingAuthKind {
+  EMAIL_REGISTER
+  GOOGLE_PROFILE
+  GOOGLE_REGISTER
+  GOOGLE_LINK
+  GOOGLE_CHALLENGE
+}
+
 enum ProductStatus {
   DRAFT
   SUBMITTED
@@ -108,6 +116,28 @@ model OtpCode {
   @@index([email, purpose, expiresAt])
   @@index([userId])
   @@map("otp_codes")
+}
+
+model PendingAuth {
+  id                String          @id @default(cuid())
+  kind              PendingAuthKind
+  tokenHash         String          @unique @db.VarChar(64)
+  email             String?         @db.VarChar(320)
+  fullName          String?         @db.VarChar(255)
+  phone             String?         @db.VarChar(30)
+  passwordHash      String?         @db.VarChar(255)
+  googleSub         String?         @db.VarChar(255)
+  nonceHash         String?         @db.VarChar(64)
+  userId            String?
+  otpHash           String?         @db.VarChar(64)
+  attempts          Int             @default(0)
+  expiresAt         DateTime        @db.Timestamptz(3)
+  otpExpiresAt      DateTime?        @db.Timestamptz(3)
+  resendAvailableAt DateTime?        @db.Timestamptz(3)
+  createdAt         DateTime        @default(now()) @db.Timestamptz(3)
+
+  @@index([expiresAt])
+  @@map("pending_auth")
 }
 
 model OrganizationUnit {
