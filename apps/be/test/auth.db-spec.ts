@@ -674,3 +674,298 @@ describe('OCOP AUTH-01..04 scenarios (unverified login, OTP format/expiry, resen
     });
   });
 });
+
+
+describe('Google registration and OTP linking', () => {
+  const identity = { sub: 'task-3-subject', email: 'task3@example.invalid', suggestedName: 'Suggested name', authoritative: false };
+  async function start(context: Parameters<Parameters<typeof withTestApp>[0]>[0], link = false, claims = identity) {
+    const { app, prisma, baseUrl } = context;
+    const user = link ? await createUser(prisma, claims.email, Role.ADMIN) : null;
+    app.get(GoogleIdentityService).verify = jest.fn().mockResolvedValue(claims);
+    const deliveries: { email: string; code: string; purpose: string }[] = [];
+    app.get(MailService).sendOtp = jest.fn(async (email, code, purpose) => { deliveries.push({ email, code, purpose }); });
+    const challenge = await googlePost(baseUrl, '/auth/google/challenge', {});
+    expect(challenge.status).toBe(200);
+    const response = await googlePost(baseUrl, '/auth/google', {
+      challengeToken: challenge.body.data.challengeToken, credential: 'verified-google', intent: link ? 'login' : 'register',
+    });
+    expect(response.status).toBe(200);
+    expect(response.body.data.kind).toBe(link ? 'link_otp' : 'profile');
+    expect(response.body.data).not.toHaveProperty('accessToken');
+    return { user, deliveries, registrationToken: response.body.data.registrationToken as string };
+  }
+  async function profile(baseUrl: string, registrationToken: string, fullName = 'Confirmed OCOP unit') {
+    const response = await googlePost(baseUrl, '/auth/google/register', { registrationToken, fullName, phone: ' 0123456789 ' });
+    expect(response.status).toBe(200);
+    return response.body.data;
+  }
+
+  it('creates a Google-only registrant only after OTP with the confirmed profile and server-owned identity', async () => {
+    await withTestApp(async (context) => {
+      const { prisma, baseUrl } = context;
+      const session = await start(context);
+      expect(session.deliveries).toHaveLength(0);
+      const data = await profile(baseUrl, session.registrationToken);
+      expect(data.registrationToken).toBe(session.registrationToken);
+      expect(data.email).toBe(identity.email);
+      expect(await prisma.user.count()).toBe(0);
+      expect(session.deliveries).toEqual([{ email: identity.email, code: expect.stringMatching(/^\d{6}$/), purpose: 'REGISTER' }]);
+      const status = await post<any>(baseUrl, '/auth/registration-status', { registrationToken: session.registrationToken });
+      expect(status.body.data).toMatchObject({ mode: 'register', email: identity.email });
+      const request = { registrationToken: session.registrationToken, code: session.deliveries[0].code };
+      expect((await post(baseUrl, '/auth/verify-otp', request)).status).toBe(200);
+      expect(await prisma.user.findUniqueOrThrow({ where: { email: identity.email } })).toMatchObject({
+        googleSub: identity.sub, fullName: 'Confirmed OCOP unit', phone: '0123456789', password: null, verified: true, role: Role.REGISTRANT,
+      });
+      expect((await post(baseUrl, '/auth/verify-otp', request)).status).toBe(401);
+      expect(await prisma.pendingAuth.count()).toBe(0);
+    });
+  });
+
+  it.each([{ fullName: '  ' }, { fullName: 'x'.repeat(256) }, { fullName: 'Valid', phone: '1'.repeat(31) },
+    { fullName: 'Valid', email: 'attacker@example.invalid' }, { fullName: 'Valid', googleSub: 'attacker-sub' }])('rejects invalid or browser-owned identity profile fields: %j', async (fields) => {
+    await withTestApp(async (context) => {
+      const session = await start(context);
+      expect((await googlePost(context.baseUrl, '/auth/google/register', { registrationToken: session.registrationToken, ...fields })).status).toBe(400);
+      expect(session.deliveries).toHaveLength(0);
+      expect(await context.prisma.user.count()).toBe(0);
+    });
+  });
+
+  it('rejects expired profile tokens and cannot resubmit a profile or use profile/link tokens at registration OTP endpoints', async () => {
+    await withTestApp(async (context) => {
+      const { prisma, baseUrl } = context;
+      const session = await start(context);
+      const request = { registrationToken: session.registrationToken };
+      expect((await post(baseUrl, '/auth/registration-status', request)).status).toBe(401);
+      expect((await post(baseUrl, '/auth/verify-otp', { ...request, code: '123456' })).status).toBe(401);
+      await prisma.pendingAuth.update({ where: { tokenHash: tokenHash(session.registrationToken) }, data: { expiresAt: new Date(0) } });
+      expect((await googlePost(baseUrl, '/auth/google/register', { ...request, fullName: 'Valid' })).status).toBe(401);
+      await prisma.pendingAuth.update({ where: { tokenHash: tokenHash(session.registrationToken) }, data: { expiresAt: new Date(Date.now() + 60_000) } });
+      await profile(baseUrl, session.registrationToken);
+      expect((await googlePost(baseUrl, '/auth/google/register', { ...request, fullName: 'Replacement' })).status).toBe(401);
+      expect((await googlePost(baseUrl, '/auth/google/link/verify', { ...request, code: session.deliveries[0].code })).status).toBe(401);
+      expect(await prisma.user.count()).toBe(0);
+    });
+  });
+
+  it('rejects wrong, expired and attempt-exhausted Google registration OTPs', async () => {
+    await withTestApp(async (context) => {
+      const { prisma, baseUrl, app } = context;
+      const session = await start(context);
+      await profile(baseUrl, session.registrationToken);
+      const code = session.deliveries[0].code;
+      const request = { registrationToken: session.registrationToken };
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        await expect(app.get(OtpService).verifyRegistration(session.registrationToken, code === '000000' ? '999999' : '000000')).rejects.toThrow('Invalid or expired');
+        expect(await prisma.pendingAuth.findUniqueOrThrow({ where: { tokenHash: tokenHash(session.registrationToken) } })).toMatchObject({ attempts: attempt });
+      }
+      expect((await post(baseUrl, '/auth/verify-otp', { ...request, code })).status).toBe(401);
+      await prisma.pendingAuth.update({ where: { tokenHash: tokenHash(session.registrationToken) }, data: { attempts: 0, otpExpiresAt: new Date(0) } });
+      expect((await post(baseUrl, '/auth/verify-otp', { ...request, code })).status).toBe(401);
+      expect(await prisma.user.count()).toBe(0);
+    });
+  });
+
+  it.each(['email', 'sub'] as const)('allows only one simultaneous Google registration for the same %s', async (collision) => {
+    await withTestApp(async (context) => {
+      const first = await start(context);
+      await profile(context.baseUrl, first.registrationToken, 'First unit');
+      const second = await start(context, false, { ...identity, sub: collision === 'email' ? 'second-sub' : identity.sub, email: collision === 'sub' ? 'second@example.invalid' : identity.email });
+      await profile(context.baseUrl, second.registrationToken, 'Second unit');
+      const responses = await Promise.all([first, second].map((session) => post(context.baseUrl, '/auth/verify-otp', { registrationToken: session.registrationToken, code: session.deliveries[0].code })));
+      expect(responses.map((response) => response.status).sort()).toEqual([200, 409]);
+      expect(await context.prisma.user.count()).toBe(1);
+      expect(await context.prisma.pendingAuth.count()).toBe(1);
+    });
+  });
+
+  it('reports failed Google registration mail and lets resend recover without creating a user', async () => {
+    await withTestApp(async (context) => {
+      const session = await start(context);
+      context.app.get(MailService).sendOtp = jest.fn().mockRejectedValue(new Error('smtp down'));
+      expect((await googlePost(context.baseUrl, '/auth/google/register', { registrationToken: session.registrationToken, fullName: 'Confirmed' })).status).toBe(500);
+      expect(await context.prisma.user.count()).toBe(0);
+      expect((await post(context.baseUrl, '/auth/resend-otp', { registrationToken: session.registrationToken })).status).toBe(429);
+      await context.prisma.pendingAuth.update({ where: { tokenHash: tokenHash(session.registrationToken) }, data: { resendAvailableAt: new Date(0) } });
+      let code = '';
+      context.app.get(MailService).sendOtp = jest.fn(async (_email, sent) => { code = sent; });
+      expect((await post(context.baseUrl, '/auth/resend-otp', { registrationToken: session.registrationToken })).status).toBe(200);
+      expect((await post(context.baseUrl, '/auth/verify-otp', { registrationToken: session.registrationToken, code })).status).toBe(200);
+    });
+  });
+
+  it('links the existing account atomically after OTP and subsequent Google login needs no new mail', async () => {
+    await withTestApp(async (context) => {
+      const { prisma, baseUrl, app } = context;
+      const session = await start(context, true);
+      const request = { registrationToken: session.registrationToken };
+      const code = session.deliveries[0].code;
+      const status = await post<any>(baseUrl, '/auth/registration-status', request);
+      expect(status.body.data).toMatchObject({ mode: 'google-link', email: identity.email });
+      expect((await post(baseUrl, '/auth/verify-otp', { ...request, code })).status).toBe(401);
+      expect((await post(baseUrl, '/auth/resend-otp', request)).status).toBe(401);
+      expect((await googlePost(baseUrl, '/auth/google/link/verify', { ...request, code: code === '000000' ? '999999' : '000000' })).status).toBe(401);
+      expect((await prisma.user.findUniqueOrThrow({ where: { id: session.user!.id } })).googleSub).toBeNull();
+      const responses = await Promise.all([1, 2].map(() => googlePost(baseUrl, '/auth/google/link/verify', { ...request, code })));
+      expect(responses.map((response) => response.status).sort()).toEqual([200, 401]);
+      const success = responses.find((response) => response.status === 200)!;
+      expect(success.body.data).toMatchObject({ kind: 'session', user: { id: session.user!.id, role: Role.ADMIN, staffPermissions: ['MANAGE', 'VIEW'] } });
+      expect((await me(baseUrl, success.body.data.accessToken)).status).toBe(200);
+      expect(await prisma.user.findUniqueOrThrow({ where: { id: session.user!.id } })).toMatchObject({
+        googleSub: identity.sub, password: session.user!.password, fullName: session.user!.fullName, tokenVersion: session.user!.tokenVersion,
+      });
+      const challenge = await googlePost(baseUrl, '/auth/google/challenge', {});
+      const login = await googlePost(baseUrl, '/auth/google', { challengeToken: challenge.body.data.challengeToken, credential: 'verified-google', intent: 'login' });
+      expect(login.body.data).toMatchObject({ kind: 'session', user: { id: session.user!.id } });
+      expect(session.deliveries).toHaveLength(1);
+      expect(await prisma.pendingAuth.count()).toBe(0);
+    });
+  });
+
+  it.each([{ verified: false }, { isActive: false }, { email: 'changed@example.invalid' }, { googleSub: 'different-google-sub' }])('rejects a changed link target without JWT or rebinding: %j', async (change) => {
+    await withTestApp(async (context) => {
+      const session = await start(context, true);
+      const before = await context.prisma.user.update({ where: { id: session.user!.id }, data: change });
+      const response = await googlePost(context.baseUrl, '/auth/google/link/verify', { registrationToken: session.registrationToken, code: session.deliveries[0].code });
+      expect(response.status).toBe(401);
+      expect(response.body).not.toHaveProperty('data.accessToken');
+      expect(await context.prisma.user.findUniqueOrThrow({ where: { id: session.user!.id } })).toEqual(before);
+    });
+  });
+
+  it('never rebinds a Google subject claimed by another user while the OTP is pending', async () => {
+    await withTestApp(async (context) => {
+      const session = await start(context, true);
+      const owner = await createUser(context.prisma, 'subject-owner@example.invalid');
+      const before = await context.prisma.user.update({ where: { id: owner.id }, data: { googleSub: identity.sub } });
+      const response = await googlePost(context.baseUrl, '/auth/google/link/verify', { registrationToken: session.registrationToken, code: session.deliveries[0].code });
+      expect(response.status).toBe(409);
+      expect(response.body).not.toHaveProperty('data.accessToken');
+      expect(await context.prisma.user.findUniqueOrThrow({ where: { id: owner.id } })).toEqual(before);
+      expect((await context.prisma.user.findUniqueOrThrow({ where: { id: session.user!.id } })).googleSub).toBeNull();
+    });
+  });
+
+  it('limits link OTP resends, rotates the old code on SMTP failure, and caps expiry to the session', async () => {
+    await withTestApp(async (context) => {
+      const { prisma, app, baseUrl } = context;
+      const session = await start(context, true);
+      const request = { registrationToken: session.registrationToken };
+      const oldCode = session.deliveries[0].code;
+      expect((await googlePost(baseUrl, '/auth/google/link/resend', request)).status).toBe(429);
+      const expiresAt = new Date(Date.now() + 90_000);
+      await prisma.pendingAuth.update({ where: { tokenHash: tokenHash(session.registrationToken) }, data: { resendAvailableAt: new Date(0), expiresAt } });
+      app.get(MailService).sendOtp = jest.fn().mockRejectedValue(new Error('smtp down'));
+      expect((await googlePost(baseUrl, '/auth/google/link/resend', request)).status).toBe(500);
+      expect((await googlePost(baseUrl, '/auth/google/link/verify', { ...request, code: oldCode })).status).toBe(401);
+      const pending = await prisma.pendingAuth.findUniqueOrThrow({ where: { tokenHash: tokenHash(session.registrationToken) } });
+      expect(pending.otpExpiresAt).toEqual(expiresAt);
+      await prisma.pendingAuth.update({ where: { id: pending.id }, data: { resendAvailableAt: new Date(0) } });
+      let code = '';
+      app.get(MailService).sendOtp = jest.fn(async (email, sent, purpose) => { expect(email).toBe(identity.email); expect(purpose).toBe('GOOGLE_LINK'); code = sent; });
+      const results = await Promise.all([1, 2].map(() => googlePost(baseUrl, '/auth/google/link/resend', request)));
+      expect(results.map((result) => result.status).sort()).toEqual([200, 429]);
+      expect((await googlePost(baseUrl, '/auth/google/link/verify', { ...request, code })).status).toBe(200);
+    });
+  });
+
+  it('rejects expired and exhausted link OTPs and expired sessions', async () => {
+    await withTestApp(async (context) => {
+      const session = await start(context, true);
+      const request = { registrationToken: session.registrationToken, code: session.deliveries[0].code };
+      for (const change of [{ otpExpiresAt: new Date(0) }, { otpExpiresAt: new Date(Date.now() + 60_000), attempts: 5 }, { attempts: 0, expiresAt: new Date(0) }]) {
+        await context.prisma.pendingAuth.update({ where: { tokenHash: tokenHash(session.registrationToken) }, data: change });
+        expect((await googlePost(context.baseUrl, '/auth/google/link/verify', request)).status).toBe(401);
+      }
+      expect((await googlePost(context.baseUrl, '/auth/google/link/resend', request)).status).toBe(400);
+      expect((await googlePost(context.baseUrl, '/auth/google/link/resend', { registrationToken: session.registrationToken })).status).toBe(401);
+      expect((await post(context.baseUrl, '/auth/registration-status', { registrationToken: session.registrationToken })).status).toBe(401);
+      expect((await context.prisma.user.findUniqueOrThrow({ where: { id: session.user!.id } })).googleSub).toBeNull();
+    });
+  });
+
+  it('persists five wrong link attempts and then rejects the correct code', async () => {
+    await withTestApp(async (context) => {
+      const session = await start(context, true);
+      const code = session.deliveries[0].code;
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        const response = await googlePost(context.baseUrl, '/auth/google/link/verify', { registrationToken: session.registrationToken, code: code === '000000' ? '999999' : '000000' });
+        expect(response.status).toBe(401);
+        expect(await context.prisma.pendingAuth.findUniqueOrThrow({ where: { tokenHash: tokenHash(session.registrationToken) } })).toMatchObject({ attempts: attempt });
+      }
+      // Exercise the persisted limit after the separate HTTP attempt throttle is exhausted.
+      await expect(context.app.get(OtpService).verifyGoogleLink(session.registrationToken, code)).rejects.toThrow('Invalid or expired');
+      expect((await context.prisma.user.findUniqueOrThrow({ where: { id: session.user!.id } })).googleSub).toBeNull();
+    });
+  });
+
+  it('does not transfer an OTP link to a replacement account with the same email', async () => {
+    await withTestApp(async (context) => {
+      const session = await start(context, true);
+      await context.prisma.user.delete({ where: { id: session.user!.id } });
+      const replacement = await createUser(context.prisma, identity.email);
+      const response = await googlePost(context.baseUrl, '/auth/google/link/verify', { registrationToken: session.registrationToken, code: session.deliveries[0].code });
+      expect(response.status).toBe(401);
+      expect(response.body).not.toHaveProperty('data.accessToken');
+      expect(await context.prisma.user.findUniqueOrThrow({ where: { id: replacement.id } })).toEqual(replacement);
+    });
+  });
+
+  it('allows only one concurrent link of a subject to different accounts', async () => {
+    await withTestApp(async (context) => {
+      const first = await start(context, true);
+      const second = await start(context, true, { ...identity, email: 'second-link@example.invalid' });
+      const responses = await Promise.all([first, second].map((session) => googlePost(context.baseUrl, '/auth/google/link/verify', { registrationToken: session.registrationToken, code: session.deliveries[0].code })));
+      expect(responses.map((response) => response.status).sort()).toEqual([200, 409]);
+      expect(await context.prisma.user.count({ where: { googleSub: identity.sub } })).toBe(1);
+      expect(await context.prisma.user.count({ where: { googleSub: null } })).toBe(1);
+      expect(await context.prisma.pendingAuth.count()).toBe(1);
+      expect(responses.find((response) => response.status === 409)!.body).not.toHaveProperty('data.accessToken');
+    });
+  });
+
+  it('consumes a Google profile once and serializes repeated registration verification', async () => {
+    await withTestApp(async (context) => {
+      const session = await start(context);
+      const profiles = await Promise.all(['First', 'Second'].map((fullName) => googlePost(context.baseUrl, '/auth/google/register', { registrationToken: session.registrationToken, fullName })));
+      expect(profiles.map((response) => response.status).sort()).toEqual([200, 401]);
+      expect(session.deliveries).toHaveLength(1);
+      const responses = await Promise.all([1, 2].map(() => post(context.baseUrl, '/auth/verify-otp', { registrationToken: session.registrationToken, code: session.deliveries[0].code })));
+      expect(responses.map((response) => response.status).sort()).toEqual([200, 401]);
+      expect(await context.prisma.user.count()).toBe(1);
+      expect(await context.prisma.pendingAuth.count()).toBe(0);
+    });
+  });
+
+  it.each(['/auth/google/register', '/auth/google/link/verify', '/auth/google/link/resend'])('requires an allowed Origin for %s', async (path) => {
+    await withTestApp(async (context) => {
+      const body = path.endsWith('/register') ? { registrationToken: 'unknown', fullName: 'Valid' }
+        : path.endsWith('/verify') ? { registrationToken: 'unknown', code: '123456' } : { registrationToken: 'unknown' };
+      expect((await googlePost(context.baseUrl, path, body, '')).status).toBe(403);
+      expect((await googlePost(context.baseUrl, path, body, 'https://attacker.invalid')).status).toBe(403);
+      expect(await context.prisma.user.count()).toBe(0);
+    });
+  });
+
+  it('rolls back linking and issues no JWT when pending consumption fails', async () => {
+    await withTestApp(async (context) => {
+      const { prisma, app, baseUrl } = context;
+      const session = await start(context, true);
+      const sign = jest.spyOn(app.get(JwtService), 'signAsync');
+      await prisma.$executeRaw(Prisma.sql`CREATE FUNCTION ${databaseObject('reject_link_delete')}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'test link delete failure'; END; $$`);
+      await prisma.$executeRaw(Prisma.sql`CREATE TRIGGER reject_link_delete BEFORE DELETE ON ${databaseObject('pending_auth')} FOR EACH ROW EXECUTE FUNCTION ${databaseObject('reject_link_delete')}()`);
+      try {
+        const response = await googlePost(baseUrl, '/auth/google/link/verify', { registrationToken: session.registrationToken, code: session.deliveries[0].code });
+        expect(response.status).toBe(500);
+        expect(response.body).not.toHaveProperty('data.accessToken');
+        expect(sign).not.toHaveBeenCalled();
+        expect(await prisma.user.findUniqueOrThrow({ where: { id: session.user!.id } })).toEqual(session.user);
+        expect(await prisma.pendingAuth.count()).toBe(1);
+      } finally {
+        await prisma.$executeRaw(Prisma.sql`DROP TRIGGER reject_link_delete ON ${databaseObject('pending_auth')}`);
+        await prisma.$executeRaw(Prisma.sql`DROP FUNCTION ${databaseObject('reject_link_delete')}()`);
+      }
+    });
+  });
+});

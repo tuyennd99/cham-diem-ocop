@@ -101,6 +101,40 @@ export class AuthService {
       otpExpiresAt: pending.otpExpiresAt, resendAvailableAt: pending.resendAvailableAt };
   }
 
+  async googleRegister(input: { registrationToken: string; fullName: string; phone?: string }) {
+    const { pending, code, registrationToken } = await this.otpService.issueGoogleRegistration(input.registrationToken, {
+      fullName: input.fullName.trim(), phone: input.phone?.trim() || null,
+    });
+    await this.sendRegistrationOtp(pending.email!, code);
+    return { registrationToken, email: pending.email, expiresAt: pending.expiresAt,
+      otpExpiresAt: pending.otpExpiresAt, resendAvailableAt: pending.resendAvailableAt };
+  }
+
+  async googleLinkVerify(registrationToken: string, code: string) {
+    let result: Awaited<ReturnType<OtpService['verifyGoogleLink']>>;
+    try {
+      result = await this.otpService.verifyGoogleLink(registrationToken, code);
+    } catch (error) {
+      if (this.isUniqueConstraint(error)) throw new ConflictException('Google account is already linked; sign in again');
+      throw error;
+    }
+    if (result.status === 'collision') throw new ConflictException('Google account is already linked; sign in again');
+    const user = result.user;
+    return { kind: 'session' as const, ...await this.issueToken({
+      sub: user.id, email: user.email, role: user.role, tokenVersion: user.tokenVersion,
+    }, this.publicUser(user)) };
+  }
+
+  async googleLinkResend(registrationToken: string) {
+    const { pending, code } = await this.otpService.resendRegistration(registrationToken, 'GOOGLE_LINK');
+    try {
+      await this.mailService.sendOtp(pending.email!, code, 'GOOGLE_LINK');
+    } catch {
+      throw new InternalServerErrorException('Could not send verification email');
+    }
+    return { message: 'Verification code sent', otpExpiresAt: pending.otpExpiresAt, resendAvailableAt: pending.resendAvailableAt };
+  }
+
   private hashToken(token: string) {
     return createHash('sha256').update(token).digest('hex');
   }

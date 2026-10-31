@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { Public } from '../decorators/public.decorator';
-import { ChangePasswordDto, EmailDto, GoogleLoginDto, LegacyVerifyOtpDto, LoginDto, RegisterDto, RegistrationTokenDto, ResetPasswordDto, VerifyOtpDto } from '../dtos/auth.dto';
+import { ChangePasswordDto, EmailDto, GoogleLoginDto, GoogleRegisterDto, LegacyVerifyOtpDto, LoginDto, RegisterDto, RegistrationTokenDto, ResetPasswordDto, VerifyOtpDto } from '../dtos/auth.dto';
 import { env } from '../config/env';
 import { AuthService } from '../services/auth.service';
 import type { AccessTokenPayload } from '../types/auth';
@@ -29,6 +29,33 @@ export class AuthController {
   google(@Body() body: GoogleLoginDto, @Headers('origin') origin: string, @Headers('content-type') contentType: string) {
     this.assertGoogleRequest(origin, contentType);
     return this.authService.google(body);
+  }
+
+  @Public()
+  @Post('google/register')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 3, ttl: 15 * 60_000 } })
+  googleRegister(@Body() body: GoogleRegisterDto, @Headers('origin') origin: string, @Headers('content-type') contentType: string) {
+    this.assertGoogleRequest(origin, contentType);
+    return this.authService.googleRegister(body);
+  }
+
+  @Public()
+  @Post('google/link/verify')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  googleLinkVerify(@Body() body: VerifyOtpDto, @Headers('origin') origin: string, @Headers('content-type') contentType: string) {
+    this.assertGoogleRequest(origin, contentType);
+    return this.authService.googleLinkVerify(body.registrationToken, body.code);
+  }
+
+  @Public()
+  @Post('google/link/resend')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 3, ttl: 15 * 60_000 } })
+  googleLinkResend(@Body() body: RegistrationTokenDto, @Headers('origin') origin: string, @Headers('content-type') contentType: string) {
+    this.assertGoogleRequest(origin, contentType);
+    return this.authService.googleLinkResend(body.registrationToken);
   }
 
   private assertGoogleRequest(origin: string, contentType: string) {

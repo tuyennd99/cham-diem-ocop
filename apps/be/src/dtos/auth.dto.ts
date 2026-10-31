@@ -76,6 +76,22 @@ export class RegistrationTokenDto {
   registrationToken!: string;
 }
 
+export class GoogleRegisterDto extends RegistrationTokenDto {
+  @ApiProperty({ minLength: 1, maxLength: 255 })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(255)
+  fullName!: string;
+
+  @ApiPropertyOptional({ maxLength: 30, nullable: true })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  phone?: string;
+}
+
 export class VerifyOtpDto extends RegistrationTokenDto {
   @ApiProperty({ pattern: '^\\d{6}$' })
   @IsString()

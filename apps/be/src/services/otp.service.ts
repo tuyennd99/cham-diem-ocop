@@ -23,10 +23,29 @@ export class OtpService {
     return { registrationToken, code, pending };
   }
 
+  async issueGoogleRegistration(registrationToken: string, profile: { fullName: string; phone: string | null }) {
+    const tokenHash = this.hashToken(registrationToken);
+    const snapshot = await this.repository.findPendingRegistration(tokenHash, [PendingAuthKind.GOOGLE_PROFILE]);
+    if (!snapshot) throw new UnauthorizedException('Invalid or expired registration');
+    const code = this.generateCode();
+    const pending = await this.repository.startGoogleRegistration(tokenHash, profile, this.hash(snapshot.id, OtpPurpose.REGISTER, code));
+    if (!pending) throw new UnauthorizedException('Invalid or expired registration');
+    return { registrationToken, pending, code };
+  }
+
+  async verifyGoogleLink(registrationToken: string, code: string) {
+    const tokenHash = this.hashToken(registrationToken);
+    const pending = await this.repository.findPendingRegistration(tokenHash, [PendingAuthKind.GOOGLE_LINK]);
+    if (!pending) throw new UnauthorizedException('Invalid or expired verification code');
+    const result = await this.repository.consumeGoogleLink(tokenHash, this.hash(pending.id, 'GOOGLE_LINK', code));
+    if (result.status === 'invalid') throw new UnauthorizedException('Invalid or expired verification code');
+    return result;
+  }
+
   async registrationStatus(registrationToken: string) {
-    const pending = await this.repository.findPendingRegistration(this.hashToken(registrationToken));
+    const pending = await this.repository.findPendingRegistration(this.hashToken(registrationToken), [PendingAuthKind.EMAIL_REGISTER, PendingAuthKind.GOOGLE_REGISTER, PendingAuthKind.GOOGLE_LINK]);
     if (!pending || pending.expiresAt <= new Date()) throw new UnauthorizedException('Invalid or expired registration');
-    return { mode: 'register' as const, email: pending.email, expiresAt: pending.expiresAt,
+    return { mode: pending.kind === PendingAuthKind.GOOGLE_LINK ? 'google-link' as const : 'register' as const, email: pending.email, expiresAt: pending.expiresAt,
       otpExpiresAt: pending.otpExpiresAt, resendAvailableAt: pending.resendAvailableAt };
   }
 
@@ -37,17 +56,18 @@ export class OtpService {
     if (!valid) throw new UnauthorizedException('Invalid or expired verification code');
   }
 
-  async resendRegistration(registrationToken: string) {
+  async resendRegistration(registrationToken: string, purpose: 'REGISTER' | 'GOOGLE_LINK' = 'REGISTER') {
     const tokenHash = this.hashToken(registrationToken);
-    const pending = await this.repository.findPendingRegistration(tokenHash);
+    const kinds = purpose === 'GOOGLE_LINK' ? [PendingAuthKind.GOOGLE_LINK] : undefined;
+    const pending = await this.repository.findPendingRegistration(tokenHash, kinds);
     if (!pending) throw new UnauthorizedException('Invalid or expired registration');
     let code: string;
     let otpHash: string;
     do {
       code = this.generateCode();
-      otpHash = this.hash(pending.id, OtpPurpose.REGISTER, code);
+      otpHash = this.hash(pending.id, purpose, code);
     } while (otpHash === pending.otpHash);
-    const result = await this.repository.replacePendingRegistrationOtp(tokenHash, otpHash);
+    const result = await this.repository.replacePendingRegistrationOtp(tokenHash, otpHash, kinds);
     if (result.status === 'cooldown') throw new HttpException('Please wait before requesting another code', HttpStatus.TOO_MANY_REQUESTS);
     if (result.status !== 'ok') throw new UnauthorizedException('Invalid or expired registration');
     return { pending: result.pending, code };
@@ -77,7 +97,7 @@ export class OtpService {
     if (!valid) throw new UnauthorizedException('Invalid or expired verification code');
   }
 
-  private hash(email: string, purpose: OtpPurpose, code: string) {
+  private hash(email: string, purpose: OtpPurpose | 'GOOGLE_LINK', code: string) {
     return createHmac('sha256', env(process.env).jwtSecret)
       .update(`${email}:${purpose}:${code}`)
       .digest('hex');
