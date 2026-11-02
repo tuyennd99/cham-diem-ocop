@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "types": ["vite/client", "node"] },
+  "include": ["test/form-errors.test.ts", "test/form-values.test.ts", "test/form-contract.typecheck.tsx"]
+}
