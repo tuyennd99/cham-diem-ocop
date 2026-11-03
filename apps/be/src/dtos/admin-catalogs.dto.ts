@@ -52,6 +52,27 @@ class EffectiveToAfterFrom implements ValidatorConstraintInterface {
   }
 }
 
+@ValidatorConstraint({ name: 'registrationToAfterFrom', async: false })
+class RegistrationToAfterFrom implements ValidatorConstraintInterface {
+  validate(
+    registrationTo: string | null | undefined,
+    args: ValidationArguments,
+  ) {
+    const registrationFrom = (
+      args.object as { registrationFrom?: string | null }
+    ).registrationFrom;
+    return (
+      !registrationTo ||
+      !registrationFrom ||
+      new Date(registrationTo).getTime() > new Date(registrationFrom).getTime()
+    );
+  }
+
+  defaultMessage() {
+    return 'registrationTo must be later than registrationFrom';
+  }
+}
+
 abstract class CatalogQueryDto {
   @ApiPropertyOptional({ minimum: 1, default: 1 })
   @IsOptional()
@@ -192,12 +213,21 @@ export class PublicLocalitiesQueryDto
   implements PublicLocalityQuery {}
 
 export class CreateLocalityDto implements CreateLocalityInput {
-  @ApiProperty({ minLength: 1, maxLength: 50 })
+  @ApiPropertyOptional({ minLength: 1, maxLength: 50 })
+  @ValidateIf((_object, value) => value !== undefined && value !== '')
   @Transform(trimString)
   @IsString()
   @MinLength(1)
   @MaxLength(50)
-  code!: string;
+  code?: string;
+
+  @ApiPropertyOptional({ minLength: 1, maxLength: 255 })
+  @ValidateIf((_object, value) => value !== undefined)
+  @Transform(trimString)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(255)
+  eventName?: string;
 
   @ApiProperty({ minLength: 1, maxLength: 255 })
   @Transform(trimString)
@@ -230,6 +260,23 @@ export class CreateLocalityDto implements CreateLocalityInput {
   @Validate(EffectiveToAfterFrom)
   effectiveTo?: string | null;
 
+  @ApiPropertyOptional({ nullable: true, format: 'date-time' })
+  @IsOptional()
+  @Transform(trimString)
+  @IsString()
+  @IsDateString({ strict: true })
+  @Matches(ISO_TIMESTAMP_WITH_OFFSET)
+  registrationFrom?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, format: 'date-time' })
+  @IsOptional()
+  @Transform(trimString)
+  @IsString()
+  @IsDateString({ strict: true })
+  @Matches(ISO_TIMESTAMP_WITH_OFFSET)
+  @Validate(RegistrationToAfterFrom)
+  registrationTo?: string | null;
+
   @ApiProperty()
   @IsBoolean()
   isActive!: boolean;
@@ -243,6 +290,14 @@ export class CreateLocalityDto implements CreateLocalityInput {
 }
 
 export class UpdateLocalityDto implements UpdateLocalityInput {
+  @ApiPropertyOptional({ minLength: 1, maxLength: 255 })
+  @ValidateIf((_object, value) => value !== undefined)
+  @Transform(trimString)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(255)
+  eventName?: string;
+
   @ApiPropertyOptional({ minLength: 1, maxLength: 255 })
   @ValidateIf((_object, value) => value !== undefined)
   @Transform(trimString)
@@ -275,6 +330,23 @@ export class UpdateLocalityDto implements UpdateLocalityInput {
   @Matches(ISO_TIMESTAMP_WITH_OFFSET)
   @Validate(EffectiveToAfterFrom)
   effectiveTo?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, format: 'date-time' })
+  @IsOptional()
+  @Transform(trimString)
+  @IsString()
+  @IsDateString({ strict: true })
+  @Matches(ISO_TIMESTAMP_WITH_OFFSET)
+  registrationFrom?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, format: 'date-time' })
+  @IsOptional()
+  @Transform(trimString)
+  @IsString()
+  @IsDateString({ strict: true })
+  @Matches(ISO_TIMESTAMP_WITH_OFFSET)
+  @Validate(RegistrationToAfterFrom)
+  registrationTo?: string | null;
 
   @ApiPropertyOptional()
   @ValidateIf((_object, value) => value !== undefined)

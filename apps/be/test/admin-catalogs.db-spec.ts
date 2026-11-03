@@ -15,7 +15,8 @@ const categoryInput = () => ({
 });
 const localityInput = (overrides: Record<string, unknown> = {}) => ({
   code: 'TEST-L-' + randomUUID(),
-  name: ' Test locality ',
+  eventName: ' Đợt đánh giá thử nghiệm ',
+  name: ' Test locality ' + randomUUID().slice(0, 8),
   provinceName: ' Test province ',
   isActive: true,
   reason: ' Catalog setup ',
@@ -23,10 +24,103 @@ const localityInput = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('H4 product catalogs', () => {
+  it('auto-generates sequential XP<n> codes and rejects overlapping event periods for the same commune', async () => {
+    await withTestApp(async ({ app, prisma, baseUrl }) => {
+      const f = await adminFixture(app, prisma, baseUrl);
+      const countBefore = await prisma.locality.count();
+      const firstSeq = countBefore + 1;
+
+      const phase1 = await f.call('manager', localitiesPath, 'POST', {
+        eventName: 'Đánh giá OCOP đợt 1 năm 2026',
+        name: 'Xã A',
+        provinceName: 'Tỉnh Cao Bằng',
+        effectiveFrom: '2026-05-01T00:00:00+07:00',
+        effectiveTo: '2026-11-01T00:00:00+07:00',
+        registrationFrom: '2026-05-01T00:00:00+07:00',
+        registrationTo: '2026-10-01T00:00:00+07:00',
+        isActive: true,
+        reason: 'Mở đợt 1',
+      });
+      expect(phase1.status).toBe(201);
+      expect(phase1.body.data).toMatchObject({
+        code: `XP${firstSeq}`,
+        eventName: 'Đánh giá OCOP đợt 1 năm 2026',
+        name: 'Xã A',
+        provinceName: 'Tỉnh Cao Bằng',
+        effectiveFrom: '2026-04-30T17:00:00.000Z',
+        effectiveTo: '2026-10-31T17:00:00.000Z',
+        registrationFrom: '2026-04-30T17:00:00.000Z',
+        registrationTo: '2026-09-30T17:00:00.000Z',
+      });
+
+      const overlapping = await f.call('manager', localitiesPath, 'POST', {
+        eventName: 'Đánh giá OCOP đợt 2 trùng lịch',
+        name: 'Xã A',
+        provinceName: 'Tỉnh Cao Bằng',
+        effectiveFrom: '2026-10-01T00:00:00+07:00',
+        effectiveTo: '2027-01-01T00:00:00+07:00',
+        registrationFrom: '2026-10-01T00:00:00+07:00',
+        registrationTo: '2026-12-01T00:00:00+07:00',
+        isActive: true,
+        reason: 'Mở đợt 2 trùng lịch',
+      });
+      expect(overlapping.status).toBe(409);
+
+      const outOfBoundsRegistration = await f.call(
+        'manager',
+        localitiesPath,
+        'POST',
+        {
+          eventName: 'Đăng ký vượt ngoài sự kiện',
+          name: 'Xã B',
+          provinceName: 'Tỉnh Cao Bằng',
+          effectiveFrom: '2026-05-01T00:00:00+07:00',
+          effectiveTo: '2026-11-01T00:00:00+07:00',
+          registrationFrom: '2026-04-15T00:00:00+07:00',
+          registrationTo: '2026-10-01T00:00:00+07:00',
+          isActive: true,
+          reason: 'Mở đăng ký sớm hơn sự kiện',
+        },
+      );
+      expect(outOfBoundsRegistration.status).toBe(400);
+
+      const phase2 = await f.call('manager', localitiesPath, 'POST', {
+        eventName: 'Đánh giá OCOP đợt 2 năm 2026',
+        name: 'Xã A',
+        provinceName: 'Tỉnh Cao Bằng',
+        effectiveFrom: '2026-11-01T00:00:00+07:00',
+        effectiveTo: '2027-01-01T00:00:00+07:00',
+        registrationFrom: '2026-11-01T00:00:00+07:00',
+        registrationTo: '2026-12-15T00:00:00+07:00',
+        isActive: true,
+        reason: 'Mở đợt 2 liền kề',
+      });
+      expect(phase2.status).toBe(201);
+      expect(phase2.body.data).toMatchObject({
+        code: `XP${firstSeq + 1}`,
+        eventName: 'Đánh giá OCOP đợt 2 năm 2026',
+        name: 'Xã A',
+        provinceName: 'Tỉnh Cao Bằng',
+      });
+
+      const updateOverlap = await f.call(
+        'manager',
+        `${localitiesPath}/${phase2.body.data.id}`,
+        'PUT',
+        {
+          effectiveFrom: '2026-10-15T00:00:00+07:00',
+          registrationFrom: '2026-10-15T00:00:00+07:00',
+          reason: 'Lùi ngày bắt đầu đè lên đợt 1',
+        },
+      );
+      expect(updateOverlap.status).toBe(409);
+    });
+  });
+
   it('creates, filters, and retires localities through the correct permissions', async () => {
     await withTestApp(async ({ app, prisma, baseUrl }) => {
       const f = await adminFixture(app, prisma, baseUrl);
-      const input = localityInput();
+      const input = localityInput({ name: 'Test locality' });
       const created = await f.call('manager', localitiesPath, 'POST', input);
       expect(created.status).toBe(201);
       expect(created.body.data).toMatchObject({

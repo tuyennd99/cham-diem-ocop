@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { useStore, type AnyFormApi } from '@tanstack/react-form';
 import type { ButtonProps } from '@/types/ui';
 import { messageOf } from '@/lib/api-error';
+import { cn } from '@/lib/utils';
 import AlertError from '@/components/alert-error';
 import { Button } from '@/components/ui/button';
 import { formContext, useFormContext } from './form-context';
@@ -22,6 +23,7 @@ export type FormActionsProps = {
   cancelLabel?: ReactNode;
   onCancel?: () => void;
   disabled?: boolean;
+  className?: string;
   children?: ReactNode;
 };
 
@@ -80,12 +82,13 @@ export function FormActions({
   cancelLabel = 'Đóng',
   onCancel,
   disabled,
+  className,
   children,
 }: FormActionsProps) {
   const form = useFormContext();
   const isSubmitting = useStore(form.store, (state) => state.isSubmitting);
   return (
-    <div className='admin-actions'>
+    <div className={cn('admin-actions justify-end', className)}>
       <FormSubmitButton busyLabel={busyLabel} disabled={disabled}>
         {submitLabel}
       </FormSubmitButton>

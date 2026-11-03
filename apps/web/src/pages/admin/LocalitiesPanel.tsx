@@ -6,7 +6,7 @@ import type {
   UpdateLocalityInput,
 } from '@ocop/shared';
 import { useBlocker } from '@tanstack/react-router';
-import {  useSelector } from '@tanstack/react-form';
+import { useSelector } from '@tanstack/react-form';
 import { format } from 'date-fns';
 import AlertError from '@/components/alert-error';
 import { AppForm, useAppForm } from '@/components/form';
@@ -35,7 +35,6 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { ALL, DEFAULT_PAGE_SIZE } from '../../constants/consts';
-import { HTTP_STATUS } from '../../constants/http-status';
 import {
   nextVietnameseDayIso,
   vietnameseDateInput,
@@ -46,7 +45,7 @@ import {
   ADMINISTRATIVE_PROVINCES,
   useWardsByProvince,
 } from '../../lib/administrative-divisions';
-import { ApiError, errorText, messageOf } from '../../lib/api-error';
+import { errorText, messageOf } from '../../lib/api-error';
 import { useAdminLocalities } from '../../queries/admin-catalogs';
 
 export interface LocalitiesPanelProps {
@@ -68,9 +67,11 @@ interface LocalityFormDialogProps {
 
 type LocalityFormValues = {
   code: string;
+  eventName: string;
   name: string;
   provinceName: string;
-  dateRange: FormDateRangeValue;
+  eventDateRange: FormDateRangeValue;
+  registrationDateRange: FormDateRangeValue;
 };
 
 function LocalityFormDialog({
@@ -83,69 +84,106 @@ function LocalityFormDialog({
 }: LocalityFormDialogProps) {
   const isEdit = locality !== null;
   const todayYmd = format(new Date(), 'yyyy-MM-dd');
+  const initialEventFrom = locality?.effectiveFrom
+    ? vietnameseDateInput(locality.effectiveFrom)
+    : todayYmd;
+  const initialEventTo = locality?.effectiveTo
+    ? vietnameseInclusiveEndInput(locality.effectiveTo)
+    : todayYmd;
+  const initialRegFrom = locality?.registrationFrom
+    ? vietnameseDateInput(locality.registrationFrom)
+    : initialEventFrom;
+  const initialRegTo = locality?.registrationTo
+    ? vietnameseInclusiveEndInput(locality.registrationTo)
+    : initialEventTo;
+
   const defaultValues: LocalityFormValues = {
     code: locality?.code ?? '',
+    eventName: locality?.eventName ?? locality?.name ?? '',
     name: locality?.name ?? '',
     provinceName: locality?.provinceName ?? '',
-    dateRange: {
-      fromDay: locality?.effectiveFrom ? vietnameseDateInput(locality.effectiveFrom) : todayYmd,
-      toDay: locality?.effectiveTo ? vietnameseInclusiveEndInput(locality.effectiveTo) : '',
+    eventDateRange: {
+      fromDay: initialEventFrom,
+      toDay: initialEventTo,
+    },
+    registrationDateRange: {
+      fromDay: initialRegFrom,
+      toDay: initialRegTo,
     },
   };
   const [error, setError] = useState('');
 
   const form = useAppForm({
     defaultValues,
-    onSubmit: async ({ value, formApi }) => {
+    onSubmit: async ({ value }) => {
       setError('');
       try {
-        const effectiveFrom = value.dateRange.fromDay
-          ? vietnameseDayStartIso(value.dateRange.fromDay)
+        const effectiveFrom = value.eventDateRange.fromDay
+          ? vietnameseDayStartIso(value.eventDateRange.fromDay)
           : null;
-        const effectiveTo = value.dateRange.toDay
-          ? nextVietnameseDayIso(value.dateRange.toDay)
+        const effectiveTo = value.eventDateRange.toDay
+          ? nextVietnameseDayIso(value.eventDateRange.toDay)
           : null;
+        const registrationFrom = value.registrationDateRange.fromDay
+          ? vietnameseDayStartIso(value.registrationDateRange.fromDay)
+          : null;
+        const registrationTo = value.registrationDateRange.toDay
+          ? nextVietnameseDayIso(value.registrationDateRange.toDay)
+          : null;
+
         if (effectiveFrom && effectiveTo && Date.parse(effectiveFrom) >= Date.parse(effectiveTo)) {
-          throw new Error('Thời điểm kết thúc phải sau thời điểm bắt đầu.');
+          throw new Error('Thời điểm kết thúc sự kiện phải sau thời điểm bắt đầu.');
         }
+        if (
+          registrationFrom &&
+          registrationTo &&
+          Date.parse(registrationFrom) >= Date.parse(registrationTo)
+        ) {
+          throw new Error('Thời điểm kết thúc mở đăng ký phải sau thời điểm bắt đầu.');
+        }
+        if (
+          registrationFrom &&
+          effectiveFrom &&
+          Date.parse(registrationFrom) < Date.parse(effectiveFrom)
+        ) {
+          throw new Error('Thời gian mở đăng ký không được trước thời gian bắt đầu sự kiện.');
+        }
+        if (registrationTo && effectiveTo && Date.parse(registrationTo) > Date.parse(effectiveTo)) {
+          throw new Error('Thời gian mở đăng ký không được vượt quá thời gian kết thúc sự kiện.');
+        }
+
+        const trimmedEventName = value.eventName.trim();
         const common = {
+          eventName: trimmedEventName,
           name: value.name,
           provinceName: value.provinceName,
           effectiveFrom,
           effectiveTo,
+          registrationFrom,
+          registrationTo,
           isActive: true,
         };
         if (locality) {
           await onUpdate(locality.id, {
             ...common,
-            reason: `Cập nhật địa bàn ${value.name} (${value.provinceName})`,
+            reason: `Cập nhật sự kiện ${trimmedEventName} - ${value.name} (${value.provinceName})`,
           });
-          onSaved(`Đã cập nhật địa bàn ${value.name}.`);
+          onSaved(`Đã cập nhật sự kiện ${trimmedEventName} (${locality.code}).`);
         } else {
           await onCreate({
             ...common,
-            code: value.code.trim(),
-            reason: `Thêm địa bàn ${value.name} (${value.provinceName})`,
+            reason: `Thêm sự kiện ${trimmedEventName} - ${value.name} (${value.provinceName})`,
           });
-          onSaved(`Đã thêm địa bàn ${value.name} vào danh mục.`);
+          onSaved(`Đã thêm sự kiện ${trimmedEventName} vào danh mục.`);
         }
         onOpenChange(false);
       } catch (cause) {
-        if (!locality && cause instanceof ApiError && cause.status === HTTP_STATUS.CONFLICT) {
-          formApi.setFieldMeta('code', (prev) => ({
-            ...prev,
-            errorMap: {
-              ...prev.errorMap,
-              onSubmit: 'Mã địa bàn đã tồn tại. Vui lòng nhập mã khác.',
-            },
-          }));
-        } else {
-          setError(messageOf(cause));
-        }
+        setError(messageOf(cause));
       }
     },
   });
   const provinceName = useSelector(form.store, (state) => state.values.provinceName);
+  const eventDateRange = useSelector(form.store, (state) => state.values.eventDateRange);
   const wardsInSelectedProvince = useWardsByProvince(provinceName);
   const isDefaultValue = useSelector(form.store, (state) => state.isDefaultValue);
   const busy = useSelector(form.store, (state) => state.isSubmitting);
@@ -153,7 +191,7 @@ function LocalityFormDialog({
 
   useBlocker({
     shouldBlockFn: () =>
-      dirty && !window.confirm('Biểu mẫu địa bàn có thay đổi chưa lưu. Rời trang và bỏ thay đổi?'),
+      dirty && !window.confirm('Biểu mẫu sự kiện có thay đổi chưa lưu. Rời trang và bỏ thay đổi?'),
     enableBeforeUnload: () => dirty,
   });
 
@@ -165,7 +203,7 @@ function LocalityFormDialog({
     if (busy) return;
     if (
       dirty &&
-      !window.confirm('Biểu mẫu địa bàn có thay đổi chưa lưu. Đóng hộp thoại và bỏ thay đổi?')
+      !window.confirm('Biểu mẫu sự kiện có thay đổi chưa lưu. Đóng hộp thoại và bỏ thay đổi?')
     ) {
       return;
     }
@@ -181,63 +219,161 @@ function LocalityFormDialog({
       >
         <DialogHeader>
           <DialogTitle>
-            {isEdit ? `Cập nhật địa bàn: ${locality.name}` : 'Thêm địa bàn'}
+            {isEdit ? `Cập nhật sự kiện: ${locality.eventName || locality.name}` : 'Thêm sự kiện'}
           </DialogTitle>
           <DialogDescription>
             {isEdit
-              ? `Mã địa bàn cố định: ${locality.code}. Chọn Tỉnh / Thành phố, Xã / Phường và khoảng thời gian mở đăng ký.`
-              : 'Nhập mã địa bàn, chọn Tỉnh / Thành phố, Xã / Phường và khoảng thời gian mở đăng ký.'}
+              ? `Mã sự kiện cố định: ${locality.code}. Cập nhật tên sự kiện, địa bàn hành chính, thời gian diễn ra sự kiện và thời gian mở đăng ký.`
+              : 'Mã sự kiện (XP1, XP2, …) được hệ thống tự sinh theo số thứ tự. Nhập tên sự kiện, chọn địa bàn, thời gian sự kiện và thời gian mở đăng ký.'}
           </DialogDescription>
         </DialogHeader>
-        <AppForm form={form} className='admin-form account-form' error={error} errorTitle='Không thể lưu địa bàn'>
-          <form.AppField name='code' validators={{
-            onChange: ({ value }) => !value.trim() ? 'Vui lòng nhập mã địa bàn.' : undefined,
-          }}>
-            {(field) => <field.Input id='locality-code' label={isEdit ? 'Mã địa bàn (bất biến)' : 'Mã địa bàn'}
-              placeholder='Nhập mã địa bàn' maxLength={50} required disabled={isEdit} />}
-          </form.AppField>
-          <form.AppField name='provinceName' validators={{
-            onChange: ({ value }) => !value.trim() ? 'Vui lòng chọn tỉnh / thành phố.' : undefined,
-          }}>
-            {(field) => <field.Combobox id='locality-province' label='Tỉnh / thành phố' required
-              options={ADMINISTRATIVE_PROVINCES.map((item) => ({ value: item.name_with_type, label: item.name_with_type }))}
-              allowClear preserveUnknownValue placeholder='Chọn tỉnh / thành phố trước'
-              onValueChange={() => form.setFieldValue('name', '')} />}
-          </form.AppField>
-          <form.AppField name='name' validators={{
-            onChange: ({ value }) => !value.trim() ? 'Vui lòng chọn xã / phường.' : undefined,
-          }}>
-            {(field) => <field.Combobox id='locality-name' label='Xã / phường' required
-              options={wardsInSelectedProvince.map((item) => ({ value: item.name_with_type, label: item.name_with_type }))}
-              disabled={!provinceName} allowClear preserveUnknownValue
-              placeholder={provinceName ? 'Chọn xã / phường trong tỉnh…' : 'Chọn tỉnh / thành phố trước'}
-              onValueChange={(value) => {
-                const ward = wardsInSelectedProvince.find((item) => item.name_with_type === value || item.name === value);
-                if (!ward) return;
-                if (!isEdit && !form.state.values.code.trim()) {
-                  form.setFieldMeta('code', (prev) => ({ ...prev, errorMap: { ...prev.errorMap, onSubmit: undefined } }));
-                  form.setFieldValue('code', `XP-${ward.code}`);
-                }
-              }} />}
+        <AppForm
+          form={form}
+          className='admin-form account-form'
+          error={error}
+          errorTitle='Không thể lưu sự kiện'
+        >
+          {isEdit && (
+            <form.AppField name='code'>
+              {(field) => (
+                <field.Input
+                  id='locality-code'
+                  label='Mã sự kiện (tự sinh)'
+                  maxLength={50}
+                  disabled
+                />
+              )}
+            </form.AppField>
+          )}
+          <form.AppField
+            name='eventName'
+            validators={{
+              onChange: ({ value }) =>
+                !value.trim() ? 'Vui lòng nhập tên sự kiện.' : undefined,
+            }}
+          >
+            {(field) => (
+              <field.Input
+                id='locality-event-name'
+                label='Tên sự kiện'
+                placeholder='VD: Đánh giá OCOP đợt 1 năm 2026'
+                maxLength={255}
+                required
+              />
+            )}
           </form.AppField>
           <form.AppField
-            name='dateRange'
+            name='provinceName'
+            validators={{
+              onChange: ({ value }) =>
+                !value.trim() ? 'Vui lòng chọn tỉnh / thành phố.' : undefined,
+            }}
+          >
+            {(field) => (
+              <field.Combobox
+                id='locality-province'
+                label='Tỉnh / thành phố'
+                required
+                options={ADMINISTRATIVE_PROVINCES.map((item) => ({
+                  value: item.name_with_type,
+                  label: item.name_with_type,
+                }))}
+                allowClear
+                preserveUnknownValue
+                placeholder='Chọn tỉnh / thành phố trước'
+                onValueChange={() => form.setFieldValue('name', '')}
+              />
+            )}
+          </form.AppField>
+          <form.AppField
+            name='name'
+            validators={{
+              onChange: ({ value }) =>
+                !value.trim() ? 'Vui lòng chọn xã / phường.' : undefined,
+            }}
+          >
+            {(field) => (
+              <field.Combobox
+                id='locality-name'
+                label='Xã / phường'
+                required
+                options={wardsInSelectedProvince.map((item) => ({
+                  value: item.name_with_type,
+                  label: item.name_with_type,
+                }))}
+                disabled={!provinceName}
+                allowClear
+                preserveUnknownValue
+                placeholder={
+                  provinceName ? 'Chọn xã / phường trong tỉnh…' : 'Chọn tỉnh / thành phố trước'
+                }
+              />
+            )}
+          </form.AppField>
+          <form.AppField
+            name='eventDateRange'
             validators={{
               onChange: ({ value }) => {
-                if (value.fromDay && value.fromDay < todayYmd) {
-                  return 'Ngày bắt đầu không được là ngày trong quá khứ.';
+                if (!value.fromDay || !value.toDay) {
+                  return 'Vui lòng chọn đầy đủ thời gian bắt đầu và kết thúc sự kiện.';
                 }
-                if (value.toDay && value.toDay < todayYmd) {
-                  return 'Ngày kết thúc không được là ngày trong quá khứ.';
+                if (value.fromDay < todayYmd) {
+                  return 'Ngày bắt đầu sự kiện không được là ngày trong quá khứ.';
                 }
-                if (value.fromDay && value.toDay && value.fromDay > value.toDay) {
-                  return 'Ngày kết thúc không được trước ngày bắt đầu.';
+                if (value.toDay < todayYmd) {
+                  return 'Ngày kết thúc sự kiện không được là ngày trong quá khứ.';
+                }
+                if (value.fromDay > value.toDay) {
+                  return 'Ngày kết thúc sự kiện không được trước ngày bắt đầu.';
                 }
                 return undefined;
               },
             }}
           >
-            {(field) => <field.DateRange label='Thời gian mở' disablePast />}
+            {(field) => (
+              <field.DateRange
+                id='locality-event-date-range'
+                label='Thời gian sự kiện'
+                required
+                disablePast
+              />
+            )}
+          </form.AppField>
+          <form.AppField
+            name='registrationDateRange'
+            validators={{
+              onChangeListenTo: ['eventDateRange'],
+              onChange: ({ value }) => {
+                if (!value.fromDay || !value.toDay) {
+                  return 'Vui lòng chọn đầy đủ thời gian mở và kết thúc đăng ký.';
+                }
+                if (value.fromDay < todayYmd) {
+                  return 'Ngày bắt đầu mở đăng ký không được là ngày trong quá khứ.';
+                }
+                if (value.toDay < todayYmd) {
+                  return 'Ngày kết thúc mở đăng ký không được là ngày trong quá khứ.';
+                }
+                if (value.fromDay > value.toDay) {
+                  return 'Ngày kết thúc mở đăng ký không được trước ngày bắt đầu.';
+                }
+                if (eventDateRange.fromDay && value.fromDay < eventDateRange.fromDay) {
+                  return 'Thời gian mở đăng ký không được trước ngày bắt đầu sự kiện.';
+                }
+                if (eventDateRange.toDay && value.toDay > eventDateRange.toDay) {
+                  return 'Thời gian mở đăng ký không được vượt quá ngày kết thúc sự kiện.';
+                }
+                return undefined;
+              },
+            }}
+          >
+            {(field) => (
+              <field.DateRange
+                id='locality-registration-date-range'
+                label='Thời gian mở đăng ký'
+                required
+                disablePast
+              />
+            )}
           </form.AppField>
           <form.Actions submitLabel='Lưu' onCancel={() => requestOpenChange(false)} />
         </AppForm>
@@ -304,13 +440,18 @@ export function LocalitiesPanel({
     const cols: DataTableColumnDef<LocalityRecord>[] = [
       {
         accessorKey: 'code',
-        header: 'Mã địa bàn',
+        header: 'Mã sự kiện',
         meta: { cellClassName: 'font-mono text-xs' },
       },
       {
-        accessorKey: 'name',
-        header: 'Tên xã / phường',
+        accessorKey: 'eventName',
+        header: 'Tên sự kiện',
         meta: { isRowHeader: true },
+        cell: ({ row }) => row.original.eventName || row.original.name,
+      },
+      {
+        accessorKey: 'name',
+        header: 'Xã / Phường',
       },
       {
         accessorKey: 'provinceName',
@@ -318,15 +459,30 @@ export function LocalitiesPanel({
       },
       {
         id: 'effectiveRange',
-        header: 'Khoảng hiệu lực',
+        header: 'Thời gian sự kiện',
         meta: { cellClassName: 'text-xs text-muted' },
         cell: ({ row }) => {
           const item = row.original;
           return (
             <>
-              {item.effectiveFrom ? new Date(item.effectiveFrom).toLocaleString('vi-VN') : 'Từ đầu'}{' '}
-              →{' '}
-              {item.effectiveTo ? new Date(item.effectiveTo).toLocaleString('vi-VN') : 'Hiện hành'}
+              {item.effectiveFrom ? vietnameseDateInput(item.effectiveFrom) : 'Từ đầu'} →{' '}
+              {item.effectiveTo ? vietnameseInclusiveEndInput(item.effectiveTo) : 'Hiện hành'}
+            </>
+          );
+        },
+      },
+      {
+        id: 'registrationRange',
+        header: 'Thời gian mở đăng ký',
+        meta: { cellClassName: 'text-xs text-muted' },
+        cell: ({ row }) => {
+          const item = row.original;
+          const regFrom = item.registrationFrom ?? item.effectiveFrom;
+          const regTo = item.registrationTo ?? item.effectiveTo;
+          return (
+            <>
+              {regFrom ? vietnameseDateInput(regFrom) : 'Từ đầu'} →{' '}
+              {regTo ? vietnameseInclusiveEndInput(regTo) : 'Hiện hành'}
             </>
           );
         },
@@ -367,13 +523,13 @@ export function LocalitiesPanel({
   }, [canManage]);
 
   return (
-    <section className='admin-page' aria-label='Danh mục địa bàn xã phường'>
+    <section className='admin-page' aria-label='Danh mục sự kiện địa bàn'>
       <div className='admin-page-heading'>
         <div>
-          <h1>Địa bàn</h1>
+          <h1>Sự kiện</h1>
           <p className='route-intro'>
-            Quản lý danh mục Xã / Phường ({data?.meta?.total ?? localities.length} địa bàn) phục vụ
-            hồ sơ và báo cáo.
+            Quản lý danh mục Sự kiện đánh giá OCOP tại Xã / Phường (
+            {data?.meta?.total ?? localities.length} sự kiện) phục vụ đăng ký hồ sơ và báo cáo.
           </p>
         </div>
         <div className='admin-actions'>
@@ -394,7 +550,7 @@ export function LocalitiesPanel({
                 setCreateOpen(true);
               }}
             >
-              Thêm địa bàn
+              Thêm sự kiện
             </Button>
           )}
         </div>
@@ -434,7 +590,10 @@ export function LocalitiesPanel({
             }}
           >
             <ComboboxAnchor>
-              <ComboboxInput id='localities-filter-province' placeholder='Tất cả tỉnh / thành phố' />
+              <ComboboxInput
+                id='localities-filter-province'
+                placeholder='Tất cả tỉnh / thành phố'
+              />
               <ComboboxTrigger aria-label='Mở danh sách tỉnh / thành phố' />
             </ComboboxAnchor>
             <ComboboxContent>
@@ -449,7 +608,7 @@ export function LocalitiesPanel({
           </Combobox>
         </FormField>
         <FormField
-          label='Tìm mã hoặc tên xã / phường'
+          label='Tìm mã, tên sự kiện hoặc xã / phường'
           htmlFor='localities-filter-q'
           className='admin-filter-field'
           data-filter-width='search'
@@ -457,7 +616,7 @@ export function LocalitiesPanel({
           <Input
             id='localities-filter-q'
             value={draftQ}
-            placeholder='Nhập mã hoặc tên xã/phường…'
+            placeholder='Nhập mã, tên sự kiện hoặc xã/phường…'
             onChange={(event) => setDraftQ(event.target.value)}
           />
         </FormField>
@@ -475,7 +634,7 @@ export function LocalitiesPanel({
           >
             <ComboboxAnchor>
               <ComboboxInput id='localities-filter-active' placeholder='Tất cả' />
-              <ComboboxTrigger aria-label='Mở danh sách trạng thái địa bàn' />
+              <ComboboxTrigger aria-label='Mở danh sách trạng thái sự kiện' />
             </ComboboxAnchor>
             <ComboboxContent>
               <ComboboxEmpty>Không tìm thấy trạng thái.</ComboboxEmpty>
@@ -505,13 +664,13 @@ export function LocalitiesPanel({
 
       {isFetching && !isPending && (
         <p className='form-note' role='status'>
-          Đang cập nhật danh mục địa bàn…
+          Đang cập nhật danh mục sự kiện…
         </p>
       )}
 
       {loadErrorText && (
         <div className='space-y-2'>
-          <AlertError title='Không thể tải địa bàn' errors={[loadErrorText]} />
+          <AlertError title='Không thể tải danh sách sự kiện' errors={[loadErrorText]} />
           <Button
             type='button'
             variant='secondary'
@@ -527,10 +686,10 @@ export function LocalitiesPanel({
 
       {!isPending && !loadError && localities.length === 0 && (
         <Card className='admin-table-region empty-card'>
-          <h3>Chưa có địa bàn phù hợp</h3>
+          <h3>Chưa có sự kiện phù hợp</h3>
           <p className='text-muted text-sm'>
-            Nạp danh mục Xã/Phường đã đối chiếu để phục vụ chọn địa bàn khi nộp hồ sơ và báo cáo
-            thống kê.
+            Tạo sự kiện đánh giá OCOP tại Xã/Phường để mở cổng cho chủ thể đăng ký hồ sơ và thống
+            kê báo cáo.
           </p>
         </Card>
       )}
@@ -539,7 +698,7 @@ export function LocalitiesPanel({
         <div
           className='admin-table-region'
           role='region'
-          aria-label='Bảng danh mục Xã Phường'
+          aria-label='Bảng danh mục Sự kiện'
           tabIndex={0}
         >
           <DataTable

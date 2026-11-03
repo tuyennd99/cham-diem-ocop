@@ -126,11 +126,11 @@ Màn hình có cây/nhóm bên trái và bảng phân loại bên phải, tìm t
 - Không cung cấp sửa tự do điểm, lựa chọn hoặc nội dung 26 bộ tiêu chí trên UI này. Màn này quản lý danh mục và đọc/in các bộ đã kiểm chứng.
 - Hồ sơ nháp giữ nguyên lựa chọn cũ khi danh mục ngừng dùng, có cảnh báo; BE kiểm tra nhóm/phân loại/bộ phiếu còn hợp lệ trước khi nộp mới. Hồ sơ đã nộp tiếp tục chấm theo bộ đã gắn.
 
-### 5.3. Tab Địa bàn phục vụ báo cáo
+### 5.3. Quản lý Sự kiện địa bàn phục vụ đăng ký và báo cáo
 
-Danh mục Xã/Phường gồm mã, tên, loại, tỉnh/thành phố, trạng thái và thông tin hiệu lực. Không bắt nhập một cấp huyện để đáp ứng bộ lọc xã/phường của yêu cầu này. Danh mục triển khai dùng mã đã được chủ quản đối chiếu; tài liệu không tự tạo mã địa bàn.
+Mỗi bản ghi trong danh mục `Locality` đại diện cho một **Sự kiện** (đợt tổ chức đánh giá OCOP tại một Xã/Phường thuộc Tỉnh/Thành phố), gồm: mã tự sinh theo số thứ tự (`XP<số_thứ_tự>`, ví dụ `XP14`, `XP234`), tên sự kiện (`eventName`), tên xã/phường (`name`), tỉnh/thành phố (`provinceName`), **Thời gian sự kiện** (`effectiveFrom` – `effectiveTo`), **Thời gian mở đăng ký** (`registrationFrom` – `registrationTo`) và trạng thái (`isActive`). Hai sự kiện của cùng một Xã/Phường trong cùng Tỉnh/Thành phố không được giao nhau về Thời gian sự kiện; Thời gian mở đăng ký phải nằm trong Thời gian sự kiện. Chi tiết xem tại [Đặc tả Sự kiện địa bàn](2026-11-03-locality-events-spec.md).
 
-Đăng ký chọn `localityId` từ danh mục; địa chỉ liên hệ vẫn là trường riêng. Khi nộp, lưu thông tin địa bàn tại thời điểm nộp để đổi tên/sắp xếp danh mục không dồn sai số liệu cũ. Bản ghi cũ chưa ánh xạ nằm ở nhóm **Chưa xác định địa bàn**, không bị loại khỏi tổng và không tự ánh xạ bằng tìm chuỗi địa chỉ.
+Đăng ký chọn `localityId` (sự kiện đang trong hạn mở đăng ký) từ danh mục; địa chỉ liên hệ vẫn là trường riêng. Khi nộp, lưu thông tin địa bàn tại thời điểm nộp để đổi tên/sắp xếp danh mục không dồn sai số liệu cũ. Bản ghi cũ chưa ánh xạ nằm ở nhóm **Chưa xác định địa bàn**, không bị loại khỏi tổng và không tự ánh xạ bằng tìm chuỗi địa chỉ.
 
 ## 6. Phân hệ 3 — Danh mục sản phẩm
 

@@ -106,10 +106,10 @@ export const WorkspaceNav = memo(function WorkspaceNav({
               <span>Danh mục sản phẩm</span>
             </Link>
           </NavItemTooltip>
-          <NavItemTooltip label='Địa bàn' enabled={tooltipEnabled}>
-            <Link to='/admin/localities' title='Địa bàn' onClick={onNavigate}>
+          <NavItemTooltip label='Sự kiện' enabled={tooltipEnabled}>
+            <Link to='/admin/localities' title='Sự kiện' onClick={onNavigate}>
               <MapPin className='size-4' aria-hidden='true' />
-              <span>Địa bàn</span>
+              <span>Sự kiện</span>
             </Link>
           </NavItemTooltip>
           <NavItemTooltip label='Sản phẩm' enabled={tooltipEnabled}>

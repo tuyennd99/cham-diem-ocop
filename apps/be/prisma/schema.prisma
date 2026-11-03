@@ -151,16 +151,19 @@ model OrganizationUnit {
 }
 
 model Locality {
-  id            String       @id @default(cuid())
-  code          String       @unique @db.VarChar(50)
-  name          String       @db.VarChar(255)
-  provinceName  String       @db.VarChar(255)
-  effectiveFrom DateTime?    @db.Timestamptz(3)
-  effectiveTo   DateTime?    @db.Timestamptz(3)
-  isActive      Boolean      @default(true)
-  createdAt     DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime     @updatedAt @db.Timestamptz(3)
-  products      Product[]
+  id               String       @id @default(cuid())
+  code             String       @unique @db.VarChar(50)
+  eventName        String       @default("") @db.VarChar(255)
+  name             String       @db.VarChar(255)
+  provinceName     String       @db.VarChar(255)
+  effectiveFrom    DateTime?    @db.Timestamptz(3)
+  effectiveTo      DateTime?    @db.Timestamptz(3)
+  registrationFrom DateTime?    @db.Timestamptz(3)
+  registrationTo   DateTime?    @db.Timestamptz(3)
+  isActive         Boolean      @default(true)
+  createdAt        DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime     @updatedAt @db.Timestamptz(3)
+  products         Product[]
 
   @@map("localities")
 }

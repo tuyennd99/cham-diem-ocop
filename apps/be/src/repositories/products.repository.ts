@@ -740,7 +740,9 @@ export class ProductsRepository {
       !locality ||
       !locality.isActive ||
       (locality.effectiveFrom && locality.effectiveFrom > now) ||
-      (locality.effectiveTo && locality.effectiveTo <= now)
+      (locality.effectiveTo && locality.effectiveTo <= now) ||
+      (locality.registrationFrom && locality.registrationFrom > now) ||
+      (locality.registrationTo && locality.registrationTo <= now)
     ) {
       throw new ConflictException('Locality is not currently available');
     }

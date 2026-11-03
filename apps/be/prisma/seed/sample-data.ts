@@ -141,24 +141,28 @@ export async function seedSampleOcopData(
     {
       id: 'seed-locality-khanh-an',
       code: 'XP-KHANHAN',
+      eventName: 'Đánh giá OCOP năm 2026 - Xã Khánh An',
       name: 'Xã Khánh An',
       provinceName: 'Tỉnh Cà Mau',
     },
     {
       id: 'seed-locality-rach-goc',
       code: 'XP-RACHGOC',
+      eventName: 'Đánh giá OCOP năm 2026 - Phường Rạch Gốc',
       name: 'Phường Rạch Gốc',
       provinceName: 'Tỉnh Cà Mau',
     },
     {
       id: 'seed-locality-dat-mui',
       code: 'XP-DATMUI',
+      eventName: 'Đánh giá OCOP năm 2026 - Xã Đất Mũi',
       name: 'Xã Đất Mũi',
       provinceName: 'Tỉnh Cà Mau',
     },
     {
       id: 'seed-locality-tran-van-thoi',
       code: 'XP-TVTHOI',
+      eventName: 'Đánh giá OCOP năm 2026 - Xã Trần Văn Thời',
       name: 'Xã Trần Văn Thời',
       provinceName: 'Tỉnh Cà Mau',
     },
@@ -168,18 +172,23 @@ export async function seedSampleOcopData(
     await prisma.locality.upsert({
       where: { code: loc.code },
       update: {
+        eventName: loc.eventName,
         name: loc.name,
         provinceName: loc.provinceName,
         effectiveFrom: new Date('2020-01-01T00:00:00+07:00'),
         effectiveTo: null,
+        registrationFrom: new Date('2020-01-01T00:00:00+07:00'),
+        registrationTo: null,
         isActive: true,
       },
       create: {
         id: loc.id,
         code: loc.code,
+        eventName: loc.eventName,
         name: loc.name,
         provinceName: loc.provinceName,
         effectiveFrom: new Date('2020-01-01T00:00:00+07:00'),
+        registrationFrom: new Date('2020-01-01T00:00:00+07:00'),
         isActive: true,
       },
     });

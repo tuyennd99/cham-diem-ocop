@@ -21,22 +21,28 @@ describe('locality DTO validation', () => {
     reason: 'Catalog update',
   };
 
-  it('accepts offset timestamps and trims locality names', async () => {
+  it('accepts offset timestamps, optional code, eventName and registration dates', async () => {
     await expect(
       validate(
         {
-          ...create,
           name: ' Test locality ',
+          eventName: ' Đợt 1 năm 2026 ',
           provinceName: ' Test province ',
-          effectiveFrom: '2026-01-01T00:00:00+07:00',
-          effectiveTo: '2027-01-01T00:00:00Z',
+          effectiveFrom: '2026-05-01T00:00:00+07:00',
+          effectiveTo: '2026-11-01T00:00:00+07:00',
+          registrationFrom: '2026-05-01T00:00:00+07:00',
+          registrationTo: '2026-10-01T00:00:00+07:00',
+          isActive: true,
+          reason: 'Catalog update',
         },
         CreateLocalityDto,
       ),
     ).resolves.toMatchObject({
       name: 'Test locality',
+      eventName: 'Đợt 1 năm 2026',
       provinceName: 'Test province',
-      effectiveFrom: '2026-01-01T00:00:00+07:00',
+      effectiveFrom: '2026-05-01T00:00:00+07:00',
+      registrationFrom: '2026-05-01T00:00:00+07:00',
     });
   });
 
@@ -46,6 +52,10 @@ describe('locality DTO validation', () => {
     {
       effectiveFrom: '2027-01-01T00:00:00Z',
       effectiveTo: '2026-01-01T00:00:00Z',
+    },
+    {
+      registrationFrom: '2027-01-01T00:00:00Z',
+      registrationTo: '2026-01-01T00:00:00Z',
     },
   ])('rejects invalid effective date input %p', async (dates) => {
     await expect(

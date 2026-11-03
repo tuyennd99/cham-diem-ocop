@@ -80,7 +80,7 @@ export const adminGroup: NavGroup = {
       icon: FolderTree,
     },
     {
-      title: 'Địa bàn',
+      title: 'Sự kiện',
       href: '/admin/localities',
       icon: MapPin,
     },

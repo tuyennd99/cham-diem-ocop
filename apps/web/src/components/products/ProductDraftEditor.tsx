@@ -923,7 +923,9 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                                   )}
                                 {localityOptions.map((locality) => (
                                   <ComboboxItem key={locality.id} value={locality.id}>
-                                    {locality.name} · {locality.provinceName}
+                                    {locality.eventName && locality.eventName !== locality.name
+                                      ? `${locality.eventName} · ${locality.name} · ${locality.provinceName}`
+                                      : `${locality.name} · ${locality.provinceName}`}
                                   </ComboboxItem>
                                 ))}
                                 {staticWardsInProvince

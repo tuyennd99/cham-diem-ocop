@@ -81,10 +81,13 @@ export interface ResetAdminUserPasswordInput {
 export interface LocalityRecord {
   id: string;
   code: string;
+  eventName: string;
   name: string;
   provinceName: string;
   effectiveFrom: string | null;
   effectiveTo: string | null;
+  registrationFrom: string | null;
+  registrationTo: string | null;
   isActive: boolean;
 }
 export interface LocalityQuery {
@@ -96,19 +99,25 @@ export interface LocalityQuery {
 }
 export type PublicLocalityQuery = Omit<LocalityQuery, "isActive">;
 export interface CreateLocalityInput {
-  code: string;
+  code?: string;
+  eventName?: string;
   name: string;
   provinceName: string;
   effectiveFrom?: string | null;
   effectiveTo?: string | null;
+  registrationFrom?: string | null;
+  registrationTo?: string | null;
   isActive: boolean;
   reason: string;
 }
 export interface UpdateLocalityInput {
+  eventName?: string;
   name?: string;
   provinceName?: string;
   effectiveFrom?: string | null;
   effectiveTo?: string | null;
+  registrationFrom?: string | null;
+  registrationTo?: string | null;
   isActive?: boolean;
   reason: string;
 }

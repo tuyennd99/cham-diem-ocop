@@ -96,10 +96,13 @@ const submittedStatuses: ProductStatus[] = [
 const localitySelect = {
   id: true,
   code: true,
+  eventName: true,
   name: true,
   provinceName: true,
   effectiveFrom: true,
   effectiveTo: true,
+  registrationFrom: true,
+  registrationTo: true,
   isActive: true,
 } satisfies Prisma.LocalitySelect;
 
@@ -110,8 +113,11 @@ type LocalityRow = Prisma.LocalityGetPayload<{
 function localityRecord(row: LocalityRow): LocalityRecord {
   return {
     ...row,
+    eventName: row.eventName || row.name,
     effectiveFrom: row.effectiveFrom?.toISOString() ?? null,
     effectiveTo: row.effectiveTo?.toISOString() ?? null,
+    registrationFrom: row.registrationFrom?.toISOString() ?? null,
+    registrationTo: row.registrationTo?.toISOString() ?? null,
   };
 }
 
@@ -127,6 +133,111 @@ function assertEffectiveRange(
     throw new BadRequestException(
       'effectiveTo must be later than effectiveFrom',
     );
+  }
+}
+
+function assertRegistrationRange(
+  effectiveFrom: Date | null,
+  effectiveTo: Date | null,
+  registrationFrom: Date | null,
+  registrationTo: Date | null,
+) {
+  if (
+    registrationFrom &&
+    registrationTo &&
+    registrationTo <= registrationFrom
+  ) {
+    throw new BadRequestException(
+      'registrationTo must be later than registrationFrom',
+    );
+  }
+  if (registrationFrom && effectiveFrom && registrationFrom < effectiveFrom) {
+    throw new BadRequestException(
+      'Thời gian mở đăng ký không được trước thời gian bắt đầu sự kiện.',
+    );
+  }
+  if (registrationTo && effectiveTo && registrationTo > effectiveTo) {
+    throw new BadRequestException(
+      'Thời gian mở đăng ký không được vượt quá thời gian kết thúc sự kiện.',
+    );
+  }
+  if (registrationFrom && effectiveTo && registrationFrom >= effectiveTo) {
+    throw new BadRequestException(
+      'Thời gian mở đăng ký phải nằm trong thời gian sự kiện.',
+    );
+  }
+  if (registrationTo && effectiveFrom && registrationTo <= effectiveFrom) {
+    throw new BadRequestException(
+      'Thời gian mở đăng ký phải nằm trong thời gian sự kiện.',
+    );
+  }
+}
+
+async function generateNextLocalityCode(
+  tx: Prisma.TransactionClient,
+): Promise<string> {
+  const existing = await tx.locality.findMany({
+    select: { code: true },
+  });
+  const usedCodes = new Set(existing.map((r) => r.code.toUpperCase()));
+  let seq = existing.length + 1;
+  while (usedCodes.has(`XP${seq}`)) {
+    seq += 1;
+  }
+  return `XP${seq}`;
+}
+
+async function assertNoOverlappingEvent(
+  tx: Prisma.TransactionClient,
+  input: {
+    excludeId?: string;
+    provinceName: string;
+    name: string;
+    effectiveFrom: Date | null;
+    effectiveTo: Date | null;
+  },
+) {
+  if (!input.effectiveFrom && !input.effectiveTo) {
+    return;
+  }
+  const siblings = await tx.locality.findMany({
+    where: {
+      ...(input.excludeId ? { id: { not: input.excludeId } } : {}),
+      provinceName: { equals: input.provinceName, mode: 'insensitive' },
+      name: { equals: input.name, mode: 'insensitive' },
+    },
+    select: {
+      id: true,
+      code: true,
+      eventName: true,
+      effectiveFrom: true,
+      effectiveTo: true,
+    },
+  });
+
+  const newStart = input.effectiveFrom
+    ? input.effectiveFrom.getTime()
+    : Number.NEGATIVE_INFINITY;
+  const newEnd = input.effectiveTo
+    ? input.effectiveTo.getTime()
+    : Number.POSITIVE_INFINITY;
+
+  for (const sibling of siblings) {
+    if (!sibling.effectiveFrom && !sibling.effectiveTo) {
+      continue;
+    }
+    const existStart = sibling.effectiveFrom
+      ? sibling.effectiveFrom.getTime()
+      : Number.NEGATIVE_INFINITY;
+    const existEnd = sibling.effectiveTo
+      ? sibling.effectiveTo.getTime()
+      : Number.POSITIVE_INFINITY;
+
+    if (existStart < newEnd && newStart < existEnd) {
+      throw new ConflictException(
+        `Thời gian sự kiện của ${input.name} (${input.provinceName}) bị trùng với sự kiện ${sibling.code}${sibling.eventName ? ` - ${sibling.eventName}` : ''}.`,
+      );
+    }
   }
 }
 
@@ -151,6 +262,7 @@ export class AdminCatalogsRepository {
         ? {
             OR: [
               { code: { contains: q, mode: 'insensitive' } },
+              { eventName: { contains: q, mode: 'insensitive' } },
               { name: { contains: q, mode: 'insensitive' } },
               { provinceName: { contains: q, mode: 'insensitive' } },
             ],
@@ -165,6 +277,18 @@ export class AdminCatalogsRepository {
               },
               {
                 OR: [{ effectiveTo: null }, { effectiveTo: { gt: now } }],
+              },
+              {
+                OR: [
+                  { registrationFrom: null },
+                  { registrationFrom: { lte: now } },
+                ],
+              },
+              {
+                OR: [
+                  { registrationTo: null },
+                  { registrationTo: { gt: now } },
+                ],
               },
             ],
           }
@@ -189,13 +313,42 @@ export class AdminCatalogsRepository {
   }
 
   createLocality(input: CreateLocalityDto, actorId: string, meta: RequestMeta) {
-    const { reason, effectiveFrom, effectiveTo, ...fields } = input;
+    const {
+      reason,
+      code: requestedCode,
+      eventName: requestedEventName,
+      effectiveFrom,
+      effectiveTo,
+      registrationFrom,
+      registrationTo,
+      ...fields
+    } = input;
     const from = effectiveDate(effectiveFrom);
     const to = effectiveDate(effectiveTo);
+    const regFrom = effectiveDate(registrationFrom);
+    const regTo = effectiveDate(registrationTo);
     assertEffectiveRange(from, to);
+    assertRegistrationRange(from, to, regFrom, regTo);
+    const resolvedEventName = requestedEventName?.trim() || fields.name;
     return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('locality_create_and_schedule_lock'))`;
+      await assertNoOverlappingEvent(tx, {
+        provinceName: fields.provinceName,
+        name: fields.name,
+        effectiveFrom: from,
+        effectiveTo: to,
+      });
+      const code = requestedCode?.trim() || (await generateNextLocalityCode(tx));
       const row = await tx.locality.create({
-        data: { ...fields, effectiveFrom: from, effectiveTo: to },
+        data: {
+          ...fields,
+          code,
+          eventName: resolvedEventName,
+          effectiveFrom: from,
+          effectiveTo: to,
+          registrationFrom: regFrom,
+          registrationTo: regTo,
+        },
         select: localitySelect,
       });
       const record = localityRecord(row);
@@ -220,6 +373,7 @@ export class AdminCatalogsRepository {
   ) {
     const { reason, ...requested } = input;
     return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('locality_create_and_schedule_lock'))`;
       await tx.$queryRaw(
         Prisma.sql`SELECT "id" FROM ${databaseObject('localities')} WHERE "id" = ${id} FOR UPDATE`,
       );
@@ -237,9 +391,44 @@ export class AdminCatalogsRepository {
         requested.effectiveTo === undefined
           ? before.effectiveTo
           : effectiveDate(requested.effectiveTo);
+      const registrationFrom =
+        requested.registrationFrom === undefined
+          ? before.registrationFrom
+          : effectiveDate(requested.registrationFrom);
+      const registrationTo =
+        requested.registrationTo === undefined
+          ? before.registrationTo
+          : effectiveDate(requested.registrationTo);
       assertEffectiveRange(effectiveFrom, effectiveTo);
+      assertRegistrationRange(
+        effectiveFrom,
+        effectiveTo,
+        registrationFrom,
+        registrationTo,
+      );
+
+      const nextName = requested.name ?? before.name;
+      const nextProvinceName = requested.provinceName ?? before.provinceName;
+      const scheduleOrPlaceChanged =
+        nextName !== before.name ||
+        nextProvinceName !== before.provinceName ||
+        effectiveFrom?.getTime() !== before.effectiveFrom?.getTime() ||
+        effectiveTo?.getTime() !== before.effectiveTo?.getTime();
+      if (scheduleOrPlaceChanged) {
+        await assertNoOverlappingEvent(tx, {
+          excludeId: id,
+          provinceName: nextProvinceName,
+          name: nextName,
+          effectiveFrom,
+          effectiveTo,
+        });
+      }
 
       const data: Prisma.LocalityUpdateInput = {
+        ...(requested.eventName === undefined ||
+        requested.eventName === before.eventName
+          ? {}
+          : { eventName: requested.eventName }),
         ...(requested.name === undefined || requested.name === before.name
           ? {}
           : { name: requested.name }),
@@ -257,6 +446,12 @@ export class AdminCatalogsRepository {
         ...(effectiveTo?.getTime() === before.effectiveTo?.getTime()
           ? {}
           : { effectiveTo }),
+        ...(registrationFrom?.getTime() === before.registrationFrom?.getTime()
+          ? {}
+          : { registrationFrom }),
+        ...(registrationTo?.getTime() === before.registrationTo?.getTime()
+          ? {}
+          : { registrationTo }),
       };
       if (!Object.keys(data).length) return localityRecord(before);
 
