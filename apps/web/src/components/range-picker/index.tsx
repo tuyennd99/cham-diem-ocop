@@ -171,13 +171,19 @@ const DateRangePicker: FC<RangePickerProps> = ({
       case 'today':
         return { from: startOfDay(today), to: endOfDay(today) };
       case 'thisMonth':
-        return { from: startOfMonth(today), to: endOfMonth(today) };
+        return {
+          from: disablePast ? startOfDay(today) : startOfMonth(today),
+          to: endOfMonth(today),
+        };
       case 'next3Months':
         return { from: startOfDay(today), to: endOfDay(addMonths(today, 3)) };
       case 'next6Months':
         return { from: startOfDay(today), to: endOfDay(addMonths(today, 6)) };
       case 'thisYear':
-        return { from: startOfYear(today), to: endOfYear(today) };
+        return {
+          from: disablePast ? startOfDay(today) : startOfYear(today),
+          to: endOfYear(today),
+        };
       case 'next1Year':
         return { from: startOfDay(today), to: endOfDay(addYears(today, 1)) };
       case 'next3Years':

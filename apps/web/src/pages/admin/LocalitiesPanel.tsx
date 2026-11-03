@@ -220,10 +220,26 @@ function LocalityFormDialog({
                 }
               }} />}
           </form.AppField>
-          <form.AppField name='dateRange'>
-            {(field) => <field.DateRange label='Thời gian mở' />}
+          <form.AppField
+            name='dateRange'
+            validators={{
+              onChange: ({ value }) => {
+                if (value.fromDay && value.fromDay < todayYmd) {
+                  return 'Ngày bắt đầu không được là ngày trong quá khứ.';
+                }
+                if (value.toDay && value.toDay < todayYmd) {
+                  return 'Ngày kết thúc không được là ngày trong quá khứ.';
+                }
+                if (value.fromDay && value.toDay && value.fromDay > value.toDay) {
+                  return 'Ngày kết thúc không được trước ngày bắt đầu.';
+                }
+                return undefined;
+              },
+            }}
+          >
+            {(field) => <field.DateRange label='Thời gian mở' disablePast />}
           </form.AppField>
-          <form.Actions submitLabel={isEdit ? 'Lưu địa bàn' : 'Thêm địa bàn'} onCancel={() => requestOpenChange(false)} />
+          <form.Actions submitLabel='Lưu' onCancel={() => requestOpenChange(false)} />
         </AppForm>
       </DialogContent>
     </Dialog>
