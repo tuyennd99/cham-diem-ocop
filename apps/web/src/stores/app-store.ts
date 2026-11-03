@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import { getSession, setSession } from './session-store';
-import { hasStaffPermission } from '@/lib/session-contract';
 import type { SessionUser } from '@/types/auth';
+import { hasStaffPermission } from '@/lib/session-contract';
+import { getSession, setSession } from './session-store';
 
 export type AppState = {
   name: string;

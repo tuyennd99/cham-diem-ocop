@@ -1,9 +1,9 @@
-import { Link, useNavigate } from '@/components/navigation';
-import { setSession } from '@/lib/auth';
 import { useAppStore } from '@/stores/app-store';
 import type { User } from '@/types';
 import { Globe, KeyRound, LogOut, Settings } from 'lucide-react';
+import { setSession } from '@/lib/auth';
 import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
+import { Link, useNavigate } from '@/components/navigation';
 import {
   DropdownMenuItem,
   DropdownMenuLabel,

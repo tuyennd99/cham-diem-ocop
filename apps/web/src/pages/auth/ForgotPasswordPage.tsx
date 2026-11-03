@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useForm } from '@tanstack/react-form';
+import { toast } from 'sonner';
 import AlertError from '@/components/alert-error';
 import { FormField } from '@/components/form-field';
 import PasswordInput from '@/components/password-input';
@@ -45,10 +46,13 @@ export function ForgotPasswordPage() {
           newPassword: value.password,
         });
         setNotice('Đã đổi mật khẩu. Bạn có thể đăng nhập.');
+        toast.success('Đã đổi mật khẩu. Bạn có thể đăng nhập.');
         setSent(false);
         resetForm.reset();
       } catch (cause) {
-        setError(messageOf(cause));
+        const msg = messageOf(cause);
+        setError(msg);
+        toast.error(msg);
       }
     },
   });

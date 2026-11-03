@@ -5,12 +5,37 @@ import AlertError from '@/components/alert-error';
 import { FormField } from '@/components/form-field';
 import { GoogleSignIn } from '@/components/google-sign-in';
 import PasswordInput from '@/components/password-input';
+import { SimpleCombobox } from '@/components/simple-combobox';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { authApi } from '../../api';
 import { messageOf } from '../../lib/api-error';
 import { homeFor, setSession } from '../../lib/auth';
 import { AuthFrame } from './AuthFrame';
+
+// shortcut: hardcoded seed accounts for local testing, remove before production
+const SEED_ACCOUNTS = [
+  { value: 'admin@ocop.test', label: 'Quản trị hệ thống (MANAGE + VIEW) — admin@ocop.test' },
+  {
+    value: 'admin.score@ocop.test',
+    label: 'Quản trị kiêm Giám khảo (MANAGE + VIEW + SCORE) — admin.score@ocop.test',
+  },
+  { value: 'viewer@ocop.test', label: 'Cán bộ Tra cứu & Báo cáo (VIEW) — viewer@ocop.test' },
+  {
+    value: 'viewer.score@ocop.test',
+    label: 'Giám khảo kiêm Xem toàn hệ thống (VIEW + SCORE) — viewer.score@ocop.test',
+  },
+  { value: 'judge@ocop.test', label: 'Giám khảo Hội đồng (SCORE) — judge@ocop.test' },
+  { value: 'registrant@ocop.test', label: 'Chủ thể OCOP Mẫu (REGISTRANT) — registrant@ocop.test' },
+  {
+    value: 'htx.uminh@ocop.test',
+    label: 'Hợp tác xã Mật ong rừng U Minh Hạ (REGISTRANT) — htx.uminh@ocop.test',
+  },
+  {
+    value: 'htx.rachgoc@ocop.test',
+    label: 'Hợp tác xã Thủy sản Sinh thái Rạch Gốc (REGISTRANT) — htx.rachgoc@ocop.test',
+  },
+];
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -33,7 +58,7 @@ export function LoginPage() {
   const loginAside = (
     <aside className='auth-aside' aria-label='Phân quyền hệ thống'>
       <p className='eyebrow'>KHU VỰC HỆ THỐNG</p>
-      <h2>Làm việc theo vai trò được phân quyền</h2>
+      <h2 className='auth-register-heading'>Làm việc theo vai trò được phân quyền</h2>
       <p className='auth-aside-lead'>
         Hệ thống tự động chuyển hướng tới không gian làm việc tương ứng ngay sau khi đăng nhập thành
         công:
@@ -95,6 +120,22 @@ export function LoginPage() {
           void form.handleSubmit();
         }}
       >
+        <form.Subscribe selector={(state) => state.values.email}>
+          {(email) => (
+            <FormField label='Tài khoản test (Seed)' htmlFor='login-seed-account'>
+              <SimpleCombobox
+                id='login-seed-account'
+                options={SEED_ACCOUNTS}
+                value={SEED_ACCOUNTS.some((item) => item.value === email) ? email : ''}
+                onChange={(nextEmail) => {
+                  form.setFieldValue('email', nextEmail);
+                  form.setFieldValue('password', 'OcopTest@2026!');
+                }}
+                placeholder='Chọn nhanh tài khoản seed...'
+              />
+            </FormField>
+          )}
+        </form.Subscribe>
         <form.Field name='email'>
           {(field) => (
             <FormField label='Email' htmlFor={`login-${field.name}`}>

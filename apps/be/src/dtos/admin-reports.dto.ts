@@ -1,9 +1,7 @@
 import { Transform, Type } from 'class-transformer';
 import type { TransformFnParams } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { LocalityType as PrismaLocalityType } from '@prisma/client';
 import {
-  IsEnum,
   IsIn,
   IsInt,
   IsOptional,
@@ -16,7 +14,6 @@ import {
 import type {
   AdminReportFilterQuery,
   AdminReportQuery,
-  LocalityType,
   ProductRegistrationType,
   ReportGroupBy,
 } from '@ocop/shared';
@@ -48,11 +45,6 @@ export class AdminDashboardQueryDto implements AdminReportFilterQuery {
   @Min(1)
   @Max(12)
   month?: number;
-
-  @ApiPropertyOptional({ enum: PrismaLocalityType })
-  @IsOptional()
-  @IsEnum(PrismaLocalityType)
-  localityType?: LocalityType;
 
   @ApiPropertyOptional({ maxLength: 100 })
   @IsOptional()

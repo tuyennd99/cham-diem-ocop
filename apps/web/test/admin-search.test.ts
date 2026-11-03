@@ -50,10 +50,10 @@ it('preserves detail tab in URL search and strips tab before API query', () => {
 });
 
 it('keeps inactive locality filters and selected catalog tab', () => {
-  const query = parseAdminCatalogSearch({ tab: 'localities', isActive: 'false', type: 'WARD' });
+  const query = parseAdminCatalogSearch({ tab: 'localities', isActive: 'false', provinceName: 'Hà Nội' });
   assert.equal(query.tab, 'localities');
   assert.equal(query.isActive, false);
-  assert.equal(query.type, 'WARD');
+  assert.equal(query.provinceName, 'Hà Nội');
 });
 
 it('preserves legacy judge filter and false user filters', () => {
@@ -102,13 +102,11 @@ it('parses assignment matrix filters without carrying unknown keys', () => {
 it('parses dashboard period filters with Vietnamese default year', () => {
   const query = parseAdminDashboardSearch({
     month: '10',
-    localityType: 'WARD',
     registrationType: 'UPGRADE',
     assessmentYear: '2026',
   });
   assert.equal(typeof query.year, 'number');
   assert.equal(query.month, 10);
-  assert.equal(query.localityType, 'WARD');
   assert.equal(query.registrationType, 'UPGRADE');
   assert.equal(query.assessmentYear, 2026);
 });
@@ -119,7 +117,6 @@ it('restores result report tab and grouping after reload', () => {
     year: '2026',
     month: '10',
     groupBy: 'locality',
-    localityType: 'COMMUNE',
     assessmentYear: '2025',
   });
   assert.equal(query.tab, 'results');

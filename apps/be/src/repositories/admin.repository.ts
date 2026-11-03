@@ -49,7 +49,7 @@ const adminProductSelect = {
   },
   registrant: { select: { id: true, fullName: true, email: true } },
   locality: {
-    select: { id: true, code: true, name: true, type: true, provinceName: true },
+    select: { id: true, code: true, name: true, provinceName: true },
   },
   attachments: {
     where: { type: 'IMAGE' as const },
@@ -1141,7 +1141,6 @@ export class AdminRepository {
         createdAt: true,
         localityCodeAtSubmit: true,
         localityNameAtSubmit: true,
-        localityTypeAtSubmit: true,
         provinceNameAtSubmit: true,
         formData: true,
         registrationSnapshot: true,
@@ -1162,7 +1161,6 @@ export class AdminRepository {
             id: true,
             code: true,
             name: true,
-            type: true,
             provinceName: true,
           },
         },
@@ -1286,14 +1284,12 @@ export class AdminRepository {
               localityId: true,
               localityCodeAtSubmit: true,
               localityNameAtSubmit: true,
-              localityTypeAtSubmit: true,
               provinceNameAtSubmit: true,
               locality: {
                 select: {
                   id: true,
                   code: true,
                   name: true,
-                  type: true,
                   provinceName: true,
                 },
               },
@@ -1350,7 +1346,6 @@ export class AdminRepository {
               id: true,
               code: true,
               name: true,
-              type: true,
               provinceName: true,
             },
             orderBy: [{ provinceName: 'asc' }, { name: 'asc' }, { id: 'asc' }],
@@ -1384,10 +1379,6 @@ export class AdminRepository {
                   id: p.localityId ?? p.localityCodeAtSubmit ?? 'SUBMITTED_LOC',
                   code: p.localityCodeAtSubmit ?? p.locality?.code ?? '',
                   name: p.localityNameAtSubmit,
-                  type:
-                    p.localityTypeAtSubmit ??
-                    p.locality?.type ??
-                    ('COMMUNE' as const),
                   provinceName:
                     p.provinceNameAtSubmit ?? p.locality?.provinceName ?? '',
                 }

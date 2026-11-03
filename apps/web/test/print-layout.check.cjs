@@ -18,7 +18,7 @@ const registration = {
   kind: 'REGISTRATION', generatedAt: timestamp, isDraft: false, hasSubmissionSnapshot: true, product,
   registrant: { id: 'owner', fullName: 'Nguyễn Văn Kiểm Thử', email: 'test@example.com', phone: '0900000000' },
   category: { id: 'category', name: product.categoryName },
-  locality: { id: 'locality', code: 'TEST', name: product.localityName, provinceName: product.provinceName, type: 'COMMUNE' },
+  locality: { id: 'locality', code: 'TEST', name: product.localityName, provinceName: product.provinceName },
   formData: {
     entityName: product.entityName, representativeName: 'Nguyễn Văn Kiểm Thử', representativeTitle: 'Giám đốc',
     contactAddress: 'Địa chỉ kiểm thử bố cục phiếu đăng ký', provinceName: product.provinceName,

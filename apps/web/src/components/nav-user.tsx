@@ -1,6 +1,6 @@
 import { Activity } from 'react';
-import { useSession } from '@/lib/auth';
 import { ChevronsUpDown } from 'lucide-react';
+import { useSession } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import {

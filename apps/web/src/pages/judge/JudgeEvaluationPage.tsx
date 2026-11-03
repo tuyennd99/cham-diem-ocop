@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Criterion, ScoreOption } from '@ocop/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
-import { keyBy, mapValues, maxBy, partition, sumBy } from 'lodash';
+import { Link, useBlocker } from '@tanstack/react-router';
+import { Check, ArrowLeft } from 'lucide-react';
+import { isEqual, keyBy, mapValues, maxBy, partition, sumBy } from 'lodash';
+import { toast } from 'sonner';
 import AlertError from '@/components/alert-error';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import PageSpin from '@/components/page-spin';
@@ -11,12 +13,15 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
+import { PageContainer, PageHeader } from '@/layouts/PageLayout';
 import { judgeApi } from '../../api';
 import { queryKeys } from '../../constants/query-key';
-import { messageOf } from '../../lib/api-error';
+import { errorText, messageOf } from '../../lib/api-error';
 import { openAttachment } from '../../lib/attachments';
 import { partitionFormEntries } from '../../lib/utils';
+import { useEvaluation } from '../../queries/judge';
 import type { EvaluationData } from '../../types/judge';
+import { PrivateAttachmentThumbnail } from '../registrant/AttachmentLink';
 
 type SubCriterion = Criterion['subCriteria'][number];
 
@@ -24,7 +29,7 @@ async function openJudgeAttachment(productId: string, attachmentId: string, file
   try {
     await openAttachment(await judgeApi.attachment(productId, attachmentId), fileName);
   } catch (cause) {
-    window.alert(messageOf(cause));
+    toast.error(messageOf(cause));
   }
 }
 
@@ -37,34 +42,53 @@ function scoreSubCriteria(items: SubCriterion[], selected: Record<string, string
 
 export function JudgeEvaluationPage({ productId }: { productId: string }) {
   const queryClient = useQueryClient();
+  const {
+    data: remoteData = null,
+    error: loadError,
+    isPending: loading,
+    isFetching,
+    refetch,
+  } = useEvaluation(productId);
   const [data, setData] = useState<EvaluationData | null>(null);
   const [selected, setSelected] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [savedSelected, setSavedSelected] = useState<Record<string, string>>({});
+  const [savedNotes, setSavedNotes] = useState<Record<string, string>>({});
   const [activeCriterionId, setActiveCriterionId] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
+  const seededProductIdRef = useRef('');
 
   useEffect(() => {
-    let active = true;
-    judgeApi
-      .evaluation(productId)
-      .then(({ data: result }) => {
-        if (!active) return;
-        setData(result);
-        const scoresBySubCriterion = keyBy(result.evaluation.scores, 'subCriterionId');
-        setSelected(mapValues(scoresBySubCriterion, 'optionId'));
-        setNotes(mapValues(scoresBySubCriterion, (score) => score.note ?? ''));
-        setActiveCriterionId(result.criteria[0]?.id ?? '');
-      })
-      .catch((cause) => {
-        if (active) setError(messageOf(cause));
-      });
-    return () => {
-      active = false;
-    };
-  }, [productId]);
+    if (!remoteData) return;
+    setData(remoteData);
+    if (seededProductIdRef.current !== remoteData.product.id) {
+      seededProductIdRef.current = remoteData.product.id;
+      const scoresBySubCriterion = keyBy(remoteData.evaluation.scores, 'subCriterionId');
+      const initialSelected = mapValues(scoresBySubCriterion, 'optionId');
+      const initialNotes = mapValues(scoresBySubCriterion, (score) => score.note ?? '');
+      setSelected(initialSelected);
+      setNotes(initialNotes);
+      setSavedSelected(initialSelected);
+      setSavedNotes(initialNotes);
+      setActiveCriterionId(remoteData.criteria[0]?.id ?? '');
+    }
+  }, [remoteData]);
+
+  const isLocked = data?.evaluation.status === 'SUBMITTED';
+  const isDirty =
+    Boolean(data) &&
+    !isLocked &&
+    (!isEqual(selected, savedSelected) || !isEqual(notes, savedNotes));
+
+  useBlocker({
+    shouldBlockFn: () =>
+      isDirty &&
+      !window.confirm('Bạn có điểm hoặc ghi chú chưa lưu. Rời trang và bỏ thay đổi vừa nhập?'),
+    enableBeforeUnload: () => isDirty,
+  });
 
   const subcriteria = useMemo(
     () => data?.criteria.flatMap((criterion) => criterion.subCriteria) ?? [],
@@ -99,10 +123,15 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
     setNotice('');
     try {
       await judgeApi.save(productId, { scores: buildScores() });
+      setSavedSelected(selected);
+      setSavedNotes(notes);
       setNotice('Đã lưu bản chấm.');
+      toast.success('Đã lưu bản chấm.');
       void queryClient.invalidateQueries({ queryKey: queryKeys.judge.queue });
     } catch (cause) {
-      setError(messageOf(cause));
+      const msg = messageOf(cause);
+      setError(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
@@ -122,6 +151,8 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
     try {
       await judgeApi.save(productId, { scores: buildScores() });
       const { data: result } = await judgeApi.submit(productId);
+      setSavedSelected(selected);
+      setSavedNotes(notes);
       setData((current) =>
         current
           ? {
@@ -132,31 +163,48 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
       );
       setSubmitConfirmOpen(false);
       setNotice('Đã nộp phiếu chấm.');
+      toast.success('Đã nộp phiếu chấm.');
       void queryClient.invalidateQueries({ queryKey: queryKeys.judge.all });
       void queryClient.invalidateQueries({ queryKey: queryKeys.admin.all });
     } catch (cause) {
-      setError(messageOf(cause));
+      const msg = messageOf(cause);
+      setError(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
   }
 
-  if (error && !data)
+  const initialLoadError = errorText(loadError);
+
+  if (initialLoadError && !data)
     return (
-      <section className='space-y-3'>
-        <h1>Phiếu chấm</h1>
-        <AlertError title='Chưa tải được phiếu chấm' errors={[error]} />
-        <Button asChild variant='secondary'>
-          <Link to='/judge'>Quay lại hàng chờ</Link>
-        </Button>
-      </section>
+      <PageContainer>
+        <PageHeader title='Phiếu chấm' />
+        <AlertError title='Chưa tải được phiếu chấm' errors={[initialLoadError]} />
+        <div className='admin-actions'>
+          <Button
+            type='button'
+            variant='secondary'
+            loading={isFetching}
+            disabled={isFetching}
+            onClick={() => void refetch()}
+          >
+            {isFetching ? 'Đang tải…' : 'Thử lại'}
+          </Button>
+          <Button asChild variant='secondary'>
+            <Link to='/judge'>Quay lại hàng chờ</Link>
+          </Button>
+        </div>
+      </PageContainer>
     );
-  if (!data)
+  if (loading && !data)
     return (
-      <section aria-busy='true' aria-label='Đang tải phiếu chấm'>
+      <PageContainer aria-busy='true' aria-label='Đang tải phiếu chấm'>
         <PageSpin />
-      </section>
+      </PageContainer>
     );
+  if (!data) return null;
 
   const locked = data.evaluation.status === 'SUBMITTED';
   const sections = [
@@ -184,29 +232,45 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
   );
 
   return (
-    <section className='judge-page'>
-      <div className='judge-page-header'>
-        <div>
-          <Link className='text-link' to='/judge'>
-            ← Hàng chờ chấm
+    <PageContainer className='judge-page'>
+      <PageHeader
+        className='judge-page-header'
+        backLink={
+          <Link className='text-link inline-flex items-center gap-1 text-sm' to='/judge'>
+            <ArrowLeft className='size-4' aria-hidden='true' />
+            <span>Hàng chờ chấm</span>
           </Link>
-          <p className='eyebrow'>{data.product.category.name}</p>
-          <h1>{data.product.name}</h1>
-          <p>
-            Mã hồ sơ <code>{data.product.id}</code>
-          </p>
-        </div>
-        <div className='hero-actions'>
+        }
+        title={data.product.name}
+        badge={
+          <Badge
+            variant='outline'
+            className={locked ? 'status-badge status-completed' : 'status-badge status-scoring'}
+          >
+            {locked ? 'Đã nộp · chỉ đọc' : 'Phiếu nháp'}
+          </Badge>
+        }
+        description={
+          <>
+            {data.product.category.name} · Mã hồ sơ <code>{data.product.id}</code>
+            {locked ? (
+              <>
+                {' · '}
+                <strong>
+                  {total}/{maxPossibleScore} điểm
+                </strong>
+              </>
+            ) : null}
+          </>
+        }
+        actions={
           <Button asChild variant='secondary'>
             <Link to='/print/judge/products/$id' params={{ id: productId }}>
               In phiếu chấm A4
             </Link>
           </Button>
-          <Badge variant={locked ? 'default' : 'secondary'}>
-            {locked ? 'Đã nộp · chỉ đọc' : 'Phiếu nháp'}
-          </Badge>
-        </div>
-      </div>
+        }
+      />
       {locked && <p className='form-note'>Phiếu đã nộp và không thể chỉnh sửa.</p>}
       <div className='judge-workspace'>
         <aside className='judge-criteria-nav' aria-label='Điều hướng tiêu chí'>
@@ -246,9 +310,9 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
                   return (
                     <button
                       type='button'
-                      className={`criterion-nav-item${criterion.id === activeCriterionId ? 'is-current' : ''}`}
+                      className={`criterion-nav-item ${criterion.id === activeCriterionId ? 'is-current' : ''}`}
                       key={criterion.id}
-                      aria-current={criterion.id === activeCriterionId ? 'step' : undefined}
+                      aria-current={criterion.id === activeCriterionId ? 'true' : undefined}
                       onClick={() => setActiveCriterionId(criterion.id)}
                     >
                       <span className='criterion-nav-name'>
@@ -256,9 +320,12 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
                       </span>
                       <span className='criterion-nav-meta'>
                         <span>
-                          {score}/{criterion.maxScore}
+                          {score}/{criterion.maxScore} điểm
                         </span>
-                        <span>{done ? '✓ Đã chấm' : 'Chưa chấm'}</span>
+                        <span className='inline-flex items-center gap-1'>
+                          {done && <Check className='size-3.5 text-accent' aria-hidden='true' />}
+                          <span>{done ? 'Đã chấm' : 'Chưa chấm'}</span>
+                        </span>
                       </span>
                     </button>
                   );
@@ -270,14 +337,16 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
         <main className='judge-scoring-main'>
           <div className='criteria-summary'>
             <div>
-              <p className='eyebrow'>
-                TIÊU CHÍ {activeIndex + 1} / {data.criteria.length}
-              </p>
               <h2>
                 {activeCriterion
                   ? `${activeCriterion.code} — ${activeCriterion.name}`
                   : 'Chưa có tiêu chí được phân công'}
               </h2>
+              {activeCriterion && (
+                <p className='text-muted mt-1 text-xs'>
+                  Tiêu chí {activeIndex + 1} / {data.criteria.length}
+                </p>
+              )}
             </div>
             {activeCriterion && (
               <Badge variant='secondary'>Tối đa {activeCriterion.maxScore} điểm</Badge>
@@ -302,13 +371,13 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
                       const optionInputId = `score-${sub.id}-${option.id}`;
                       return (
                         <div
-                          className={`score-option relative${selected[sub.id] === option.id ? 'is-selected' : ''}`}
+                          className={`score-option relative ${selected[sub.id] === option.id ? 'is-selected' : ''}`}
                           key={option.id}
                         >
                           <RadioGroupItem value={option.id} id={optionInputId} />
                           <Label
                             htmlFor={optionInputId}
-                            className='cursor-pointer after:absolute after:inset-0'
+                            className='cursor-pointer leading-normal after:absolute after:inset-0'
                           >
                             {option.label}
                           </Label>
@@ -317,20 +386,25 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
                       );
                     })}
                   </RadioGroup>
-                  <details className='judge-note'>
-                    <summary>Ghi chú của giám khảo</summary>
-                    <Label htmlFor={`note-${sub.id}`}>Ghi chú (không bắt buộc)</Label>
-                    <Textarea
-                      id={`note-${sub.id}`}
-                      rows={3}
-                      maxLength={2000}
-                      value={notes[sub.id] ?? ''}
-                      onChange={(event) => {
-                        setNotes((current) => ({ ...current, [sub.id]: event.target.value }));
-                        setNotice('');
-                      }}
-                    />
-                  </details>
+                  {(!locked || Boolean(notes[sub.id]?.trim())) && (
+                    <details className='judge-note' open={Boolean(notes[sub.id]?.trim())}>
+                      <summary>
+                        Ghi chú của giám khảo
+                        {notes[sub.id]?.trim() ? ' (Đã có ghi chú)' : ''}
+                      </summary>
+                      <Label htmlFor={`note-${sub.id}`}>Ghi chú (không bắt buộc)</Label>
+                      <Textarea
+                        id={`note-${sub.id}`}
+                        rows={3}
+                        maxLength={2000}
+                        value={notes[sub.id] ?? ''}
+                        onChange={(event) => {
+                          setNotes((current) => ({ ...current, [sub.id]: event.target.value }));
+                          setNotice('');
+                        }}
+                      />
+                    </details>
+                  )}
                 </fieldset>
               ))}
             </div>
@@ -358,32 +432,63 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
               Tiêu chí tiếp theo →
             </Button>
           </div>
+          {!locked && (
+            <footer className='judge-submit-bar'>
+              <div className='judge-score-total'>
+                <strong aria-live='polite'>{total}</strong>
+                <span>/ {maxPossibleScore} điểm tạm tính</span>
+              </div>
+              <span className='autosave-state' role='status'>
+                {notice || (isDirty ? 'Bản nháp có thay đổi chưa lưu' : 'Đã lưu nháp')}
+              </span>
+              {error && <AlertError title='Không thể lưu hoặc nộp phiếu chấm' errors={[error]} />}
+              <div className='judge-submit-actions'>
+                <Button
+                  variant='secondary'
+                  loading={busy}
+                  disabled={busy}
+                  onClick={() => void save()}
+                >
+                  {busy ? 'Đang lưu…' : 'Lưu nháp'}
+                </Button>
+                <Button
+                  loading={busy}
+                  disabled={busy || !data.criteria.length}
+                  onClick={requestSubmit}
+                >
+                  {busy ? 'Đang nộp…' : 'Nộp phiếu chấm'}
+                </Button>
+              </div>
+            </footer>
+          )}
         </main>
         <aside className='judge-evidence-panel' aria-label='Thông tin sản phẩm và minh chứng'>
           <h2>Minh chứng hồ sơ</h2>
-          <div className='evidence-gallery'>
-            {imageAttachments.map((file) => (
-              <button
-                type='button'
-                className='evidence-thumb'
-                key={file.id}
-                onClick={() => void openJudgeAttachment(productId, file.id, file.fileName)}
-                aria-label={`Mở ảnh ${file.fileName}`}
-              >
-                <span>{file.fileName}</span>
-              </button>
-            ))}
-          </div>
-          <article className='product-summary'>
-            <Badge variant='secondary'>{data.product.category.name}</Badge>
-            <h3>{data.product.name}</h3>
-            <p>{String(data.product.formData.entityName ?? 'Chưa có thông tin đơn vị sản xuất')}</p>
-            <p>
-              Mã hồ sơ <code>{data.product.id}</code>
-            </p>
-          </article>
-          {renderFormSection('Thông tin đơn vị sản xuất', entityEntries)}
-          {renderFormSection('Thông tin sản phẩm (Mẫu 01)', productEntries)}
+          {imageAttachments.length ? (
+            <div className='evidence-gallery'>
+              {imageAttachments.map((file) => (
+                <button
+                  type='button'
+                  className='evidence-thumb'
+                  key={file.id}
+                  onClick={() => void openJudgeAttachment(productId, file.id, file.fileName)}
+                  aria-label={`Mở ảnh ${file.fileName}`}
+                >
+                  <span className='evidence-thumb-frame'>
+                    <PrivateAttachmentThumbnail
+                      mode='judge'
+                      productId={productId}
+                      attachmentId={file.id}
+                      name={file.fileName}
+                    />
+                  </span>
+                  <span className='evidence-thumb-caption'>{file.fileName}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className='text-muted mb-3 text-sm'>Chưa có hình ảnh sản phẩm đính kèm.</p>
+          )}
           <section className='evidence-files'>
             <h3>Tệp minh chứng</h3>
             {documentAttachments.length ? (
@@ -393,7 +498,7 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
                     <Button
                       type='button'
                       variant='link'
-                      className='h-auto min-h-0 p-0'
+                      className='attachment-link-btn text-link h-auto min-h-0 justify-start p-0 text-left'
                       onClick={() => void openJudgeAttachment(productId, file.id, file.fileName)}
                     >
                       {/\.pdf$/i.test(file.fileName) ? 'PDF · ' : 'Tệp · '}
@@ -403,31 +508,15 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
                 ))}
               </ul>
             ) : (
-              <p>Không có tệp minh chứng bổ sung.</p>
+              <p className='text-muted text-sm'>Không có tệp minh chứng bổ sung.</p>
             )}
           </section>
+          <div className='mt-3'>
+            {renderFormSection('Thông tin đơn vị sản xuất', entityEntries)}
+            {renderFormSection('Thông tin sản phẩm', productEntries)}
+          </div>
         </aside>
       </div>
-      <footer className='judge-submit-bar'>
-        <div className='judge-score-total'>
-          <strong aria-live='polite'>{total}</strong>
-          <span>/ {maxPossibleScore} điểm tạm tính</span>
-        </div>
-        <span className='autosave-state' role='status'>
-          {notice || (locked ? 'Phiếu đã nộp' : 'Bản nháp chưa lưu')}
-        </span>
-        {error && <AlertError title='Không thể lưu hoặc nộp phiếu chấm' errors={[error]} />}
-        {!locked && (
-          <div className='judge-submit-actions'>
-            <Button variant='secondary' loading={busy} disabled={busy} onClick={() => void save()}>
-              {busy ? 'Đang lưu…' : 'Lưu nháp'}
-            </Button>
-            <Button loading={busy} disabled={busy || !data.criteria.length} onClick={requestSubmit}>
-              {busy ? 'Đang nộp…' : 'Nộp phiếu chấm'}
-            </Button>
-          </div>
-        )}
-      </footer>
       <ConfirmDialog
         open={submitConfirmOpen}
         onOpenChange={(open) => {
@@ -439,6 +528,6 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
         pending={busy}
         onConfirm={() => void submit()}
       />
-    </section>
+    </PageContainer>
   );
 }

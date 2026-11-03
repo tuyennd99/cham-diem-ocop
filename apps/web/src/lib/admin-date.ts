@@ -12,11 +12,7 @@ function parseYmdStrict(day: string): { year: number; month: number; date: numbe
   const month = Number(match[2]);
   const date = Number(match[3]);
   const dt = new Date(Date.UTC(year, month - 1, date));
-  if (
-    dt.getUTCFullYear() !== year ||
-    dt.getUTCMonth() !== month - 1 ||
-    dt.getUTCDate() !== date
-  ) {
+  if (dt.getUTCFullYear() !== year || dt.getUTCMonth() !== month - 1 || dt.getUTCDate() !== date) {
     throw new Error(`Ngày không tồn tại trong lịch: ${day}`);
   }
   return { year, month, date };
@@ -38,11 +34,7 @@ export function isValidIsoWithOffset(value: string): boolean {
     if (offH > 23 || offM > 59) return false;
   }
   const dt = new Date(Date.UTC(year, month - 1, date));
-  if (
-    dt.getUTCFullYear() !== year ||
-    dt.getUTCMonth() !== month - 1 ||
-    dt.getUTCDate() !== date
-  ) {
+  if (dt.getUTCFullYear() !== year || dt.getUTCMonth() !== month - 1 || dt.getUTCDate() !== date) {
     return false;
   }
   return !Number.isNaN(Date.parse(value));
@@ -99,8 +91,7 @@ export function vietnameseInclusiveEndInput(toExclusiveIso: string): string {
   return shifted.toISOString().slice(0, 10);
 }
 
-const DATETIME_LOCAL_RE =
-  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/;
+const DATETIME_LOCAL_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/;
 
 export function vietnameseDateTimeInput(iso: string | null | undefined): string {
   if (!iso) return '';
@@ -118,10 +109,7 @@ export function vietnameseDateTimeInput(iso: string | null | undefined): string 
   return full.slice(0, 16);
 }
 
-export function localityEffectiveValue(
-  input: string,
-  original?: string | null,
-): string | null {
+export function localityEffectiveValue(input: string, original?: string | null): string | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
   if (original && vietnameseDateTimeInput(original) === trimmed) {

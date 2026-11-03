@@ -82,7 +82,6 @@ describe('H6 reporting and analytics dashboard engine', () => {
       id: 'loc-1',
       code: 'LOC-01',
       name: 'Xã Tân Cương',
-      type: 'COMMUNE' as const,
       provinceName: 'Thái Nguyên',
     };
 

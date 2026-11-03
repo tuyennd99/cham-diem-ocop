@@ -12,8 +12,10 @@ import { AuthController } from '../controllers/auth.controller';
 describe('AuthService', () => {
   const repository = {
     findUserByEmail: jest.fn(),
+    findUserById: jest.fn(),
     findCredentialsById: jest.fn(),
     changePassword: jest.fn(),
+    updateProfile: jest.fn(),
   };
   const jwtService = { signAsync: jest.fn().mockResolvedValue('signed-token') };
   const otpService = { issue: jest.fn(), verify: jest.fn(), issueRegistration: jest.fn(), resendRegistration: jest.fn(), verifyRegistration: jest.fn(), registrationStatus: jest.fn() };
@@ -164,6 +166,47 @@ describe('AuthService', () => {
     repository.findCredentialsById.mockResolvedValue({ password: null, verified: true, isActive: true });
     await expect(service.changePassword('google-user', 'anything', 'NewPassword2!')).rejects.toThrow('Use forgot password to set an application password');
     expect(repository.changePassword).not.toHaveBeenCalled();
+  });
+
+  it('updates current user basic profile (fullName and phone) for an active verified account', async () => {
+    repository.findUserById.mockResolvedValue({
+      id: 'user-1',
+      email: 'person@example.com',
+      fullName: 'Old Name',
+      phone: null,
+      role: Role.REGISTRANT,
+      verified: true,
+      isActive: true,
+      tokenVersion: 1,
+      staffPermissions: [],
+      organizationUnitId: null,
+      organizationUnit: null,
+    });
+    repository.updateProfile.mockResolvedValue({
+      id: 'user-1',
+      email: 'person@example.com',
+      fullName: 'New Name',
+      phone: '0901234567',
+      role: Role.REGISTRANT,
+      verified: true,
+      isActive: true,
+      tokenVersion: 1,
+      staffPermissions: [],
+      organizationUnitId: null,
+      organizationUnit: null,
+    });
+
+    await expect(
+      service.updateProfile('user-1', { fullName: '  New Name  ', phone: ' 0901234567 ' }),
+    ).resolves.toMatchObject({
+      id: 'user-1',
+      fullName: 'New Name',
+      phone: '0901234567',
+    });
+    expect(repository.updateProfile).toHaveBeenCalledWith('user-1', {
+      fullName: 'New Name',
+      phone: '0901234567',
+    });
   });
 
   it('MailService can be instantiated without SMTP environment variables until sendOtp is called', () => {

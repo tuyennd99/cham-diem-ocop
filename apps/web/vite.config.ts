@@ -7,13 +7,13 @@ import { defineConfig, loadEnv } from "vite";
 
 export default defineConfig(({ mode }) => {
   const values = loadEnv(mode, process.cwd(), "VITE_");
-  process.env.LAUNCH_EDITOR ??= "antigravity-ide.cmd";
+
   return {
     plugins: [
       tanstackRouter({ target: 'react', autoCodeSplitting: true }),
       codeInspectorPlugin({
         bundler: 'vite',
-        editor: 'code'
+        editor: 'code',
       }),
       react(),
       tailwindcss(),

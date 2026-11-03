@@ -1,6 +1,6 @@
-import { debounce } from 'lodash';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEventHandler, ComponentProps } from 'react';
+import { debounce } from 'lodash';
 import { Input } from '@/components/ui/input';
 
 type DebouncedInputProps = Omit<ComponentProps<typeof Input>, 'value' | 'defaultValue'> & {

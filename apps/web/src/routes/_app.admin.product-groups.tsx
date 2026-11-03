@@ -1,10 +1,19 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { parseAdminCatalogSearch } from '../lib/admin-search';
+import { createFileRoute, redirect } from '@tanstack/react-router';
+import { parseAdminCatalogSearch, toAdminLocalityApiQuery } from '../lib/admin-search';
 import { requirePermission } from '../lib/route-guards';
 import { AdminProductGroupsPage } from '../pages/admin/AdminProductGroupsPage';
 
 export const Route = createFileRoute('/_app/admin/product-groups')({
-  beforeLoad: requirePermission('VIEW'),
+  beforeLoad: (args) => {
+    requirePermission('VIEW')(args);
+    if (args.search.tab === 'localities') {
+      throw redirect({
+        to: '/admin/localities',
+        search: toAdminLocalityApiQuery(args.search),
+        replace: true,
+      });
+    }
+  },
   validateSearch: parseAdminCatalogSearch,
   component: ProductGroupsRoute,
 });

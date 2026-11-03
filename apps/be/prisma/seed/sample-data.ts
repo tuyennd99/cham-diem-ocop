@@ -1,6 +1,5 @@
 import {
   EvaluationStatus,
-  LocalityType,
   Prisma,
   PrismaClient,
   ProductStatus,
@@ -143,28 +142,24 @@ export async function seedSampleOcopData(
       id: 'seed-locality-khanh-an',
       code: 'XP-KHANHAN',
       name: 'Xã Khánh An',
-      type: LocalityType.COMMUNE,
       provinceName: 'Tỉnh Cà Mau',
     },
     {
       id: 'seed-locality-rach-goc',
       code: 'XP-RACHGOC',
       name: 'Phường Rạch Gốc',
-      type: LocalityType.WARD,
       provinceName: 'Tỉnh Cà Mau',
     },
     {
       id: 'seed-locality-dat-mui',
       code: 'XP-DATMUI',
       name: 'Xã Đất Mũi',
-      type: LocalityType.COMMUNE,
       provinceName: 'Tỉnh Cà Mau',
     },
     {
       id: 'seed-locality-tran-van-thoi',
       code: 'XP-TVTHOI',
       name: 'Xã Trần Văn Thời',
-      type: LocalityType.COMMUNE,
       provinceName: 'Tỉnh Cà Mau',
     },
   ];
@@ -174,7 +169,6 @@ export async function seedSampleOcopData(
       where: { code: loc.code },
       update: {
         name: loc.name,
-        type: loc.type,
         provinceName: loc.provinceName,
         effectiveFrom: new Date('2020-01-01T00:00:00+07:00'),
         effectiveTo: null,
@@ -184,7 +178,6 @@ export async function seedSampleOcopData(
         id: loc.id,
         code: loc.code,
         name: loc.name,
-        type: loc.type,
         provinceName: loc.provinceName,
         effectiveFrom: new Date('2020-01-01T00:00:00+07:00'),
         isActive: true,
@@ -658,7 +651,6 @@ export async function seedSampleOcopData(
             id: locality.id,
             code: locality.code,
             name: locality.name,
-            type: locality.type,
             provinceName: locality.provinceName,
           },
         }) as unknown as Prisma.InputJsonValue)
@@ -681,7 +673,6 @@ export async function seedSampleOcopData(
         registrationSnapshot,
         localityCodeAtSubmit: submittedAt ? locality.code : null,
         localityNameAtSubmit: submittedAt ? locality.name : null,
-        localityTypeAtSubmit: submittedAt ? locality.type : null,
         provinceNameAtSubmit: submittedAt ? locality.provinceName : null,
       },
       create: {
@@ -700,7 +691,6 @@ export async function seedSampleOcopData(
         registrationSnapshot,
         localityCodeAtSubmit: submittedAt ? locality.code : null,
         localityNameAtSubmit: submittedAt ? locality.name : null,
-        localityTypeAtSubmit: submittedAt ? locality.type : null,
         provinceNameAtSubmit: submittedAt ? locality.provinceName : null,
       },
     });

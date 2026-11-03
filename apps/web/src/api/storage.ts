@@ -1,11 +1,11 @@
 import type { User } from '@/types/auth';
-import type { AuthSession, AuthTokens } from './types';
 import {
-  AUTH_USER_STORAGE_KEY,
   AUTH_ACCESS_TOKEN_STORAGE_KEY,
-  AUTH_TOKEN_STORAGE_KEY,
   AUTH_REFRESH_TOKEN_STORAGE_KEY,
+  AUTH_TOKEN_STORAGE_KEY,
+  AUTH_USER_STORAGE_KEY,
 } from '@/constants/auth';
+import type { AuthSession, AuthTokens } from './types';
 
 const isBrowser = () => typeof window !== 'undefined';
 

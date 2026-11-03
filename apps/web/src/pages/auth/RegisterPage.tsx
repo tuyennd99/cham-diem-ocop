@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useForm } from '@tanstack/react-form';
 import { Link, useNavigate } from '@tanstack/react-router';
+import { toast } from 'sonner';
 import AlertError from '@/components/alert-error';
 import { FormField } from '@/components/form-field';
 import { GoogleSignIn } from '@/components/google-sign-in';
@@ -33,13 +34,15 @@ export function RegisterPage() {
           password: value.password,
         });
         writePendingEmail({ ...data, mode: 'register' });
+        toast.success('Đã gửi mã OTP xác thực tới email.');
         await navigate({ to: '/verify-otp', search: {} });
       } catch (cause) {
-        setError(
+        const msg =
           cause instanceof ApiError && cause.status === 409
             ? 'Email này đã được dùng. Vui lòng đăng nhập.'
-            : messageOf(cause),
-        );
+            : messageOf(cause);
+        setError(msg);
+        toast.error(msg);
       }
     },
   });
@@ -47,7 +50,7 @@ export function RegisterPage() {
   const registerAside = (
     <aside className='auth-aside' aria-label='Hướng dẫn đăng ký tài khoản người đăng ký'>
       <p className='eyebrow'>HƯỚNG DẪN NGƯỜI ĐĂNG KÝ</p>
-      <h2>3 bước chuẩn bị và nộp hồ sơ OCOP</h2>
+      <h2 className='auth-register-heading'>3 bước chuẩn bị và nộp hồ sơ OCOP</h2>
       <p className='auth-aside-lead'>
         Tài khoản người đăng ký giúp hợp tác xã, doanh nghiệp và hộ sản xuất lưu trữ hồ sơ trực
         tuyến và theo dõi kết quả chấm điểm minh bạch.

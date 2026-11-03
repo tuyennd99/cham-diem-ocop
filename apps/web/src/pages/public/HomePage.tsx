@@ -5,12 +5,14 @@ import { FormField } from '@/components/form-field';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  Combobox,
+  ComboboxAnchor,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxTrigger,
+} from '@/components/ui/combobox';
 import { publicAttachmentUrl } from '../../constants/api';
 import { ALL } from '../../constants/consts';
 import {
@@ -95,23 +97,25 @@ export function HomePage() {
               </p>
             </div>
             <FormField label='Danh mục sản phẩm' htmlFor='home-1' className='field featured-filter'>
-              <Select
+              <Combobox
                 value={categoryId || ALL}
                 onValueChange={(value) => setCategoryId(value === ALL ? '' : value)}
                 disabled={Boolean(error) && categories.length === 0}
               >
-                <SelectTrigger id='home-1'>
-                  <SelectValue placeholder='Tất cả danh mục' />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Tất cả danh mục</SelectItem>
+                <ComboboxAnchor>
+                  <ComboboxInput id='home-1' placeholder='Tất cả danh mục' />
+                  <ComboboxTrigger />
+                </ComboboxAnchor>
+                <ComboboxContent>
+                  <ComboboxEmpty>Không tìm thấy danh mục.</ComboboxEmpty>
+                  <ComboboxItem value={ALL}>Tất cả danh mục</ComboboxItem>
                   {categories.map((category) => (
-                    <SelectItem key={category.id} value={category.id}>
+                    <ComboboxItem key={category.id} value={category.id}>
                       {category.name}
-                    </SelectItem>
+                    </ComboboxItem>
                   ))}
-                </SelectContent>
-              </Select>
+                </ComboboxContent>
+              </Combobox>
             </FormField>
           </div>
 

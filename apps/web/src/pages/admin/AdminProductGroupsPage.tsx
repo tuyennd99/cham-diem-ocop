@@ -1,12 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { AdminCategoryRecord, LocalityQuery } from '@ocop/shared';
+import type { AdminCategoryRecord } from '@ocop/shared';
 import { Link } from '@tanstack/react-router';
+import { Eye, Pencil, Plus, Printer, RotateCcw } from 'lucide-react';
 import AlertError from '@/components/alert-error';
 import { FormField } from '@/components/form-field';
 import PageSpin from '@/components/page-spin';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import {
+  Combobox,
+  ComboboxAnchor,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxTrigger,
+} from '@/components/ui/combobox';
 import { DataTable, type DataTableColumnDef } from '@/components/ui/data-table';
 import {
   Dialog,
@@ -16,21 +26,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ALL, DEFAULT_PAGE_SIZE } from '../../constants/consts';
 import {
   parseAdminCatalogSearch,
   toAdminCategoryApiQuery,
-  toAdminLocalityApiQuery,
   type AdminCatalogSearch,
-  type AdminCatalogTab,
 } from '../../lib/admin-search';
 import { errorText } from '../../lib/api-error';
 import { useSession } from '../../lib/auth';
@@ -41,7 +42,6 @@ import {
   useAdminCategoryDetail,
 } from '../../queries/admin-catalogs';
 import { CategoryEditorDialog } from './CategoryEditorDialog';
-import { LocalitiesPanel } from './LocalitiesPanel';
 
 interface AdminProductGroupsPageProps {
   search?: AdminCatalogSearch;
@@ -61,7 +61,6 @@ export function AdminProductGroupsPage({
     limit: DEFAULT_PAGE_SIZE,
   });
   const appliedSearch = controlledSearch ?? fallbackSearch;
-  const selectedTab: AdminCatalogTab = appliedSearch.tab ?? 'catalog';
 
   function applySearch(next: AdminCatalogSearch) {
     const normalized = parseAdminCatalogSearch(next as Record<string, unknown>);
@@ -84,7 +83,6 @@ export function AdminProductGroupsPage({
   }, [appliedSearch.q, appliedSearch.isActive]);
 
   const categoryApiQuery = toAdminCategoryApiQuery(appliedSearch);
-  const localityApiQuery = toAdminLocalityApiQuery(appliedSearch);
 
   const categoriesQuery = useAdminCategories(categoryApiQuery);
   const detailQuery = useAdminCategoryDetail(selectedCategoryId);
@@ -97,28 +95,35 @@ export function AdminProductGroupsPage({
 
   const categoryColumns = useMemo<DataTableColumnDef<AdminCategoryRecord>[]>(
     () => [
-      { accessorKey: 'order', header: 'STT', meta: { align: 'right', width: '5%' } },
+      {
+        accessorKey: 'order',
+        header: 'STT',
+        meta: {
+          align: 'right',
+          width: '4rem',
+          cellClassName: 'text-muted tabular-nums',
+        },
+      },
       {
         accessorKey: 'name',
         header: 'Danh mục sản phẩm',
-        meta: { isRowHeader: true, cellClassName: 'font-normal', width: '29%' },
-        cell: ({ row }) => <div className='text-fg font-semibold'>{row.original.name}</div>,
+        meta: { isRowHeader: true, width: '30%', cellClassName: 'font-normal' },
+        cell: ({ row }) => (
+          <div className='text-fg min-w-[14rem] font-semibold leading-snug'>
+            {row.original.name}
+          </div>
+        ),
       },
       {
         id: 'criteriaSet',
         header: 'Bộ tiêu chí & Điểm',
-        meta: { width: '20%' },
+        meta: { cellClassName: 'whitespace-nowrap tabular-nums' },
         cell: ({ row }) => {
           const cat = row.original;
           return cat.criteriaSet ? (
-            <div>
-              <div className='font-medium'>
-                {cat.criteriaSet.maxScore} điểm ({cat.criteriaSet.criterionCount} tiêu chí)
-              </div>
-              <div className='text-muted text-xs'>
-                v{cat.criteriaSet.version} · {cat.criteriaSet.source ?? 'QĐ 26/2026/QĐ-TTg'}
-              </div>
-            </div>
+            <span className='font-medium'>
+              {cat.criteriaSet.maxScore} điểm ({cat.criteriaSet.criterionCount} tiêu chí)
+            </span>
           ) : (
             <span className='text-muted text-xs'>Chưa nạp bộ tiêu chí</span>
           );
@@ -126,21 +131,29 @@ export function AdminProductGroupsPage({
       },
       {
         accessorKey: 'referenceCount',
-        header: 'Hồ sơ tham chiếu',
+        header: 'Hồ sơ đã nộp',
         meta: {
-          width: '15%',
-          align: 'right',
-          cellStyle: { fontVariantNumeric: 'tabular-nums' },
+          align: 'left',
+          cellClassName: 'whitespace-nowrap tabular-nums',
         },
-        cell: ({ row }) =>
-          `${row.original.referenceCount} hồ sơ (${row.original.submittedReferenceCount} đã nộp)`,
+        cell: ({ row }) => (
+          <div>
+            <span className='font-medium'>{row.original.referenceCount} hồ sơ</span>
+            <span className='text-muted ml-1 text-xs'>
+              ({row.original.submittedReferenceCount} đã nộp)
+            </span>
+          </div>
+        ),
       },
       {
         accessorKey: 'isActive',
         header: 'Trạng thái',
-        meta: { width: '13%' },
+        meta: { cellClassName: 'whitespace-nowrap' },
         cell: ({ row }) => (
-          <Badge variant={row.original.isActive ? 'default' : 'secondary'}>
+          <Badge
+            variant={row.original.isActive ? 'default' : 'secondary'}
+            className='whitespace-nowrap'
+          >
             {row.original.isActive ? 'Đang mở đăng ký' : 'Ngừng mở đăng ký'}
           </Badge>
         ),
@@ -148,38 +161,61 @@ export function AdminProductGroupsPage({
       {
         id: 'actions',
         header: 'Thao tác',
-        meta: { align: 'right', width: '18%' },
+        meta: { align: 'right', width: '8.5rem', cellClassName: 'whitespace-nowrap' },
         cell: ({ row }) => {
           const cat = row.original;
           return (
-            <div className='admin-actions justify-end'>
-              <Button
-                type='button'
-                variant='secondary'
-                size='sm'
-                onClick={() => setSelectedCategoryId(cat.id)}
-              >
-                Xem tiêu chí
-              </Button>
+            <div className='flex items-center justify-end gap-1.5'>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    size='icon-sm'
+                    aria-label={`Xem tiêu chí ${cat.name}`}
+                    onClick={() => setSelectedCategoryId(cat.id)}
+                  >
+                    <Eye className='size-4' aria-hidden='true' />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Xem tiêu chí</TooltipContent>
+              </Tooltip>
+
               {cat.criteriaSet && (
-                <Button asChild variant='secondary' size='sm'>
-                  <Link to='/print/criteria-sets/$id' params={{ id: cat.criteriaSet.id }}>
-                    In mẫu trắng
-                  </Link>
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button asChild variant='secondary' size='icon-sm'>
+                      <Link
+                        to='/print/criteria-sets/$id'
+                        params={{ id: cat.criteriaSet.id }}
+                        aria-label={`In mẫu trắng ${cat.name}`}
+                      >
+                        <Printer className='size-4' aria-hidden='true' />
+                      </Link>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>In mẫu trắng</TooltipContent>
+                </Tooltip>
               )}
+
               {canManage && (
-                <Button
-                  type='button'
-                  variant='secondary'
-                  size='sm'
-                  onClick={() => {
-                    setCreateCategoryOpen(false);
-                    setEditingCategory(cat);
-                  }}
-                >
-                  Sửa
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      size='icon-sm'
+                      aria-label={`Sửa danh mục ${cat.name}`}
+                      onClick={() => {
+                        setCreateCategoryOpen(false);
+                        setEditingCategory(cat);
+                      }}
+                    >
+                      <Pencil className='size-4' aria-hidden='true' />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Sửa danh mục</TooltipContent>
+                </Tooltip>
               )}
             </div>
           );
@@ -189,38 +225,29 @@ export function AdminProductGroupsPage({
     [canManage],
   );
 
-  function changeTab(value: string) {
-    const nextTab = (value === 'localities' ? value : 'catalog') as AdminCatalogTab;
-    applySearch({
-      page: 1,
-      limit: appliedSearch.limit ?? DEFAULT_PAGE_SIZE,
-      tab: nextTab,
-    });
-  }
-
-  function handleLocalityQueryChange(nextLocalityQuery: LocalityQuery) {
-    applySearch({
-      tab: 'localities',
-      page: nextLocalityQuery.page ?? 1,
-      limit: nextLocalityQuery.limit ?? DEFAULT_PAGE_SIZE,
-      q: nextLocalityQuery.q,
-      isActive: nextLocalityQuery.isActive,
-      type: nextLocalityQuery.type,
-      provinceName: nextLocalityQuery.provinceName,
-    });
-  }
+  const hasActiveFilters = Boolean(appliedSearch.q || appliedSearch.isActive !== undefined);
 
   return (
     <section className='admin-page'>
       <div className='admin-page-heading'>
         <div>
-          <h1>Danh mục sản phẩm &amp; địa bàn</h1>
+          <h1>Danh mục sản phẩm</h1>
           <p className='route-intro'>
-            Quản lý danh mục sản phẩm gắn bộ tiêu chí và danh mục Xã/Phường.
+            Quản lý danh mục sản phẩm ({categoryMeta?.total ?? categories.length} phân loại) gắn bộ
+            tiêu chí đánh giá OCOP.
           </p>
         </div>
-        {canManage && selectedTab === 'catalog' && (
-          <div className='admin-actions'>
+        <div className='admin-actions'>
+          <Button
+            type='button'
+            variant='secondary'
+            loading={categoriesQuery.isFetching}
+            disabled={categoriesQuery.isFetching}
+            onClick={() => void categoriesQuery.refetch()}
+          >
+            Tải lại
+          </Button>
+          {canManage && (
             <Button
               type='button'
               onClick={() => {
@@ -228,137 +255,123 @@ export function AdminProductGroupsPage({
                 setCreateCategoryOpen(true);
               }}
             >
-              Thêm danh mục sản phẩm
+              <Plus className='size-4' aria-hidden='true' />
+              <span>Thêm danh mục sản phẩm</span>
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      <Tabs value={selectedTab} onValueChange={changeTab}>
-        <TabsList aria-label='Phân hệ danh mục sản phẩm và địa bàn'>
-          <TabsTrigger value='catalog'>Danh mục sản phẩm</TabsTrigger>
-          <TabsTrigger value='localities'>Địa bàn</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value='catalog'>
-          <div className='admin-page'>
-            <form
-              className='admin-filters'
-              onSubmit={(event) => {
-                event.preventDefault();
-                applySearch({
-                  ...appliedSearch,
-                  tab: 'catalog',
-                  page: 1,
-                  q: searchText.trim() || undefined,
-                  isActive: statusFilter,
-                });
-              }}
-            >
-              <FormField
-                label='Tìm mã hoặc tên danh mục'
-                htmlFor='catalog-search-q'
-                className='admin-filter-field'
-                data-filter-width='search'
-              >
-                <Input
-                  id='catalog-search-q'
-                  value={searchText}
-                  placeholder='Nhập tên hoặc mã danh mục…'
-                  onChange={(event) => setSearchText(event.target.value)}
-                />
-              </FormField>
-              <FormField
-                label='Trạng thái mở đăng ký'
-                htmlFor='catalog-search-status'
-                className='admin-filter-field'
-                data-filter-width='status'
-              >
-                <Select
-                  value={statusFilter === undefined ? ALL : String(statusFilter)}
-                  onValueChange={(value) =>
-                    setStatusFilter(value === ALL ? undefined : value === 'true')
-                  }
-                >
-                  <SelectTrigger id='catalog-search-status'>
-                    <SelectValue placeholder='Tất cả' />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ALL}>Tất cả</SelectItem>
-                    <SelectItem value='true'>Đang mở đăng ký</SelectItem>
-                    <SelectItem value='false'>Ngừng mở đăng ký</SelectItem>
-                  </SelectContent>
-                </Select>
-              </FormField>
-              <div className='admin-actions admin-filter-actions items-end'>
-                <Button type='submit'>Áp dụng</Button>
-                <Button
-                  type='button'
-                  variant='secondary'
-                  loading={categoriesQuery.isFetching}
-                  disabled={categoriesQuery.isFetching}
-                  onClick={() => void categoriesQuery.refetch()}
-                >
-                  Tải lại
-                </Button>
-              </div>
-            </form>
-
-            {categoriesError && (
-              <AlertError title='Không thể tải dữ liệu danh mục' errors={[categoriesError]} />
-            )}
-
-            {categoriesQuery.isPending && <PageSpin />}
-            {!categoriesQuery.isPending && categories.length === 0 && (
-              <Card className='admin-table-region empty-card'>
-                <h2>Chưa có danh mục phù hợp</h2>
-              </Card>
-            )}
-
-            {!categoriesQuery.isPending && categories.length > 0 && (
-              <div
-                className='admin-table-region'
-                role='region'
-                aria-label='Bảng danh mục sản phẩm OCOP'
-                tabIndex={0}
-              >
-                <DataTable
-                  columns={categoryColumns}
-                  tableClassName='min-w-[64rem]'
-                  data={categories}
-                  total={categoryMeta?.total ?? categories.length}
-                  page={categoryMeta?.page ?? appliedSearch.page ?? 1}
-                  pageSize={appliedSearch.limit ?? DEFAULT_PAGE_SIZE}
-                  getRowId={(row) => row.id}
-                  onPageChange={(nextPage) =>
-                    applySearch({
-                      ...appliedSearch,
-                      page: nextPage,
-                    })
-                  }
-                  onPageSizeChange={(nextLimit) =>
-                    applySearch({
-                      ...appliedSearch,
-                      page: 1,
-                      limit: nextLimit,
-                    })
-                  }
-                />
-              </div>
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value='localities'>
-          <LocalitiesPanel
-            canManage={canManage}
-            query={localityApiQuery}
-            onQueryChange={handleLocalityQueryChange}
-            onCreate={mutations.createLocality}
-            onUpdate={mutations.updateLocality}
+      <form
+        className='admin-filters'
+        onSubmit={(event) => {
+          event.preventDefault();
+          applySearch({
+            ...appliedSearch,
+            page: 1,
+            q: searchText.trim() || undefined,
+            isActive: statusFilter,
+          });
+        }}
+      >
+        <FormField
+          label='Tìm mã hoặc tên danh mục'
+          htmlFor='catalog-search-q'
+          className='admin-filter-field'
+          data-filter-width='search'
+        >
+          <Input
+            id='catalog-search-q'
+            value={searchText}
+            placeholder='Nhập tên hoặc mã danh mục…'
+            onChange={(event) => setSearchText(event.target.value)}
           />
-        </TabsContent>
-      </Tabs>
+        </FormField>
+        <FormField
+          label='Trạng thái mở đăng ký'
+          htmlFor='catalog-search-status'
+          className='admin-filter-field'
+          data-filter-width='status'
+        >
+          <Combobox
+            value={statusFilter === undefined ? ALL : String(statusFilter)}
+            onValueChange={(value) =>
+              setStatusFilter(value === ALL ? undefined : value === 'true')
+            }
+          >
+            <ComboboxAnchor>
+              <ComboboxInput id='catalog-search-status' placeholder='Tất cả' />
+              <ComboboxTrigger aria-label='Mở danh sách trạng thái mở đăng ký' />
+            </ComboboxAnchor>
+            <ComboboxContent>
+              <ComboboxEmpty>Không tìm thấy trạng thái.</ComboboxEmpty>
+              <ComboboxItem value={ALL}>Tất cả</ComboboxItem>
+              <ComboboxItem value='true'>Đang mở đăng ký</ComboboxItem>
+              <ComboboxItem value='false'>Ngừng mở đăng ký</ComboboxItem>
+            </ComboboxContent>
+          </Combobox>
+        </FormField>
+        <div className='admin-actions admin-filter-actions items-end'>
+          <Button type='submit'>Áp dụng</Button>
+          {hasActiveFilters && (
+            <Button
+              type='button'
+              variant='secondary'
+              onClick={() =>
+                applySearch({
+                  page: 1,
+                  limit: appliedSearch.limit ?? DEFAULT_PAGE_SIZE,
+                })
+              }
+            >
+              <RotateCcw className='size-4' aria-hidden='true' />
+              <span>Xóa bộ lọc</span>
+            </Button>
+          )}
+        </div>
+      </form>
+
+      {categoriesError && (
+        <AlertError title='Không thể tải dữ liệu danh mục' errors={[categoriesError]} />
+      )}
+
+      {categoriesQuery.isPending && <PageSpin />}
+      {!categoriesQuery.isPending && categories.length === 0 && (
+        <Card className='admin-table-region empty-card'>
+          <h2>Chưa có danh mục phù hợp</h2>
+        </Card>
+      )}
+
+      {!categoriesQuery.isPending && categories.length > 0 && (
+        <div
+          className='admin-table-region'
+          role='region'
+          aria-label='Bảng danh mục sản phẩm OCOP'
+          tabIndex={0}
+        >
+          <DataTable
+            columns={categoryColumns}
+            data={categories}
+            total={categoryMeta?.total ?? categories.length}
+            page={categoryMeta?.page ?? appliedSearch.page ?? 1}
+            pageSize={appliedSearch.limit ?? DEFAULT_PAGE_SIZE}
+            getRowId={(row) => row.id}
+            onPageChange={(nextPage) =>
+              applySearch({
+                ...appliedSearch,
+                page: nextPage,
+              })
+            }
+            onPageSizeChange={(nextLimit) =>
+              applySearch({
+                ...appliedSearch,
+                page: 1,
+                limit: nextLimit,
+              })
+            }
+          />
+        </div>
+      )}
 
       <Dialog
         open={selectedCategoryId !== null}

@@ -22,11 +22,10 @@ it('sends explicit inactive filters and catalog mutations through the shared tra
   };
   try {
     await adminCatalogsApi.categories({ isActive: false, page: 1, limit: 20 });
-    await adminCatalogsApi.localities({ isActive: false, type: 'COMMUNE', page: 1, limit: 20 });
+    await adminCatalogsApi.localities({ isActive: false, page: 1, limit: 20 });
     assert.equal(captured[0]?.params?.isActive, false);
     assert.equal(captured[0]?.url, '/admin/categories');
     assert.equal(captured[1]?.params?.isActive, false);
-    assert.equal(captured[1]?.params?.type, 'COMMUNE');
     assert.equal(captured[1]?.url, '/admin/localities');
   } finally {
     baseRequest.defaults.adapter = previous;

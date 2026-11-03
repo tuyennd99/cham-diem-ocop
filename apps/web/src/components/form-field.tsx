@@ -8,6 +8,8 @@ interface FormFieldProps extends Omit<ComponentProps<'div'>, 'children'> {
   /** `id` của control bên trong `children`. */
   htmlFor?: string;
   labelClassName?: string;
+  /** Đánh dấu trường bắt buộc bằng dấu `*` màu đỏ trên `<Label>`. */
+  required?: boolean;
   /** Mô tả / hướng dẫn cho trường nhập liệu, render ngoài `<Label>`. */
   hint?: ReactNode;
   /** `id` của hint (mặc định `${htmlFor}-hint` nếu có `htmlFor`) để control liên kết qua `aria-describedby`. */
@@ -26,6 +28,7 @@ export function FormField({
   label,
   htmlFor,
   labelClassName,
+  required,
   hint,
   hintId,
   optional,
@@ -38,23 +41,23 @@ export function FormField({
   return (
     <div
       data-slot='form-field'
-      className={cn('grid min-w-0 content-start gap-1.5', className)}
+      className={cn('flex min-w-0 flex-col gap-1.5', className)}
       {...props}
     >
       {optional ? (
-        <div className='flex items-baseline justify-between gap-2 flex-wrap'>
-          <Label htmlFor={htmlFor} className={labelClassName}>
+        <div className='mb-auto flex flex-wrap items-baseline justify-between gap-2'>
+          <Label htmlFor={htmlFor} required={required} className={labelClassName}>
             {label}
           </Label>
-          <span className='field-optional text-xs text-muted-foreground'>{optional}</span>
+          <span className='field-optional text-muted-foreground text-xs'>{optional}</span>
         </div>
       ) : (
-        <Label htmlFor={htmlFor} className={labelClassName}>
+        <Label htmlFor={htmlFor} required={required} className={cn('mb-auto', labelClassName)}>
           {label}
         </Label>
       )}
       {hint && (
-        <p id={resolvedHintId} className='field-hint text-xs text-muted-foreground leading-relaxed'>
+        <p id={resolvedHintId} className='field-hint text-muted-foreground text-xs leading-relaxed'>
           {hint}
         </p>
       )}

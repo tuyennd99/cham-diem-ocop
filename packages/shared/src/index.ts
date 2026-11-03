@@ -78,12 +78,10 @@ export interface ResetAdminUserPasswordInput {
   password: string;
   reason: string;
 }
-export type LocalityType = "COMMUNE" | "WARD";
 export interface LocalityRecord {
   id: string;
   code: string;
   name: string;
-  type: LocalityType;
   provinceName: string;
   effectiveFrom: string | null;
   effectiveTo: string | null;
@@ -93,7 +91,6 @@ export interface LocalityQuery {
   page?: number;
   limit?: number;
   q?: string;
-  type?: LocalityType;
   provinceName?: string;
   isActive?: boolean;
 }
@@ -101,7 +98,6 @@ export type PublicLocalityQuery = Omit<LocalityQuery, "isActive">;
 export interface CreateLocalityInput {
   code: string;
   name: string;
-  type: LocalityType;
   provinceName: string;
   effectiveFrom?: string | null;
   effectiveTo?: string | null;
@@ -110,7 +106,6 @@ export interface CreateLocalityInput {
 }
 export interface UpdateLocalityInput {
   name?: string;
-  type?: LocalityType;
   provinceName?: string;
   effectiveFrom?: string | null;
   effectiveTo?: string | null;
@@ -209,7 +204,6 @@ export interface RegistrationSnapshotV1 {
     id: string;
     code: string;
     name: string;
-    type: LocalityType;
     provinceName: string;
   };
   formData: ProductApplicationForm;
@@ -285,7 +279,7 @@ export interface AdminProductListItem {
   formData: Partial<ProductApplicationForm>;
   category: AdminProductCategory;
   registrant: { id: string; fullName: string; email: string };
-  locality: Pick<LocalityRecord, "id" | "code" | "name" | "type" | "provinceName"> | null;
+  locality: Pick<LocalityRecord, "id" | "code" | "name" | "provinceName"> | null;
   attachments: ProductAttachment[];
 }
 
@@ -537,7 +531,6 @@ export interface RegistrationPrintData {
     id: string;
     code: string;
     name: string;
-    type: LocalityType;
     provinceName: string;
   } | null;
   formData: Partial<ProductApplicationForm>;
@@ -555,7 +548,6 @@ export type ReportGroupBy = (typeof reportGroupByValues)[number];
 export interface AdminReportFilterQuery {
   year?: number;
   month?: number;
-  localityType?: LocalityType;
   localityId?: string;
   categoryId?: string;
   registrationType?: ProductRegistrationType;

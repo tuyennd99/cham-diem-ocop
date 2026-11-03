@@ -6,8 +6,11 @@ import { pipeline, Readable } from 'node:stream';
 import { ForbiddenException, StreamableFile } from '@nestjs/common';
 import type { MulterOptions } from '@nestjs/platform-express/multer/interfaces/multer-options.interface';
 
-export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
-export const uuidStorageKeyPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export const MAX_FILE_BYTES = 2 * 1024 * 1024;
+export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+export const MAX_IMAGE_BYTES = MAX_VIDEO_BYTES;
+export const uuidStorageKeyPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const storedFileMimeTypes: Record<string, string> = {
   png: 'image/png',
@@ -16,6 +19,9 @@ const storedFileMimeTypes: Record<string, string> = {
   gif: 'image/gif',
   webp: 'image/webp',
   pdf: 'application/pdf',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
+  mov: 'video/quicktime',
 };
 
 export function storageRoot(value = process.env.STORAGE_PATH) {
@@ -46,7 +52,11 @@ export async function removeUploadedPrivateFile(
   }
 }
 
-export async function openStoredFile(storageKey: string, originalName: string, root = storageRoot()) {
+export async function openStoredFile(
+  storageKey: string,
+  originalName: string,
+  root = storageRoot(),
+) {
   const path = resolveStoredPath(storageKey, root);
   const extension = originalName.split('.').pop()?.toLowerCase();
   const info = await stat(path);
@@ -84,7 +94,9 @@ class PrivateStorage {
     const output = createWriteStream(path);
     openStreams.set(path, output);
     output.once('close', () => openStreams.delete(path));
-    file.stream.on('data', (chunk: Buffer) => { size += chunk.length; });
+    file.stream.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+    });
     pipeline(file.stream, output, (error) => {
       if (error)
         return this._removeFile(_request, file, (cleanupError) =>
@@ -94,7 +106,11 @@ class PrivateStorage {
     });
   }
 
-  _removeFile(_request: unknown, file: { path?: string }, callback: (error: Error | null) => void) {
+  _removeFile(
+    _request: unknown,
+    file: { path?: string },
+    callback: (error: Error | null) => void,
+  ) {
     if (!file.path) return callback(null);
     const path = file.path;
     const output = openStreams.get(path);
@@ -124,12 +140,15 @@ export function productUploadOptions(): MulterOptions {
   };
 }
 
-export function asDownload(file: {
-  stream: Readable;
-  originalName: string;
-  mimeType: string;
-  sizeBytes: number;
-}, disposition: 'attachment' | 'inline' = 'attachment') {
+export function asDownload(
+  file: {
+    stream: Readable;
+    originalName: string;
+    mimeType: string;
+    sizeBytes: number;
+  },
+  disposition: 'attachment' | 'inline' = 'attachment',
+) {
   return new StreamableFile(file.stream, {
     type: file.mimeType,
     length: file.sizeBytes,

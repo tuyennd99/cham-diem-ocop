@@ -20,7 +20,6 @@ export async function adminFixture(
       code: 'TEST-L-' + randomUUID(),
       name: 'Test locality',
       provinceName: 'Test province',
-      type: 'COMMUNE',
     },
   });
   const password = await bcrypt.hash('StaffPassword1!', 4);

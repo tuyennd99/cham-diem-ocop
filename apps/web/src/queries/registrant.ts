@@ -2,10 +2,11 @@ import { useQuery } from '@tanstack/react-query';
 import { myProductsApi } from '../api';
 import { queryKeys } from '../constants/query-key';
 
-export function useMyProducts() {
+export function useMyProducts(enabled = true) {
   return useQuery({
     queryKey: queryKeys.myProducts.list,
     queryFn: async () => (await myProductsApi.list()).data,
+    enabled,
   });
 }
 

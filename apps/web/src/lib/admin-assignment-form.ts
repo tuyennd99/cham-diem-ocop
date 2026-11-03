@@ -6,9 +6,8 @@ export function assignmentScopeFor(
   categoryId: string,
 ): string[] {
   return [
-    ...(assignments.find(
-      (row) => row.judgeId === judgeId && row.categoryId === categoryId,
-    )?.criterionIds ?? []),
+    ...(assignments.find((row) => row.judgeId === judgeId && row.categoryId === categoryId)
+      ?.criterionIds ?? []),
   ];
 }
 

@@ -8,9 +8,9 @@ import {
   ProductResultsPrintSheet,
   RegistrationPrintSheet,
 } from '../../components/print/OcopPrintSheets';
+import type { AdminProductSearch } from '../../lib/admin-search';
 import { errorText } from '../../lib/api-error';
 import { useSession } from '../../lib/auth';
-import type { AdminProductSearch } from '../../lib/admin-search';
 import { hasStaffPermission } from '../../lib/session-contract';
 import {
   useCriteriaSetPrintData,
@@ -20,13 +20,7 @@ import {
   useResultsPrintData,
 } from '../../queries/scoring-print';
 
-function PrintLoadError({
-  message,
-  onRetry,
-}: {
-  message: string;
-  onRetry: () => void;
-}) {
+function PrintLoadError({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <section className='route-panel space-y-2'>
       <AlertError title='Không tải được dữ liệu bản in' errors={[message]} />
@@ -37,11 +31,7 @@ function PrintLoadError({
   );
 }
 
-export function BlankCriteriaPrintPreviewPage({
-  criteriaSetId,
-}: {
-  criteriaSetId: string;
-}) {
+export function BlankCriteriaPrintPreviewPage({ criteriaSetId }: { criteriaSetId: string }) {
   const { data, error, isPending, refetch } = useCriteriaSetPrintData(criteriaSetId);
   const err = errorText(error);
   return (
@@ -58,11 +48,7 @@ export function BlankCriteriaPrintPreviewPage({
   );
 }
 
-export function AdminEvaluationPrintPreviewPage({
-  evaluationId,
-}: {
-  evaluationId: string;
-}) {
+export function AdminEvaluationPrintPreviewPage({ evaluationId }: { evaluationId: string }) {
   const { data, error, isPending, refetch } = useEvaluationPrintData(evaluationId);
   const err = errorText(error);
   return (
@@ -79,11 +65,7 @@ export function AdminEvaluationPrintPreviewPage({
   );
 }
 
-export function JudgeEvaluationPrintPreviewPage({
-  productId,
-}: {
-  productId: string;
-}) {
+export function JudgeEvaluationPrintPreviewPage({ productId }: { productId: string }) {
   const { data, error, isPending, refetch } = useJudgeEvaluationPrintData(productId);
   const err = errorText(error);
   return (
@@ -109,8 +91,7 @@ export function ProductRegistrationPrintPreviewPage({
 }) {
   const session = useSession();
   const isStaffViewer =
-    hasStaffPermission(session?.user, 'VIEW') ||
-    hasStaffPermission(session?.user, 'MANAGE');
+    hasStaffPermission(session?.user, 'VIEW') || hasStaffPermission(session?.user, 'MANAGE');
   const mode: 'admin' | 'owner' = isStaffViewer ? 'admin' : 'owner';
   const backTo = isStaffViewer
     ? `/admin/${search.returnMode ?? 'registrations'}/${encodeURIComponent(productId)}`
@@ -129,9 +110,7 @@ export function ProductRegistrationPrintPreviewPage({
       />
       {isPending && <PageSpin />}
       {err && <PrintLoadError message={err} onRetry={() => void refetch()} />}
-      {data?.data && (
-        <RegistrationPrintSheet data={data.data} attachmentMode={mode} />
-      )}
+      {data?.data && <RegistrationPrintSheet data={data.data} attachmentMode={mode} />}
     </section>
   );
 }
@@ -145,8 +124,7 @@ export function ProductResultsPrintPreviewPage({
 }) {
   const session = useSession();
   const isStaffViewer =
-    hasStaffPermission(session?.user, 'VIEW') ||
-    hasStaffPermission(session?.user, 'MANAGE');
+    hasStaffPermission(session?.user, 'VIEW') || hasStaffPermission(session?.user, 'MANAGE');
   const mode: 'admin' | 'owner' = isStaffViewer ? 'admin' : 'owner';
   const backTo = isStaffViewer
     ? `/admin/${search.returnMode ?? 'products'}/${encodeURIComponent(productId)}`

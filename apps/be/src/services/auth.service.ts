@@ -274,6 +274,26 @@ export class AuthService {
     return this.publicUser(user);
   }
 
+  async updateProfile(
+    userId: string,
+    input: { fullName: string; phone?: string | null },
+  ): Promise<PublicUser> {
+    const current = await this.repository.findUserById(userId);
+    if (!current?.verified || !current.isActive) {
+      throw new UnauthorizedException('Authentication required');
+    }
+    const fullName = input.fullName.trim();
+    if (!fullName) {
+      throw new BadRequestException('Họ và tên không được để trống');
+    }
+    const phone = input.phone ? input.phone.trim() || null : null;
+    const updated = await this.repository.updateProfile(userId, {
+      fullName,
+      phone,
+    });
+    return this.publicUser(updated);
+  }
+
   private async issueToken(payload: AccessTokenPayload, user: PublicUser) {
     const expiresIn = ACCESS_TOKEN_TTL_SECONDS;
     return {

@@ -4,7 +4,6 @@ import type {
   AdminReportFilterQuery,
   AdminReportQuery,
   DashboardKpiItem,
-  LocalityType,
   PeriodComparisonDelta,
   ProductRegistrationType,
   ProductStatus,
@@ -164,7 +163,6 @@ export interface ReportingProductRecord {
     id: string;
     code: string;
     name: string;
-    type: LocalityType;
     provinceName: string;
   } | null;
   statusEvents: ReportingStatusEvent[];
@@ -212,8 +210,6 @@ export function matchesReportDimensionFilters(
   if (query.categoryId && product.category.id !== query.categoryId)
     return false;
   if (query.localityId && product.locality?.id !== query.localityId)
-    return false;
-  if (query.localityType && product.locality?.type !== query.localityType)
     return false;
   if (
     query.registrationType &&
@@ -608,7 +604,6 @@ export function buildRegistrationReport(input: {
     id: string;
     code: string;
     name: string;
-    type: LocalityType;
     provinceName: string;
   }>;
   now?: Date;
@@ -771,7 +766,6 @@ export function buildResultsReport(input: {
     id: string;
     code: string;
     name: string;
-    type: LocalityType;
     provinceName: string;
   }>;
   now?: Date;
@@ -923,7 +917,6 @@ export function buildAnalyticsDashboard(input: {
     id: string;
     code: string;
     name: string;
-    type: LocalityType;
     provinceName: string;
   }>;
   coveredCategoryIdsAtNow: ReadonlySet<string>;

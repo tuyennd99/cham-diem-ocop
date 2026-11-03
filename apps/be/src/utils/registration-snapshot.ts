@@ -75,7 +75,7 @@ export function buildRegistrationSnapshot(input: {
   product: Pick<Product, 'id' | 'name' | 'description' | 'formData'>;
   registrant: Pick<User, 'id' | 'fullName' | 'email' | 'phone'>;
   category: Pick<ProductCategory, 'id' | 'name'>;
-  locality: Pick<Locality, 'id' | 'code' | 'name' | 'type' | 'provinceName'>;
+  locality: Pick<Locality, 'id' | 'code' | 'name' | 'provinceName'>;
 }): RegistrationSnapshotV2 {
   return {
     version: 2,
@@ -99,7 +99,6 @@ export function buildRegistrationSnapshot(input: {
       id: input.locality.id,
       code: input.locality.code,
       name: input.locality.name,
-      type: input.locality.type,
       provinceName: input.locality.provinceName,
     },
     formData: validateProductApplicationForm(input.product.formData),

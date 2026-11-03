@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
 import type { NavGroup, NavItem } from '@/types';
 import { ChevronRight } from 'lucide-react';
-import { Link, useLocation } from '@/components/navigation';
 import { cn } from '@/lib/utils';
+import { Link, useLocation } from '@/components/navigation';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   DropdownMenu,

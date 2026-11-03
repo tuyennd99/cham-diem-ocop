@@ -164,7 +164,6 @@ describe('admin product mutations and registration snapshots', () => {
           code: `RETIRED-${f.locality.id}`,
           name: 'Retired locality',
           provinceName: 'Test province',
-          type: 'COMMUNE',
           isActive: false,
         },
       });

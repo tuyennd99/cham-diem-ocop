@@ -14,6 +14,15 @@ import PasswordInput from '@/components/password-input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
+  Combobox,
+  ComboboxAnchor,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxTrigger,
+} from '@/components/ui/combobox';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -22,13 +31,6 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { staffAccessPayloadForForm, staffPermissionsForForm } from '../../lib/admin-user-form';
 import { messageOf } from '../../lib/api-error';
 import { getSession, validatePasswordBytes } from '../../lib/auth';
@@ -232,7 +234,8 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
       <DialogHeader>
         <DialogTitle>Thông tin người dùng: {user.fullName}</DialogTitle>
         <DialogDescription>
-          {user.email} · {user.role === 'REGISTRANT' ? 'Tài khoản người đăng ký' : 'Tài khoản nội bộ'} ·{' '}
+          {user.email} ·{' '}
+          {user.role === 'REGISTRANT' ? 'Tài khoản người đăng ký' : 'Tài khoản nội bộ'} ·{' '}
           {user.verified ? 'Đã xác thực' : 'Chưa xác thực'}
         </DialogDescription>
       </DialogHeader>
@@ -351,30 +354,32 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
             ))}
           </div>
           <FormField label='Đơn vị công tác' htmlFor='user-editor-5'>
-            <Select
-              value={organizationUnitId || undefined}
+            <Combobox
+              value={organizationUnitId}
               onValueChange={setOrganizationUnitId}
               disabled={busy}
             >
-              <SelectTrigger id='user-editor-5'>
-                <SelectValue placeholder='Chưa gán đơn vị' />
-              </SelectTrigger>
-              <SelectContent>
+              <ComboboxAnchor>
+                <ComboboxInput id='user-editor-5' placeholder='Chưa gán đơn vị' />
+                <ComboboxTrigger aria-label='Mở danh sách đơn vị công tác' />
+              </ComboboxAnchor>
+              <ComboboxContent>
+                <ComboboxEmpty>Không tìm thấy đơn vị phù hợp.</ComboboxEmpty>
                 {props.units.map((unit) => (
-                  <SelectItem key={unit.id} value={unit.id} disabled={!unit.isActive}>
+                  <ComboboxItem key={unit.id} value={unit.id} disabled={!unit.isActive}>
                     {unit.name}
                     {unit.isActive ? '' : ' (ngừng nhận tài khoản mới)'}
-                  </SelectItem>
+                  </ComboboxItem>
                 ))}
                 {user.organizationUnitId &&
                   !props.units.some((unit) => unit.id === user.organizationUnitId) && (
-                    <SelectItem value={user.organizationUnitId} disabled>
+                    <ComboboxItem value={user.organizationUnitId} disabled>
                       {user.organizationUnit?.name ?? 'Đơn vị hiện tại'} (đang được giữ trên tài
                       khoản)
-                    </SelectItem>
+                    </ComboboxItem>
                   )}
-              </SelectContent>
-            </Select>
+              </ComboboxContent>
+            </Combobox>
           </FormField>
           <FormField label='Lý do thay đổi quyền/đơn vị' htmlFor='user-editor-6'>
             <Input
@@ -575,23 +580,25 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
           />
         </FormField>
         <FormField label='Đơn vị công tác' htmlFor='user-editor-15'>
-          <Select
-            value={createForm.organizationUnitId || undefined}
+          <Combobox
+            value={createForm.organizationUnitId}
             onValueChange={(value) => setCreateForm({ ...createForm, organizationUnitId: value })}
           >
-            <SelectTrigger id='user-editor-15'>
-              <SelectValue placeholder='Chọn đơn vị' />
-            </SelectTrigger>
-            <SelectContent>
+            <ComboboxAnchor>
+              <ComboboxInput id='user-editor-15' placeholder='Chọn đơn vị' />
+              <ComboboxTrigger aria-label='Mở danh sách đơn vị công tác' />
+            </ComboboxAnchor>
+            <ComboboxContent>
+              <ComboboxEmpty>Không tìm thấy đơn vị phù hợp.</ComboboxEmpty>
               {props.units
                 .filter((unit) => unit.isActive)
                 .map((unit) => (
-                  <SelectItem key={unit.id} value={unit.id}>
+                  <ComboboxItem key={unit.id} value={unit.id}>
                     {unit.name}
-                  </SelectItem>
+                  </ComboboxItem>
                 ))}
-            </SelectContent>
-          </Select>
+            </ComboboxContent>
+          </Combobox>
         </FormField>
         <fieldset className='account-form'>
           <legend className='text-sm font-semibold'>Quyền nội bộ</legend>

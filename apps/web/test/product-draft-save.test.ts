@@ -56,6 +56,22 @@ describe('product draft save availability', () => {
       canStartProductDraftSave({ reviewRequired: false, createOutcomeUnknown: false }),
       true,
     );
+    assert.equal(
+      canStartProductDraftSave({
+        reviewRequired: false,
+        createOutcomeUnknown: false,
+        declarationAccepted: false,
+      }),
+      false,
+    );
+    assert.equal(
+      canStartProductDraftSave({
+        reviewRequired: false,
+        createOutcomeUnknown: false,
+        declarationAccepted: true,
+      }),
+      true,
+    );
   });
 });
 describe('saveProductDraft', () => {

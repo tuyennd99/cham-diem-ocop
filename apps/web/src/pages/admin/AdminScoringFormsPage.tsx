@@ -12,6 +12,15 @@ import PageSpin from '@/components/page-spin';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import {
+  Combobox,
+  ComboboxAnchor,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxTrigger,
+} from '@/components/ui/combobox';
 import { DataTable, type DataTableColumnDef } from '@/components/ui/data-table';
 import {
   Dialog,
@@ -21,13 +30,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ALL, DEFAULT_PAGE_SIZE } from '../../constants/consts';
 import {
@@ -240,7 +242,14 @@ export function AdminScoringFormsPage({
         accessorKey: 'status',
         header: 'Trạng thái',
         cell: ({ row }) => (
-          <Badge variant={row.original.status === 'SUBMITTED' ? 'default' : 'secondary'}>
+          <Badge
+            variant='outline'
+            className={
+              row.original.status === 'SUBMITTED'
+                ? 'status-badge status-completed'
+                : 'status-badge status-draft'
+            }
+          >
             {row.original.status === 'SUBMITTED' ? 'Đã nộp' : 'Bản nháp'}
           </Badge>
         ),
@@ -377,7 +386,7 @@ export function AdminScoringFormsPage({
                   className='admin-filter-field'
                   data-filter-width='group'
                 >
-                  <Select
+                  <Combobox
                     value={draftFilters.categoryId ?? ALL}
                     onValueChange={(value) =>
                       setDraftFilters((old) => ({
@@ -386,18 +395,20 @@ export function AdminScoringFormsPage({
                       }))
                     }
                   >
-                    <SelectTrigger id='scoring-sets-category'>
-                      <SelectValue placeholder='Tất cả danh mục' />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={ALL}>Tất cả danh mục</SelectItem>
+                    <ComboboxAnchor>
+                      <ComboboxInput id='scoring-sets-category' placeholder='Tất cả danh mục' />
+                      <ComboboxTrigger aria-label='Mở danh sách danh mục' />
+                    </ComboboxAnchor>
+                    <ComboboxContent>
+                      <ComboboxEmpty>Không tìm thấy danh mục phù hợp.</ComboboxEmpty>
+                      <ComboboxItem value={ALL}>Tất cả danh mục</ComboboxItem>
                       {categories.map((category) => (
-                        <SelectItem key={category.id} value={category.id}>
+                        <ComboboxItem key={category.id} value={category.id}>
                           {category.name}
-                        </SelectItem>
+                        </ComboboxItem>
                       ))}
-                    </SelectContent>
-                  </Select>
+                    </ComboboxContent>
+                  </Combobox>
                 </FormField>
                 <FormField
                   label='Trạng thái'
@@ -405,7 +416,7 @@ export function AdminScoringFormsPage({
                   className='admin-filter-field'
                   data-filter-width='status'
                 >
-                  <Select
+                  <Combobox
                     value={
                       draftFilters.isActive === undefined ? ALL : String(draftFilters.isActive)
                     }
@@ -416,15 +427,17 @@ export function AdminScoringFormsPage({
                       }))
                     }
                   >
-                    <SelectTrigger id='scoring-sets-status'>
-                      <SelectValue placeholder='Tất cả' />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={ALL}>Tất cả</SelectItem>
-                      <SelectItem value='true'>Đang áp dụng</SelectItem>
-                      <SelectItem value='false'>Ngừng áp dụng</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    <ComboboxAnchor>
+                      <ComboboxInput id='scoring-sets-status' placeholder='Tất cả' />
+                      <ComboboxTrigger aria-label='Mở danh sách trạng thái bộ phiếu' />
+                    </ComboboxAnchor>
+                    <ComboboxContent>
+                      <ComboboxEmpty>Không tìm thấy trạng thái.</ComboboxEmpty>
+                      <ComboboxItem value={ALL}>Tất cả</ComboboxItem>
+                      <ComboboxItem value='true'>Đang áp dụng</ComboboxItem>
+                      <ComboboxItem value='false'>Ngừng áp dụng</ComboboxItem>
+                    </ComboboxContent>
+                  </Combobox>
                 </FormField>
 
                 <div className='admin-actions admin-filter-actions'>
@@ -548,7 +561,7 @@ export function AdminScoringFormsPage({
                   className='admin-filter-field'
                   data-filter-width='group'
                 >
-                  <Select
+                  <Combobox
                     value={draftFilters.categoryId ?? ALL}
                     onValueChange={(value) =>
                       setDraftFilters((old) => ({
@@ -557,18 +570,20 @@ export function AdminScoringFormsPage({
                       }))
                     }
                   >
-                    <SelectTrigger id='scoring-evals-category'>
-                      <SelectValue placeholder='Tất cả danh mục' />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={ALL}>Tất cả danh mục</SelectItem>
+                    <ComboboxAnchor>
+                      <ComboboxInput id='scoring-evals-category' placeholder='Tất cả danh mục' />
+                      <ComboboxTrigger aria-label='Mở danh sách danh mục' />
+                    </ComboboxAnchor>
+                    <ComboboxContent>
+                      <ComboboxEmpty>Không tìm thấy danh mục phù hợp.</ComboboxEmpty>
+                      <ComboboxItem value={ALL}>Tất cả danh mục</ComboboxItem>
                       {categories.map((category) => (
-                        <SelectItem key={category.id} value={category.id}>
+                        <ComboboxItem key={category.id} value={category.id}>
                           {category.name}
-                        </SelectItem>
+                        </ComboboxItem>
                       ))}
-                    </SelectContent>
-                  </Select>
+                    </ComboboxContent>
+                  </Combobox>
                 </FormField>
 
                 <FormField
@@ -577,7 +592,7 @@ export function AdminScoringFormsPage({
                   className='admin-filter-field'
                   data-filter-width='status'
                 >
-                  <Select
+                  <Combobox
                     value={draftFilters.status ?? ALL}
                     onValueChange={(value) =>
                       setDraftFilters((old) => ({
@@ -586,15 +601,17 @@ export function AdminScoringFormsPage({
                       }))
                     }
                   >
-                    <SelectTrigger id='scoring-evals-status'>
-                      <SelectValue placeholder='Tất cả' />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={ALL}>Tất cả</SelectItem>
-                      <SelectItem value='SUBMITTED'>Đã nộp</SelectItem>
-                      {canManage && <SelectItem value='IN_PROGRESS'>Đang chấm nháp</SelectItem>}
-                    </SelectContent>
-                  </Select>
+                    <ComboboxAnchor>
+                      <ComboboxInput id='scoring-evals-status' placeholder='Tất cả' />
+                      <ComboboxTrigger aria-label='Mở danh sách trạng thái phiếu' />
+                    </ComboboxAnchor>
+                    <ComboboxContent>
+                      <ComboboxEmpty>Không tìm thấy trạng thái phiếu.</ComboboxEmpty>
+                      <ComboboxItem value={ALL}>Tất cả</ComboboxItem>
+                      <ComboboxItem value='SUBMITTED'>Đã nộp</ComboboxItem>
+                      {canManage && <ComboboxItem value='IN_PROGRESS'>Đang chấm nháp</ComboboxItem>}
+                    </ComboboxContent>
+                  </Combobox>
                 </FormField>
 
                 <div className='admin-actions admin-filter-actions'>

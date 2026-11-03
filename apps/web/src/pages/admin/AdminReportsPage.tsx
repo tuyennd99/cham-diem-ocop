@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type {
   AdminProductQuery,
-  LocalityType,
   ProductRegistrationType,
   RegistrationReportRow,
   ReportDataQuality,
@@ -16,18 +15,21 @@ import { FormField } from '@/components/form-field';
 import PageSpin from '@/components/page-spin';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Combobox,
+  ComboboxAnchor,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxTrigger,
+} from '@/components/ui/combobox';
 import { DataTable, type DataTableColumnDef } from '@/components/ui/data-table';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ALL } from '../../constants/consts';
 import { currentVietnameseYear } from '../../lib/admin-date';
+import { ADMINISTRATIVE_PROVINCES } from '../../lib/administrative-divisions';
 import {
   parseAdminReportsSearch,
   toAdminReportApiQuery,
@@ -272,7 +274,6 @@ export function AdminReportsPage({
   const [showAdvanced, setShowAdvanced] = useState(
     Boolean(
       appliedSearch.categoryId ||
-      appliedSearch.localityType ||
       appliedSearch.localityId ||
       appliedSearch.registrationType ||
       appliedSearch.assessmentYear,
@@ -285,6 +286,7 @@ export function AdminReportsPage({
 
   const apiQuery = toAdminReportApiQuery(appliedSearch);
 
+  const [localityProvince, setLocalityProvince] = useState('');
   const categoriesQuery = useAdminCategories({
     page: 1,
     limit: 100,
@@ -292,7 +294,7 @@ export function AdminReportsPage({
   const localitiesQuery = useAdminLocalities({
     page: 1,
     limit: 100,
-    type: draftFilters.localityType,
+    provinceName: localityProvince || undefined,
   });
 
   const regQuery = useAdminRegistrationsReport(apiQuery, reportTab === 'registrations');
@@ -597,7 +599,6 @@ export function AdminReportsPage({
   const hasExtraFilters = Boolean(
     appliedSearch.month ||
     appliedSearch.categoryId ||
-    appliedSearch.localityType ||
     appliedSearch.localityId ||
     appliedSearch.registrationType ||
     appliedSearch.assessmentYear ||
@@ -683,7 +684,7 @@ export function AdminReportsPage({
               className='admin-filter-field'
               data-filter-width='month'
             >
-              <Select
+              <Combobox
                 value={draftFilters.month ? String(draftFilters.month) : ALL}
                 onValueChange={(value) =>
                   setDraftFilters((old) => ({
@@ -692,18 +693,20 @@ export function AdminReportsPage({
                   }))
                 }
               >
-                <SelectTrigger id='report-month'>
-                  <SelectValue placeholder='Cả năm' />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Cả năm</SelectItem>
+                <ComboboxAnchor>
+                  <ComboboxInput id='report-month' placeholder='Cả năm' />
+                  <ComboboxTrigger aria-label='Mở danh sách tháng' />
+                </ComboboxAnchor>
+                <ComboboxContent>
+                  <ComboboxEmpty>Không tìm thấy tháng phù hợp.</ComboboxEmpty>
+                  <ComboboxItem value={ALL}>Cả năm</ComboboxItem>
                   {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => (
-                    <SelectItem key={m} value={String(m)}>
+                    <ComboboxItem key={m} value={String(m)}>
                       Tháng {m}
-                    </SelectItem>
+                    </ComboboxItem>
                   ))}
-                </SelectContent>
-              </Select>
+                </ComboboxContent>
+              </Combobox>
             </FormField>
             <FormField
               label='Nhóm dòng báo cáo theo'
@@ -711,7 +714,7 @@ export function AdminReportsPage({
               className='admin-filter-field'
               data-filter-width='group'
             >
-              <Select
+              <Combobox
                 value={draftFilters.groupBy ?? 'month'}
                 onValueChange={(value) =>
                   setDraftFilters((old) => ({
@@ -720,17 +723,19 @@ export function AdminReportsPage({
                   }))
                 }
               >
-                <SelectTrigger id='report-group-by'>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
+                <ComboboxAnchor>
+                  <ComboboxInput id='report-group-by' />
+                  <ComboboxTrigger aria-label='Mở danh sách nhóm dòng báo cáo' />
+                </ComboboxAnchor>
+                <ComboboxContent>
+                  <ComboboxEmpty>Không tìm thấy nhóm báo cáo.</ComboboxEmpty>
                   {(Object.keys(GROUP_BY_LABELS) as ReportGroupBy[]).map((key) => (
-                    <SelectItem key={key} value={key}>
+                    <ComboboxItem key={key} value={key}>
                       {GROUP_BY_LABELS[key]}
-                    </SelectItem>
+                    </ComboboxItem>
                   ))}
-                </SelectContent>
-              </Select>
+                </ComboboxContent>
+              </Combobox>
             </FormField>
 
             <div className='admin-actions admin-filter-actions'>
@@ -766,7 +771,7 @@ export function AdminReportsPage({
 
           <div id='report-advanced-filters' hidden={!showAdvanced} className='advanced-filter-grid'>
             <FormField label='Danh mục sản phẩm' htmlFor='report-category-id'>
-              <Select
+              <Combobox
                 value={draftFilters.categoryId ?? ALL}
                 onValueChange={(value) =>
                   setDraftFilters((old) => ({
@@ -775,51 +780,57 @@ export function AdminReportsPage({
                   }))
                 }
               >
-                <SelectTrigger id='report-category-id'>
-                  <SelectValue placeholder='Tất cả danh mục' />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Tất cả danh mục</SelectItem>
+                <ComboboxAnchor>
+                  <ComboboxInput id='report-category-id' placeholder='Tất cả danh mục' />
+                  <ComboboxTrigger aria-label='Mở danh sách danh mục' />
+                </ComboboxAnchor>
+                <ComboboxContent>
+                  <ComboboxEmpty>Không tìm thấy danh mục phù hợp.</ComboboxEmpty>
+                  <ComboboxItem value={ALL}>Tất cả danh mục</ComboboxItem>
                   {categories.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id}>
+                    <ComboboxItem key={cat.id} value={cat.id}>
                       {cat.name}
-                    </SelectItem>
+                    </ComboboxItem>
                   ))}
-                </SelectContent>
-              </Select>
+                </ComboboxContent>
+              </Combobox>
             </FormField>
 
-            <FormField label='Loại địa bàn' htmlFor='report-locality-type'>
-              <Select
-                value={draftFilters.localityType ?? ALL}
+            <FormField label='Tỉnh / Thành phố' htmlFor='report-locality-province'>
+              <Combobox
+                value={localityProvince || ALL}
                 onValueChange={(value) => {
-                  const nextType = (value === ALL ? undefined : value) as LocalityType | undefined;
-                  const keepLoc =
-                    !nextType ||
-                    localities.some(
-                      (loc) => loc.id === draftFilters.localityId && loc.type === nextType,
-                    );
+                  const nextProvince = value === ALL ? '' : value;
+                  setLocalityProvince(nextProvince);
                   setDraftFilters((old) => ({
                     ...old,
-                    localityType: nextType,
-                    localityId: keepLoc ? old.localityId : undefined,
+                    localityId: undefined,
                   }));
                 }}
               >
-                <SelectTrigger id='report-locality-type'>
-                  <SelectValue placeholder='Tất cả (Xã & Phường)' />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Tất cả (Xã &amp; Phường)</SelectItem>
-                  <SelectItem value='COMMUNE'>Xã</SelectItem>
-                  <SelectItem value='WARD'>Phường</SelectItem>
-                </SelectContent>
-              </Select>
+                <ComboboxAnchor>
+                  <ComboboxInput
+                    id='report-locality-province'
+                    placeholder='Tất cả tỉnh / thành phố'
+                  />
+                  <ComboboxTrigger aria-label='Mở danh sách tỉnh / thành phố' />
+                </ComboboxAnchor>
+                <ComboboxContent>
+                  <ComboboxEmpty>Không tìm thấy tỉnh / thành phố.</ComboboxEmpty>
+                  <ComboboxItem value={ALL}>Tất cả tỉnh / thành phố</ComboboxItem>
+                  {ADMINISTRATIVE_PROVINCES.map((province) => (
+                    <ComboboxItem key={province.code} value={province.name_with_type}>
+                      {province.name_with_type}
+                    </ComboboxItem>
+                  ))}
+                </ComboboxContent>
+              </Combobox>
             </FormField>
 
-            <FormField label='Địa bàn cụ thể' htmlFor='report-locality-id'>
-              <Select
+            <FormField label='Địa bàn cụ thể (xã / phường)' htmlFor='report-locality-id'>
+              <Combobox
                 value={draftFilters.localityId ?? ALL}
+                disabled={!localityProvince && !draftFilters.localityId}
                 onValueChange={(value) =>
                   setDraftFilters((old) => ({
                     ...old,
@@ -827,22 +838,31 @@ export function AdminReportsPage({
                   }))
                 }
               >
-                <SelectTrigger id='report-locality-id'>
-                  <SelectValue placeholder='Tất cả địa bàn' />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Tất cả địa bàn</SelectItem>
+                <ComboboxAnchor>
+                  <ComboboxInput
+                    id='report-locality-id'
+                    placeholder={
+                      localityProvince
+                        ? 'Tất cả xã / phường trong tỉnh'
+                        : 'Chọn tỉnh / thành phố trước'
+                    }
+                  />
+                  <ComboboxTrigger aria-label='Mở danh sách địa bàn' />
+                </ComboboxAnchor>
+                <ComboboxContent>
+                  <ComboboxEmpty>Không tìm thấy địa bàn phù hợp.</ComboboxEmpty>
+                  <ComboboxItem value={ALL}>Tất cả địa bàn</ComboboxItem>
                   {localities.map((loc) => (
-                    <SelectItem key={loc.id} value={loc.id}>
+                    <ComboboxItem key={loc.id} value={loc.id}>
                       {loc.name} · {loc.provinceName}
-                    </SelectItem>
+                    </ComboboxItem>
                   ))}
-                </SelectContent>
-              </Select>
+                </ComboboxContent>
+              </Combobox>
             </FormField>
 
             <FormField label='Loại đăng ký' htmlFor='report-registration-type'>
-              <Select
+              <Combobox
                 value={draftFilters.registrationType ?? ALL}
                 onValueChange={(value) =>
                   setDraftFilters((old) => ({
@@ -852,16 +872,18 @@ export function AdminReportsPage({
                   }))
                 }
               >
-                <SelectTrigger id='report-registration-type'>
-                  <SelectValue placeholder='Tất cả' />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Tất cả</SelectItem>
-                  <SelectItem value='FIRST'>Lần đầu</SelectItem>
-                  <SelectItem value='UPGRADE'>Nâng hạng</SelectItem>
-                  <SelectItem value='REASSESSMENT'>Đánh giá lại</SelectItem>
-                </SelectContent>
-              </Select>
+                <ComboboxAnchor>
+                  <ComboboxInput id='report-registration-type' placeholder='Tất cả' />
+                  <ComboboxTrigger aria-label='Mở danh sách loại đăng ký' />
+                </ComboboxAnchor>
+                <ComboboxContent>
+                  <ComboboxEmpty>Không tìm thấy loại đăng ký.</ComboboxEmpty>
+                  <ComboboxItem value={ALL}>Tất cả</ComboboxItem>
+                  <ComboboxItem value='FIRST'>Lần đầu</ComboboxItem>
+                  <ComboboxItem value='UPGRADE'>Nâng hạng</ComboboxItem>
+                  <ComboboxItem value='REASSESSMENT'>Đánh giá lại</ComboboxItem>
+                </ComboboxContent>
+              </Combobox>
             </FormField>
 
             <FormField label='Năm đánh giá khai báo' htmlFor='report-assessment-year'>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from '@tanstack/react-form';
 import { Link, useLoaderData, useNavigate, useRouter } from '@tanstack/react-router';
 import { CheckCircle2, ShieldCheck } from 'lucide-react';
+import { toast } from 'sonner';
 import AlertError from '@/components/alert-error';
 import { FormField } from '@/components/form-field';
 import InputError from '@/components/input-error';
@@ -122,6 +123,7 @@ function VerificationForm({ initial }: { initial: Exclude<VerificationState, { k
       }
       try {
         const data = await verifyPendingRegistration(pending, email, value.code);
+        toast.success('Đã xác thực tài khoản thành công.');
         if (data) {
           setSession({ accessToken: data.accessToken, user: data.user });
           await navigate({ to: homeFor(data.user.role, data.user.staffPermissions) });
@@ -132,17 +134,25 @@ function VerificationForm({ initial }: { initial: Exclude<VerificationState, { k
       } catch (cause) {
         if (pending && cause instanceof ApiError && cause.status === 410) {
           clearPendingEmail();
+          toast.error(messageOf(cause));
           await navigate({
             to: pending.mode === 'google-link' ? '/login' : '/register',
             replace: true,
           });
-        } else if (cause instanceof ApiError && cause.status === 409)
-          setError('Tài khoản hoặc email này đã được dùng. Vui lòng đăng nhập.');
-        else if (cause instanceof ApiError && cause.status === 401)
-          setCodeError(
-            'Mã không đúng, đã hết hạn hoặc phiên không còn hiệu lực. Kiểm tra email hoặc gửi mã mới.',
-          );
-        else setError(messageOf(cause));
+        } else if (cause instanceof ApiError && cause.status === 409) {
+          const msg = 'Tài khoản hoặc email này đã được dùng. Vui lòng đăng nhập.';
+          setError(msg);
+          toast.error(msg);
+        } else if (cause instanceof ApiError && cause.status === 401) {
+          const msg =
+            'Mã không đúng, đã hết hạn hoặc phiên không còn hiệu lực. Kiểm tra email hoặc gửi mã mới.';
+          setCodeError(msg);
+          toast.error(msg);
+        } else {
+          const msg = messageOf(cause);
+          setError(msg);
+          toast.error(msg);
+        }
       }
     },
   });
@@ -264,6 +274,7 @@ function VerificationForm({ initial }: { initial: Exclude<VerificationState, { k
               autoComplete='email'
               value={field.state.value}
               readOnly={Boolean(pending)}
+              disabled={Boolean(pending)}
               onBlur={field.handleBlur}
               onChange={(event) => {
                 field.handleChange(event.target.value);

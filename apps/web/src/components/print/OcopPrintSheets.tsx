@@ -278,7 +278,7 @@ export function EvaluationPrintSheet({ data }: { data: EvaluationPrintData }) {
               : null;
             return (
               <tr
-                className={`print-criterion-group${criterion.inScope ? '' : 'is-out-of-scope'}`}
+                className={`print-criterion-group ${criterion.inScope ? '' : 'is-out-of-scope'}`}
                 key={criterion.criterionId}
               >
                 <td>

@@ -1,9 +1,9 @@
-import { Body, Controller, ForbiddenException, Get, Headers, HttpCode, Post, UnsupportedMediaTypeException } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Headers, HttpCode, Patch, Post, UnsupportedMediaTypeException } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { Public } from '../decorators/public.decorator';
-import { ChangePasswordDto, EmailDto, GoogleLoginDto, GoogleRegisterDto, LegacyVerifyOtpDto, LoginDto, RegisterDto, RegistrationTokenDto, ResetPasswordDto, VerifyOtpDto } from '../dtos/auth.dto';
+import { ChangePasswordDto, EmailDto, GoogleLoginDto, GoogleRegisterDto, LegacyVerifyOtpDto, LoginDto, RegisterDto, RegistrationTokenDto, ResetPasswordDto, UpdateProfileDto, VerifyOtpDto } from '../dtos/auth.dto';
 import { env } from '../config/env';
 import { AuthService } from '../services/auth.service';
 import type { AccessTokenPayload } from '../types/auth';
@@ -138,6 +138,13 @@ export class AuthController {
   @ApiBearerAuth()
   me(@CurrentUser() user: AccessTokenPayload) {
     return this.authService.me(user.sub);
+  }
+
+  @Patch('me')
+  @ApiBearerAuth()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  updateProfile(@Body() body: UpdateProfileDto, @CurrentUser() user: AccessTokenPayload) {
+    return this.authService.updateProfile(user.sub, body);
   }
 
   @Post('change-password')

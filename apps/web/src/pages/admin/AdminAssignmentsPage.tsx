@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBlocker } from '@tanstack/react-router';
 import { compact, differenceBy, keyBy, pick, uniq, xor } from 'lodash';
+import { toast } from 'sonner';
 import AlertError from '@/components/alert-error';
 import { FormField } from '@/components/form-field';
 import { MultiCombobox } from '@/components/multi-combobox';
@@ -12,6 +13,15 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
+  Combobox,
+  ComboboxAnchor,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxTrigger,
+} from '@/components/ui/combobox';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -20,13 +30,6 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { adminApi, productsApi } from '../../api';
 import { ALL } from '../../constants/consts';
 import { queryKeys } from '../../constants/query-key';
@@ -211,12 +214,13 @@ export function AdminAssignmentsPage({
       syncScopeState(judgeId, categoryId, data);
       setConfirmOpen(false);
       setNotice('Đã lưu toàn bộ phân công giám khảo.');
+      toast.success('Đã lưu toàn bộ phân công giám khảo.');
       void queryClient.invalidateQueries({ queryKey: queryKeys.admin.all });
       void queryClient.invalidateQueries({ queryKey: queryKeys.judge.all });
     } catch (cause) {
-      setError(
-        `Chưa lưu được danh sách thay thế. Danh mục liên quan: ${categoriesText}. ${messageOf(cause)}`,
-      );
+      const errMsg = `Chưa lưu được danh sách thay thế. Danh mục liên quan: ${categoriesText}. ${messageOf(cause)}`;
+      setError(errMsg);
+      toast.error(errMsg);
     } finally {
       setBusy(false);
     }
@@ -341,7 +345,7 @@ export function AdminAssignmentsPage({
               className='admin-filter-field'
               data-filter-width='group'
             >
-              <Select
+              <Combobox
                 value={appliedSearch.categoryId || ALL}
                 onValueChange={(value) =>
                   applySearch({
@@ -350,18 +354,20 @@ export function AdminAssignmentsPage({
                   })
                 }
               >
-                <SelectTrigger id='assignment-filter-category'>
-                  <SelectValue placeholder='Tất cả danh mục' />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Tất cả danh mục</SelectItem>
+                <ComboboxAnchor>
+                  <ComboboxInput id='assignment-filter-category' placeholder='Tất cả danh mục' />
+                  <ComboboxTrigger aria-label='Mở danh sách danh mục' />
+                </ComboboxAnchor>
+                <ComboboxContent>
+                  <ComboboxEmpty>Không tìm thấy danh mục phù hợp.</ComboboxEmpty>
+                  <ComboboxItem value={ALL}>Tất cả danh mục</ComboboxItem>
                   {visibleCategoriesForFilter.map((category) => (
-                    <SelectItem key={category.id} value={category.id}>
+                    <ComboboxItem key={category.id} value={category.id}>
                       {category.name}
-                    </SelectItem>
+                    </ComboboxItem>
                   ))}
-                </SelectContent>
-              </Select>
+                </ComboboxContent>
+              </Combobox>
             </FormField>
 
             <div className='flex flex-col justify-end gap-2'>
@@ -580,7 +586,7 @@ export function AdminAssignmentsPage({
                         <div key={judge.id} className='grid gap-1'>
                           <button
                             type='button'
-                            className={`assignment-cell${item ? 'is-assigned' : ''}${
+                            className={`assignment-cell ${item ? 'is-assigned' : ''} ${
                               isSelectedPair ? 'ring-accent ring-2' : ''
                             }`}
                             aria-pressed={Boolean(item)}

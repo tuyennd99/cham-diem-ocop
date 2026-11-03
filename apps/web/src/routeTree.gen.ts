@@ -24,6 +24,7 @@ import { Route as AppAccountPasswordRouteImport } from './routes/_app.account.pa
 import { Route as AppAdminIndexRouteImport } from './routes/_app.admin.index'
 import { Route as AppAdminAssignmentsRouteImport } from './routes/_app.admin.assignments'
 import { Route as AppAdminJudgesRouteImport } from './routes/_app.admin.judges'
+import { Route as AppAdminLocalitiesRouteImport } from './routes/_app.admin.localities'
 import { Route as AppAdminProductGroupsRouteImport } from './routes/_app.admin.product-groups'
 import { Route as AppAdminReportsRouteImport } from './routes/_app.admin.reports'
 import { Route as AppAdminScoringFormsRouteImport } from './routes/_app.admin.scoring-forms'
@@ -118,6 +119,11 @@ const AppAdminAssignmentsRoute = AppAdminAssignmentsRouteImport.update({
 const AppAdminJudgesRoute = AppAdminJudgesRouteImport.update({
   id: '/admin/judges',
   path: '/admin/judges',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminLocalitiesRoute = AppAdminLocalitiesRouteImport.update({
+  id: '/admin/localities',
+  path: '/admin/localities',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAdminProductGroupsRoute = AppAdminProductGroupsRouteImport.update({
@@ -253,6 +259,7 @@ export interface FileRoutesByFullPath {
   '/account/password': typeof AppAccountPasswordRoute
   '/admin/assignments': typeof AppAdminAssignmentsRoute
   '/admin/judges': typeof AppAdminJudgesRoute
+  '/admin/localities': typeof AppAdminLocalitiesRoute
   '/admin/product-groups': typeof AppAdminProductGroupsRoute
   '/admin/reports': typeof AppAdminReportsRoute
   '/admin/scoring-forms': typeof AppAdminScoringFormsRoute
@@ -290,6 +297,7 @@ export interface FileRoutesByTo {
   '/account/password': typeof AppAccountPasswordRoute
   '/admin/assignments': typeof AppAdminAssignmentsRoute
   '/admin/judges': typeof AppAdminJudgesRoute
+  '/admin/localities': typeof AppAdminLocalitiesRoute
   '/admin/product-groups': typeof AppAdminProductGroupsRoute
   '/admin/reports': typeof AppAdminReportsRoute
   '/admin/scoring-forms': typeof AppAdminScoringFormsRoute
@@ -331,6 +339,7 @@ export interface FileRoutesById {
   '/_app/account/password': typeof AppAccountPasswordRoute
   '/_app/admin/assignments': typeof AppAdminAssignmentsRoute
   '/_app/admin/judges': typeof AppAdminJudgesRoute
+  '/_app/admin/localities': typeof AppAdminLocalitiesRoute
   '/_app/admin/product-groups': typeof AppAdminProductGroupsRoute
   '/_app/admin/reports': typeof AppAdminReportsRoute
   '/_app/admin/scoring-forms': typeof AppAdminScoringFormsRoute
@@ -370,6 +379,7 @@ export interface FileRouteTypes {
     | '/account/password'
     | '/admin/assignments'
     | '/admin/judges'
+    | '/admin/localities'
     | '/admin/product-groups'
     | '/admin/reports'
     | '/admin/scoring-forms'
@@ -407,6 +417,7 @@ export interface FileRouteTypes {
     | '/account/password'
     | '/admin/assignments'
     | '/admin/judges'
+    | '/admin/localities'
     | '/admin/product-groups'
     | '/admin/reports'
     | '/admin/scoring-forms'
@@ -447,6 +458,7 @@ export interface FileRouteTypes {
     | '/_app/account/password'
     | '/_app/admin/assignments'
     | '/_app/admin/judges'
+    | '/_app/admin/localities'
     | '/_app/admin/product-groups'
     | '/_app/admin/reports'
     | '/_app/admin/scoring-forms'
@@ -587,6 +599,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/judges'
       fullPath: '/admin/judges'
       preLoaderRoute: typeof AppAdminJudgesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin/localities': {
+      id: '/_app/admin/localities'
+      path: '/admin/localities'
+      fullPath: '/admin/localities'
+      preLoaderRoute: typeof AppAdminLocalitiesRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/admin/product-groups': {
@@ -757,6 +776,7 @@ interface AppRouteChildren {
   AppAccountPasswordRoute: typeof AppAccountPasswordRoute
   AppAdminAssignmentsRoute: typeof AppAdminAssignmentsRoute
   AppAdminJudgesRoute: typeof AppAdminJudgesRoute
+  AppAdminLocalitiesRoute: typeof AppAdminLocalitiesRoute
   AppAdminProductGroupsRoute: typeof AppAdminProductGroupsRoute
   AppAdminReportsRoute: typeof AppAdminReportsRoute
   AppAdminScoringFormsRoute: typeof AppAdminScoringFormsRoute
@@ -786,6 +806,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAccountPasswordRoute: AppAccountPasswordRoute,
   AppAdminAssignmentsRoute: AppAdminAssignmentsRoute,
   AppAdminJudgesRoute: AppAdminJudgesRoute,
+  AppAdminLocalitiesRoute: AppAdminLocalitiesRoute,
   AppAdminProductGroupsRoute: AppAdminProductGroupsRoute,
   AppAdminReportsRoute: AppAdminReportsRoute,
   AppAdminScoringFormsRoute: AppAdminScoringFormsRoute,

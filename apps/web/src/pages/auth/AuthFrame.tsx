@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { ArrowLeft } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { SiteHeader } from '../../layouts/PublicLayout';
 
 export function AuthFrame({
   eyebrow,
@@ -24,20 +26,20 @@ export function AuthFrame({
 }) {
   const panel = (
     <section
-      className={`route-panel auth-panel${aside ? '' : ' auth-panel-standalone'}`}
+      className={cn('route-panel auth-panel', !aside && 'auth-panel-standalone')}
       aria-labelledby='route-title'
     >
       {mode && (
         <div className='auth-tabs' aria-label='Chuyển đổi đăng nhập và đăng ký'>
           <Link
-            className={`auth-tab${mode === 'login' ? ' is-active' : ''}`}
+            className={cn('auth-tab', mode === 'login' && 'is-active')}
             to='/login'
             aria-current={mode === 'login' ? 'page' : undefined}
           >
             Đăng nhập
           </Link>
           <Link
-            className={`auth-tab${mode === 'register' ? ' is-active' : ''}`}
+            className={cn('auth-tab', mode === 'register' && 'is-active')}
             to='/register'
             aria-current={mode === 'register' ? 'page' : undefined}
           >
@@ -64,17 +66,20 @@ export function AuthFrame({
   );
 
   return (
-    <main className='route-main' id='content'>
-      <div className='route-container container'>
-        {aside ? (
-          <div className='auth-grid'>
-            {panel}
-            {aside}
-          </div>
-        ) : (
-          panel
-        )}
-      </div>
-    </main>
+    <>
+      {mode && <SiteHeader />}
+      <main className='route-main' id='content'>
+        <div className='route-container container'>
+          {aside ? (
+            <div className='auth-grid'>
+              {panel}
+              {aside}
+            </div>
+          ) : (
+            panel
+          )}
+        </div>
+      </main>
+    </>
   );
 }

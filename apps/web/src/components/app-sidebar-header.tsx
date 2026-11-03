@@ -3,11 +3,7 @@ import { Breadcrumbs } from '@/components/breadcrumbs';
 import { NotificationBell } from '@/components/notification-bell';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 
-export function AppSidebarHeader({
-  breadcrumbs = [],
-}: {
-  breadcrumbs?: BreadcrumbItem[];
-}) {
+export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: BreadcrumbItem[] }) {
   return (
     <header className='border-border bg-background/95 sticky top-0 z-10 border-b backdrop-blur'>
       <div className='flex h-14 items-center gap-3 px-4'>

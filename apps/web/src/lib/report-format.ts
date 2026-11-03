@@ -1,8 +1,4 @@
-import type {
-  DashboardKpiId,
-  DashboardKpiItem,
-  PeriodComparisonDelta,
-} from '@ocop/shared';
+import type { DashboardKpiId, DashboardKpiItem, PeriodComparisonDelta } from '@ocop/shared';
 import { formatExactScore } from './print-format';
 
 export function dashboardKpiLinkLabel(id: DashboardKpiId): string | null {
@@ -56,7 +52,6 @@ export function formatKpiDeltaText(kpi: DashboardKpiItem): string {
     previous: kpi.previousValue,
     deltaAbsolute: kpi.deltaAbsolute,
     deltaPercent: kpi.deltaPercent,
-    comparisonNote:
-      kpi.availability === 'NO_PRIOR_DATA' ? 'NO_PRIOR_DATA' : 'OK',
+    comparisonNote: kpi.availability === 'NO_PRIOR_DATA' ? 'NO_PRIOR_DATA' : 'OK',
   });
 }

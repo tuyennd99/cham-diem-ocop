@@ -1,7 +1,9 @@
 import type { AdminProductQuery } from '@ocop/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { adminProductsApi, myProductsApi } from '../api';
 import { queryKeys } from '../constants/query-key';
+import { messageOf } from '../lib/api-error';
 import type { ProductDraftCommands } from '../lib/save-product-draft';
 import type { AdminProductDetail } from '../types/admin';
 import type { ApiResult } from '../types/api';
@@ -13,18 +15,25 @@ export function useAdminProductList(
   mode: AdminProductMode,
   canManage: boolean,
   query: AdminProductQuery,
+  enabled = true,
 ) {
   return useQuery({
     queryKey: queryKeys.adminProducts.list(mode, canManage, query),
     queryFn: () => adminProductsApi.list(query),
+    enabled,
   });
 }
 
-export function useAdminProductDetail(mode: AdminProductMode, canManage: boolean, id: string) {
+export function useAdminProductDetail(
+  mode: AdminProductMode,
+  canManage: boolean,
+  id: string,
+  enabled = true,
+) {
   return useQuery({
     queryKey: queryKeys.adminProducts.detail(mode, canManage, id),
     queryFn: () => adminProductsApi.detail(id),
-    enabled: Boolean(id),
+    enabled: Boolean(id) && enabled,
   });
 }
 
@@ -107,18 +116,30 @@ export function useAdminProductMutations(id: string, mode: AdminProductMode, can
   };
   const submit = useMutation({
     mutationFn: (reason: string) => adminProductsApi.submit(id, reason),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      toast.success('Đã nộp hồ sơ thay người đăng ký.');
+    },
+    onError: (err) => toast.error(messageOf(err)),
     retry: false,
   });
   const remove = useMutation({
     mutationFn: (reason: string) => adminProductsApi.remove(id, reason),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      toast.success('Đã xóa bản nháp hồ sơ.');
+    },
+    onError: (err) => toast.error(messageOf(err)),
     retry: false,
   });
   const removeAttachment = useMutation({
     mutationFn: ({ attachmentId, reason }: { attachmentId: string; reason: string }) =>
       adminProductsApi.removeAttachment(id, attachmentId, reason),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      toast.success('Đã xóa tệp đính kèm.');
+    },
+    onError: (err) => toast.error(messageOf(err)),
     retry: false,
   });
   return {

@@ -1,8 +1,5 @@
 import { memo } from 'react';
 import { Plus } from 'lucide-react';
-import { Link } from '@/components/navigation';
-import { homeFor, useSession } from '@/lib/auth';
-import { hasStaffPermission } from '@/lib/session-contract';
 import {
   accountNavItems,
   adminGroup,
@@ -11,9 +8,12 @@ import {
   mainNavItems,
   registrantNavItems,
 } from '@/config/menu-nav';
+import { homeFor, useSession } from '@/lib/auth';
+import { hasStaffPermission } from '@/lib/session-contract';
 import AppLogo from '@/components/app-logo';
 import { NavMainCollapsible } from '@/components/nav-main-collapsible';
 import { NavUser } from '@/components/nav-user';
+import { Link } from '@/components/navigation';
 import { Button } from '@/components/ui/button';
 import {
   Sidebar,
@@ -35,7 +35,9 @@ export const AppSidebar = memo(function AppSidebar() {
   const homePath = role ? homeFor(role, permissions) : '/';
 
   const evalItems = [
-    ...(canView ? evaluationNavItems : evaluationNavItems.filter((i) => i.href === '/admin/scoring-forms')),
+    ...(canView
+      ? evaluationNavItems
+      : evaluationNavItems.filter((i) => i.href === '/admin/scoring-forms')),
     ...(canScore ? [judgeNavItem] : []),
   ];
 

@@ -97,7 +97,6 @@ const localitySelect = {
   id: true,
   code: true,
   name: true,
-  type: true,
   provinceName: true,
   effectiveFrom: true,
   effectiveTo: true,
@@ -136,7 +135,7 @@ export class AdminCatalogsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async listLocalities(query: LocalityQuery, publicOnly = false) {
-    const { page, limit, q, type, provinceName } = query;
+    const { page, limit, q, provinceName } = query;
     const skip = (page - 1) * limit;
     if (!Number.isSafeInteger(page) || !Number.isSafeInteger(skip)) {
       throw new BadRequestException(
@@ -145,7 +144,6 @@ export class AdminCatalogsRepository {
     }
     const now = new Date();
     const where: Prisma.LocalityWhereInput = {
-      ...(type ? { type } : {}),
       ...(provinceName
         ? { provinceName: { contains: provinceName, mode: 'insensitive' } }
         : {}),
@@ -245,9 +243,6 @@ export class AdminCatalogsRepository {
         ...(requested.name === undefined || requested.name === before.name
           ? {}
           : { name: requested.name }),
-        ...(requested.type === undefined || requested.type === before.type
-          ? {}
-          : { type: requested.type }),
         ...(requested.provinceName === undefined ||
         requested.provinceName === before.provinceName
           ? {}
@@ -266,9 +261,8 @@ export class AdminCatalogsRepository {
       if (!Object.keys(data).length) return localityRecord(before);
 
       const identityChanged =
-        (requested.type !== undefined && requested.type !== before.type) ||
-        (requested.provinceName !== undefined &&
-          requested.provinceName !== before.provinceName);
+        requested.provinceName !== undefined &&
+        requested.provinceName !== before.provinceName;
       if (
         identityChanged &&
         (await tx.product.count({
@@ -276,7 +270,7 @@ export class AdminCatalogsRepository {
         }))
       ) {
         throw new ConflictException(
-          'A locality referenced by submitted products cannot change type or province',
+          'A locality referenced by submitted products cannot change province',
         );
       }
 

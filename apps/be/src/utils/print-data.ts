@@ -4,7 +4,6 @@ import type {
   EvaluationPrintCriterionRow,
   EvaluationPrintData,
   EvaluationRecordStatus,
-  LocalityType,
   ProductApplicationForm,
   ProductResultsPrintData,
   ProductStatus,
@@ -503,7 +502,6 @@ export function buildRegistrationPrintData(input: {
     createdAt: Date;
     localityCodeAtSubmit?: string | null;
     localityNameAtSubmit?: string | null;
-    localityTypeAtSubmit?: LocalityType | null;
     provinceNameAtSubmit?: string | null;
     formData: unknown;
     registrationSnapshot: unknown;
@@ -521,7 +519,6 @@ export function buildRegistrationPrintData(input: {
       id: string;
       code: string;
       name: string;
-      type: LocalityType;
       provinceName: string;
     } | null;
     attachments: Array<{
@@ -545,10 +542,6 @@ export function buildRegistrationPrintData(input: {
           id: product.locality?.id ?? '',
           code: product.localityCodeAtSubmit ?? product.locality?.code ?? '',
           name: product.localityNameAtSubmit,
-          type:
-            product.localityTypeAtSubmit ??
-            product.locality?.type ??
-            ('COMMUNE' as LocalityType),
           provinceName:
             product.provinceNameAtSubmit ??
             product.locality?.provinceName ??

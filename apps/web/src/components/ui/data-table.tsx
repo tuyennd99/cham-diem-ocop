@@ -1,11 +1,7 @@
 'use client';
 
+import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import {
-  type CellData,
-  type ColumnDef,
-  type RowData,
-  type SortingState,
-  type TableFeatures,
   columnFilteringFeature,
   columnVisibilityFeature,
   createFilteredRowModel,
@@ -17,24 +13,27 @@ import {
   rowSortingFeature,
   tableFeatures,
   useTable,
+  type CellData,
+  type ColumnDef,
+  type RowData,
+  type SortingState,
+  type TableFeatures,
 } from '@tanstack/react-table';
-import {
-  ChevronLeft,
-  ChevronRight,
-  ChevronsUpDown,
-  ChevronDown,
-  ChevronUp,
-} from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronsUpDown, ChevronUp } from 'lucide-react';
+import { DEFAULT_PAGE_SIZE, LIST_PAGE_SIZES } from '@/constants/consts';
+import { getPageCount, type DataTableParams } from '@/lib/data-table-utils';
 import { cn } from '@/lib/utils';
 import { DebouncedInput } from '@/components/debounced-input';
 import { Button } from '@/components/ui/button';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  Combobox,
+  ComboboxAnchor,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxTrigger,
+} from '@/components/ui/combobox';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
@@ -45,9 +44,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { type DataTableParams, getPageCount } from '@/lib/data-table-utils';
-import { type CSSProperties, type ReactNode, useCallback, useEffect, useState } from 'react';
-import { DEFAULT_PAGE_SIZE, LIST_PAGE_SIZES } from '@/constants/consts';
 
 // Cột chia theo phần trăm: TanStack `size` chỉ nhận số (px) nên bề rộng % đi
 // qua meta.width. Có ít nhất một cột khai báo width thì bảng chuyển table-fixed,
@@ -146,7 +142,8 @@ export function DataTable<T extends RowData>({
   });
 
   const pagination = {
-    pageIndex: controlledPage !== undefined ? Math.max(0, controlledPage - 1) : internalPagination.pageIndex,
+    pageIndex:
+      controlledPage !== undefined ? Math.max(0, controlledPage - 1) : internalPagination.pageIndex,
     pageSize: controlledPageSize !== undefined ? controlledPageSize : internalPagination.pageSize,
   };
 
@@ -226,7 +223,7 @@ export function DataTable<T extends RowData>({
       )}
 
       {/* TableCell/TableHead mặc định p-2 nên ô đầu (thường là checkbox) chỉ
-        * cách viền 8px, nhìn như dính viền. Nới ô đầu và ô cuối của mọi hàng. */}
+       * cách viền 8px, nhìn như dính viền. Nới ô đầu và ô cuối của mọi hàng. */}
       <Table
         className={cn(
           'admin-data-table [&_tr>*:first-child]:pl-4 [&_tr>*:last-child]:pr-4',
@@ -263,10 +260,7 @@ export function DataTable<T extends RowData>({
                         )}
                         onClick={header.column.getToggleSortingHandler()}
                       >
-                        {flexRender(
-                          header.column.columnDef.header,
-                          header.getContext(),
-                        )}
+                        {flexRender(header.column.columnDef.header, header.getContext())}
                         {dir === 'asc' ? (
                           <ChevronUp className='size-4' />
                         ) : dir === 'desc' ? (
@@ -276,10 +270,7 @@ export function DataTable<T extends RowData>({
                         )}
                       </button>
                     ) : (
-                      flexRender(
-                        header.column.columnDef.header,
-                        header.getContext(),
-                      )
+                      flexRender(header.column.columnDef.header, header.getContext())
                     )}
                   </TableHead>
                 );
@@ -313,10 +304,7 @@ export function DataTable<T extends RowData>({
               <TableRow key={row.id}>
                 {row.getVisibleCells().map((cell) => {
                   const meta = cell.column.columnDef.meta;
-                  const cellContent = flexRender(
-                    cell.column.columnDef.cell,
-                    cell.getContext(),
-                  );
+                  const cellContent = flexRender(cell.column.columnDef.cell, cell.getContext());
                   const cellStyle: CSSProperties = {
                     textAlign: meta?.align,
                     ...meta?.cellStyle,
@@ -337,11 +325,7 @@ export function DataTable<T extends RowData>({
                   //   );
                   // }
                   return (
-                    <TableCell
-                      key={cell.id}
-                      className={meta?.cellClassName}
-                      style={cellStyle}
-                    >
+                    <TableCell key={cell.id} className={meta?.cellClassName} style={cellStyle}>
                       {cellContent}
                     </TableCell>
                   );
@@ -356,24 +340,30 @@ export function DataTable<T extends RowData>({
 
       {paginated && (
         <div className='table-footer flex items-center justify-between'>
-          <Select
+          <Combobox
             value={String(table.state.pagination.pageSize)}
             onValueChange={(v) => {
               const nextSize = Number(v);
-              handlePaginationChange({ pageIndex: 0, pageSize: nextSize });
+              if (Number.isFinite(nextSize) && nextSize > 0) {
+                handlePaginationChange({ pageIndex: 0, pageSize: nextSize });
+              }
             }}
+            readOnly
+            className='w-32'
           >
-            <SelectTrigger className='h-9 min-h-9 w-28'>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
+            <ComboboxAnchor className='h-9 min-h-9 w-32'>
+              <ComboboxInput aria-label='Số dòng mỗi trang' />
+              <ComboboxTrigger />
+            </ComboboxAnchor>
+            <ComboboxContent>
+              <ComboboxEmpty>Không tìm thấy.</ComboboxEmpty>
               {pageSizeOptions.map((opt) => (
-                <SelectItem key={opt} value={String(opt)}>
+                <ComboboxItem key={opt} value={String(opt)} label={`${opt} / trang`}>
                   {opt} / trang
-                </SelectItem>
+                </ComboboxItem>
               ))}
-            </SelectContent>
-          </Select>
+            </ComboboxContent>
+          </Combobox>
 
           <div className='pagination-actions flex items-center gap-2'>
             <span className='text-muted-foreground text-sm'>

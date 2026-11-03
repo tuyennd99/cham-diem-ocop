@@ -232,7 +232,7 @@ function ConfiguredGoogleSignIn({
         >
           <p className='form-note'>Xác nhận tên người đăng ký hoặc đơn vị trước khi nhận mã OTP.</p>
           <FormField label='Email Google' htmlFor='google-profile-email'>
-            <Input id='google-profile-email' type='email' value={profile.email} readOnly />
+            <Input id='google-profile-email' type='email' value={profile.email} readOnly disabled />
           </FormField>
           <profileForm.Field name='fullName'>
             {(field) => (

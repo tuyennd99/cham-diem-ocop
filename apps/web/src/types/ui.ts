@@ -1,8 +1,10 @@
-import type { ReactNode, ButtonHTMLAttributes, InputHTMLAttributes } from 'react';
+import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, Ref } from 'react';
 import type { BreadcrumbItem } from '@/types/navigation';
+
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  ref?: Ref<HTMLButtonElement>;
   variant?:
-  'default' | 'primary' | 'secondary' | 'destructive' | 'outline' | 'ghost' | 'link' | null;
+    'default' | 'primary' | 'secondary' | 'destructive' | 'outline' | 'ghost' | 'link' | null;
   size?: 'default' | 'xs' | 'sm' | 'lg' | 'icon' | 'icon-xs' | 'icon-sm' | null;
   asChild?: boolean;
   loading?: boolean;

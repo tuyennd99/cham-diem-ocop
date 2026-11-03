@@ -19,11 +19,6 @@ enum StaffPermission {
   SCORE
 }
 
-enum LocalityType {
-  COMMUNE
-  WARD
-}
-
 enum OtpPurpose {
   REGISTER
   RESET_PASSWORD
@@ -159,7 +154,6 @@ model Locality {
   id            String       @id @default(cuid())
   code          String       @unique @db.VarChar(50)
   name          String       @db.VarChar(255)
-  type          LocalityType
   provinceName  String       @db.VarChar(255)
   effectiveFrom DateTime?    @db.Timestamptz(3)
   effectiveTo   DateTime?    @db.Timestamptz(3)
@@ -274,7 +268,6 @@ model Product {
   locality             Locality?            @relation(fields: [localityId], references: [id], onDelete: Restrict)
   localityCodeAtSubmit String?              @db.VarChar(50)
   localityNameAtSubmit String?              @db.VarChar(255)
-  localityTypeAtSubmit LocalityType?
   provinceNameAtSubmit String?              @db.VarChar(255)
   completedAt          DateTime?            @db.Timestamptz(3)
   statusEvents         ProductStatusEvent[]

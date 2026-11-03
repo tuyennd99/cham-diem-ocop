@@ -4,7 +4,6 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsBoolean,
   IsDateString,
-  IsEnum,
   IsInt,
   IsOptional,
   IsString,
@@ -19,14 +18,12 @@ import {
   type ValidationArguments,
   type ValidatorConstraintInterface,
 } from 'class-validator';
-import { LocalityType as PrismaLocalityType } from '@prisma/client';
 import type {
   AdminCategoryQuery,
   CreateAdminCategoryInput,
   CreateLocalityInput,
   LocalityQuery,
   PublicLocalityQuery,
-  LocalityType,
   UpdateLocalityInput,
   UpdateAdminCategoryInput,
 } from '@ocop/shared';
@@ -172,11 +169,6 @@ abstract class LocalitiesQueryDto {
   @IsString()
   q?: string;
 
-  @ApiPropertyOptional({ enum: PrismaLocalityType })
-  @IsOptional()
-  @IsEnum(PrismaLocalityType)
-  type?: LocalityType;
-
   @ApiPropertyOptional()
   @IsOptional()
   @Transform(trimString)
@@ -213,10 +205,6 @@ export class CreateLocalityDto implements CreateLocalityInput {
   @MinLength(1)
   @MaxLength(255)
   name!: string;
-
-  @ApiProperty({ enum: PrismaLocalityType })
-  @IsEnum(PrismaLocalityType)
-  type!: LocalityType;
 
   @ApiProperty({ minLength: 1, maxLength: 255 })
   @Transform(trimString)
@@ -262,11 +250,6 @@ export class UpdateLocalityDto implements UpdateLocalityInput {
   @MinLength(1)
   @MaxLength(255)
   name?: string;
-
-  @ApiPropertyOptional({ enum: PrismaLocalityType })
-  @ValidateIf((_object, value) => value !== undefined)
-  @IsEnum(PrismaLocalityType)
-  type?: LocalityType;
 
   @ApiPropertyOptional({ minLength: 1, maxLength: 255 })
   @ValidateIf((_object, value) => value !== undefined)

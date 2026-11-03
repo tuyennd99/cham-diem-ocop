@@ -17,6 +17,7 @@ import type {
   RegistrationTokenInput,
   ResetPasswordInput,
   SessionUser,
+  UpdateProfileInput,
   VerifyOtpInput,
 } from '../types/auth';
 import { requestJson } from './base-request';
@@ -63,6 +64,18 @@ export const authApi = {
   me: async () => {
     const accessToken = getSession()?.accessToken;
     const result = await requestJson<SessionUser>({ url: API.auth.me });
+    const session = getSession();
+    if (accessToken && session?.accessToken === accessToken)
+      setSession({ ...session, user: result.data });
+    return result;
+  },
+  updateProfile: async (data: UpdateProfileInput) => {
+    const accessToken = getSession()?.accessToken;
+    const result = await requestJson<SessionUser>({
+      url: API.auth.me,
+      method: 'PATCH',
+      data,
+    });
     const session = getSession();
     if (accessToken && session?.accessToken === accessToken)
       setSession({ ...session, user: result.data });

@@ -1,3 +1,4 @@
+import AlertError from '@/components/alert-error';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -20,6 +21,7 @@ export function ConfirmDialog({
   confirmLabel = 'Xác nhận',
   destructive,
   pending,
+  error,
   onConfirm,
 }: {
   open: boolean;
@@ -29,6 +31,7 @@ export function ConfirmDialog({
   confirmLabel?: string;
   destructive?: boolean;
   pending?: boolean;
+  error?: string;
   onConfirm: () => void;
 }) {
   return (
@@ -38,6 +41,7 @@ export function ConfirmDialog({
           <DialogTitle>{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
+        {error && <AlertError title='Không thể thực hiện thao tác' errors={[error]} />}
         <DialogFooter>
           <Button variant='outline' onClick={() => onOpenChange(false)}>
             Hủy

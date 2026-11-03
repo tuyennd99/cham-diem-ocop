@@ -16,7 +16,6 @@ const categoryInput = () => ({
 const localityInput = (overrides: Record<string, unknown> = {}) => ({
   code: 'TEST-L-' + randomUUID(),
   name: ' Test locality ',
-  type: 'COMMUNE',
   provinceName: ' Test province ',
   isActive: true,
   reason: ' Catalog setup ',
@@ -33,7 +32,6 @@ describe('H4 product catalogs', () => {
       expect(created.body.data).toMatchObject({
         code: input.code,
         name: 'Test locality',
-        type: 'COMMUNE',
         provinceName: 'Test province',
         effectiveFrom: null,
         effectiveTo: null,
@@ -78,7 +76,7 @@ describe('H4 product catalogs', () => {
 
       const adminList = await f.call(
         'viewer',
-        `${localitiesPath}?q=${encodeURIComponent(input.code)}&type=COMMUNE&provinceName=TEST%20PROVINCE&isActive=true&page=1&limit=1`,
+        `${localitiesPath}?q=${encodeURIComponent(input.code)}&provinceName=TEST%20PROVINCE&isActive=true&page=1&limit=1`,
       );
       expect(adminList.status).toBe(200);
       expect(adminList.body.data).toHaveLength(1);
@@ -217,7 +215,6 @@ describe('H4 product catalogs', () => {
           localityId: f.locality.id,
           localityCodeAtSubmit: f.locality.code,
           localityNameAtSubmit: f.locality.name,
-          localityTypeAtSubmit: f.locality.type,
           provinceNameAtSubmit: f.locality.provinceName,
           name: 'Existing submitted product',
           formData: {},
@@ -239,7 +236,6 @@ describe('H4 product catalogs', () => {
       const snapshots = {
         localityCodeAtSubmit: f.locality.code,
         localityNameAtSubmit: f.locality.name,
-        localityTypeAtSubmit: f.locality.type,
         provinceNameAtSubmit: f.locality.provinceName,
       };
       expect(
@@ -275,10 +271,7 @@ describe('H4 product catalogs', () => {
         originalUpdatedAt.getTime(),
       );
 
-      for (const change of [
-        { type: 'WARD' },
-        { provinceName: 'Other province' },
-      ]) {
+      for (const change of [{ provinceName: 'Other province' }]) {
         expect(
           (
             await f.call(
@@ -303,7 +296,6 @@ describe('H4 product catalogs', () => {
         data: {
           code: 'TEST-L-DRAFT-' + randomUUID(),
           name: 'Draft locality',
-          type: 'COMMUNE',
           provinceName: 'Test province',
         },
       });
@@ -323,7 +315,6 @@ describe('H4 product catalogs', () => {
             `${localitiesPath}/${draftLocality.id}`,
             'PUT',
             {
-              type: 'WARD',
               provinceName: 'New province',
               reason: 'Verified correction',
             },
@@ -730,7 +721,6 @@ describe('H4 product catalogs', () => {
           localityId: f.locality.id,
           localityCodeAtSubmit: f.locality.code,
           localityNameAtSubmit: f.locality.name,
-          localityTypeAtSubmit: f.locality.type,
           provinceNameAtSubmit: f.locality.provinceName,
           name: 'Hồ sơ 2 (SUBMITTED trước khi ngừng phân loại)',
           formData: validFormData,

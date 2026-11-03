@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import AlertError from '@/components/alert-error';
 import PageSpin from '@/components/page-spin';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { AdminProductSearch } from '../../lib/admin-search';
 import { errorText } from '../../lib/api-error';
@@ -35,14 +36,9 @@ export function AdminProductResultsPage({
 
   if (error) {
     return (
-      <section className='admin-table-region p-4 space-y-2'>
+      <section className='admin-table-region space-y-2 p-4'>
         <AlertError title='Không thể tải kết quả chấm' errors={[error]} />
-        <Button
-          type='button'
-          variant='secondary'
-          size='sm'
-          onClick={() => void refetch()}
-        >
+        <Button type='button' variant='secondary' size='sm' onClick={() => void refetch()}>
           Thử lại
         </Button>
       </section>
@@ -66,11 +62,7 @@ export function AdminProductResultsPage({
         </div>
         <div className='admin-actions'>
           <Button asChild variant='secondary'>
-            <Link
-              to='/print/products/$id/results'
-              params={{ id: product.id }}
-              search={printSearch}
-            >
+            <Link to='/print/products/$id/results' params={{ id: product.id }} search={printSearch}>
               In bảng tổng hợp kết quả (A4)
             </Link>
           </Button>
@@ -79,32 +71,38 @@ export function AdminProductResultsPage({
 
       {product.evaluations.length === 0 ? (
         <div className='admin-table-region p-6'>
-          <p className='text-sm text-muted'>
-            Chưa có phiếu chấm nào được ghi nhận cho hồ sơ này.
-          </p>
+          <p className='text-muted text-sm'>Chưa có phiếu chấm nào được ghi nhận cho hồ sơ này.</p>
         </div>
       ) : (
         product.evaluations.map((evaluation) => (
           <article className='admin-table-region p-5' key={evaluation.judge.id}>
             <div className='admin-page-heading' style={{ marginBottom: '12px' }}>
               <div>
-                <h3>
-                  {evaluation.judge.fullName} ·{' '}
-                  {EVALUATION_STATUS_LABEL[evaluation.status] ?? evaluation.status}
-                </h3>
-                <p className='text-sm text-muted'>
+                <div className='flex flex-wrap items-center gap-2'>
+                  <h3 className='m-0'>{evaluation.judge.fullName}</h3>
+                  <Badge
+                    variant='outline'
+                    className={
+                      evaluation.status === 'SUBMITTED'
+                        ? 'status-badge status-completed'
+                        : 'status-badge status-scoring'
+                    }
+                  >
+                    {EVALUATION_STATUS_LABEL[evaluation.status] ?? evaluation.status}
+                  </Badge>
+                </div>
+                <p className='text-muted mt-1 text-sm'>
                   {evaluation.judge.email} · Điểm trong phạm vi:{' '}
                   <strong style={{ fontVariantNumeric: 'tabular-nums' }}>
-                    {evaluation.total !== null ? `${formatExactScore(evaluation.total)} điểm` : 'Chưa có tổng điểm'}
+                    {evaluation.total !== null
+                      ? `${formatExactScore(evaluation.total)} điểm`
+                      : 'Chưa có tổng điểm'}
                   </strong>
                 </p>
               </div>
               {evaluation.id && (
                 <Button asChild variant='secondary' size='sm'>
-                  <Link
-                    to='/print/evaluations/$id'
-                    params={{ id: evaluation.id }}
-                  >
+                  <Link to='/print/evaluations/$id' params={{ id: evaluation.id }}>
                     In phiếu chấm
                   </Link>
                 </Button>

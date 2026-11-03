@@ -8,7 +8,6 @@ import type {
   AdminUserQuery,
   EvaluationRecordStatus,
   LocalityQuery,
-  LocalityType,
   OrganizationUnitQuery,
   ProductRegistrationType,
   ProductStatus,
@@ -171,12 +170,11 @@ export function toAdminProductApiQuery(search: AdminProductSearch): AdminProduct
 export type AdminCatalogTab = 'catalog' | 'localities';
 
 export type AdminCatalogSearch = AdminCategoryQuery &
-  Pick<LocalityQuery, 'type' | 'provinceName'> & {
+  Pick<LocalityQuery, 'provinceName'> & {
     tab?: AdminCatalogTab;
   };
 
 const CATALOG_TABS: readonly AdminCatalogTab[] = ['catalog', 'localities'];
-const LOCALITY_TYPES: readonly LocalityType[] = ['COMMUNE', 'WARD'];
 
 export function parseAdminCatalogSearch(search: Record<string, unknown>): AdminCatalogSearch {
   const result: AdminCatalogSearch = {
@@ -189,9 +187,6 @@ export function parseAdminCatalogSearch(search: Record<string, unknown>): AdminC
 
   const isActive = parseScalarBoolean(search.isActive);
   if (isActive !== undefined) result.isActive = isActive;
-
-  const type = parseEnum(search.type, LOCALITY_TYPES);
-  if (type !== undefined) result.type = type;
 
   const provinceName = parseScalarString(search.provinceName, 255);
   if (provinceName !== undefined) result.provinceName = provinceName;
@@ -212,6 +207,10 @@ export function toAdminCategoryApiQuery(search: AdminCatalogSearch): AdminCatego
   return query;
 }
 
+export function parseAdminLocalitiesSearch(search: Record<string, unknown>): LocalityQuery {
+  return toAdminLocalityApiQuery(parseAdminCatalogSearch(search));
+}
+
 export function toAdminLocalityApiQuery(search: AdminCatalogSearch): LocalityQuery {
   const query: LocalityQuery = {
     page: search.page ?? 1,
@@ -219,7 +218,6 @@ export function toAdminLocalityApiQuery(search: AdminCatalogSearch): LocalityQue
   };
   if (search.q !== undefined) query.q = search.q;
   if (search.isActive !== undefined) query.isActive = search.isActive;
-  if (search.type !== undefined) query.type = search.type;
   if (search.provinceName !== undefined) query.provinceName = search.provinceName;
   return query;
 }
@@ -374,9 +372,6 @@ export function parseAdminDashboardSearch(search: Record<string, unknown>): Admi
 
   const month = parseScalarInt(search.month, 1, 12);
   if (month !== undefined) result.month = month;
-
-  const localityType = parseEnum(search.localityType, LOCALITY_TYPES);
-  if (localityType !== undefined) result.localityType = localityType;
 
   const localityId = parseScalarString(search.localityId, 100);
   if (localityId !== undefined) result.localityId = localityId;

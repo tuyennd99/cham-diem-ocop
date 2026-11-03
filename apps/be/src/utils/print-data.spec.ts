@@ -248,7 +248,6 @@ describe('print-data builders', () => {
         createdAt: new Date('2026-10-20T01:00:00.000Z'),
         localityCodeAtSubmit: 'LOC-01',
         localityNameAtSubmit: 'Xã Cũ',
-        localityTypeAtSubmit: 'COMMUNE',
         provinceNameAtSubmit: 'Tỉnh Cũ',
         formData: { entityName: 'Chủ thể hiện tại' },
         registrationSnapshot: {
@@ -277,7 +276,6 @@ describe('print-data builders', () => {
             id: 'loc-1',
             code: 'LOC-01',
             name: 'Xã lúc nộp',
-            type: 'COMMUNE',
             provinceName: 'Tỉnh lúc nộp',
           },
           formData: {
@@ -307,7 +305,6 @@ describe('print-data builders', () => {
           id: 'loc-1',
           code: 'LOC-01',
           name: 'Xã đổi tên',
-          type: 'COMMUNE',
           provinceName: 'Tỉnh đổi tên',
         },
         attachments: [

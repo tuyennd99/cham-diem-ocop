@@ -7,7 +7,9 @@ export default function AdminFilterError({ mode }: { mode: 'products' | 'registr
   return (
     <section className='admin-page'>
       <div className='admin-page-heading'>
-        <div><h1>Bộ lọc không hợp lệ</h1></div>
+        <div>
+          <h1>Bộ lọc không hợp lệ</h1>
+        </div>
       </div>
       <AlertError
         title='Bộ lọc không hợp lệ'

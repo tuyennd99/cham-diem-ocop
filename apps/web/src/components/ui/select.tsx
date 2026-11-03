@@ -16,7 +16,7 @@ export function SelectTrigger({
     <SelectPrimitive.Trigger
       data-slot='select-trigger'
       className={cn(
-        'border-border bg-surface text-fg focus:ring-ring flex min-h-11 w-full items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1',
+        'border-border bg-surface text-fg focus:ring-ring flex h-9 min-h-9 w-full items-center justify-between gap-2 rounded-md border px-3 py-1.5 text-sm shadow-xs focus:ring-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1',
         className,
       )}
       {...props}
@@ -41,7 +41,7 @@ export function SelectContent({
         data-slot='select-content'
         position={position}
         className={cn(
-          'border-border bg-popover text-popover-foreground relative z-50 max-h-96 min-w-32 overflow-hidden rounded-md border shadow-md',
+          'border-border bg-popover text-popover-foreground relative z-[100] max-h-96 min-w-32 overflow-hidden rounded-md border shadow-md',
           className,
         )}
         {...props}

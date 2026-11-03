@@ -1,10 +1,12 @@
 import type { AdminUserQuery, OrganizationUnitQuery } from '@ocop/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
+import { toast } from 'sonner';
 import { adminUsersApi } from '../api/admin-users';
 import { authApi } from '../api/auth';
 import { queryKeys } from '../constants/query-key';
 import { staffAccessWouldRevokeSession } from '../lib/admin-user-form';
+import { messageOf } from '../lib/api-error';
 import { getSession, setSession } from '../lib/auth';
 
 export function useAdminUsers(query: AdminUserQuery) {
@@ -43,20 +45,32 @@ export function useRegistrantOwners(
 export function useAdminUserMutations() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const create = useMutation({ mutationFn: adminUsersApi.create, retry: false, gcTime: 0 });
+  const create = useMutation({
+    mutationFn: adminUsersApi.create,
+    onSuccess: (res) => toast.success(`Đã tạo tài khoản ${res.data.fullName}.`),
+    onError: (err) => toast.error(messageOf(err)),
+    retry: false,
+    gcTime: 0,
+  });
   const update = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Parameters<typeof adminUsersApi.update>[1] }) =>
       adminUsersApi.update(id, data),
+    onSuccess: () => toast.success('Đã lưu thông tin hồ sơ người dùng.'),
+    onError: (err) => toast.error(messageOf(err)),
     retry: false,
   });
   const access = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Parameters<typeof adminUsersApi.access>[1] }) =>
       adminUsersApi.access(id, data),
+    onSuccess: () => toast.success('Đã lưu quyền và đơn vị công tác.'),
+    onError: (err) => toast.error(messageOf(err)),
     retry: false,
   });
   const status = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Parameters<typeof adminUsersApi.status>[1] }) =>
       adminUsersApi.status(id, data),
+    onSuccess: () => toast.success('Đã lưu trạng thái hoạt động của tài khoản.'),
+    onError: (err) => toast.error(messageOf(err)),
     retry: false,
   });
   const resetPassword = useMutation({
@@ -67,10 +81,17 @@ export function useAdminUserMutations() {
       id: string;
       data: Parameters<typeof adminUsersApi.resetPassword>[1];
     }) => adminUsersApi.resetPassword(id, data),
+    onSuccess: () => toast.success('Đã đặt lại mật khẩu tài khoản.'),
+    onError: (err) => toast.error(messageOf(err)),
     retry: false,
     gcTime: 0,
   });
-  const createUnit = useMutation({ mutationFn: adminUsersApi.createUnit, retry: false });
+  const createUnit = useMutation({
+    mutationFn: adminUsersApi.createUnit,
+    onSuccess: (res) => toast.success(`Đã tạo đơn vị ${res.data.name}.`),
+    onError: (err) => toast.error(messageOf(err)),
+    retry: false,
+  });
   const updateUnit = useMutation({
     mutationFn: ({
       id,
@@ -79,6 +100,8 @@ export function useAdminUserMutations() {
       id: string;
       data: Parameters<typeof adminUsersApi.updateUnit>[1];
     }) => adminUsersApi.updateUnit(id, data),
+    onSuccess: (res) => toast.success(`Đã cập nhật đơn vị ${res.data.name}.`),
+    onError: (err) => toast.error(messageOf(err)),
     retry: false,
   });
 

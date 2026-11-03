@@ -2,7 +2,7 @@ import { Input } from '@/components/ui/input';
 import type { InputProps } from '@/types/ui';
 import { numberInputValue } from '@/components/form/field-values';
 import { resolveFieldDescribedBy } from '@/components/form/form-errors';
-import { FormFieldLayout, useResolvedField, type BaseFieldLayoutProps } from '@/components/form/form-field-layout';
+import { FormFieldLayout, useNativeFieldError, useResolvedField, type BaseFieldLayoutProps } from '@/components/form/form-field-layout';
 
 type NativeInputProps = Omit<
   InputProps,
@@ -15,6 +15,8 @@ type FormInputProps = BaseFieldLayoutProps & NativeInputProps & (
 
 export function FormInput(props: FormInputProps) {
   const meta = useResolvedField<string | number | undefined>(props.id);
+  const native = useNativeFieldError(meta.field);
+  const error = meta.error || native.error;
   const {
     label, hint, hintId, optional, required, className, id: _id,
     onValueChange: _onValueChange, ...inputProps
@@ -29,7 +31,7 @@ export function FormInput(props: FormInputProps) {
       optional={optional}
       required={required}
       className={className}
-      error={meta.error}
+      error={error}
     >
       <Input
         {...inputProps}
@@ -38,12 +40,17 @@ export function FormInput(props: FormInputProps) {
         required={required}
         value={meta.value ?? ''}
         disabled={props.disabled || meta.isSubmitting}
-        aria-invalid={Boolean(meta.error)}
+        aria-invalid={Boolean(error)}
         onBlur={meta.handleBlur}
         aria-describedby={resolveFieldDescribedBy(
-          meta.id, Boolean(hint), Boolean(meta.error), hintId, props['aria-describedby'],
+          meta.id, Boolean(hint), Boolean(error), hintId, props['aria-describedby'],
         )}
+        onInvalid={(event) => {
+          props.onInvalid?.(event);
+          native.invalid(event.currentTarget);
+        }}
         onChange={(event) => {
+          native.validate(event.currentTarget);
           if (props.type === 'number') {
             const next = numberInputValue(event.currentTarget.value, event.currentTarget.valueAsNumber);
             meta.handleChange(next);

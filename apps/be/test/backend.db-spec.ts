@@ -296,7 +296,6 @@ describe('HTTP production journey', () => {
         data: {
           code: `TEST-LOCALITY-${suffix}`,
           name: 'Journey locality',
-          type: 'COMMUNE',
           provinceName: 'Hà Nội',
         },
       });

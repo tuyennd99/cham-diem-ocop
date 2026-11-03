@@ -1,17 +1,11 @@
 import type { BreadcrumbItem } from '@/types';
 import { Menu } from 'lucide-react';
-import { Link } from '@/components/navigation';
 import AppLogo from '@/components/app-logo';
 import { Breadcrumbs } from '@/components/breadcrumbs';
+import { Link } from '@/components/navigation';
 import { NotificationBell } from '@/components/notification-bell';
 import { Button } from '@/components/ui/button';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 
 type Props = {
   breadcrumbs?: BreadcrumbItem[];
@@ -41,9 +35,7 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
             <AppLogo />
           </Link>
           <div className='hidden lg:block'>
-            <div className='text-sm font-medium'>
-              Hệ thống Đánh giá và Phân hạng Sản phẩm OCOP
-            </div>
+            <div className='text-sm font-medium'>Hệ thống Đánh giá và Phân hạng Sản phẩm OCOP</div>
             <div className='text-muted-foreground text-xs'>
               Chương trình Mỗi xã một sản phẩm · Quyết định 26/2026/QĐ-TTg
             </div>

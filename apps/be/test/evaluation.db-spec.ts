@@ -44,7 +44,6 @@ async function createFixture(prisma: PrismaService) {
     data: {
       code: `TEST-EVAL-${suffix}`,
       name: 'Evaluation locality',
-      type: 'COMMUNE',
       provinceName: 'Test province',
     },
   });

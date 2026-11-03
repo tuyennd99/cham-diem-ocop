@@ -27,7 +27,7 @@ try {
     '/', '/403', '/404', '/products', '/products/$id',
     '/login', '/register', '/forgot-password', '/verify-otp',
     '/account', '/account/password', '/admin', '/admin/reports',
-    '/admin/product-groups', '/admin/scoring-forms', '/admin/assignments',
+    '/admin/product-groups', '/admin/localities', '/admin/scoring-forms', '/admin/assignments',
     '/admin/users', '/admin/judges', '/admin/products', '/admin/products/$id',
     '/admin/registrations', '/admin/registrations/new',
     '/admin/registrations/$id', '/admin/registrations/$id/edit',

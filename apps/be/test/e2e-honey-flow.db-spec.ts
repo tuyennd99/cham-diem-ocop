@@ -185,7 +185,6 @@ describe('OCOP E2E honey flow, judge scoring, and public privacy (E2E-01..06, JD
           body: JSON.stringify({
             code: 'XP-UMINH-01',
             name: 'Xã Khánh An',
-            type: 'COMMUNE',
             provinceName: 'Tỉnh Cà Mau',
             effectiveFrom: '2020-01-01T00:00:00+07:00',
             isActive: true,

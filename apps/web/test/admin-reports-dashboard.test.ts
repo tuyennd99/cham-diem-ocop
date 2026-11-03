@@ -25,7 +25,6 @@ it('calls registrations report, results report, and filtered dashboard through t
       year: 2026,
       month: 1,
       groupBy: 'locality',
-      localityType: 'COMMUNE',
     });
     await adminApi.resultsReport({
       year: 2026,
@@ -43,7 +42,6 @@ it('calls registrations report, results report, and filtered dashboard through t
       year: 2026,
       month: 1,
       groupBy: 'locality',
-      localityType: 'COMMUNE',
     });
     assert.equal(captured[1]?.url, '/admin/reports/results');
     assert.deepEqual(captured[1]?.params, {

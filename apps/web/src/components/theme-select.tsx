@@ -2,12 +2,14 @@ import { Monitor, Moon, Sun } from 'lucide-react';
 import type { Appearance } from '@/hooks/use-appearance';
 import { useAppearance } from '@/hooks/use-appearance';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  Combobox,
+  ComboboxAnchor,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxTrigger,
+} from '@/components/ui/combobox';
 
 const themes: { value: Appearance; icon: typeof Sun; label: string }[] = [
   { value: 'system', icon: Monitor, label: 'Hệ thống' },
@@ -17,35 +19,33 @@ const themes: { value: Appearance; icon: typeof Sun; label: string }[] = [
 
 export function ThemeSelect() {
   const { appearance, updateAppearance } = useAppearance();
+  const current = themes.find((t) => t.value === appearance);
+  const CurrentIcon = current?.icon;
 
   return (
-    <Select
+    <Combobox
       value={appearance}
-      onValueChange={(value: string) => updateAppearance(value as Appearance)}
+      onValueChange={(value: string) => {
+        if (value) updateAppearance(value as Appearance);
+      }}
+      readOnly
     >
-      <SelectTrigger className='w-[140px]'>
-        <SelectValue>
-          {(() => {
-            const current = themes.find((t) => t.value === appearance);
-            if (!current) return null;
-            const Icon = current.icon;
-            return (
-              <span className='flex items-center gap-2'>
-                <Icon className='size-4' />
-                {current.label}
-              </span>
-            );
-          })()}
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent position='popper' align='end'>
+      <ComboboxAnchor className='w-[140px]'>
+        {CurrentIcon && <CurrentIcon className='size-4 shrink-0' />}
+        <ComboboxInput placeholder='Giao diện' />
+        <ComboboxTrigger />
+      </ComboboxAnchor>
+      <ComboboxContent align='end'>
+        <ComboboxEmpty>Không tìm thấy.</ComboboxEmpty>
         {themes.map(({ value, icon: Icon, label }) => (
-          <SelectItem key={value} value={value}>
-            <Icon className='size-4' />
-            {label}
-          </SelectItem>
+          <ComboboxItem key={value} value={value} label={label}>
+            <span className='flex items-center gap-2'>
+              <Icon className='size-4' />
+              {label}
+            </span>
+          </ComboboxItem>
         ))}
-      </SelectContent>
-    </Select>
+      </ComboboxContent>
+    </Combobox>
   );
 }

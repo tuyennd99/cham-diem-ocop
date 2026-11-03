@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { PageContainer, PageHeader } from '@/layouts/PageLayout';
 import { useForm } from '@tanstack/react-form';
 import { Link } from '@tanstack/react-router';
+import { toast } from 'sonner';
 import AlertError from '@/components/alert-error';
 import { FormField } from '@/components/form-field';
 import PasswordInput from '@/components/password-input';
@@ -62,36 +64,32 @@ export function ChangePasswordPage() {
           currentPassword: value.currentPassword,
           newPassword: value.newPassword,
         });
+        toast.success('Đã đổi mật khẩu thành công. Vui lòng đăng nhập lại.');
         form.reset();
         setSession(null);
         window.location.replace('/login');
       } catch (cause) {
-        setError(
+        const msg =
           cause instanceof ApiError && cause.status === 401
             ? 'Mật khẩu hiện tại không đúng.'
-            : messageOf(cause),
-        );
+            : messageOf(cause);
+        setError(msg);
+        toast.error(msg);
       }
     },
   });
 
   return (
-    <section className='admin-page'>
-      <div>
-        <Link className='text-link text-sm' to='/account'>
-          ← Quay lại thông tin tài khoản
-        </Link>
-      </div>
-
-      <div className='admin-page-heading'>
-        <div>
-          <h1>Đổi mật khẩu</h1>
-          <p className='route-intro'>
-            Chọn mật khẩu mới có ít nhất 8 ký tự (tối đa 72 byte UTF-8). Sau khi đổi mật khẩu thành
-            công, bạn sẽ cần đăng nhập lại.
-          </p>
-        </div>
-      </div>
+    <PageContainer>
+      <PageHeader
+        backLink={
+          <Link className='text-link text-sm' to='/account'>
+            ← Quay lại thông tin tài khoản
+          </Link>
+        }
+        title='Đổi mật khẩu'
+        description='Chọn mật khẩu mới có ít nhất 8 ký tự (tối đa 72 byte UTF-8). Sau khi đổi mật khẩu thành công, bạn sẽ cần đăng nhập lại.'
+      />
 
       <form
         className='admin-form account-form filter-card'
@@ -136,6 +134,6 @@ export function ChangePasswordPage() {
           )}
         </form.Subscribe>
       </form>
-    </section>
+    </PageContainer>
   );
 }

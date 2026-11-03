@@ -7,6 +7,7 @@ import {
   FolderTree,
   Globe,
   LayoutDashboard,
+  MapPin,
   Package,
   ShieldCheck,
   UserCheck,
@@ -77,6 +78,11 @@ export const adminGroup: NavGroup = {
       title: 'Danh mục sản phẩm',
       href: '/admin/product-groups',
       icon: FolderTree,
+    },
+    {
+      title: 'Địa bàn',
+      href: '/admin/localities',
+      icon: MapPin,
     },
     {
       title: 'Người dùng & đơn vị',

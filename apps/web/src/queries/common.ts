@@ -16,16 +16,17 @@ export function useMe() {
   });
 }
 
-export function useCategories() {
+export function useCategories(enabled = true) {
   return useQuery({
     queryKey: queryKeys.categories,
     queryFn: async () => (await productsApi.categories()).data,
     staleTime: 5 * 60_000,
+    enabled,
   });
 }
 
 export function useLocalities(
-  query: Pick<PublicLocalityQuery, 'page' | 'limit' | 'q'>,
+  query: Pick<PublicLocalityQuery, 'page' | 'limit' | 'q' | 'provinceName'>,
   enabled = true,
 ) {
   return useQuery({

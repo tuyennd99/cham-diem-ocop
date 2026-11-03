@@ -24,10 +24,17 @@ export function DialogOverlay({
   );
 }
 
+function isInsideComboboxContent(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest('[data-slot="combobox-content"]') !== null;
+}
+
 export function DialogContent({
   className,
   children,
   showCloseButton = true,
+  onPointerDownOutside,
+  onFocusOutside,
+  onInteractOutside,
   ...props
 }: ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
@@ -37,6 +44,24 @@ export function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot='dialog-content'
+        onPointerDownOutside={(event) => {
+          if (isInsideComboboxContent(event.target)) {
+            event.preventDefault();
+          }
+          onPointerDownOutside?.(event);
+        }}
+        onFocusOutside={(event) => {
+          if (isInsideComboboxContent(event.target)) {
+            event.preventDefault();
+          }
+          onFocusOutside?.(event);
+        }}
+        onInteractOutside={(event) => {
+          if (isInsideComboboxContent(event.target)) {
+            event.preventDefault();
+          }
+          onInteractOutside?.(event);
+        }}
         className={cn(
           'border-border bg-background fixed top-1/2 left-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border p-6 shadow-lg duration-200',
           className,

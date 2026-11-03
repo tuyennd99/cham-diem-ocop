@@ -14,6 +14,15 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Combobox,
+  ComboboxAnchor,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxTrigger,
+} from '@/components/ui/combobox';
 import { DataTable, type DataTableColumnDef } from '@/components/ui/data-table';
 import {
   Dialog,
@@ -24,13 +33,6 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { ALL, DEFAULT_PAGE_SIZE } from '../../constants/consts';
 import { errorText, messageOf } from '../../lib/api-error';
 import { useOrganizationUnits } from '../../queries/admin-users';
@@ -407,21 +409,23 @@ export function OrganizationUnitsPanel({
           className='admin-filter-field'
           data-filter-width='status'
         >
-          <Select
+          <Combobox
             value={draftIsActive === undefined ? ALL : String(draftIsActive)}
             onValueChange={(value) =>
               setDraftIsActive(value === ALL ? undefined : value === 'true')
             }
           >
-            <SelectTrigger id='units-filter-active'>
-              <SelectValue placeholder='Tất cả' />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>Tất cả</SelectItem>
-              <SelectItem value='true'>Đang hoạt động</SelectItem>
-              <SelectItem value='false'>Ngừng nhận tài khoản mới</SelectItem>
-            </SelectContent>
-          </Select>
+            <ComboboxAnchor>
+              <ComboboxInput id='units-filter-active' placeholder='Tất cả' />
+              <ComboboxTrigger aria-label='Mở danh sách trạng thái đơn vị' />
+            </ComboboxAnchor>
+            <ComboboxContent>
+              <ComboboxEmpty>Không tìm thấy trạng thái.</ComboboxEmpty>
+              <ComboboxItem value={ALL}>Tất cả</ComboboxItem>
+              <ComboboxItem value='true'>Đang hoạt động</ComboboxItem>
+              <ComboboxItem value='false'>Ngừng nhận tài khoản mới</ComboboxItem>
+            </ComboboxContent>
+          </Combobox>
         </FormField>
         <div className='admin-actions admin-filter-actions items-end'>
           <Button type='submit'>Áp dụng</Button>

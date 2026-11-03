@@ -75,6 +75,29 @@ export class AuthRepository {
     });
   }
 
+  updateProfile(
+    id: string,
+    data: { fullName: string; phone: string | null },
+  ): Promise<PublicUser & { isActive: boolean; tokenVersion: number }> {
+    return this.prisma.user.update({
+      where: { id },
+      data,
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        phone: true,
+        role: true,
+        verified: true,
+        isActive: true,
+        tokenVersion: true,
+        staffPermissions: true,
+        organizationUnitId: true,
+        organizationUnit: { select: { id: true, code: true, name: true } },
+      },
+    });
+  }
+
   findCredentialsById(id: string) {
     return this.prisma.user.findUnique({
       where: { id },

@@ -88,6 +88,10 @@ export interface ChangePasswordInput {
   currentPassword: string;
   newPassword: string;
 }
+export interface UpdateProfileInput {
+  fullName: string;
+  phone?: string | null;
+}
 export interface MessageResponse {
   message: string;
 }

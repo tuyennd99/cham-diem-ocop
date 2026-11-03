@@ -4,15 +4,17 @@ import { Link } from '@tanstack/react-router';
 import { times, trim } from 'lodash';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Combobox,
+  ComboboxAnchor,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxTrigger,
+} from '@/components/ui/combobox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { publicAttachmentUrl } from '../../constants/api';
 import { ALL, DEFAULT_PAGE_SIZE } from '../../constants/consts';
 import { PUBLIC_PRODUCT_STATUS_LABEL } from '../../constants/product-status';
@@ -91,22 +93,24 @@ export function PublicCatalogPage() {
             {(field) => (
               <div className='field status-field'>
                 <Label htmlFor='product-category'>Danh mục sản phẩm</Label>
-                <Select
+                <Combobox
                   value={field.state.value || ALL}
                   onValueChange={(value) => field.handleChange(value === ALL ? '' : value)}
                 >
-                  <SelectTrigger id='product-category'>
-                    <SelectValue placeholder='Tất cả danh mục' />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ALL}>Tất cả danh mục</SelectItem>
+                  <ComboboxAnchor>
+                    <ComboboxInput id='product-category' placeholder='Tất cả danh mục' />
+                    <ComboboxTrigger />
+                  </ComboboxAnchor>
+                  <ComboboxContent>
+                    <ComboboxEmpty>Không tìm thấy danh mục.</ComboboxEmpty>
+                    <ComboboxItem value={ALL}>Tất cả danh mục</ComboboxItem>
                     {categories.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
+                      <ComboboxItem key={item.id} value={item.id}>
                         {item.name}
-                      </SelectItem>
+                      </ComboboxItem>
                     ))}
-                  </SelectContent>
-                </Select>
+                  </ComboboxContent>
+                </Combobox>
               </div>
             )}
           </searchForm.Field>

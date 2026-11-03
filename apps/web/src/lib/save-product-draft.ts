@@ -2,15 +2,23 @@ import type { ApiResult } from '../types/api';
 import type { ProductAttachmentRecord } from '../types/product';
 import type { ProductWriteInput, RegistrantProduct } from '../types/registrant';
 import { ApiError, messageOf } from './api-error';
-import { validateProductFile } from './attachments';
-
-const MAX_PRODUCT_ATTACHMENTS = 20;
+import {
+  isVideoFileName,
+  MAX_PRODUCT_FILES,
+  MAX_PRODUCT_VIDEOS,
+  validateProductFile,
+} from './attachments';
 
 export function canStartProductDraftSave(state: {
   reviewRequired: boolean;
   createOutcomeUnknown: boolean;
+  declarationAccepted?: boolean;
 }) {
-  return !state.reviewRequired && !state.createOutcomeUnknown;
+  return (
+    !state.reviewRequired &&
+    !state.createOutcomeUnknown &&
+    state.declarationAccepted !== false
+  );
 }
 
 export interface ProductDraftCommands {
@@ -37,11 +45,20 @@ export async function saveProductDraft(input: {
   commands: ProductDraftCommands;
 }): Promise<DraftSaveResult> {
   for (const file of input.files) validateProductFile(file);
-  if (
-    (input.existingProduct?.attachments.length ?? 0) + input.files.length >
-    MAX_PRODUCT_ATTACHMENTS
-  )
-    throw new Error(`Mỗi hồ sơ tối đa ${MAX_PRODUCT_ATTACHMENTS} tệp.`);
+  const existingAttachments = input.existingProduct?.attachments ?? [];
+  const existingVideos = existingAttachments.filter((att) => isVideoFileName(att.fileName)).length;
+  const existingFiles = existingAttachments.length - existingVideos;
+  const newVideos = input.files.filter((file) => isVideoFileName(file.name)).length;
+  const newFiles = input.files.length - newVideos;
+
+  if (existingFiles + newFiles > MAX_PRODUCT_FILES) {
+    throw new Error(
+      `Mỗi hồ sơ tối đa ${MAX_PRODUCT_FILES} tệp ảnh hoặc tài liệu (tối đa 2 MB/tệp).`,
+    );
+  }
+  if (existingVideos + newVideos > MAX_PRODUCT_VIDEOS) {
+    throw new Error(`Mỗi hồ sơ tối đa ${MAX_PRODUCT_VIDEOS} video (tối đa 50 MB).`);
+  }
 
   const payload = input.existingProduct
     ? {

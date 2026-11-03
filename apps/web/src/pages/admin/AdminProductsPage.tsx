@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import type {
   AdminProductListItem,
@@ -6,27 +6,40 @@ import type {
   LocalityRecord,
   ProductStatus,
 } from '@ocop/shared';
+import { useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { Filter, Inbox, Plus, RotateCcw, Tag } from 'lucide-react';
+import { Eye, Filter, Inbox, Pencil, Plus, RotateCcw, Send, Tag, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import AlertError from '@/components/alert-error';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { FormField } from '@/components/form-field';
 import PageSpin from '@/components/page-spin';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Combobox,
+  ComboboxAnchor,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxTrigger,
+} from '@/components/ui/combobox';
 import { DataTable, type DataTableColumnDef } from '@/components/ui/data-table';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { myProductsApi } from '../../api';
 import { ALL } from '../../constants/consts';
-import { ADMIN_DASHBOARD_STATUS_LABEL } from '../../constants/product-status';
+import {
+  ADMIN_DASHBOARD_STATUS_LABEL,
+  PRODUCT_STATUS_TONE,
+  REGISTRANT_PRODUCT_STATUS_LABEL,
+} from '../../constants/product-status';
+import { queryKeys } from '../../constants/query-key';
+import { PageContainer, PageHeader } from '../../layouts';
 import {
   nextVietnameseDayIso,
   vietnameseDateInput,
@@ -39,17 +52,24 @@ import {
   toAdminProductApiQuery,
   type AdminProductSearch,
 } from '../../lib/admin-search';
-import { errorText } from '../../lib/api-error';
+import { ADMINISTRATIVE_PROVINCES } from '../../lib/administrative-divisions';
+import { errorText, messageOf } from '../../lib/api-error';
 import { useSession } from '../../lib/auth';
 import { formatExactScore, formatStarRatingLabel } from '../../lib/print-format';
 import { hasStaffPermission } from '../../lib/session-contract';
 import { PrivateAttachmentThumbnail } from '../../pages/registrant/AttachmentLink';
 import { useAdminCategories, useAdminCategoryDetail } from '../../queries/admin-catalogs';
 import { useAdminProductList, type AdminProductMode } from '../../queries/admin-products';
-import { useLocalities } from '../../queries/common';
+import { useCategories, useLocalities } from '../../queries/common';
+import { useMyProducts } from '../../queries/registrant';
+import type { RegistrantProduct } from '../../types/registrant';
+
+export type ProductListViewMode = AdminProductMode | 'owner';
+
+type ProductRowItem = AdminProductListItem | RegistrantProduct;
 
 interface AdminProductsPageProps {
-  mode?: AdminProductMode;
+  mode?: ProductListViewMode;
   search?: AdminProductSearch;
   onSearchChange?: (next: AdminProductSearch) => void;
 }
@@ -59,20 +79,26 @@ const DEFAULT_SEARCH: AdminProductSearch = {
   limit: 20,
 };
 
-function formatRegistrationType(type?: string) {
+function formatRegistrationType(type?: unknown) {
   if (type === 'FIRST') return 'Lần đầu';
   if (type === 'UPGRADE') return 'Nâng hạng';
   if (type === 'REASSESSMENT') return 'Đánh giá lại';
-  return type ?? 'Chưa khai báo';
+  return typeof type === 'string' && type ? type : 'Chưa khai báo';
 }
 
 function formatDateBasisLabel(basis?: 'submittedAt' | 'completedAt') {
   return basis === 'completedAt' ? 'Ngày hoàn tất' : 'Ngày nộp';
 }
 
-function formatStatusBadge(status: ProductStatus) {
-  const variant = status === 'COMPLETED' ? 'default' : status === 'DRAFT' ? 'secondary' : 'outline';
-  return <Badge variant={variant}>{ADMIN_DASHBOARD_STATUS_LABEL[status] ?? status}</Badge>;
+function formatStatusBadge(status: ProductStatus, isOwner: boolean) {
+  const label = isOwner
+    ? (REGISTRANT_PRODUCT_STATUS_LABEL[status] ?? status)
+    : (ADMIN_DASHBOARD_STATUS_LABEL[status] ?? status);
+  return (
+    <Badge variant='outline' className={PRODUCT_STATUS_TONE[status]}>
+      {label}
+    </Badge>
+  );
 }
 
 function deriveDateInputs(search: AdminProductSearch): {
@@ -105,24 +131,38 @@ export function AdminProductsPage({
   search: controlledSearch,
   onSearchChange,
 }: AdminProductsPageProps) {
+  const isOwner = mode === 'owner';
+  const adminMode: AdminProductMode = mode === 'registrations' ? 'registrations' : 'products';
+  const queryClient = useQueryClient();
   const session = useSession();
   const canManage = hasStaffPermission(session?.user, 'MANAGE');
   const [fallbackSearch, setFallbackSearch] = useState<AdminProductSearch>(DEFAULT_SEARCH);
   const appliedSearch = controlledSearch ?? fallbackSearch;
 
-  function applySearch(next: AdminProductSearch) {
-    const normalized = parseAdminProductSearch(next as Record<string, unknown>);
-    if (onSearchChange) {
-      onSearchChange(normalized);
-    } else {
-      setFallbackSearch(normalized);
-    }
-  }
+  const applySearch = useCallback(
+    (next: AdminProductSearch) => {
+      const normalized = parseAdminProductSearch(next as Record<string, unknown>);
+      if (onSearchChange) {
+        onSearchChange(normalized);
+      } else {
+        setFallbackSearch(normalized);
+      }
+    },
+    [onSearchChange],
+  );
 
   const [draftFilters, setDraftFilters] = useState<AdminProductSearch>(appliedSearch);
   const [dateRange, setDateRange] = useState(() => deriveDateInputs(appliedSearch));
   const [filterError, setFilterError] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Owner-specific draft actions (submit / delete)
+  const [actionError, setActionError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [confirmState, setConfirmState] = useState<{
+    mode: 'submit' | 'delete';
+    product: RegistrantProduct;
+  } | null>(null);
 
   useEffect(() => {
     setDraftFilters(appliedSearch);
@@ -130,52 +170,182 @@ export function AdminProductsPage({
     setFilterError('');
   }, [appliedSearch]);
 
+  const [localityProvince, setLocalityProvince] = useState('');
   const [localitySearch, setLocalitySearch] = useState('');
   const [localityPage, setLocalityPage] = useState(1);
   const [selectedLocality, setSelectedLocality] = useState<LocalityRecord | null>(null);
 
-  const categoriesQuery = useAdminCategories({
-    page: 1,
-    limit: 100,
-  });
-  const selectedCategoryDetail = useAdminCategoryDetail(
-    draftFilters.categoryId ?? appliedSearch.categoryId ?? null,
+  const adminCategoriesQuery = useAdminCategories(
+    {
+      page: 1,
+      limit: 100,
+    },
+    !isOwner,
   );
-  const localityQuery = useLocalities({
-    page: localityPage,
-    limit: 20,
-    q: localitySearch.trim() || undefined,
-  });
+  const publicCategoriesQuery = useCategories(isOwner);
+  const selectedCategoryDetail = useAdminCategoryDetail(
+    !isOwner ? (draftFilters.categoryId ?? appliedSearch.categoryId ?? null) : null,
+  );
+  const localityQuery = useLocalities(
+    {
+      page: localityPage,
+      limit: 100,
+      provinceName: localityProvince || undefined,
+      q: localitySearch.trim() || undefined,
+    },
+    !isOwner,
+  );
 
   const apiQuery = toAdminProductApiQuery(appliedSearch);
-  const {
-    data: response,
-    error: loadError,
-    isPending: loading,
-    isFetching,
-    refetch,
-  } = useAdminProductList(mode, canManage, apiQuery);
+  const adminListQuery = useAdminProductList(adminMode, canManage, apiQuery, !isOwner);
+  const ownerListQuery = useMyProducts(isOwner);
 
+  const loadError = isOwner ? ownerListQuery.error : adminListQuery.error;
+  const loading = isOwner ? ownerListQuery.isPending : adminListQuery.isPending;
+  const isFetching = isOwner ? ownerListQuery.isFetching : adminListQuery.isFetching;
+  const refetch = isOwner ? ownerListQuery.refetch : adminListQuery.refetch;
   const error = errorText(loadError);
-  const data = response?.data ?? [];
-  const meta = response?.meta;
-  const categories = categoriesQuery.data?.data ?? [];
+
+  const categories = isOwner
+    ? (publicCategoriesQuery.data ?? [])
+    : (adminCategoriesQuery.data?.data ?? []);
   const localities = localityQuery.data?.data ?? [];
   const localityMeta = localityQuery.data?.meta;
 
-  const statusOptions: Array<{ value: ProductStatus | undefined; label: string }> = [
-    {
-      value: undefined,
-      label: mode === 'products' ? 'Tất cả sản phẩm' : 'Tất cả phiếu',
-    },
-    ...(canManage ? [{ value: 'DRAFT' as const, label: ADMIN_DASHBOARD_STATUS_LABEL.DRAFT }] : []),
-    { value: 'SUBMITTED', label: ADMIN_DASHBOARD_STATUS_LABEL.SUBMITTED },
-    { value: 'SCORING', label: ADMIN_DASHBOARD_STATUS_LABEL.SCORING },
-    { value: 'COMPLETED', label: ADMIN_DASHBOARD_STATUS_LABEL.COMPLETED },
-  ];
+  const ownerFilteredResult = useMemo(() => {
+    if (!isOwner) return { rows: [] as ProductRowItem[], total: 0, page: 1 };
+    const source = ownerListQuery.data ?? [];
+    const keyword = appliedSearch.q?.trim().toLowerCase();
+    const filtered = source.filter((item) => {
+      if (appliedSearch.status && item.status !== appliedSearch.status) return false;
+      if (
+        keyword &&
+        !item.name.toLowerCase().includes(keyword) &&
+        !item.id.toLowerCase().includes(keyword)
+      ) {
+        return false;
+      }
+      if (appliedSearch.categoryId && item.category.id !== appliedSearch.categoryId) return false;
+      if (
+        appliedSearch.registrationType &&
+        item.formData?.registrationType !== appliedSearch.registrationType
+      ) {
+        return false;
+      }
+      if (
+        appliedSearch.assessmentYear &&
+        Number(item.formData?.assessmentYear) !== appliedSearch.assessmentYear
+      ) {
+        return false;
+      }
+      if (appliedSearch.starRating && item.starRating !== appliedSearch.starRating) return false;
+      if (appliedSearch.from || appliedSearch.toExclusive) {
+        const rawDate =
+          appliedSearch.dateBasis === 'completedAt'
+            ? item.completedAt
+            : (item.submittedAt ?? item.updatedAt);
+        if (!rawDate) return false;
+        const ts = Date.parse(rawDate);
+        if (appliedSearch.from && ts < Date.parse(appliedSearch.from)) return false;
+        if (appliedSearch.toExclusive && ts >= Date.parse(appliedSearch.toExclusive)) return false;
+      }
+      return true;
+    });
 
-  const productColumns = useMemo<DataTableColumnDef<AdminProductListItem>[]>(
-    () => [
+    const sortBy = appliedSearch.sortBy ?? 'submittedAt';
+    const dir = (appliedSearch.sortDirection ?? 'desc') === 'asc' ? 1 : -1;
+    const sorted = [...filtered].sort((a, b) => {
+      if (sortBy === 'name') {
+        return a.name.localeCompare(b.name, 'vi') * dir;
+      }
+      if (sortBy === 'finalScore') {
+        const scoreA = a.finalScore ?? -1;
+        const scoreB = b.finalScore ?? -1;
+        return (scoreA - scoreB) * dir;
+      }
+      const timeA = Date.parse(a.submittedAt ?? a.updatedAt ?? '') || 0;
+      const timeB = Date.parse(b.submittedAt ?? b.updatedAt ?? '') || 0;
+      return (timeA - timeB) * dir;
+    });
+
+    const pageSize = appliedSearch.limit ?? 20;
+    const total = sorted.length;
+    const maxPage = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(Math.max(1, appliedSearch.page ?? 1), maxPage);
+    const start = (page - 1) * pageSize;
+    return {
+      rows: sorted.slice(start, start + pageSize),
+      total,
+      page,
+    };
+  }, [appliedSearch, isOwner, ownerListQuery.data]);
+
+  const data: ProductRowItem[] = isOwner
+    ? ownerFilteredResult.rows
+    : (adminListQuery.data?.data ?? []);
+  const totalCount = isOwner
+    ? ownerFilteredResult.total
+    : (adminListQuery.data?.meta?.total ?? data.length);
+  const currentPage = isOwner
+    ? ownerFilteredResult.page
+    : (adminListQuery.data?.meta?.page ?? appliedSearch.page ?? 1);
+
+  async function executeOwnerConfirm() {
+    if (!confirmState || busy) return;
+    const { mode: confirmMode, product } = confirmState;
+    setBusy(true);
+    setActionError('');
+    try {
+      if (confirmMode === 'delete') {
+        await myProductsApi.remove(product.id);
+        queryClient.setQueryData<RegistrantProduct[]>(queryKeys.myProducts.list, (rows = []) =>
+          rows.filter((item) => item.id !== product.id),
+        );
+        toast.success('Đã xóa bản nháp sản phẩm.');
+      } else {
+        const { data: updated } = await myProductsApi.submit(product.id);
+        queryClient.setQueryData<RegistrantProduct[]>(queryKeys.myProducts.list, (rows = []) =>
+          rows.map((item) => (item.id === product.id ? { ...item, ...updated } : item)),
+        );
+        queryClient.setQueryData<RegistrantProduct>(
+          queryKeys.myProducts.detail(product.id),
+          (current) => (current ? { ...current, ...updated } : updated),
+        );
+        toast.success('Đã nộp hồ sơ tới hội đồng đánh giá.');
+      }
+      setConfirmState(null);
+    } catch (cause) {
+      const msg = messageOf(cause);
+      setActionError(msg);
+      toast.error(msg);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const statusOptions: Array<{ value: ProductStatus | undefined; label: string }> = isOwner
+    ? [
+        { value: undefined, label: 'Tất cả hồ sơ' },
+        { value: 'DRAFT', label: REGISTRANT_PRODUCT_STATUS_LABEL.DRAFT },
+        { value: 'SUBMITTED', label: REGISTRANT_PRODUCT_STATUS_LABEL.SUBMITTED },
+        { value: 'SCORING', label: REGISTRANT_PRODUCT_STATUS_LABEL.SCORING },
+        { value: 'COMPLETED', label: REGISTRANT_PRODUCT_STATUS_LABEL.COMPLETED },
+      ]
+    : [
+        {
+          value: undefined,
+          label: mode === 'products' ? 'Tất cả sản phẩm' : 'Tất cả phiếu',
+        },
+        ...(canManage
+          ? [{ value: 'DRAFT' as const, label: ADMIN_DASHBOARD_STATUS_LABEL.DRAFT }]
+          : []),
+        { value: 'SUBMITTED', label: ADMIN_DASHBOARD_STATUS_LABEL.SUBMITTED },
+        { value: 'SCORING', label: ADMIN_DASHBOARD_STATUS_LABEL.SCORING },
+        { value: 'COMPLETED', label: ADMIN_DASHBOARD_STATUS_LABEL.COMPLETED },
+      ];
+
+  const productColumns = useMemo<DataTableColumnDef<ProductRowItem>[]>(() => {
+    const columns: DataTableColumnDef<ProductRowItem>[] = [
       {
         accessorKey: 'name',
         header: 'Sản phẩm / Mã hồ sơ',
@@ -186,7 +356,7 @@ export function AdminProductsPage({
             <div className='product-cell'>
               {image ? (
                 <PrivateAttachmentThumbnail
-                  mode='admin'
+                  mode={isOwner ? 'owner' : 'admin'}
                   productId={product.id}
                   attachmentId={image.id}
                   name={product.name}
@@ -212,11 +382,14 @@ export function AdminProductsPage({
           );
         },
       },
-      {
+    ];
+
+    if (!isOwner) {
+      columns.push({
         id: 'registrant',
         header: 'Người đăng ký',
         cell: ({ row }) => {
-          const product = row.original;
+          const product = row.original as AdminProductListItem;
           return (
             <div>
               <div className='registrant-name'>{product.registrant.fullName}</div>
@@ -224,14 +397,17 @@ export function AdminProductsPage({
             </div>
           );
         },
-      },
+      });
+    }
+
+    columns.push(
       {
         id: 'locality',
-        header: 'Địa bàn / Năm',
+        header: isOwner ? 'Địa bàn / Cập nhật' : 'Địa bàn / Năm',
         cell: ({ row }) => {
           const product = row.original;
-          const year = product.formData.assessmentYear;
-          const registrationType = product.formData.registrationType;
+          const year = product.formData?.assessmentYear as string | number | undefined;
+          const registrationType = product.formData?.registrationType;
           return (
             <div>
               <div className='text-fg font-medium'>
@@ -240,6 +416,13 @@ export function AdminProductsPage({
               </div>
               <div className='text-muted mt-0.5 text-xs'>
                 Năm {year ?? '—'} · {formatRegistrationType(registrationType)}
+                {isOwner && 'updatedAt' in product
+                  ? ` · ${
+                      product.submittedAt
+                        ? `Đã nộp ${new Date(product.submittedAt).toLocaleDateString('vi-VN')}`
+                        : `Cập nhật ${new Date(product.updatedAt).toLocaleDateString('vi-VN')}`
+                    }`
+                  : ''}
               </div>
             </div>
           );
@@ -248,7 +431,7 @@ export function AdminProductsPage({
       {
         accessorKey: 'status',
         header: 'Trạng thái',
-        cell: ({ row }) => formatStatusBadge(row.original.status),
+        cell: ({ row }) => formatStatusBadge(row.original.status, isOwner),
       },
       {
         id: 'result',
@@ -277,6 +460,76 @@ export function AdminProductsPage({
         meta: { align: 'right' },
         cell: ({ row }) => {
           const product = row.original;
+          if (isOwner) {
+            const ownerProduct = product as RegistrantProduct;
+            return (
+              <div className='flex items-center justify-end gap-1.5'>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button asChild variant='secondary' size='icon-sm'>
+                      <Link
+                        to='/my/products/$id'
+                        params={{ id: ownerProduct.id }}
+                        aria-label={`Mở hồ sơ ${ownerProduct.name}`}
+                      >
+                        <Eye className='size-4' aria-hidden='true' />
+                      </Link>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Mở hồ sơ</TooltipContent>
+                </Tooltip>
+                {ownerProduct.status === 'DRAFT' && (
+                  <>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button asChild variant='secondary' size='icon-sm'>
+                          <Link
+                            to='/my/products/$id/edit'
+                            params={{ id: ownerProduct.id }}
+                            aria-label={`Sửa bản nháp ${ownerProduct.name}`}
+                          >
+                            <Pencil className='size-4' aria-hidden='true' />
+                          </Link>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Sửa bản nháp</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type='button'
+                          variant='secondary'
+                          size='icon-sm'
+                          disabled={busy}
+                          aria-label={`Nộp hồ sơ ${ownerProduct.name}`}
+                          onClick={() => setConfirmState({ mode: 'submit', product: ownerProduct })}
+                        >
+                          <Send className='size-4' aria-hidden='true' />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Nộp hồ sơ</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type='button'
+                          variant='destructive'
+                          size='icon-sm'
+                          disabled={busy}
+                          aria-label={`Xóa bản nháp ${ownerProduct.name}`}
+                          onClick={() => setConfirmState({ mode: 'delete', product: ownerProduct })}
+                        >
+                          <Trash2 className='size-4' aria-hidden='true' />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Xóa bản nháp</TooltipContent>
+                    </Tooltip>
+                  </>
+                )}
+              </div>
+            );
+          }
+
           return (
             <div className='flex items-center justify-end gap-2'>
               <Button asChild variant='secondary' size='sm'>
@@ -303,9 +556,10 @@ export function AdminProductsPage({
           );
         },
       },
-    ],
-    [appliedSearch, canManage, mode],
-  );
+    );
+
+    return columns;
+  }, [appliedSearch, busy, canManage, isOwner, mode]);
 
   function handleStatusSelect(status: ProductStatus | undefined) {
     applySearch({
@@ -319,7 +573,7 @@ export function AdminProductsPage({
     event.preventDefault();
     setFilterError('');
 
-    if (draftFilters.localityId && draftFilters.unmappedLocality) {
+    if (!isOwner && draftFilters.localityId && draftFilters.unmappedLocality) {
       setFilterError('Chỉ chọn một điều kiện: Địa bàn cụ thể hoặc Chưa gắn địa bàn.');
       return;
     }
@@ -386,7 +640,11 @@ export function AdminProductsPage({
   if (appliedSearch.status) {
     appliedChips.push({
       key: 'status',
-      label: `Trạng thái: ${ADMIN_DASHBOARD_STATUS_LABEL[appliedSearch.status]}`,
+      label: `Trạng thái: ${
+        isOwner
+          ? REGISTRANT_PRODUCT_STATUS_LABEL[appliedSearch.status]
+          : ADMIN_DASHBOARD_STATUS_LABEL[appliedSearch.status]
+      }`,
     });
   }
   if (appliedSearch.q) {
@@ -400,7 +658,7 @@ export function AdminProductsPage({
         : appliedSearch.categoryId);
     appliedChips.push({ key: 'categoryId', label: `Phân loại: ${catLabel}` });
   }
-  if (appliedSearch.registrantQ) {
+  if (!isOwner && appliedSearch.registrantQ) {
     appliedChips.push({ key: 'registrantQ', label: `Người đăng ký: ${appliedSearch.registrantQ}` });
   }
   if (appliedSearch.registrationType) {
@@ -421,7 +679,7 @@ export function AdminProductsPage({
       label: formatStarRatingLabel(appliedSearch.starRating),
     });
   }
-  if (appliedSearch.localityId) {
+  if (!isOwner && appliedSearch.localityId) {
     const locLabel =
       localities.find((item) => item.id === appliedSearch.localityId)?.name ??
       (selectedLocality?.id === appliedSearch.localityId
@@ -429,7 +687,7 @@ export function AdminProductsPage({
         : appliedSearch.localityId);
     appliedChips.push({ key: 'localityId', label: `Địa bàn: ${locLabel}` });
   }
-  if (appliedSearch.unmappedLocality) {
+  if (!isOwner && appliedSearch.unmappedLocality) {
     appliedChips.push({ key: 'unmappedLocality', label: 'Chưa gắn địa bàn' });
   }
   if (appliedSearch.from || appliedSearch.toExclusive) {
@@ -451,31 +709,40 @@ export function AdminProductsPage({
     Boolean(draftFilters.categoryId) &&
     !categories.some((item) => item.id === draftFilters.categoryId);
   const currentLocalityOptionMissing =
+    !isOwner &&
     Boolean(draftFilters.localityId) &&
     !localities.some((item) => item.id === draftFilters.localityId);
 
+  const pageTitle = isOwner
+    ? 'Hồ sơ của tôi'
+    : mode === 'products'
+      ? 'Sản phẩm OCOP'
+      : 'Phiếu đăng ký';
+  const pageDescription = isOwner
+    ? 'Theo dõi hồ sơ sản phẩm, tiến độ chấm điểm và mức sao đạt được.'
+    : mode === 'products'
+      ? 'Theo dõi hồ sơ, tiến độ chấm và mức sao theo điểm.'
+      : 'Nhập và quản lý phiếu đăng ký cho người đăng ký.';
+
+  const headerActions = isOwner ? (
+    <Button asChild>
+      <Link to='/my/products/new'>
+        <Plus className='size-4' aria-hidden='true' />
+        <span>Tạo hồ sơ</span>
+      </Link>
+    </Button>
+  ) : canManage ? (
+    <Button asChild>
+      <Link to='/admin/registrations/new' search={appliedSearch}>
+        <Plus className='size-4' aria-hidden='true' />
+        <span>{mode === 'products' ? 'Thêm phiếu đăng ký' : 'Nhập phiếu đăng ký'}</span>
+      </Link>
+    </Button>
+  ) : undefined;
+
   return (
-    <section className='admin-page'>
-      <div className='admin-page-heading'>
-        <div>
-          <h1>{mode === 'products' ? 'Sản phẩm OCOP' : 'Phiếu đăng ký'}</h1>
-          <p className='route-intro'>
-            {mode === 'products'
-              ? 'Theo dõi hồ sơ, tiến độ chấm và mức sao theo điểm.'
-              : 'Nhập và quản lý phiếu đăng ký cho người đăng ký.'}
-          </p>
-        </div>
-        {canManage && (
-          <div className='admin-actions'>
-            <Button asChild>
-              <Link to='/admin/registrations/new' search={appliedSearch}>
-                <Plus className='size-4' aria-hidden='true' />
-                <span>{mode === 'products' ? 'Thêm phiếu đăng ký' : 'Nhập phiếu đăng ký'}</span>
-              </Link>
-            </Button>
-          </div>
-        )}
-      </div>
+    <PageContainer>
+      <PageHeader title={pageTitle} description={pageDescription} actions={headerActions} />
 
       <div className='status-tabs' role='group' aria-label='Lọc nhanh theo trạng thái hồ sơ'>
         {statusOptions.map((option) => {
@@ -519,7 +786,7 @@ export function AdminProductsPage({
             className='admin-filter-field'
             data-filter-width='group'
           >
-            <Select
+            <Combobox
               value={draftFilters.categoryId ?? ALL}
               onValueChange={(value) =>
                 setDraftFilters((old) => ({
@@ -528,25 +795,27 @@ export function AdminProductsPage({
                 }))
               }
             >
-              <SelectTrigger id='admin-product-category'>
-                <SelectValue placeholder='Tất cả danh mục' />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>Tất cả danh mục</SelectItem>
+              <ComboboxAnchor>
+                <ComboboxInput id='admin-product-category' placeholder='Tất cả danh mục' />
+                <ComboboxTrigger aria-label='Mở danh sách danh mục' />
+              </ComboboxAnchor>
+              <ComboboxContent>
+                <ComboboxEmpty>Không tìm thấy danh mục phù hợp.</ComboboxEmpty>
+                <ComboboxItem value={ALL}>Tất cả danh mục</ComboboxItem>
                 {currentCategoryOptionMissing && draftFilters.categoryId && (
-                  <SelectItem value={draftFilters.categoryId}>
+                  <ComboboxItem value={draftFilters.categoryId}>
                     {selectedCategoryDetail.data?.data.id === draftFilters.categoryId
                       ? selectedCategoryDetail.data.data.name
                       : `Mã danh mục: ${draftFilters.categoryId}`}
-                  </SelectItem>
+                  </ComboboxItem>
                 )}
                 {categories.map((category) => (
-                  <SelectItem key={category.id} value={category.id}>
+                  <ComboboxItem key={category.id} value={category.id}>
                     {category.name}
-                  </SelectItem>
+                  </ComboboxItem>
                 ))}
-              </SelectContent>
-            </Select>
+              </ComboboxContent>
+            </Combobox>
           </FormField>
 
           <div className='admin-actions admin-filter-actions'>
@@ -574,23 +843,28 @@ export function AdminProductsPage({
         </div>
 
         <div id='admin-product-advanced' hidden={!showAdvanced} className='advanced-filter-grid'>
-          <FormField label='Từ khóa người đăng ký (tên hoặc email)' htmlFor='admin-product-registrant-q'>
-            <Input
-              id='admin-product-registrant-q'
-              placeholder='Nhập tên hoặc email người đăng ký…'
-              value={draftFilters.registrantQ ?? ''}
-              maxLength={100}
-              onChange={(event) =>
-                setDraftFilters((old) => ({
-                  ...old,
-                  registrantQ: event.target.value || undefined,
-                }))
-              }
-            />
-          </FormField>
+          {!isOwner && (
+            <FormField
+              label='Từ khóa người đăng ký (tên hoặc email)'
+              htmlFor='admin-product-registrant-q'
+            >
+              <Input
+                id='admin-product-registrant-q'
+                placeholder='Nhập tên hoặc email người đăng ký…'
+                value={draftFilters.registrantQ ?? ''}
+                maxLength={100}
+                onChange={(event) =>
+                  setDraftFilters((old) => ({
+                    ...old,
+                    registrantQ: event.target.value || undefined,
+                  }))
+                }
+              />
+            </FormField>
+          )}
 
           <FormField label='Loại đăng ký' htmlFor='admin-product-registration-type'>
-            <Select
+            <Combobox
               value={draftFilters.registrationType ?? ALL}
               onValueChange={(value) =>
                 setDraftFilters((old) => ({
@@ -601,16 +875,21 @@ export function AdminProductsPage({
                 }))
               }
             >
-              <SelectTrigger id='admin-product-registration-type'>
-                <SelectValue placeholder='Tất cả loại đăng ký' />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>Tất cả loại đăng ký</SelectItem>
-                <SelectItem value='FIRST'>Lần đầu</SelectItem>
-                <SelectItem value='UPGRADE'>Nâng hạng</SelectItem>
-                <SelectItem value='REASSESSMENT'>Đánh giá lại</SelectItem>
-              </SelectContent>
-            </Select>
+              <ComboboxAnchor>
+                <ComboboxInput
+                  id='admin-product-registration-type'
+                  placeholder='Tất cả loại đăng ký'
+                />
+                <ComboboxTrigger aria-label='Mở danh sách loại đăng ký' />
+              </ComboboxAnchor>
+              <ComboboxContent>
+                <ComboboxEmpty>Không tìm thấy loại đăng ký.</ComboboxEmpty>
+                <ComboboxItem value={ALL}>Tất cả loại đăng ký</ComboboxItem>
+                <ComboboxItem value='FIRST'>Lần đầu</ComboboxItem>
+                <ComboboxItem value='UPGRADE'>Nâng hạng</ComboboxItem>
+                <ComboboxItem value='REASSESSMENT'>Đánh giá lại</ComboboxItem>
+              </ComboboxContent>
+            </Combobox>
           </FormField>
 
           <FormField label='Năm đánh giá' htmlFor='admin-product-assessment-year'>
@@ -631,7 +910,7 @@ export function AdminProductsPage({
           </FormField>
 
           <FormField label='Mức sao theo điểm' htmlFor='admin-product-star-rating'>
-            <Select
+            <Combobox
               value={draftFilters.starRating ? String(draftFilters.starRating) : ALL}
               onValueChange={(value) =>
                 setDraftFilters((old) => ({
@@ -642,123 +921,182 @@ export function AdminProductsPage({
                 }))
               }
             >
-              <SelectTrigger id='admin-product-star-rating'>
-                <SelectValue placeholder='Tất cả mức sao' />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>Tất cả mức sao</SelectItem>
-                <SelectItem value='1'>Mức điểm 1 sao</SelectItem>
-                <SelectItem value='2'>Mức điểm 2 sao</SelectItem>
-                <SelectItem value='3'>Mức điểm 3 sao</SelectItem>
-                <SelectItem value='4'>Mức điểm 4 sao</SelectItem>
-                <SelectItem value='5'>Mức điểm 5 sao / Đề nghị xem xét 5 sao</SelectItem>
-              </SelectContent>
-            </Select>
+              <ComboboxAnchor>
+                <ComboboxInput id='admin-product-star-rating' placeholder='Tất cả mức sao' />
+                <ComboboxTrigger aria-label='Mở danh sách mức sao' />
+              </ComboboxAnchor>
+              <ComboboxContent>
+                <ComboboxEmpty>Không tìm thấy mức sao.</ComboboxEmpty>
+                <ComboboxItem value={ALL}>Tất cả mức sao</ComboboxItem>
+                <ComboboxItem value='1'>Mức điểm 1 sao</ComboboxItem>
+                <ComboboxItem value='2'>Mức điểm 2 sao</ComboboxItem>
+                <ComboboxItem value='3'>Mức điểm 3 sao</ComboboxItem>
+                <ComboboxItem value='4'>Mức điểm 4 sao</ComboboxItem>
+                <ComboboxItem value='5'>Mức điểm 5 sao / Đề nghị xem xét 5 sao</ComboboxItem>
+              </ComboboxContent>
+            </Combobox>
           </FormField>
 
-          <div className='form-group'>
-            <Label htmlFor='admin-product-locality-search'>Tìm địa bàn (xã / phường)</Label>
-            <Input
-              id='admin-product-locality-search'
-              placeholder='Nhập tên hoặc mã xã / phường…'
-              value={localitySearch}
-              maxLength={100}
-              onChange={(event) => {
-                setLocalitySearch(event.target.value);
-                setLocalityPage(1);
-              }}
-            />
-            <Label htmlFor='admin-product-locality-select' className='mt-2'>
-              Địa bàn hành chính
-            </Label>
-            <Select
-              value={draftFilters.localityId ?? ALL}
-              disabled={Boolean(draftFilters.unmappedLocality)}
-              onValueChange={(value) => {
-                const id = value === ALL ? '' : value;
-                const found = localities.find((loc) => loc.id === id) ?? null;
-                setSelectedLocality(found);
-                setDraftFilters((old) => ({
-                  ...old,
-                  localityId: id || undefined,
-                  unmappedLocality: id ? undefined : old.unmappedLocality,
-                }));
-              }}
-            >
-              <SelectTrigger id='admin-product-locality-select'>
-                <SelectValue placeholder='Tất cả địa bàn' />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>Tất cả địa bàn</SelectItem>
-                {currentLocalityOptionMissing && draftFilters.localityId && (
-                  <SelectItem value={draftFilters.localityId}>
-                    {selectedLocality?.id === draftFilters.localityId
-                      ? `${selectedLocality.name} · ${selectedLocality.provinceName}`
-                      : `Mã địa bàn: ${draftFilters.localityId}`}
-                  </SelectItem>
-                )}
-                {localities.map((locality) => (
-                  <SelectItem key={locality.id} value={locality.id}>
-                    {locality.name} · {locality.provinceName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {localityQuery.error && (
-              <AlertError
-                title='Không tải được danh mục địa bàn'
-                errors={[errorText(localityQuery.error)]}
-              />
-            )}
-            <div className='admin-actions mt-1'>
-              <Button
-                type='button'
-                variant='secondary'
-                size='sm'
-                disabled={localityPage <= 1 || localityQuery.isPending}
-                onClick={() => setLocalityPage((p) => Math.max(1, p - 1))}
-              >
-                Trang địa bàn trước
-              </Button>
-              <span className='text-muted text-xs'>
-                {(localityMeta?.totalPages ?? 0) > 0
-                  ? `Trang ${localityMeta?.page ?? localityPage} / ${localityMeta?.totalPages ?? 1}`
-                  : 'Chưa có địa bàn phù hợp'}
-              </span>
-              <Button
-                type='button'
-                variant='secondary'
-                size='sm'
-                disabled={
-                  localityQuery.isPending ||
-                  (localityMeta?.totalPages ?? 0) === 0 ||
-                  localityPage >= (localityMeta?.totalPages ?? 1)
-                }
-                onClick={() => setLocalityPage((p) => p + 1)}
-              >
-                Trang địa bàn sau
-              </Button>
-            </div>
-            <div className='inline-flex items-center gap-2'>
-              <Checkbox
-                id='admin-product-unmapped-locality'
-                checked={draftFilters.unmappedLocality ?? false}
-                onCheckedChange={(checked) =>
+          {!isOwner && (
+            <div className='form-group'>
+              <Label htmlFor='admin-product-locality-province'>Tỉnh / Thành phố</Label>
+              <Combobox
+                value={localityProvince || ALL}
+                disabled={Boolean(draftFilters.unmappedLocality)}
+                onValueChange={(value) => {
+                  const nextProvince = value === ALL ? '' : value;
+                  setLocalityProvince(nextProvince);
+                  setLocalitySearch('');
+                  setLocalityPage(1);
+                  setSelectedLocality(null);
                   setDraftFilters((old) => ({
                     ...old,
-                    unmappedLocality: checked === true ? true : undefined,
-                    localityId: checked === true ? undefined : old.localityId,
-                  }))
-                }
-              />
-              <Label htmlFor='admin-product-unmapped-locality' className='cursor-pointer'>
-                Chỉ hồ sơ chưa gắn địa bàn
+                    localityId: undefined,
+                  }));
+                }}
+              >
+                <ComboboxAnchor>
+                  <ComboboxInput
+                    id='admin-product-locality-province'
+                    placeholder='Chọn tỉnh / thành phố trước'
+                  />
+                  <ComboboxTrigger aria-label='Mở danh sách tỉnh / thành phố' />
+                </ComboboxAnchor>
+                <ComboboxContent>
+                  <ComboboxEmpty>Không tìm thấy tỉnh / thành phố.</ComboboxEmpty>
+                  <ComboboxItem value={ALL}>Tất cả tỉnh / thành phố</ComboboxItem>
+                  {ADMINISTRATIVE_PROVINCES.map((province) => (
+                    <ComboboxItem key={province.code} value={province.name_with_type}>
+                      {province.name_with_type}
+                    </ComboboxItem>
+                  ))}
+                </ComboboxContent>
+              </Combobox>
+              <Label htmlFor='admin-product-locality-select' className='mt-2'>
+                Địa bàn hành chính (xã / phường)
               </Label>
+              <Combobox
+                value={draftFilters.localityId ?? ALL}
+                disabled={
+                  Boolean(draftFilters.unmappedLocality) ||
+                  (!localityProvince && !draftFilters.localityId)
+                }
+                onValueChange={(value) => {
+                  const id = value === ALL ? '' : value;
+                  const found = localities.find((loc) => loc.id === id) ?? null;
+                  setSelectedLocality(found);
+                  if (found && !localityProvince) {
+                    setLocalityProvince(found.provinceName);
+                  }
+                  setDraftFilters((old) => ({
+                    ...old,
+                    localityId: id || undefined,
+                    unmappedLocality: id ? undefined : old.unmappedLocality,
+                  }));
+                }}
+              >
+                <ComboboxAnchor>
+                  <ComboboxInput
+                    id='admin-product-locality-select'
+                    placeholder={
+                      localityProvince
+                        ? 'Tất cả xã / phường trong tỉnh'
+                        : 'Chọn tỉnh / thành phố trước'
+                    }
+                  />
+                  <ComboboxTrigger aria-label='Mở danh sách địa bàn' />
+                </ComboboxAnchor>
+                <ComboboxContent>
+                  <ComboboxEmpty>Không tìm thấy địa bàn phù hợp.</ComboboxEmpty>
+                  <ComboboxItem value={ALL}>Tất cả địa bàn</ComboboxItem>
+                  {currentLocalityOptionMissing && draftFilters.localityId && (
+                    <ComboboxItem value={draftFilters.localityId}>
+                      {selectedLocality?.id === draftFilters.localityId
+                        ? `${selectedLocality.name} · ${selectedLocality.provinceName}`
+                        : `Mã địa bàn: ${draftFilters.localityId}`}
+                    </ComboboxItem>
+                  )}
+                  {localities.map((locality) => (
+                    <ComboboxItem key={locality.id} value={locality.id}>
+                      {locality.name} · {locality.provinceName}
+                    </ComboboxItem>
+                  ))}
+                </ComboboxContent>
+              </Combobox>
+              <Label htmlFor='admin-product-locality-search' className='mt-2'>
+                Tìm nhanh xã / phường
+              </Label>
+              <Input
+                id='admin-product-locality-search'
+                placeholder={
+                  localityProvince
+                    ? 'Nhập tên hoặc mã xã / phường…'
+                    : 'Chọn tỉnh / thành phố trước…'
+                }
+                value={localitySearch}
+                disabled={!localityProvince || Boolean(draftFilters.unmappedLocality)}
+                maxLength={100}
+                onChange={(event) => {
+                  setLocalitySearch(event.target.value);
+                  setLocalityPage(1);
+                }}
+              />
+              {localityQuery.error && (
+                <AlertError
+                  title='Không tải được danh mục địa bàn'
+                  errors={[errorText(localityQuery.error)]}
+                />
+              )}
+              <div className='admin-actions mt-1'>
+                <Button
+                  type='button'
+                  variant='secondary'
+                  size='sm'
+                  disabled={localityPage <= 1 || localityQuery.isPending}
+                  onClick={() => setLocalityPage((p) => Math.max(1, p - 1))}
+                >
+                  Trang địa bàn trước
+                </Button>
+                <span className='text-muted text-xs'>
+                  {(localityMeta?.totalPages ?? 0) > 0
+                    ? `Trang ${localityMeta?.page ?? localityPage} / ${localityMeta?.totalPages ?? 1}`
+                    : 'Chưa có địa bàn phù hợp'}
+                </span>
+                <Button
+                  type='button'
+                  variant='secondary'
+                  size='sm'
+                  disabled={
+                    localityQuery.isPending ||
+                    (localityMeta?.totalPages ?? 0) === 0 ||
+                    localityPage >= (localityMeta?.totalPages ?? 1)
+                  }
+                  onClick={() => setLocalityPage((p) => p + 1)}
+                >
+                  Trang địa bàn sau
+                </Button>
+              </div>
+              <div className='inline-flex items-center gap-2'>
+                <Checkbox
+                  id='admin-product-unmapped-locality'
+                  checked={draftFilters.unmappedLocality ?? false}
+                  onCheckedChange={(checked) =>
+                    setDraftFilters((old) => ({
+                      ...old,
+                      unmappedLocality: checked === true ? true : undefined,
+                      localityId: checked === true ? undefined : old.localityId,
+                    }))
+                  }
+                />
+                <Label htmlFor='admin-product-unmapped-locality' className='cursor-pointer'>
+                  Chỉ hồ sơ chưa gắn địa bàn
+                </Label>
+              </div>
             </div>
-          </div>
+          )}
 
           <FormField label='Căn cứ lọc ngày' htmlFor='admin-product-date-basis'>
-            <Select
+            <Combobox
               value={draftFilters.dateBasis ?? 'submittedAt'}
               onValueChange={(value) =>
                 setDraftFilters((old) => ({
@@ -767,14 +1105,16 @@ export function AdminProductsPage({
                 }))
               }
             >
-              <SelectTrigger id='admin-product-date-basis'>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value='submittedAt'>Ngày nộp</SelectItem>
-                <SelectItem value='completedAt'>Ngày hoàn tất</SelectItem>
-              </SelectContent>
-            </Select>
+              <ComboboxAnchor>
+                <ComboboxInput id='admin-product-date-basis' />
+                <ComboboxTrigger aria-label='Mở danh sách căn cứ lọc ngày' />
+              </ComboboxAnchor>
+              <ComboboxContent>
+                <ComboboxEmpty>Không tìm thấy căn cứ lọc ngày.</ComboboxEmpty>
+                <ComboboxItem value='submittedAt'>Ngày nộp</ComboboxItem>
+                <ComboboxItem value='completedAt'>Ngày hoàn tất</ComboboxItem>
+              </ComboboxContent>
+            </Combobox>
           </FormField>
 
           <FormField
@@ -814,7 +1154,7 @@ export function AdminProductsPage({
           </FormField>
 
           <FormField label='Sắp xếp theo' htmlFor='admin-product-sort-by'>
-            <Select
+            <Combobox
               value={draftFilters.sortBy ?? 'submittedAt'}
               onValueChange={(value) =>
                 setDraftFilters((old) => ({
@@ -823,19 +1163,21 @@ export function AdminProductsPage({
                 }))
               }
             >
-              <SelectTrigger id='admin-product-sort-by'>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value='submittedAt'>Ngày nộp</SelectItem>
-                <SelectItem value='name'>Tên sản phẩm</SelectItem>
-                <SelectItem value='finalScore'>Điểm số</SelectItem>
-              </SelectContent>
-            </Select>
+              <ComboboxAnchor>
+                <ComboboxInput id='admin-product-sort-by' />
+                <ComboboxTrigger aria-label='Mở danh sách tiêu chí sắp xếp' />
+              </ComboboxAnchor>
+              <ComboboxContent>
+                <ComboboxEmpty>Không tìm thấy tiêu chí sắp xếp.</ComboboxEmpty>
+                <ComboboxItem value='submittedAt'>Ngày nộp</ComboboxItem>
+                <ComboboxItem value='name'>Tên sản phẩm</ComboboxItem>
+                <ComboboxItem value='finalScore'>Điểm số</ComboboxItem>
+              </ComboboxContent>
+            </Combobox>
           </FormField>
 
           <FormField label='Thứ tự sắp xếp' htmlFor='admin-product-sort-direction'>
-            <Select
+            <Combobox
               value={draftFilters.sortDirection ?? 'desc'}
               onValueChange={(value) =>
                 setDraftFilters((old) => ({
@@ -844,14 +1186,16 @@ export function AdminProductsPage({
                 }))
               }
             >
-              <SelectTrigger id='admin-product-sort-direction'>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value='desc'>Giảm dần</SelectItem>
-                <SelectItem value='asc'>Tăng dần</SelectItem>
-              </SelectContent>
-            </Select>
+              <ComboboxAnchor>
+                <ComboboxInput id='admin-product-sort-direction' />
+                <ComboboxTrigger aria-label='Mở danh sách thứ tự sắp xếp' />
+              </ComboboxAnchor>
+              <ComboboxContent>
+                <ComboboxEmpty>Không tìm thấy thứ tự sắp xếp.</ComboboxEmpty>
+                <ComboboxItem value='desc'>Giảm dần</ComboboxItem>
+                <ComboboxItem value='asc'>Tăng dần</ComboboxItem>
+              </ComboboxContent>
+            </Combobox>
           </FormField>
         </div>
 
@@ -879,13 +1223,21 @@ export function AdminProductsPage({
         <div className='space-y-2'>
           <AlertError
             title={
-              mode === 'products'
-                ? 'Không tải được danh sách sản phẩm'
-                : 'Không tải được danh sách phiếu đăng ký'
+              isOwner
+                ? 'Không thể tải hồ sơ'
+                : mode === 'products'
+                  ? 'Không tải được danh sách sản phẩm'
+                  : 'Không tải được danh sách phiếu đăng ký'
             }
             errors={[error]}
           />
-          <Button type='button' variant='secondary' size='sm' onClick={() => void refetch()}>
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            disabled={loading || busy}
+            onClick={() => void refetch()}
+          >
             <RotateCcw className='size-4' aria-hidden='true' />
             <span>Thử lại</span>
           </Button>
@@ -900,7 +1252,13 @@ export function AdminProductsPage({
             <div
               className='admin-table-region'
               role='region'
-              aria-label={mode === 'products' ? 'Bảng sản phẩm OCOP' : 'Bảng phiếu đăng ký OCOP'}
+              aria-label={
+                isOwner
+                  ? 'Bảng hồ sơ của tôi'
+                  : mode === 'products'
+                    ? 'Bảng sản phẩm OCOP'
+                    : 'Bảng phiếu đăng ký OCOP'
+              }
               tabIndex={0}
               aria-busy={isFetching}
             >
@@ -910,8 +1268,8 @@ export function AdminProductsPage({
               <DataTable
                 columns={productColumns}
                 data={data}
-                total={meta?.total ?? data.length}
-                page={meta?.page ?? appliedSearch.page ?? 1}
+                total={totalCount}
+                page={currentPage}
                 pageSize={appliedSearch.limit ?? 20}
                 getRowId={(row) => row.id}
                 onPageChange={(nextPage) => changePage(nextPage)}
@@ -946,26 +1304,41 @@ export function AdminProductsPage({
               ) : (
                 <>
                   <h2 className='text-fg mb-1 text-lg font-semibold'>
-                    {mode === 'products'
-                      ? 'Chưa có hồ sơ sản phẩm nào'
-                      : 'Chưa có phiếu đăng ký nào'}
+                    {isOwner
+                      ? 'Chưa có hồ sơ'
+                      : mode === 'products'
+                        ? 'Chưa có hồ sơ sản phẩm nào'
+                        : 'Chưa có phiếu đăng ký nào'}
                   </h2>
                   <p className='text-muted text-sm'>
-                    {mode === 'products'
-                      ? 'Khi người đăng ký nộp hồ sơ hoặc quản trị viên nhập hộ phiếu đăng ký, sản phẩm sẽ hiển thị tại đây.'
-                      : 'Bắt đầu bằng cách nhập phiếu đăng ký mới cho người đăng ký.'}
+                    {isOwner
+                      ? 'Tạo bản nháp để bắt đầu đăng ký sản phẩm OCOP.'
+                      : mode === 'products'
+                        ? 'Khi người đăng ký nộp hồ sơ hoặc quản trị viên nhập hộ phiếu đăng ký, sản phẩm sẽ hiển thị tại đây.'
+                        : 'Bắt đầu bằng cách nhập phiếu đăng ký mới cho người đăng ký.'}
                   </p>
-                  {canManage && (
+                  {isOwner ? (
                     <div className='admin-actions mt-4 justify-center'>
                       <Button asChild>
-                        <Link to='/admin/registrations/new' search={appliedSearch}>
+                        <Link to='/my/products/new'>
                           <Plus className='size-4' aria-hidden='true' />
-                          <span>
-                            {mode === 'products' ? 'Thêm phiếu đăng ký' : 'Nhập phiếu đăng ký'}
-                          </span>
+                          <span>Tạo hồ sơ</span>
                         </Link>
                       </Button>
                     </div>
+                  ) : (
+                    canManage && (
+                      <div className='admin-actions mt-4 justify-center'>
+                        <Button asChild>
+                          <Link to='/admin/registrations/new' search={appliedSearch}>
+                            <Plus className='size-4' aria-hidden='true' />
+                            <span>
+                              {mode === 'products' ? 'Thêm phiếu đăng ký' : 'Nhập phiếu đăng ký'}
+                            </span>
+                          </Link>
+                        </Button>
+                      </div>
+                    )
                   )}
                 </>
               )}
@@ -973,6 +1346,33 @@ export function AdminProductsPage({
           )}
         </>
       )}
-    </section>
+
+      {isOwner && (
+        <ConfirmDialog
+          open={confirmState !== null}
+          onOpenChange={(open) => {
+            if (!open && !busy) {
+              setConfirmState(null);
+              setActionError('');
+            }
+          }}
+          title={
+            confirmState?.mode === 'delete'
+              ? `Xóa bản nháp: ${confirmState.product.name}`
+              : `Nộp hồ sơ: ${confirmState?.product.name ?? ''}`
+          }
+          description={
+            confirmState?.mode === 'delete'
+              ? 'Bản nháp sản phẩm sẽ bị xóa vĩnh viễn và không thể khôi phục.'
+              : 'Nộp hồ sơ này để bắt đầu đánh giá? Sau khi nộp, không thể sửa bản nháp.'
+          }
+          confirmLabel={confirmState?.mode === 'delete' ? 'Xóa bản nháp' : 'Nộp hồ sơ'}
+          destructive={confirmState?.mode === 'delete'}
+          pending={busy}
+          error={actionError}
+          onConfirm={() => void executeOwnerConfirm()}
+        />
+      )}
+    </PageContainer>
   );
 }

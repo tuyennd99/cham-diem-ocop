@@ -4,7 +4,6 @@ import type {
   AdminReportFilterQuery,
   DashboardKpiId,
   DashboardKpiItem,
-  LocalityType,
   ProductRegistrationType,
 } from '@ocop/shared';
 import { Link } from '@tanstack/react-router';
@@ -14,18 +13,21 @@ import { FormField } from '@/components/form-field';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import {
+  Combobox,
+  ComboboxAnchor,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxTrigger,
+} from '@/components/ui/combobox';
 import { DataTable, type DataTableColumnDef } from '@/components/ui/data-table';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { ALL } from '../../constants/consts';
-import { ADMIN_DASHBOARD_STATUS_LABEL } from '../../constants/product-status';
+import { ADMIN_DASHBOARD_STATUS_LABEL, PRODUCT_STATUS_TONE } from '../../constants/product-status';
 import { currentVietnameseYear } from '../../lib/admin-date';
+import { ADMINISTRATIVE_PROVINCES } from '../../lib/administrative-divisions';
 import { parseAdminDashboardSearch } from '../../lib/admin-search';
 import { errorText } from '../../lib/api-error';
 import { useSession } from '../../lib/auth';
@@ -78,7 +80,6 @@ export function AdminDashboardPage({
   const [showAdvanced, setShowAdvanced] = useState(
     Boolean(
       appliedSearch.categoryId ||
-      appliedSearch.localityType ||
       appliedSearch.localityId ||
       appliedSearch.registrationType ||
       appliedSearch.assessmentYear,
@@ -92,6 +93,7 @@ export function AdminDashboardPage({
     setDraftFilters(appliedSearch);
   }, [appliedSearch]);
 
+  const [localityProvince, setLocalityProvince] = useState('');
   const categoriesQuery = useAdminCategories({
     page: 1,
     limit: 100,
@@ -99,7 +101,7 @@ export function AdminDashboardPage({
   const localitiesQuery = useAdminLocalities({
     page: 1,
     limit: 100,
-    type: draftFilters.localityType,
+    provinceName: localityProvince || undefined,
   });
 
   const {
@@ -323,7 +325,6 @@ export function AdminDashboardPage({
   const hasExtraFilters = Boolean(
     appliedSearch.month ||
     appliedSearch.categoryId ||
-    appliedSearch.localityType ||
     appliedSearch.localityId ||
     appliedSearch.registrationType ||
     appliedSearch.assessmentYear ||
@@ -392,7 +393,7 @@ export function AdminDashboardPage({
             className='admin-filter-field'
             data-filter-width='month'
           >
-            <Select
+            <Combobox
               value={draftFilters.month ? String(draftFilters.month) : ALL}
               onValueChange={(value) =>
                 setDraftFilters((old) => ({
@@ -401,18 +402,20 @@ export function AdminDashboardPage({
                 }))
               }
             >
-              <SelectTrigger id='dashboard-month'>
-                <SelectValue placeholder='Cả năm' />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>Cả năm</SelectItem>
+              <ComboboxAnchor>
+                <ComboboxInput id='dashboard-month' placeholder='Cả năm' />
+                <ComboboxTrigger aria-label='Mở danh sách tháng' />
+              </ComboboxAnchor>
+              <ComboboxContent>
+                <ComboboxEmpty>Không tìm thấy tháng phù hợp.</ComboboxEmpty>
+                <ComboboxItem value={ALL}>Cả năm</ComboboxItem>
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => (
-                  <SelectItem key={m} value={String(m)}>
+                  <ComboboxItem key={m} value={String(m)}>
                     Tháng {m}
-                  </SelectItem>
+                  </ComboboxItem>
                 ))}
-              </SelectContent>
-            </Select>
+              </ComboboxContent>
+            </Combobox>
           </FormField>
 
           <div className='admin-actions admin-filter-actions'>
@@ -446,7 +449,7 @@ export function AdminDashboardPage({
           className='advanced-filter-grid'
         >
           <FormField label='Danh mục sản phẩm' htmlFor='dashboard-category'>
-            <Select
+            <Combobox
               value={draftFilters.categoryId ?? ALL}
               onValueChange={(value) =>
                 setDraftFilters((old) => ({
@@ -455,51 +458,57 @@ export function AdminDashboardPage({
                 }))
               }
             >
-              <SelectTrigger id='dashboard-category'>
-                <SelectValue placeholder='Tất cả danh mục' />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>Tất cả danh mục</SelectItem>
+              <ComboboxAnchor>
+                <ComboboxInput id='dashboard-category' placeholder='Tất cả danh mục' />
+                <ComboboxTrigger aria-label='Mở danh sách danh mục' />
+              </ComboboxAnchor>
+              <ComboboxContent>
+                <ComboboxEmpty>Không tìm thấy danh mục phù hợp.</ComboboxEmpty>
+                <ComboboxItem value={ALL}>Tất cả danh mục</ComboboxItem>
                 {categories.map((cat) => (
-                  <SelectItem key={cat.id} value={cat.id}>
+                  <ComboboxItem key={cat.id} value={cat.id}>
                     {cat.name}
-                  </SelectItem>
+                  </ComboboxItem>
                 ))}
-              </SelectContent>
-            </Select>
+              </ComboboxContent>
+            </Combobox>
           </FormField>
 
-          <FormField label='Loại địa bàn' htmlFor='dashboard-locality-type'>
-            <Select
-              value={draftFilters.localityType ?? ALL}
+          <FormField label='Tỉnh / Thành phố' htmlFor='dashboard-locality-province'>
+            <Combobox
+              value={localityProvince || ALL}
               onValueChange={(value) => {
-                const nextType = (value === ALL ? undefined : value) as LocalityType | undefined;
-                const keepLocality =
-                  !nextType ||
-                  localities.some(
-                    (loc) => loc.id === draftFilters.localityId && loc.type === nextType,
-                  );
+                const nextProvince = value === ALL ? '' : value;
+                setLocalityProvince(nextProvince);
                 setDraftFilters((old) => ({
                   ...old,
-                  localityType: nextType,
-                  localityId: keepLocality ? old.localityId : undefined,
+                  localityId: undefined,
                 }));
               }}
             >
-              <SelectTrigger id='dashboard-locality-type'>
-                <SelectValue placeholder='Tất cả loại địa bàn' />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>Tất cả loại địa bàn</SelectItem>
-                <SelectItem value='COMMUNE'>Xã</SelectItem>
-                <SelectItem value='WARD'>Phường</SelectItem>
-              </SelectContent>
-            </Select>
+              <ComboboxAnchor>
+                <ComboboxInput
+                  id='dashboard-locality-province'
+                  placeholder='Tất cả tỉnh / thành phố'
+                />
+                <ComboboxTrigger aria-label='Mở danh sách tỉnh / thành phố' />
+              </ComboboxAnchor>
+              <ComboboxContent>
+                <ComboboxEmpty>Không tìm thấy tỉnh / thành phố.</ComboboxEmpty>
+                <ComboboxItem value={ALL}>Tất cả tỉnh / thành phố</ComboboxItem>
+                {ADMINISTRATIVE_PROVINCES.map((province) => (
+                  <ComboboxItem key={province.code} value={province.name_with_type}>
+                    {province.name_with_type}
+                  </ComboboxItem>
+                ))}
+              </ComboboxContent>
+            </Combobox>
           </FormField>
 
-          <FormField label='Địa bàn hành chính' htmlFor='dashboard-locality-id'>
-            <Select
+          <FormField label='Địa bàn hành chính (xã / phường)' htmlFor='dashboard-locality-id'>
+            <Combobox
               value={draftFilters.localityId ?? ALL}
+              disabled={!localityProvince && !draftFilters.localityId}
               onValueChange={(value) =>
                 setDraftFilters((old) => ({
                   ...old,
@@ -507,22 +516,29 @@ export function AdminDashboardPage({
                 }))
               }
             >
-              <SelectTrigger id='dashboard-locality-id'>
-                <SelectValue placeholder='Tất cả địa bàn' />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>Tất cả địa bàn</SelectItem>
+              <ComboboxAnchor>
+                <ComboboxInput
+                  id='dashboard-locality-id'
+                  placeholder={
+                    localityProvince ? 'Tất cả xã / phường trong tỉnh' : 'Chọn tỉnh / thành phố trước'
+                  }
+                />
+                <ComboboxTrigger aria-label='Mở danh sách địa bàn' />
+              </ComboboxAnchor>
+              <ComboboxContent>
+                <ComboboxEmpty>Không tìm thấy địa bàn phù hợp.</ComboboxEmpty>
+                <ComboboxItem value={ALL}>Tất cả địa bàn</ComboboxItem>
                 {localities.map((loc) => (
-                  <SelectItem key={loc.id} value={loc.id}>
+                  <ComboboxItem key={loc.id} value={loc.id}>
                     {loc.name} · {loc.provinceName}
-                  </SelectItem>
+                  </ComboboxItem>
                 ))}
-              </SelectContent>
-            </Select>
+              </ComboboxContent>
+            </Combobox>
           </FormField>
 
           <FormField label='Loại đăng ký' htmlFor='dashboard-registration-type'>
-            <Select
+            <Combobox
               value={draftFilters.registrationType ?? ALL}
               onValueChange={(value) =>
                 setDraftFilters((old) => ({
@@ -532,16 +548,18 @@ export function AdminDashboardPage({
                 }))
               }
             >
-              <SelectTrigger id='dashboard-registration-type'>
-                <SelectValue placeholder='Tất cả' />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>Tất cả</SelectItem>
-                <SelectItem value='FIRST'>Lần đầu</SelectItem>
-                <SelectItem value='UPGRADE'>Nâng hạng</SelectItem>
-                <SelectItem value='REASSESSMENT'>Đánh giá lại</SelectItem>
-              </SelectContent>
-            </Select>
+              <ComboboxAnchor>
+                <ComboboxInput id='dashboard-registration-type' placeholder='Tất cả' />
+                <ComboboxTrigger aria-label='Mở danh sách loại đăng ký' />
+              </ComboboxAnchor>
+              <ComboboxContent>
+                <ComboboxEmpty>Không tìm thấy loại đăng ký.</ComboboxEmpty>
+                <ComboboxItem value={ALL}>Tất cả</ComboboxItem>
+                <ComboboxItem value='FIRST'>Lần đầu</ComboboxItem>
+                <ComboboxItem value='UPGRADE'>Nâng hạng</ComboboxItem>
+                <ComboboxItem value='REASSESSMENT'>Đánh giá lại</ComboboxItem>
+              </ComboboxContent>
+            </Combobox>
           </FormField>
 
           <FormField label='Năm đánh giá hồ sơ' htmlFor='dashboard-assessment-year'>
@@ -674,10 +692,14 @@ export function AdminDashboardPage({
                   {data.needsAttention.map((product) => (
                     <article className='record-row' key={product.id}>
                       <div className='record-main'>
-                        <Badge variant='secondary'>{product.category.name}</Badge>
+                        <div className='record-badges'>
+                          <Badge variant='secondary'>{product.category.name}</Badge>
+                          <Badge variant='outline' className={PRODUCT_STATUS_TONE[product.status]}>
+                            {ADMIN_DASHBOARD_STATUS_LABEL[product.status]}
+                          </Badge>
+                        </div>
                         <h3 className='mt-1'>{product.name}</h3>
                         <p className='text-muted text-xs'>
-                          {product.status === 'SUBMITTED' ? 'Đã nộp' : 'Đang chấm'} ·{' '}
                           {product.assignedJudgeCount === 0 || product.missingCriteriaCount > 0
                             ? 'Thiếu phân công phủ tiêu chí'
                             : `${product.pendingEvaluationCount} phiếu chưa hoàn tất`}
@@ -939,8 +961,13 @@ export function AdminDashboardPage({
                     ADMIN_DASHBOARD_STATUS_LABEL,
                   ) as (keyof typeof ADMIN_DASHBOARD_STATUS_LABEL)[]
                 ).map((status) => (
-                  <article className='dashboard-stat' key={status}>
-                    <span>{ADMIN_DASHBOARD_STATUS_LABEL[status]}</span>
+                  <article
+                    className={`dashboard-stat dashboard-stat-${status.toLowerCase()}`}
+                    key={status}
+                  >
+                    <Badge variant='outline' className={PRODUCT_STATUS_TONE[status]}>
+                      {ADMIN_DASHBOARD_STATUS_LABEL[status]}
+                    </Badge>
                     <strong style={{ fontVariantNumeric: 'tabular-nums' }}>
                       {data.productsByStatus[status]}
                     </strong>

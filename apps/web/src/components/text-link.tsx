@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react';
-import { Link } from '@/components/navigation';
 import { cn } from '@/lib/utils';
+import { Link } from '@/components/navigation';
 
 type Props = ComponentProps<typeof Link>;
 

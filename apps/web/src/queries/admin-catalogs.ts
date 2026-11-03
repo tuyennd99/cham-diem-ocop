@@ -7,13 +7,17 @@ import type {
   UpdateLocalityInput,
 } from '@ocop/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { adminCatalogsApi } from '../api/admin-catalogs';
+import { HTTP_STATUS } from '../constants/http-status';
 import { queryKeys } from '../constants/query-key';
+import { ApiError, messageOf } from '../lib/api-error';
 
-export function useAdminCategories(query: AdminCategoryQuery) {
+export function useAdminCategories(query: AdminCategoryQuery, enabled = true) {
   return useQuery({
     queryKey: queryKeys.adminCatalogs.categories.list(query),
     queryFn: () => adminCatalogsApi.categories(query),
+    enabled,
   });
 }
 
@@ -48,27 +52,46 @@ export function useAdminCatalogMutations() {
 
   const createCategory = useMutation({
     mutationFn: (data: CreateAdminCategoryInput) => adminCatalogsApi.createCategory(data),
-    onSuccess: invalidateCatalogs,
+    onSuccess: (res) => {
+      invalidateCatalogs();
+      toast.success(`Đã thêm danh mục ${res.data.name}.`);
+    },
+    onError: (err) => toast.error(messageOf(err)),
     retry: false,
   });
 
   const updateCategory = useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateAdminCategoryInput }) =>
       adminCatalogsApi.updateCategory(id, data),
-    onSuccess: invalidateCatalogs,
+    onSuccess: (res) => {
+      invalidateCatalogs();
+      toast.success(`Đã cập nhật danh mục ${res.data.name}.`);
+    },
+    onError: (err) => toast.error(messageOf(err)),
     retry: false,
   });
 
   const createLocality = useMutation({
     mutationFn: (data: CreateLocalityInput) => adminCatalogsApi.createLocality(data),
-    onSuccess: invalidateLocalities,
+    onSuccess: (res) => {
+      invalidateLocalities();
+      toast.success(`Đã thêm địa bàn ${res.data.name} vào danh mục.`);
+    },
+    onError: (err) => {
+      if (err instanceof ApiError && err.status === HTTP_STATUS.CONFLICT) return;
+      toast.error(messageOf(err));
+    },
     retry: false,
   });
 
   const updateLocality = useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateLocalityInput }) =>
       adminCatalogsApi.updateLocality(id, data),
-    onSuccess: invalidateLocalities,
+    onSuccess: (res) => {
+      invalidateLocalities();
+      toast.success(`Đã cập nhật địa bàn ${res.data.name}.`);
+    },
+    onError: (err) => toast.error(messageOf(err)),
     retry: false,
   });
 

@@ -7,15 +7,17 @@ import PageSpin from '@/components/page-spin';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import {
+  Combobox,
+  ComboboxAnchor,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxTrigger,
+} from '@/components/ui/combobox';
 import { DataTable, type DataTableColumnDef } from '@/components/ui/data-table';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ALL, DEFAULT_PAGE_SIZE } from '../../constants/consts';
 import {
@@ -274,7 +276,7 @@ export function AdminUsersPage({ search: controlledSearch, onSearchChange }: Adm
                   className='admin-filter-field'
                   data-filter-width='status'
                 >
-                  <Select
+                  <Combobox
                     value={draftFilters.kind ?? ALL}
                     onValueChange={(value) =>
                       setDraftFilters((old) => ({
@@ -283,15 +285,17 @@ export function AdminUsersPage({ search: controlledSearch, onSearchChange }: Adm
                       }))
                     }
                   >
-                    <SelectTrigger id='admin-users-kind'>
-                      <SelectValue placeholder='Tất cả loại tài khoản' />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={ALL}>Tất cả loại tài khoản</SelectItem>
-                      <SelectItem value='STAFF'>Nội bộ (cán bộ / giám khảo)</SelectItem>
-                      <SelectItem value='REGISTRANT'>Người đăng ký</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    <ComboboxAnchor>
+                      <ComboboxInput id='admin-users-kind' placeholder='Tất cả loại tài khoản' />
+                      <ComboboxTrigger aria-label='Mở danh sách loại tài khoản' />
+                    </ComboboxAnchor>
+                    <ComboboxContent>
+                      <ComboboxEmpty>Không tìm thấy loại tài khoản.</ComboboxEmpty>
+                      <ComboboxItem value={ALL}>Tất cả loại tài khoản</ComboboxItem>
+                      <ComboboxItem value='STAFF'>Nội bộ (cán bộ / giám khảo)</ComboboxItem>
+                      <ComboboxItem value='REGISTRANT'>Người đăng ký</ComboboxItem>
+                    </ComboboxContent>
+                  </Combobox>
                 </FormField>
 
                 <FormField
@@ -300,7 +304,7 @@ export function AdminUsersPage({ search: controlledSearch, onSearchChange }: Adm
                   className='admin-filter-field'
                   data-filter-width='status'
                 >
-                  <Select
+                  <Combobox
                     value={
                       draftFilters.isActive === undefined ? ALL : String(draftFilters.isActive)
                     }
@@ -311,15 +315,17 @@ export function AdminUsersPage({ search: controlledSearch, onSearchChange }: Adm
                       }))
                     }
                   >
-                    <SelectTrigger id='admin-users-status'>
-                      <SelectValue placeholder='Tất cả trạng thái' />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={ALL}>Tất cả trạng thái</SelectItem>
-                      <SelectItem value='true'>Đang hoạt động</SelectItem>
-                      <SelectItem value='false'>Đã khóa</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    <ComboboxAnchor>
+                      <ComboboxInput id='admin-users-status' placeholder='Tất cả trạng thái' />
+                      <ComboboxTrigger aria-label='Mở danh sách trạng thái hoạt động' />
+                    </ComboboxAnchor>
+                    <ComboboxContent>
+                      <ComboboxEmpty>Không tìm thấy trạng thái.</ComboboxEmpty>
+                      <ComboboxItem value={ALL}>Tất cả trạng thái</ComboboxItem>
+                      <ComboboxItem value='true'>Đang hoạt động</ComboboxItem>
+                      <ComboboxItem value='false'>Đã khóa</ComboboxItem>
+                    </ComboboxContent>
+                  </Combobox>
                 </FormField>
 
                 <div className='admin-actions admin-filter-actions'>
@@ -371,7 +377,7 @@ export function AdminUsersPage({ search: controlledSearch, onSearchChange }: Adm
                 className='advanced-filter-grid'
               >
                 <FormField label='Quyền nội bộ' htmlFor='admin-users-permission'>
-                  <Select
+                  <Combobox
                     value={draftFilters.permission ?? ALL}
                     onValueChange={(value) =>
                       setDraftFilters((old) => ({
@@ -380,22 +386,24 @@ export function AdminUsersPage({ search: controlledSearch, onSearchChange }: Adm
                       }))
                     }
                   >
-                    <SelectTrigger id='admin-users-permission'>
-                      <SelectValue placeholder='Tất cả quyền' />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={ALL}>Tất cả quyền</SelectItem>
+                    <ComboboxAnchor>
+                      <ComboboxInput id='admin-users-permission' placeholder='Tất cả quyền' />
+                      <ComboboxTrigger aria-label='Mở danh sách quyền nội bộ' />
+                    </ComboboxAnchor>
+                    <ComboboxContent>
+                      <ComboboxEmpty>Không tìm thấy quyền phù hợp.</ComboboxEmpty>
+                      <ComboboxItem value={ALL}>Tất cả quyền</ComboboxItem>
                       {permissions.map((permission) => (
-                        <SelectItem key={permission} value={permission}>
+                        <ComboboxItem key={permission} value={permission}>
                           {STAFF_PERMISSION_LABELS[permission]} ({permission})
-                        </SelectItem>
+                        </ComboboxItem>
                       ))}
-                    </SelectContent>
-                  </Select>
+                    </ComboboxContent>
+                  </Combobox>
                 </FormField>
 
                 <FormField label='Đơn vị công tác' htmlFor='admin-users-unit'>
-                  <Select
+                  <Combobox
                     value={draftFilters.organizationUnitId ?? ALL}
                     onValueChange={(value) =>
                       setDraftFilters((old) => ({
@@ -404,28 +412,30 @@ export function AdminUsersPage({ search: controlledSearch, onSearchChange }: Adm
                       }))
                     }
                   >
-                    <SelectTrigger id='admin-users-unit'>
-                      <SelectValue placeholder='Tất cả đơn vị' />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={ALL}>Tất cả đơn vị</SelectItem>
+                    <ComboboxAnchor>
+                      <ComboboxInput id='admin-users-unit' placeholder='Tất cả đơn vị' />
+                      <ComboboxTrigger aria-label='Mở danh sách đơn vị công tác' />
+                    </ComboboxAnchor>
+                    <ComboboxContent>
+                      <ComboboxEmpty>Không tìm thấy đơn vị phù hợp.</ComboboxEmpty>
+                      <ComboboxItem value={ALL}>Tất cả đơn vị</ComboboxItem>
                       {missingSelectedUnit && draftFilters.organizationUnitId && (
-                        <SelectItem value={draftFilters.organizationUnitId}>
+                        <ComboboxItem value={draftFilters.organizationUnitId}>
                           Mã đơn vị: {draftFilters.organizationUnitId}
-                        </SelectItem>
+                        </ComboboxItem>
                       )}
                       {units.map((unit) => (
-                        <SelectItem key={unit.id} value={unit.id}>
+                        <ComboboxItem key={unit.id} value={unit.id}>
                           {unit.name}
                           {unit.isActive ? '' : ' (ngừng nhận tài khoản mới)'}
-                        </SelectItem>
+                        </ComboboxItem>
                       ))}
-                    </SelectContent>
-                  </Select>
+                    </ComboboxContent>
+                  </Combobox>
                 </FormField>
 
                 <FormField label='Trạng thái xác thực' htmlFor='admin-users-verified'>
-                  <Select
+                  <Combobox
                     value={
                       draftFilters.verified === undefined ? ALL : String(draftFilters.verified)
                     }
@@ -436,15 +446,17 @@ export function AdminUsersPage({ search: controlledSearch, onSearchChange }: Adm
                       }))
                     }
                   >
-                    <SelectTrigger id='admin-users-verified'>
-                      <SelectValue placeholder='Tất cả' />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={ALL}>Tất cả</SelectItem>
-                      <SelectItem value='true'>Đã xác thực</SelectItem>
-                      <SelectItem value='false'>Chưa xác thực</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    <ComboboxAnchor>
+                      <ComboboxInput id='admin-users-verified' placeholder='Tất cả' />
+                      <ComboboxTrigger aria-label='Mở danh sách trạng thái xác thực' />
+                    </ComboboxAnchor>
+                    <ComboboxContent>
+                      <ComboboxEmpty>Không tìm thấy trạng thái xác thực.</ComboboxEmpty>
+                      <ComboboxItem value={ALL}>Tất cả</ComboboxItem>
+                      <ComboboxItem value='true'>Đã xác thực</ComboboxItem>
+                      <ComboboxItem value='false'>Chưa xác thực</ComboboxItem>
+                    </ComboboxContent>
+                  </Combobox>
                 </FormField>
               </div>
             </form>

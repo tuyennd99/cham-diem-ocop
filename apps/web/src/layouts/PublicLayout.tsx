@@ -13,7 +13,7 @@ export function SiteHeader() {
 
   return (
     <header className='site-header'>
-      <div className={`container header-inner${menuOpen ? ' menu-open' : ''}`}>
+      <div className={`container header-inner ${menuOpen ? 'menu-open' : ''}`}>
         <Link className='brand' to='/' hash='home' aria-label='OCOP Đánh Giá — Trang chủ'>
           <span className='brand-mark' aria-hidden='true'>
             ★
@@ -48,10 +48,7 @@ export function SiteHeader() {
           </Link>
           <div className='mobile-nav-actions'>
             <Button asChild variant='secondary' className='mobile-login'>
-              <Link
-                to={signedIn ? workPath : '/login'}
-                onClick={() => setMenuOpen(false)}
-              >
+              <Link to={signedIn ? workPath : '/login'} onClick={() => setMenuOpen(false)}>
                 {signedIn ? 'Khu vực làm việc' : 'Đăng nhập'}
               </Link>
             </Button>

@@ -16,7 +16,6 @@ describe('locality DTO validation', () => {
   const create = {
     code: 'TEST-L-1',
     name: 'Test locality',
-    type: 'COMMUNE',
     provinceName: 'Test province',
     isActive: true,
     reason: 'Catalog update',

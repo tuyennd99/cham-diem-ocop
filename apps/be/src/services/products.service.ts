@@ -323,7 +323,7 @@ export class ProductsService {
       throw new UnsupportedMediaTypeException('Invalid stored upload');
     }
     if (file.size > MAX_IMAGE_BYTES) {
-      throw new PayloadTooLargeException('Attachment exceeds 10 MiB');
+      throw new PayloadTooLargeException('Attachment exceeds 50 MB');
     }
   }
 

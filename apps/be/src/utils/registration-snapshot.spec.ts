@@ -39,7 +39,6 @@ describe('buildRegistrationSnapshot', () => {
       id: 'locality-1',
       code: 'L1',
       name: 'Locality',
-      type: 'COMMUNE' as const,
       provinceName: 'Province',
     },
   };
@@ -65,7 +64,6 @@ describe('buildRegistrationSnapshot', () => {
         id: 'locality-1',
         code: 'L1',
         name: 'Locality',
-        type: 'COMMUNE',
         provinceName: 'Province',
       },
       formData: {

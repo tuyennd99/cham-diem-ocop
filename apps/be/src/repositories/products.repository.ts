@@ -10,7 +10,10 @@ import { databaseObject } from '../prisma/sql';
 import { lockEvaluationCategory } from '../utils/evaluation-result';
 import {
   MAX_ATTACHMENTS_PER_PRODUCT,
+  MAX_FILES_PER_PRODUCT,
+  MAX_VIDEOS_PER_PRODUCT,
 } from '../constants/products';
+import { isVideoAttachmentName } from '../utils/product-files';
 import { recordProductStatusEvent } from '../utils/product-status';
 import { assertCriteriaSetReady } from '../utils/category-availability';
 import { writeAudit } from '../utils/audit-log';
@@ -292,7 +295,13 @@ export class ProductsRepository {
         select: { categoryId: true },
       });
       if (!initial) return null;
-      const categoryIds = [...new Set([initial.categoryId, input.categoryId].filter((value): value is string => Boolean(value)))].sort();
+      const categoryIds = [
+        ...new Set(
+          [initial.categoryId, input.categoryId].filter(
+            (value): value is string => Boolean(value),
+          ),
+        ),
+      ].sort();
       await this.lockCategoryRows(tx, categoryIds);
       await this.lockProduct(tx, id);
       const current = await tx.product.findFirst({
@@ -471,10 +480,10 @@ export class ProductsRepository {
         data: {
           status: 'SUBMITTED',
           submittedAt,
-          registrationSnapshot: registrationSnapshot as unknown as Prisma.InputJsonValue,
+          registrationSnapshot:
+            registrationSnapshot as unknown as Prisma.InputJsonValue,
           localityCodeAtSubmit: locality.code,
           localityNameAtSubmit: locality.name,
-          localityTypeAtSubmit: locality.type,
           provinceNameAtSubmit: locality.provinceName,
         },
       });
@@ -494,7 +503,11 @@ export class ProductsRepository {
           action: 'product.submit_on_behalf',
           entityType: 'Product',
           entityId: id,
-          beforeData: { id, registrantId: product.registrantId, status: 'DRAFT' },
+          beforeData: {
+            id,
+            registrantId: product.registrantId,
+            status: 'DRAFT',
+          },
           afterData: {
             id,
             registrantId: product.registrantId,
@@ -532,8 +545,27 @@ export class ProductsRepository {
         select: { id: true },
       });
       if (!product) return null;
-      const count = await tx.attachment.count({ where: { productId } });
-      if (count >= MAX_ATTACHMENTS_PER_PRODUCT) {
+      const existingAttachments = await tx.attachment.findMany({
+        where: { productId },
+        select: { fileName: true },
+      });
+      const videoCount = existingAttachments.filter((att) =>
+        isVideoAttachmentName(att.fileName),
+      ).length;
+      const regularFileCount = existingAttachments.length - videoCount;
+      const isUploadingVideo = isVideoAttachmentName(input.fileName);
+
+      if (isUploadingVideo && videoCount >= MAX_VIDEOS_PER_PRODUCT) {
+        throw new ConflictException(
+          `Tối đa ${MAX_VIDEOS_PER_PRODUCT} video đính kèm cho mỗi sản phẩm`,
+        );
+      }
+      if (!isUploadingVideo && regularFileCount >= MAX_FILES_PER_PRODUCT) {
+        throw new ConflictException(
+          `Tối đa ${MAX_FILES_PER_PRODUCT} tệp đính kèm cho mỗi sản phẩm`,
+        );
+      }
+      if (existingAttachments.length >= MAX_ATTACHMENTS_PER_PRODUCT) {
         throw new ConflictException(
           `Tối đa ${MAX_ATTACHMENTS_PER_PRODUCT} tệp đính kèm cho mỗi sản phẩm`,
         );
@@ -577,7 +609,13 @@ export class ProductsRepository {
           productId,
           product: { ...this.actorWhere(actor), status: 'DRAFT' },
         },
-        select: { id: true, filePath: true, fileName: true, type: true, createdAt: true },
+        select: {
+          id: true,
+          filePath: true,
+          fileName: true,
+          type: true,
+          createdAt: true,
+        },
       });
       if (!attachment) return null;
       const deleted = await tx.attachment.deleteMany({
@@ -621,15 +659,21 @@ export class ProductsRepository {
     });
   }
 
-  findAdminAttachment(productId: string, attachmentId: string, canManage: boolean) {
+  findAdminAttachment(
+    productId: string,
+    attachmentId: string,
+    canManage: boolean,
+  ) {
     return this.prisma.attachment.findFirst({
       where: {
         id: attachmentId,
         productId,
-        ...(canManage ? {} : {
-          type: 'EVIDENCE',
-          product: { is: { status: { not: ProductStatus.DRAFT } } },
-        }),
+        ...(canManage
+          ? {}
+          : {
+              type: 'EVIDENCE',
+              product: { is: { status: { not: ProductStatus.DRAFT } } },
+            }),
       },
       select: { filePath: true, fileName: true },
     });
@@ -752,7 +796,8 @@ export class ProductsRepository {
     return Object.fromEntries(
       allowed.flatMap((key) => {
         const field = source[key];
-        return field === null || ['string', 'number', 'boolean'].includes(typeof field)
+        return field === null ||
+          ['string', 'number', 'boolean'].includes(typeof field)
           ? [[key, field]]
           : [];
       }),
