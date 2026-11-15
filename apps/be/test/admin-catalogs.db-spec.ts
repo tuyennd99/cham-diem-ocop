@@ -227,7 +227,7 @@ describe('H4 product catalogs', () => {
     });
   });
 
-  it('returns only localities inside the active half-open effective interval', async () => {
+  it('returns active localities regardless of legacy event dates because event time restrictions are removed (#9)', async () => {
     await withTestApp(async ({ app, prisma, baseUrl }) => {
       const f = await adminFixture(app, prisma, baseUrl);
       const now = Date.now();
@@ -251,8 +251,8 @@ describe('H4 product catalogs', () => {
       }
       const lookup = (code: string) =>
         apiRequest<any>(baseUrl, `/localities?q=${encodeURIComponent(code)}`);
-      expect((await lookup(future.code)).body.data).toEqual([]);
-      expect((await lookup(ended.code)).body.data).toEqual([]);
+      expect((await lookup(future.code)).body.data).toHaveLength(1);
+      expect((await lookup(ended.code)).body.data).toHaveLength(1);
       expect((await lookup(current.code)).body.data).toHaveLength(1);
 
       expect(
@@ -888,15 +888,14 @@ describe('H4 product catalogs', () => {
         starRating: 5,
       });
 
-      // Re-activate category, then test LOC-01: draft attached to a locality whose effectiveTo is in the past cannot be submitted (409)
+      // Re-activate category, then test retired (inactive) locality: draft attached to an inactive locality cannot be submitted (409)
       await f.call('manager', `${categoriesPath}/${category.id}`, 'PUT', {
         isActive: true,
         reason: 'Kích hoạt lại phân loại để kiểm tra LOC-01',
       });
       await f.call('manager', `${localitiesPath}/${f.locality.id}`, 'PUT', {
-        effectiveFrom: '2020-01-01T00:00:00+07:00',
-        effectiveTo: '2025-12-31T23:59:59+07:00',
-        reason: 'Đặt ngày hết hiệu lực trong quá khứ (LOC-01)',
+        isActive: false,
+        reason: 'Ngừng hoạt động địa bàn (LOC-01)',
       });
       expect(
         (

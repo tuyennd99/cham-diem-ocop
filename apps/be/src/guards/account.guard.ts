@@ -2,7 +2,7 @@ import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from
 import type { Request } from 'express';
 import { AuthRepository } from '../repositories/auth.repository';
 import type { AccessTokenPayload } from '../types/auth';
-import { effectiveStaffPermissions } from '../utils/staff-permissions';
+import { effectiveStaffPermissions, effectiveUserRoles } from '../utils/staff-permissions';
 
 @Injectable()
 export class AccountGuard implements CanActivate {
@@ -18,6 +18,7 @@ export class AccountGuard implements CanActivate {
     request.user.email = user.email;
     request.user.role = user.role;
     Object.assign(request.user, {
+      roles: effectiveUserRoles(user),
       staffPermissions: effectiveStaffPermissions(user),
       organizationUnitId: user.organizationUnitId,
       organizationUnit: user.organizationUnit,

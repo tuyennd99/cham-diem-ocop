@@ -1,18 +1,41 @@
 import { StrictMode } from 'react';
-import { QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
-import { createRoot } from 'react-dom/client';
-import { queryClient } from './lib/query-client';
+import { hydrate } from '@tanstack/react-router/ssr/client';
+import { createRoot, hydrateRoot } from 'react-dom/client';
 import { router } from './router';
 import './styles.css';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing #root application element');
 
-createRoot(root).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
+declare global {
+  interface Window {
+    $_TSR?: {
+      h?: () => void;
+      router?: unknown;
+    };
+  }
+}
+
+async function bootstrap() {
+  const hasSsrBootstrap = Boolean(window.$_TSR?.router) && root!.hasChildNodes();
+  const app = (
+    <StrictMode>
       <RouterProvider router={router} />
-    </QueryClientProvider>
-  </StrictMode>,
-);
+    </StrictMode>
+  );
+
+  if (hasSsrBootstrap) {
+    try {
+      await hydrate(router);
+    } finally {
+      window.$_TSR?.h?.();
+    }
+    hydrateRoot(root!, app);
+    return;
+  }
+
+  createRoot(root!).render(app);
+}
+
+void bootstrap();

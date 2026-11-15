@@ -1,4 +1,4 @@
-import type { Role, StaffPermission } from '@ocop/shared';
+import { STAFF_PERMISSION, type Role, type StaffPermission } from '@ocop/shared';
 import { hasStaffPermission } from './session-contract';
 
 export { getSession, setSession, useSession } from '../stores/session-store';
@@ -9,9 +9,9 @@ export function homeFor(
   registrantPath: '/my/products' | '/my/products/new' = '/my/products',
 ): '/admin/products' | '/judge' | '/my/products' | '/my/products/new' {
   const user = { role, staffPermissions };
-  if (hasStaffPermission(user, 'MANAGE')) return '/admin/products';
-  if (hasStaffPermission(user, 'SCORE')) return '/judge';
-  if (hasStaffPermission(user, 'VIEW')) return '/admin/products';
+  if (hasStaffPermission(user, STAFF_PERMISSION.MANAGE)) return '/admin/products';
+  if (hasStaffPermission(user, STAFF_PERMISSION.SCORE)) return '/judge';
+  if (hasStaffPermission(user, STAFF_PERMISSION.VIEW)) return '/admin/products';
   return registrantPath;
 }
 

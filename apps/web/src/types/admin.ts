@@ -58,6 +58,8 @@ export type AdminDashboard = AdminAnalyticsDashboardResponse;
 
 export interface ProductResults {
   id: string;
+  code?: string;
+  codeNumber?: number;
   name: string;
   status: string;
   finalScore: number | null;
@@ -78,6 +80,7 @@ export interface ProductResults {
 
 export interface UpdateAdminUserStaffAccessInput {
   staffPermissions: StaffPermission[];
+  roles?: import('@ocop/shared').Role[];
   organizationUnitId: string | null;
   reason: string;
 }

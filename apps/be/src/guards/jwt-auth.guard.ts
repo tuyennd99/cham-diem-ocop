@@ -11,7 +11,12 @@ import { Role } from '@prisma/client';
 import type { Request } from 'express';
 import { isObjectLike } from 'lodash';
 import { env } from '../config/env';
-import { JWT_AUDIENCE, JWT_ISSUER } from '../constants/auth';
+import {
+  AUTH_SCHEME_BEARER,
+  JWT_ALGORITHM,
+  JWT_AUDIENCE,
+  JWT_ISSUER,
+} from '../constants/auth';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import type { AccessTokenPayload } from '../types/auth';
 
@@ -26,11 +31,11 @@ export class JwtAuthGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest<Request & { user?: AccessTokenPayload }>();
     const [scheme, token] = request.headers.authorization?.split(' ') ?? [];
-    if (scheme !== 'Bearer' || !token) throw this.unauthorized();
+    if (scheme !== AUTH_SCHEME_BEARER || !token) throw this.unauthorized();
     try {
       const payload: unknown = await this.jwtService.verifyAsync(token, {
         secret: env(process.env).jwtSecret,
-        algorithms: ['HS256'],
+        algorithms: [JWT_ALGORITHM],
         issuer: JWT_ISSUER,
         audience: JWT_AUDIENCE,
       });

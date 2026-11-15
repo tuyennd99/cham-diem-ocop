@@ -1,10 +1,11 @@
 import { createReadStream, mkdirSync, createWriteStream } from 'node:fs';
-import { stat, unlink } from 'node:fs/promises';
+import { open, stat, unlink } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { v7 as uuidv7 } from 'uuid';
 import { pipeline, Readable } from 'node:stream';
 import { ForbiddenException, StreamableFile } from '@nestjs/common';
 import type { MulterOptions } from '@nestjs/platform-express/multer/interfaces/multer-options.interface';
+import { detectBufferMimeType } from './product-files';
 
 export const MAX_FILE_BYTES = 2 * 1024 * 1024;
 export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
@@ -60,10 +61,24 @@ export async function openStoredFile(
   const path = resolveStoredPath(storageKey, root);
   const extension = originalName.split('.').pop()?.toLowerCase();
   const info = await stat(path);
+  let detectedMime: string | null = null;
+  const handle = await open(path);
+  try {
+    const head = Buffer.alloc(12);
+    const { bytesRead } = await handle.read(head, 0, head.length, 0);
+    detectedMime = detectBufferMimeType(head, bytesRead);
+  } finally {
+    await handle.close();
+  }
+  const fallbackMime = storedFileMimeTypes[extension ?? ''] ?? 'application/octet-stream';
+  const mimeType =
+    detectedMime === 'video/mp4' && extension === 'mov'
+      ? 'video/quicktime'
+      : (detectedMime ?? fallbackMime);
   return {
     stream: createReadStream(path),
     originalName,
-    mimeType: storedFileMimeTypes[extension ?? ''] ?? 'application/octet-stream',
+    mimeType,
     sizeBytes: info.size,
   };
 }

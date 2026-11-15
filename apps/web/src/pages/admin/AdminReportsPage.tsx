@@ -27,15 +27,21 @@ import {
 import { DataTable, type DataTableColumnDef } from '@/components/ui/data-table';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ALL } from '../../constants/consts';
+import {
+  ADMIN_REPORT_TAB,
+  ALL,
+  PRODUCT_REGISTRATION_TYPE,
+  PRODUCT_STATUS,
+  REPORT_GROUP_BY,
+} from '../../constants/consts';
 import { currentVietnameseYear } from '../../lib/admin-date';
-import { ADMINISTRATIVE_PROVINCES } from '../../lib/administrative-divisions';
 import {
   parseAdminReportsSearch,
   toAdminReportApiQuery,
   type AdminReportsSearch,
   type AdminReportTab,
 } from '../../lib/admin-search';
+import { ADMINISTRATIVE_PROVINCES } from '../../lib/administrative-divisions';
 import { errorText } from '../../lib/api-error';
 import { formatExactScore } from '../../lib/print-format';
 import { formatComparisonDelta } from '../../lib/report-format';
@@ -154,19 +160,19 @@ function RegistrationRowCells({ row }: { row: RegistrationReportRow }) {
       <td className='print-num' style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
         <DrillDownLink
           count={row.waitingCount}
-          drillDown={{ ...row.drillDown, status: 'SUBMITTED' }}
+          drillDown={{ ...row.drillDown, status: PRODUCT_STATUS.SUBMITTED }}
         />
       </td>
       <td className='print-num' style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
         <DrillDownLink
           count={row.scoringCount}
-          drillDown={{ ...row.drillDown, status: 'SCORING' }}
+          drillDown={{ ...row.drillDown, status: PRODUCT_STATUS.SCORING }}
         />
       </td>
       <td className='print-num' style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
         <DrillDownLink
           count={row.completedCount}
-          drillDown={{ ...row.drillDown, status: 'COMPLETED' }}
+          drillDown={{ ...row.drillDown, status: PRODUCT_STATUS.COMPLETED }}
         />
       </td>
       <td className='print-num' style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
@@ -256,10 +262,10 @@ export function AdminReportsPage({
   const defaultYear = currentVietnameseYear();
   const [fallbackSearch, setFallbackSearch] = useState<AdminReportsSearch>({
     year: defaultYear,
-    groupBy: 'month',
+    groupBy: REPORT_GROUP_BY.MONTH,
   });
   const appliedSearch = controlledSearch ?? fallbackSearch;
-  const reportTab: AdminReportTab = appliedSearch.tab ?? 'registrations';
+  const reportTab: AdminReportTab = appliedSearch.tab ?? ADMIN_REPORT_TAB.REGISTRATIONS;
 
   function applySearch(next: AdminReportsSearch) {
     const normalized = parseAdminReportsSearch(next as Record<string, unknown>);
@@ -297,17 +303,23 @@ export function AdminReportsPage({
     provinceName: localityProvince || undefined,
   });
 
-  const regQuery = useAdminRegistrationsReport(apiQuery, reportTab === 'registrations');
-  const resQuery = useAdminResultsReport(apiQuery, reportTab === 'results');
+  const regQuery = useAdminRegistrationsReport(
+    apiQuery,
+    reportTab === ADMIN_REPORT_TAB.REGISTRATIONS,
+  );
+  const resQuery = useAdminResultsReport(apiQuery, reportTab === ADMIN_REPORT_TAB.RESULTS);
 
   const categories = categoriesQuery.data?.data ?? [];
   const localities = localitiesQuery.data?.data ?? [];
 
-  const activeError = errorText(reportTab === 'registrations' ? regQuery.error : resQuery.error);
-  const activeLoading = reportTab === 'registrations' ? regQuery.isPending : resQuery.isPending;
+  const activeError = errorText(
+    reportTab === ADMIN_REPORT_TAB.REGISTRATIONS ? regQuery.error : resQuery.error,
+  );
+  const activeLoading =
+    reportTab === ADMIN_REPORT_TAB.REGISTRATIONS ? regQuery.isPending : resQuery.isPending;
 
-  const regGroupBy = regQuery.data?.groupBy ?? appliedSearch.groupBy ?? 'month';
-  const resGroupBy = resQuery.data?.groupBy ?? appliedSearch.groupBy ?? 'month';
+  const regGroupBy = regQuery.data?.groupBy ?? appliedSearch.groupBy ?? REPORT_GROUP_BY.MONTH;
+  const resGroupBy = resQuery.data?.groupBy ?? appliedSearch.groupBy ?? REPORT_GROUP_BY.MONTH;
 
   const registrationColumns = useMemo<DataTableColumnDef<RegistrationReportRow>[]>(
     () => [
@@ -339,7 +351,10 @@ export function AdminReportsPage({
             cell: ({ row }) => (
               <DrillDownLink
                 count={row.original.waitingCount}
-                drillDown={{ ...row.original.drillDown, status: 'SUBMITTED' }}
+                drillDown={{
+                  ...row.original.drillDown,
+                  status: PRODUCT_STATUS.SUBMITTED,
+                }}
               />
             ),
           },
@@ -350,7 +365,10 @@ export function AdminReportsPage({
             cell: ({ row }) => (
               <DrillDownLink
                 count={row.original.scoringCount}
-                drillDown={{ ...row.original.drillDown, status: 'SCORING' }}
+                drillDown={{
+                  ...row.original.drillDown,
+                  status: PRODUCT_STATUS.SCORING,
+                }}
               />
             ),
           },
@@ -361,7 +379,10 @@ export function AdminReportsPage({
             cell: ({ row }) => (
               <DrillDownLink
                 count={row.original.completedCount}
-                drillDown={{ ...row.original.drillDown, status: 'COMPLETED' }}
+                drillDown={{
+                  ...row.original.drillDown,
+                  status: PRODUCT_STATUS.COMPLETED,
+                }}
               />
             ),
           },
@@ -589,7 +610,8 @@ export function AdminReportsPage({
   );
 
   function changeTab(val: string) {
-    const nextTab: AdminReportTab = val === 'results' ? 'results' : 'registrations';
+    const nextTab: AdminReportTab =
+      val === ADMIN_REPORT_TAB.RESULTS ? ADMIN_REPORT_TAB.RESULTS : ADMIN_REPORT_TAB.REGISTRATIONS;
     applySearch({
       ...appliedSearch,
       tab: nextTab,
@@ -602,7 +624,7 @@ export function AdminReportsPage({
     appliedSearch.localityId ||
     appliedSearch.registrationType ||
     appliedSearch.assessmentYear ||
-    (appliedSearch.groupBy && appliedSearch.groupBy !== 'month') ||
+    (appliedSearch.groupBy && appliedSearch.groupBy !== REPORT_GROUP_BY.MONTH) ||
     (appliedSearch.year && appliedSearch.year !== defaultYear),
   );
 
@@ -620,9 +642,15 @@ export function AdminReportsPage({
           <Button
             type='button'
             variant='secondary'
-            loading={reportTab === 'registrations' ? regQuery.isFetching : resQuery.isFetching}
+            loading={
+              reportTab === ADMIN_REPORT_TAB.REGISTRATIONS
+                ? regQuery.isFetching
+                : resQuery.isFetching
+            }
             onClick={() =>
-              void (reportTab === 'registrations' ? regQuery.refetch() : resQuery.refetch())
+              void (reportTab === ADMIN_REPORT_TAB.REGISTRATIONS
+                ? regQuery.refetch()
+                : resQuery.refetch())
             }
           >
             Tải lại số liệu
@@ -636,11 +664,11 @@ export function AdminReportsPage({
       <Tabs value={reportTab} onValueChange={changeTab}>
         <div className='no-print grid gap-2'>
           <TabsList aria-label='Chọn loại báo cáo theo căn cứ thời gian'>
-            <TabsTrigger value='registrations'>Hồ sơ đăng ký</TabsTrigger>
-            <TabsTrigger value='results'>Kết quả hoàn tất</TabsTrigger>
+            <TabsTrigger value={ADMIN_REPORT_TAB.REGISTRATIONS}>Hồ sơ đăng ký</TabsTrigger>
+            <TabsTrigger value={ADMIN_REPORT_TAB.RESULTS}>Kết quả hoàn tất</TabsTrigger>
           </TabsList>
           <p className='text-muted text-xs'>
-            {reportTab === 'registrations'
+            {reportTab === ADMIN_REPORT_TAB.REGISTRATIONS
               ? 'Căn cứ: Tính các hồ sơ có Ngày nộp nằm trong kỳ báo cáo và đối chiếu trạng thái tại mốc chốt.'
               : 'Căn cứ: Tính các hồ sơ có Ngày hoàn tất chấm điểm nằm trong kỳ báo cáo.'}
           </p>
@@ -879,9 +907,11 @@ export function AdminReportsPage({
                 <ComboboxContent>
                   <ComboboxEmpty>Không tìm thấy loại đăng ký.</ComboboxEmpty>
                   <ComboboxItem value={ALL}>Tất cả</ComboboxItem>
-                  <ComboboxItem value='FIRST'>Lần đầu</ComboboxItem>
-                  <ComboboxItem value='UPGRADE'>Nâng hạng</ComboboxItem>
-                  <ComboboxItem value='REASSESSMENT'>Đánh giá lại</ComboboxItem>
+                  <ComboboxItem value={PRODUCT_REGISTRATION_TYPE.FIRST}>Lần đầu</ComboboxItem>
+                  <ComboboxItem value={PRODUCT_REGISTRATION_TYPE.UPGRADE}>Nâng hạng</ComboboxItem>
+                  <ComboboxItem value={PRODUCT_REGISTRATION_TYPE.REASSESSMENT}>
+                    Đánh giá lại
+                  </ComboboxItem>
                 </ComboboxContent>
               </Combobox>
             </FormField>
@@ -912,7 +942,7 @@ export function AdminReportsPage({
         )}
         {activeLoading && <PageSpin />}
 
-        <TabsContent value='registrations'>
+        <TabsContent value={ADMIN_REPORT_TAB.REGISTRATIONS}>
           {regQuery.data && (
             <article className='ocop-print-sheet report-print-landscape'>
               <header className='print-sheet-header'>
@@ -988,7 +1018,7 @@ export function AdminReportsPage({
           )}
         </TabsContent>
 
-        <TabsContent value='results'>
+        <TabsContent value={ADMIN_REPORT_TAB.RESULTS}>
           {resQuery.data && (
             <article className='ocop-print-sheet report-print-landscape'>
               <header className='print-sheet-header'>

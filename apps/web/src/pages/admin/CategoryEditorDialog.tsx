@@ -20,6 +20,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { messageOf } from '../../lib/api-error';
+import { useManagingAgencies } from '../../queries/admin-catalogs';
 
 interface CategoryEditorDialogProps {
   open: boolean;
@@ -41,14 +42,22 @@ export function CategoryEditorDialog({
   const initialDescription = category?.description ?? '';
   const initialOrder = String(category?.order ?? 0);
   const initialIsActive = category?.isActive ?? false;
+  const initialAgencyIds = (category?.managingAgencies ?? []).map((a) => a.id).sort();
 
   const [name, setName] = useState(initialName);
   const [description, setDescription] = useState(initialDescription);
   const [order, setOrder] = useState(initialOrder);
   const [isActive, setIsActive] = useState(initialIsActive);
+  const [managingAgencyIds, setManagingAgencyIds] = useState<string[]>(initialAgencyIds);
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+
+  const agenciesQuery = useManagingAgencies(open);
+  const agencies = agenciesQuery.data ?? [];
+
+  const sortedCurrentAgencyIds = [...managingAgencyIds].sort();
+  const agenciesChanged = sortedCurrentAgencyIds.join(',') !== initialAgencyIds.join(',');
 
   const dirty =
     open &&
@@ -56,6 +65,7 @@ export function CategoryEditorDialog({
       description !== initialDescription ||
       order !== initialOrder ||
       isActive !== initialIsActive ||
+      agenciesChanged ||
       reason.trim().length > 0);
 
   useBlocker({
@@ -79,6 +89,12 @@ export function CategoryEditorDialog({
     onOpenChange(false);
   }
 
+  function toggleAgency(agencyId: string, checked: boolean) {
+    setManagingAgencyIds((current) =>
+      checked ? [...new Set([...current, agencyId])] : current.filter((id) => id !== agencyId),
+    );
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
@@ -91,6 +107,7 @@ export function CategoryEditorDialog({
           description: description.trim() || null,
           order: Number(order),
           isActive,
+          managingAgencyIds,
           reason,
         });
       } else {
@@ -98,6 +115,7 @@ export function CategoryEditorDialog({
           name,
           description: description.trim() || null,
           order: Number(order),
+          managingAgencyIds,
           reason,
         });
       }
@@ -118,7 +136,7 @@ export function CategoryEditorDialog({
           </DialogTitle>
           <DialogDescription>
             {isEdit
-              ? `Mã danh mục cố định: ${category.id}.`
+              ? `Mã danh mục cố định: ${category.id}. Thay đổi liên kết Cơ quan chủ trì quản lý chỉ áp dụng tự động cho các hồ sơ được duyệt sau thời điểm thay đổi.`
               : 'Danh mục mới được tạo ở trạng thái ngừng mở đăng ký cho tới khi nạp bộ tiêu chí hợp lệ đủ 100 điểm.'}
           </DialogDescription>
         </DialogHeader>
@@ -150,6 +168,32 @@ export function CategoryEditorDialog({
               required
             />
           </FormField>
+
+          <fieldset className='account-form'>
+            <legend className='text-sm font-semibold'>
+              Cơ quan chủ trì quản lý (Phụ lục I Quyết định 26/2026/QĐ-TTg)
+            </legend>
+            <p className='text-muted mb-2 text-xs'>
+              Một phân loại có thể thuộc một hoặc nhiều cơ quan quản lý. Khi duyệt hồ sơ, hệ thống
+              tự động giao cho tất cả giám khảo thuộc các cơ quan này.
+            </p>
+            <div className='grid gap-2'>
+              {agencies.map((agency) => (
+                <div key={agency.id} className='inline-flex items-center gap-2'>
+                  <Checkbox
+                    id={`category-agency-${agency.id}`}
+                    checked={managingAgencyIds.includes(agency.id)}
+                    disabled={busy}
+                    onCheckedChange={(checked) => toggleAgency(agency.id, checked === true)}
+                  />
+                  <Label htmlFor={`category-agency-${agency.id}`} className='cursor-pointer'>
+                    {agency.name} ({agency.code})
+                  </Label>
+                </div>
+              ))}
+            </div>
+          </fieldset>
+
           {isEdit && (
             <div className='inline-flex items-center gap-2'>
               <Checkbox

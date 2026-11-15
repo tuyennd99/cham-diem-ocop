@@ -34,6 +34,19 @@ function stripAdministrativePrefix(fullName: string): string {
   return fullName.replace(/^(Thành phố|Tỉnh|Phường|Xã|Đặc khu)\s+/i, '').trim();
 }
 
+function getProvinceSortOrder(placeType: string): number {
+  if (/^Thành phố/i.test(placeType.trim())) return 0;
+  return 1;
+}
+
+function getWardSortOrder(fullName: string): number {
+  const trimmed = fullName.trim();
+  if (/^Phường\b/i.test(trimmed)) return 0;
+  if (/^Xã\b/i.test(trimmed)) return 1;
+  if (/^Đặc khu\b/i.test(trimmed)) return 2;
+  return 3;
+}
+
 const rawProvinces = provinceWardsRaw as RawProvinceEntry[];
 
 export const ADMINISTRATIVE_PROVINCES: AdministrativeProvince[] = rawProvinces
@@ -44,7 +57,11 @@ export const ADMINISTRATIVE_PROVINCES: AdministrativeProvince[] = rawProvinces
     place_type: item.place_type,
     name_with_type: item.name,
   }))
-  .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+  .sort((a, b) => {
+    const typeDiff = getProvinceSortOrder(a.place_type) - getProvinceSortOrder(b.place_type);
+    if (typeDiff !== 0) return typeDiff;
+    return a.name.localeCompare(b.name, 'vi');
+  });
 
 const provinceByCodeMap = new Map<string, AdministrativeProvince>();
 const provinceByNameMap = new Map<string, AdministrativeProvince>();
@@ -67,7 +84,11 @@ for (const item of rawProvinces) {
       name_with_type: ward.name,
       parent_code: ward.province_code,
     }))
-    .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+    .sort((a, b) => {
+      const typeDiff = getWardSortOrder(a.name_with_type) - getWardSortOrder(b.name_with_type);
+      if (typeDiff !== 0) return typeDiff;
+      return a.name.localeCompare(b.name, 'vi');
+    });
 
   wardsByProvinceCodeMap.set(item.province_code, wards);
 }

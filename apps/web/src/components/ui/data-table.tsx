@@ -92,10 +92,15 @@ interface DataTableProps<T extends RowData> {
   pageSize?: number;
   onPageChange?: (page: number) => void;
   onPageSizeChange?: (pageSize: number) => void;
+  /** Controlled sorting state for URL/server-synced sorting. */
+  sorting?: SortingState;
+  onSortingChange?: (sorting: SortingState) => void;
   /** Emitted on every page/size/sort/search change in server mode. */
   onParamsChange?: (params: DataTableParams) => void;
   /** true (default) = server-side (manual) pagination; false = client-side over `data`. */
   manual?: boolean;
+  /** Keep manual pagination while sorting current data on client. */
+  manualSorting?: boolean;
   /** Enable column sorting headers (default false when not needed). */
   enableSorting?: boolean;
   /** Show pagination footer (default true). */
@@ -120,8 +125,11 @@ export function DataTable<T extends RowData>({
   pageSize: controlledPageSize,
   onPageChange,
   onPageSizeChange,
+  sorting: controlledSorting,
+  onSortingChange,
   onParamsChange,
   manual = true,
+  manualSorting,
   enableSorting = false,
   paginated = true,
   searchable = false,
@@ -134,7 +142,8 @@ export function DataTable<T extends RowData>({
   className,
   tableClassName,
 }: DataTableProps<T>) {
-  const [sorting, setSorting] = useState<SortingState>([]);
+  const [internalSorting, setInternalSorting] = useState<SortingState>([]);
+  const sorting = controlledSorting ?? internalSorting;
   const [globalFilter, setGlobalFilter] = useState('');
   const [internalPagination, setInternalPagination] = useState({
     pageIndex: (controlledPage ?? 1) - 1,
@@ -171,6 +180,7 @@ export function DataTable<T extends RowData>({
   );
 
   const effectiveManualPagination = manual || !paginated;
+  const effectiveManualSorting = manualSorting ?? (manual && Boolean(onSortingChange));
 
   const table = useTable({
     features: dataTableFeatures,
@@ -180,13 +190,18 @@ export function DataTable<T extends RowData>({
     enableSorting,
     state: { sorting, globalFilter, pagination },
     onSortingChange: (updater) => {
-      handlePaginationChange((p) => ({ ...p, pageIndex: 0 }));
-      setSorting(updater);
+      const next = typeof updater === 'function' ? updater(sorting) : updater;
+      setInternalSorting(next);
+      if (onSortingChange) {
+        onSortingChange(next);
+      } else {
+        handlePaginationChange((p) => ({ ...p, pageIndex: 0 }));
+      }
     },
     onPaginationChange: handlePaginationChange,
     onGlobalFilterChange: setGlobalFilter,
     manualPagination: effectiveManualPagination,
-    manualSorting: manual,
+    manualSorting: effectiveManualSorting,
     manualFiltering: manual,
     pageCount: manual ? getPageCount(total, pagination.pageSize) : undefined,
   });
@@ -339,31 +354,44 @@ export function DataTable<T extends RowData>({
       </Table>
 
       {paginated && (
-        <div className='table-footer flex items-center justify-between'>
-          <Combobox
-            value={String(table.state.pagination.pageSize)}
-            onValueChange={(v) => {
-              const nextSize = Number(v);
-              if (Number.isFinite(nextSize) && nextSize > 0) {
-                handlePaginationChange({ pageIndex: 0, pageSize: nextSize });
-              }
-            }}
-            readOnly
-            className='w-32'
-          >
-            <ComboboxAnchor className='h-9 min-h-9 w-32'>
-              <ComboboxInput aria-label='Số dòng mỗi trang' />
-              <ComboboxTrigger />
-            </ComboboxAnchor>
-            <ComboboxContent>
-              <ComboboxEmpty>Không tìm thấy.</ComboboxEmpty>
-              {pageSizeOptions.map((opt) => (
-                <ComboboxItem key={opt} value={String(opt)} label={`${opt} / trang`}>
-                  {opt} / trang
-                </ComboboxItem>
-              ))}
-            </ComboboxContent>
-          </Combobox>
+        <div className='table-footer flex flex-wrap items-center justify-between gap-2'>
+          <div className='flex items-center gap-3'>
+            <Combobox
+              value={String(table.state.pagination.pageSize)}
+              onValueChange={(v) => {
+                const nextSize = Number(v);
+                if (Number.isFinite(nextSize) && nextSize > 0) {
+                  handlePaginationChange({ pageIndex: 0, pageSize: nextSize });
+                }
+              }}
+              readOnly
+              className='w-32'
+            >
+              <ComboboxAnchor className='h-9 min-h-9 w-32'>
+                <ComboboxInput aria-label='Số dòng mỗi trang' />
+                <ComboboxTrigger />
+              </ComboboxAnchor>
+              <ComboboxContent>
+                <ComboboxEmpty>Không tìm thấy.</ComboboxEmpty>
+                {pageSizeOptions.map((opt) => (
+                  <ComboboxItem key={opt} value={String(opt)} label={`${opt} / trang`}>
+                    {opt} / trang
+                  </ComboboxItem>
+                ))}
+              </ComboboxContent>
+            </Combobox>
+            {(() => {
+              const effectiveTotal = manual ? total : data.length;
+              if (effectiveTotal <= 0) return null;
+              const startRow = (currentPage - 1) * pagination.pageSize + 1;
+              const endRow = Math.min(effectiveTotal, startRow + rows.length - 1);
+              return (
+                <span className='text-muted-foreground text-xs'>
+                  Hiển thị {startRow}–{Math.max(startRow, endRow)} / {effectiveTotal}
+                </span>
+              );
+            })()}
+          </div>
 
           <div className='pagination-actions flex items-center gap-2'>
             <span className='text-muted-foreground text-sm'>

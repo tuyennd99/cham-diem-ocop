@@ -1,17 +1,26 @@
-import type {
-  AdminCriteriaSetDetail,
-  BlankCriteriaPrintData,
-  EvaluationPrintCriterionRow,
-  EvaluationPrintData,
-  EvaluationRecordStatus,
-  ProductApplicationForm,
-  ProductResultsPrintData,
+import {
+  AttachmentType,
+  EvaluationStatus,
   ProductStatus,
-  RegistrationPrintData,
-  RegistrationSnapshot,
-  ScoreOption,
+} from '@prisma/client';
+import {
+  formatProductCode,
+  type AdminCriteriaSetDetail,
+  type BlankCriteriaPrintData,
+  type EvaluationPrintCriterionRow,
+  type EvaluationPrintData,
+  type EvaluationRecordStatus,
+  type ProductApplicationForm,
+  type ProductResultsPrintData,
+  type RegistrationPrintData,
+  type RegistrationSnapshot,
+  type ScoreOption,
 } from '@ocop/shared';
-import { productRegistrationTypes } from '../constants/products';
+import {
+  EVALUATION_PROVENANCE,
+  PRINT_DATA_KIND,
+  productRegistrationTypes,
+} from '../constants/products';
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -94,7 +103,7 @@ export function buildBlankCriteriaPrintData(
   generatedAt = new Date(),
 ): BlankCriteriaPrintData {
   return {
-    kind: 'BLANK_CRITERIA',
+    kind: PRINT_DATA_KIND.BLANK_CRITERIA,
     generatedAt: generatedAt.toISOString(),
     criteriaSet,
   };
@@ -127,6 +136,7 @@ export interface EvaluationPrintBuildInput {
   submissionSnapshot: unknown;
   currentProduct: {
     id: string;
+    codeNumber?: number | null;
     name: string;
     formData: unknown;
     category: {
@@ -182,7 +192,8 @@ function parseEvaluationSnapshot(raw: unknown) {
   if (!snap) return null;
   const isV1 = snap.version === 1 || snap.version === 2;
   const isPreUpgrade =
-    snap.schemaVersion === 1 && snap.provenance === 'PRE_UPGRADE';
+    snap.schemaVersion === 1 &&
+    snap.provenance === EVALUATION_PROVENANCE.PRE_UPGRADE;
   if (!isV1 && !isPreUpgrade) return null;
 
   const judgeRec = asRecord(snap.judge);
@@ -241,10 +252,11 @@ function parseEvaluationSnapshot(raw: unknown) {
   const formRec = extractSafeApplicationForm(productRec?.formData);
 
   return {
-    provenance: (isPreUpgrade ? 'PRE_UPGRADE' : snap.version === 2 ? 'SNAPSHOT_V2' : 'SNAPSHOT_V1') as
-      | 'PRE_UPGRADE'
-      | 'SNAPSHOT_V2'
-      | 'SNAPSHOT_V1',
+    provenance: isPreUpgrade
+      ? EVALUATION_PROVENANCE.PRE_UPGRADE
+      : snap.version === 2
+        ? EVALUATION_PROVENANCE.SNAPSHOT_V2
+        : EVALUATION_PROVENANCE.SNAPSHOT_V1,
     historicalValuesVerified: isPreUpgrade
       ? Boolean(snap.historicalValuesVerified)
       : true,
@@ -257,6 +269,15 @@ function parseEvaluationSnapshot(raw: unknown) {
       organizationUnitName: asString(unitRec?.name),
     },
     product: {
+      codeNumber:
+        typeof productRec?.codeNumber === 'number'
+          ? productRec.codeNumber
+          : null,
+      code:
+        asString(productRec?.code) ??
+        (typeof productRec?.codeNumber === 'number'
+          ? formatProductCode(productRec.codeNumber)
+          : null),
       name: asString(productRec?.name),
       entityName: asString(formRec.entityName),
       categoryName: asString(catRec?.name),
@@ -276,7 +297,7 @@ export function buildEvaluationPrintData(
   input: EvaluationPrintBuildInput,
 ): EvaluationPrintData {
   const generatedAt = (input.generatedAt ?? new Date()).toISOString();
-  const isDraft = input.status !== 'SUBMITTED';
+  const isDraft = input.status !== EvaluationStatus.SUBMITTED;
   const parsedSnap = !isDraft
     ? parseEvaluationSnapshot(input.submissionSnapshot)
     : null;
@@ -437,14 +458,30 @@ export function buildEvaluationPrintData(
     criteriaRows.length > 0 && criteriaRows.some((c) => !c.inScope);
 
   const currentForm = extractSafeApplicationForm(input.currentProduct.formData);
+  const currentCode =
+    typeof input.currentProduct.codeNumber === 'number'
+      ? formatProductCode(input.currentProduct.codeNumber)
+      : undefined;
+  const snapCode = parsedSnap?.product.code ?? undefined;
+  const resolvedCode = snapCode ?? currentCode;
+  const resolvedCodeNumber =
+    parsedSnap?.product.codeNumber ??
+    (typeof input.currentProduct.codeNumber === 'number'
+      ? input.currentProduct.codeNumber
+      : undefined);
+  const codeFromCurrentProduct = Boolean(
+    parsedSnap && !snapCode && currentCode,
+  );
 
   return {
-    kind: 'EVALUATION',
+    kind: PRINT_DATA_KIND.EVALUATION,
     generatedAt,
     evaluationId: input.evaluationId,
     status: input.status,
     isDraft,
-    provenance: parsedSnap ? parsedSnap.provenance : 'LIVE_DRAFT',
+    provenance: parsedSnap
+      ? parsedSnap.provenance
+      : EVALUATION_PROVENANCE.LIVE_DRAFT,
     historicalValuesVerified: parsedSnap
       ? parsedSnap.historicalValuesVerified
       : !isDraft,
@@ -452,6 +489,11 @@ export function buildEvaluationPrintData(
       parsedSnap?.submittedAt ?? input.submittedAt?.toISOString() ?? null,
     product: {
       id: input.currentProduct.id,
+      ...(resolvedCodeNumber !== undefined
+        ? { codeNumber: resolvedCodeNumber }
+        : {}),
+      ...(resolvedCode ? { code: resolvedCode } : {}),
+      ...(codeFromCurrentProduct ? { codeFromCurrentProduct: true } : {}),
       name: parsedSnap?.product.name ?? input.currentProduct.name,
       categoryName:
         parsedSnap?.product.categoryName ?? input.currentProduct.category.name,
@@ -495,6 +537,7 @@ export function buildRegistrationPrintData(input: {
   generatedAt?: Date;
   product: {
     id: string;
+    codeNumber?: number | null;
     name: string;
     description: string | null;
     status: ProductStatus;
@@ -523,7 +566,7 @@ export function buildRegistrationPrintData(input: {
     } | null;
     attachments: Array<{
       id: string;
-      type: 'IMAGE' | 'EVIDENCE';
+      type: AttachmentType;
       fileName: string;
       createdAt: Date;
     }>;
@@ -531,10 +574,25 @@ export function buildRegistrationPrintData(input: {
 }): RegistrationPrintData {
   const generatedAt = (input.generatedAt ?? new Date()).toISOString();
   const { product } = input;
-  const isDraft = product.status === 'DRAFT';
+  const isDraft = product.status === ProductStatus.DRAFT;
   const snap = !isDraft
     ? parseRegistrationSnapshot(product.registrationSnapshot)
     : null;
+  const snapProdRec = snap ? asRecord(snap.product) : null;
+  const snapCodeNumber =
+    typeof snapProdRec?.codeNumber === 'number' ? snapProdRec.codeNumber : null;
+  const snapCode =
+    asString(snapProdRec?.code) ??
+    (snapCodeNumber !== null ? formatProductCode(snapCodeNumber) : null);
+  const currentCode =
+    typeof product.codeNumber === 'number'
+      ? formatProductCode(product.codeNumber)
+      : undefined;
+  const resolvedCode = snapCode ?? currentCode;
+  const resolvedCodeNumber =
+    snapCodeNumber ??
+    (typeof product.codeNumber === 'number' ? product.codeNumber : undefined);
+  const codeFromCurrentProduct = Boolean(snap && !snapCode && currentCode);
 
   const fallbackLocality =
     !isDraft && product.localityNameAtSubmit
@@ -550,12 +608,17 @@ export function buildRegistrationPrintData(input: {
       : product.locality;
 
   return {
-    kind: 'REGISTRATION',
+    kind: PRINT_DATA_KIND.REGISTRATION,
     generatedAt,
     isDraft,
     hasSubmissionSnapshot: Boolean(snap),
     product: {
       id: product.id,
+      ...(resolvedCodeNumber !== undefined
+        ? { codeNumber: resolvedCodeNumber }
+        : {}),
+      ...(resolvedCode ? { code: resolvedCode } : {}),
+      ...(codeFromCurrentProduct ? { codeFromCurrentProduct: true } : {}),
       name: snap ? snap.product.name : product.name,
       description: snap ? snap.product.description : product.description,
       status: product.status,
@@ -594,6 +657,7 @@ export function buildProductResultsPrintData(input: {
   generatedAt?: Date;
   product: {
     id: string;
+    codeNumber?: number | null;
     name: string;
     status: ProductStatus;
     submittedAt: Date | null;
@@ -644,11 +708,28 @@ export function buildProductResultsPrintData(input: {
   const generatedAt = (input.generatedAt ?? new Date()).toISOString();
   const { product } = input;
   const regSnap = parseRegistrationSnapshot(product.registrationSnapshot);
+  const regSnapProdRec = regSnap ? asRecord(regSnap.product) : null;
+  const regSnapCodeNumber =
+    typeof regSnapProdRec?.codeNumber === 'number'
+      ? regSnapProdRec.codeNumber
+      : null;
+  const regSnapCode =
+    asString(regSnapProdRec?.code) ??
+    (regSnapCodeNumber !== null ? formatProductCode(regSnapCodeNumber) : null);
+  const currentCode =
+    typeof product.codeNumber === 'number'
+      ? formatProductCode(product.codeNumber)
+      : undefined;
+  const resolvedCode = regSnapCode ?? currentCode;
+  const resolvedCodeNumber =
+    regSnapCodeNumber ??
+    (typeof product.codeNumber === 'number' ? product.codeNumber : undefined);
+  const codeFromCurrentProduct = Boolean(regSnap && !regSnapCode && currentCode);
   const safeForm = regSnap
     ? extractSafeApplicationForm(regSnap.formData)
     : extractSafeApplicationForm(product.formData);
 
-  const isCompleted = product.status === 'COMPLETED';
+  const isCompleted = product.status === ProductStatus.COMPLETED;
   const finalScore = isCompleted ? product.finalScore : null;
   const starRating = isCompleted ? product.starRating : null;
   const starLabel = formatStarPrintLabel(finalScore, starRating);
@@ -661,7 +742,7 @@ export function buildProductResultsPrintData(input: {
 
   const evaluationRows = product.evaluations.map((evaluation) => {
     const parsedSnap =
-      evaluation.status === 'SUBMITTED'
+      evaluation.status === EvaluationStatus.SUBMITTED
         ? parseEvaluationSnapshot(evaluation.submissionSnapshot)
         : null;
 
@@ -719,7 +800,9 @@ export function buildProductResultsPrintData(input: {
     };
   });
 
-  const submittedRows = evaluationRows.filter((r) => r.status === 'SUBMITTED');
+  const submittedRows = evaluationRows.filter(
+    (r) => r.status === EvaluationStatus.SUBMITTED,
+  );
   const criteriaSummary = criteriaList.map((criterion) => {
     const scores = submittedRows
       .map((row) => row.criterionScores[criterion.id])
@@ -738,10 +821,15 @@ export function buildProductResultsPrintData(input: {
   });
 
   return {
-    kind: 'PRODUCT_RESULTS',
+    kind: PRINT_DATA_KIND.PRODUCT_RESULTS,
     generatedAt,
     product: {
       id: product.id,
+      ...(resolvedCodeNumber !== undefined
+        ? { codeNumber: resolvedCodeNumber }
+        : {}),
+      ...(resolvedCode ? { code: resolvedCode } : {}),
+      ...(codeFromCurrentProduct ? { codeFromCurrentProduct: true } : {}),
       name: regSnap ? regSnap.product.name : product.name,
       status: product.status,
       submittedAt:

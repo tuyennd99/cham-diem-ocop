@@ -111,6 +111,12 @@ export class AuthController {
   }
 
   @Public()
+  @Get('seed-accounts')
+  seedAccounts() {
+    return this.authService.seedAccounts();
+  }
+
+  @Public()
   @Post('login')
   @HttpCode(200)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })

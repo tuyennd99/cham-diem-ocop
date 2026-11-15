@@ -2,9 +2,9 @@ import {
   EvaluationStatus,
   Prisma,
   PrismaClient,
+  ProductPublicationState,
   ProductStatus,
   Role,
-  StaffPermission,
 } from '@prisma/client';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -42,6 +42,9 @@ interface LoadedCriterion {
 interface LoadedCategory {
   id: string;
   name: string;
+  agencyLinks: Array<{
+    agency: { id: string; code: string; name: string };
+  }>;
   criteriaSet: {
     id: string;
     name: string | null;
@@ -74,7 +77,6 @@ function pickOptionForTier(
       (subIndex + judgeOffset) % 3 === 0 ? Math.max(0, maxIdx - 1) : maxIdx;
     return sorted[idx];
   }
-  // 'mid' -> ~58-68 points (3 stars)
   const midIdx = Math.max(0, maxIdx - 1);
   const idx =
     (subIndex + judgeOffset) % 4 === 0 ? Math.max(0, maxIdx - 2) : midIdx;
@@ -85,6 +87,9 @@ export async function seedSampleOcopData(
   prisma: PrismaClient,
   passwordHash: string,
 ) {
+  const agencies = await prisma.managingAgency.findMany();
+  const agencyByCode = new Map(agencies.map((a) => [a.code, a]));
+
   const units = [
     {
       id: 'seed-unit-snnmt',
@@ -92,6 +97,7 @@ export async function seedSampleOcopData(
       name: 'Sở Nông nghiệp và Môi trường',
       description: 'Đơn vị thường trực Hội đồng đánh giá, phân hạng sản phẩm OCOP',
       order: 1,
+      managingAgencyId: agencyByCode.get('BNNMT')?.id ?? null,
     },
     {
       id: 'seed-unit-sct',
@@ -99,6 +105,7 @@ export async function seedSampleOcopData(
       name: 'Sở Công Thương',
       description: 'Đơn vị thành viên phụ trách xúc tiến thương mại và thị trường',
       order: 2,
+      managingAgencyId: agencyByCode.get('BCT')?.id ?? null,
     },
     {
       id: 'seed-unit-svhttdl',
@@ -106,6 +113,15 @@ export async function seedSampleOcopData(
       name: 'Sở Văn hóa, Thể thao và Du lịch',
       description: 'Đơn vị thành viên phụ trách du lịch cộng đồng và bản sắc văn hóa',
       order: 3,
+      managingAgencyId: agencyByCode.get('BVHTTDL')?.id ?? null,
+    },
+    {
+      id: 'seed-unit-syt',
+      code: 'SYT',
+      name: 'Sở Y tế',
+      description: 'Đơn vị thành viên phụ trách dược liệu, mỹ phẩm và nước uống đóng chai',
+      order: 4,
+      managingAgencyId: agencyByCode.get('BYT')?.id ?? null,
     },
   ];
 
@@ -116,6 +132,7 @@ export async function seedSampleOcopData(
         name: unit.name,
         description: unit.description,
         order: unit.order,
+        managingAgencyId: unit.managingAgencyId,
         isActive: true,
       },
       create: {
@@ -124,6 +141,7 @@ export async function seedSampleOcopData(
         name: unit.name,
         description: unit.description,
         order: unit.order,
+        managingAgencyId: unit.managingAgencyId,
         isActive: true,
       },
     });
@@ -141,28 +159,24 @@ export async function seedSampleOcopData(
     {
       id: 'seed-locality-khanh-an',
       code: 'XP-KHANHAN',
-      eventName: 'Đánh giá OCOP năm 2026 - Xã Khánh An',
       name: 'Xã Khánh An',
       provinceName: 'Tỉnh Cà Mau',
     },
     {
       id: 'seed-locality-rach-goc',
       code: 'XP-RACHGOC',
-      eventName: 'Đánh giá OCOP năm 2026 - Phường Rạch Gốc',
       name: 'Phường Rạch Gốc',
       provinceName: 'Tỉnh Cà Mau',
     },
     {
       id: 'seed-locality-dat-mui',
       code: 'XP-DATMUI',
-      eventName: 'Đánh giá OCOP năm 2026 - Xã Đất Mũi',
       name: 'Xã Đất Mũi',
       provinceName: 'Tỉnh Cà Mau',
     },
     {
       id: 'seed-locality-tran-van-thoi',
       code: 'XP-TVTHOI',
-      eventName: 'Đánh giá OCOP năm 2026 - Xã Trần Văn Thời',
       name: 'Xã Trần Văn Thời',
       provinceName: 'Tỉnh Cà Mau',
     },
@@ -172,23 +186,21 @@ export async function seedSampleOcopData(
     await prisma.locality.upsert({
       where: { code: loc.code },
       update: {
-        eventName: loc.eventName,
+        eventName: loc.name,
         name: loc.name,
         provinceName: loc.provinceName,
-        effectiveFrom: new Date('2020-01-01T00:00:00+07:00'),
+        effectiveFrom: null,
         effectiveTo: null,
-        registrationFrom: new Date('2020-01-01T00:00:00+07:00'),
+        registrationFrom: null,
         registrationTo: null,
         isActive: true,
       },
       create: {
         id: loc.id,
         code: loc.code,
-        eventName: loc.eventName,
+        eventName: loc.name,
         name: loc.name,
         provinceName: loc.provinceName,
-        effectiveFrom: new Date('2020-01-01T00:00:00+07:00'),
-        registrationFrom: new Date('2020-01-01T00:00:00+07:00'),
         isActive: true,
       },
     });
@@ -202,7 +214,6 @@ export async function seedSampleOcopData(
     ).map((l) => [l.code, l]),
   );
 
-  // Assign organization units to staff test accounts and upsert extra registrants
   const snnmt = unitByCode.get('SNNMT')!;
   const sct = unitByCode.get('SCT')!;
   const svhttdl = unitByCode.get('SVHTTDL')!;
@@ -239,6 +250,7 @@ export async function seedSampleOcopData(
         fullName: reg.fullName,
         phone: reg.phone,
         role: Role.REGISTRANT,
+        roles: [Role.REGISTRANT],
         staffPermissions: [],
         verified: true,
         isActive: true,
@@ -249,6 +261,7 @@ export async function seedSampleOcopData(
         fullName: reg.fullName,
         phone: reg.phone,
         role: Role.REGISTRANT,
+        roles: [Role.REGISTRANT],
         staffPermissions: [],
         verified: true,
         isActive: true,
@@ -263,6 +276,7 @@ export async function seedSampleOcopData(
           email: {
             in: [
               'admin@ocop.test',
+              'viewer@ocop.test',
               'judge@ocop.test',
               'viewer.score@ocop.test',
               'registrant@ocop.test',
@@ -271,11 +285,16 @@ export async function seedSampleOcopData(
             ],
           },
         },
-        include: { organizationUnit: { select: { id: true, code: true, name: true } } },
+        include: {
+          organizationUnit: {
+            select: { id: true, code: true, name: true, managingAgencyId: true },
+          },
+        },
       })
     ).map((u) => [u.email, u]),
   );
 
+  const chair = usersByEmail.get('viewer@ocop.test') ?? usersByEmail.get('admin@ocop.test')!;
   const judge1 = usersByEmail.get('judge@ocop.test')!;
   const judge2 = usersByEmail.get('viewer.score@ocop.test')!;
 
@@ -289,6 +308,7 @@ export async function seedSampleOcopData(
     status: ProductStatus;
     createdAt: string;
     submittedAt?: string;
+    approvedAt?: string;
     scoringAt?: string;
     completedAt?: string;
     scoreTier?: ScoreTier;
@@ -306,6 +326,7 @@ export async function seedSampleOcopData(
       status: ProductStatus.COMPLETED,
       createdAt: '2026-09-05T08:00:00+07:00',
       submittedAt: '2026-09-06T09:30:00+07:00',
+      approvedAt: '2026-09-08T10:00:00+07:00',
       scoringAt: '2026-09-10T14:00:00+07:00',
       completedAt: '2026-09-15T16:00:00+07:00',
       scoreTier: 'high',
@@ -315,6 +336,7 @@ export async function seedSampleOcopData(
         representativeTitle: 'Giám đốc Hợp tác xã',
         contactAddress: 'Ấp 3, Xã Khánh An, Tỉnh Cà Mau',
         provinceName: 'Tỉnh Cà Mau',
+        localityName: 'Xã Khánh An',
         phone: '0900000006',
         email: 'registrant@ocop.test',
         registrationType: 'FIRST',
@@ -334,6 +356,7 @@ export async function seedSampleOcopData(
       status: ProductStatus.COMPLETED,
       createdAt: '2026-10-01T08:30:00+07:00',
       submittedAt: '2026-10-02T10:00:00+07:00',
+      approvedAt: '2026-10-03T10:00:00+07:00',
       scoringAt: '2026-10-05T09:00:00+07:00',
       completedAt: '2026-10-08T15:30:00+07:00',
       scoreTier: 'top',
@@ -343,6 +366,7 @@ export async function seedSampleOcopData(
         representativeTitle: 'Chủ tịch Hội đồng quản trị',
         contactAddress: 'Khóm 4, Phường Rạch Gốc, Tỉnh Cà Mau',
         provinceName: 'Tỉnh Cà Mau',
+        localityName: 'Phường Rạch Gốc',
         phone: '0900000006',
         email: 'registrant@ocop.test',
         registrationType: 'UPGRADE',
@@ -362,6 +386,7 @@ export async function seedSampleOcopData(
       status: ProductStatus.COMPLETED,
       createdAt: '2026-10-03T09:00:00+07:00',
       submittedAt: '2026-10-04T11:00:00+07:00',
+      approvedAt: '2026-10-05T11:00:00+07:00',
       scoringAt: '2026-10-07T14:00:00+07:00',
       completedAt: '2026-10-10T16:30:00+07:00',
       scoreTier: 'mid',
@@ -371,6 +396,7 @@ export async function seedSampleOcopData(
         representativeTitle: 'Chủ cơ sở',
         contactAddress: 'Khóm 2, Phường Rạch Gốc, Tỉnh Cà Mau',
         provinceName: 'Tỉnh Cà Mau',
+        localityName: 'Phường Rạch Gốc',
         phone: '0900000008',
         email: 'htx.rachgoc@ocop.test',
         registrationType: 'FIRST',
@@ -390,6 +416,7 @@ export async function seedSampleOcopData(
       status: ProductStatus.COMPLETED,
       createdAt: '2026-10-04T08:00:00+07:00',
       submittedAt: '2026-10-05T10:15:00+07:00',
+      approvedAt: '2026-10-06T10:15:00+07:00',
       scoringAt: '2026-10-09T09:00:00+07:00',
       completedAt: '2026-10-12T17:00:00+07:00',
       scoreTier: 'high',
@@ -399,6 +426,7 @@ export async function seedSampleOcopData(
         representativeTitle: 'Giám đốc Hợp tác xã',
         contactAddress: 'Ấp 7, Xã Khánh An, Tỉnh Cà Mau',
         provinceName: 'Tỉnh Cà Mau',
+        localityName: 'Xã Khánh An',
         phone: '0900000007',
         email: 'htx.uminh@ocop.test',
         registrationType: 'REASSESSMENT',
@@ -418,6 +446,7 @@ export async function seedSampleOcopData(
       status: ProductStatus.SCORING,
       createdAt: '2026-10-11T08:00:00+07:00',
       submittedAt: '2026-10-12T09:30:00+07:00',
+      approvedAt: '2026-10-13T09:30:00+07:00',
       scoringAt: '2026-10-14T10:00:00+07:00',
       scoreTier: 'high',
       scoringMode: 'one_submitted_one_draft',
@@ -427,6 +456,7 @@ export async function seedSampleOcopData(
         representativeTitle: 'Giám đốc',
         contactAddress: 'Ấp 5, Xã Khánh An, Tỉnh Cà Mau',
         provinceName: 'Tỉnh Cà Mau',
+        localityName: 'Xã Khánh An',
         phone: '0900000006',
         email: 'registrant@ocop.test',
         registrationType: 'FIRST',
@@ -446,6 +476,7 @@ export async function seedSampleOcopData(
       status: ProductStatus.SCORING,
       createdAt: '2026-10-13T08:00:00+07:00',
       submittedAt: '2026-10-14T10:30:00+07:00',
+      approvedAt: '2026-10-15T10:30:00+07:00',
       scoringAt: '2026-10-16T14:00:00+07:00',
       scoreTier: 'mid',
       scoringMode: 'one_draft',
@@ -455,6 +486,7 @@ export async function seedSampleOcopData(
         representativeTitle: 'Tổ trưởng Tổ hợp tác',
         contactAddress: 'Ấp Tân Hưng, Xã Trần Văn Thời, Tỉnh Cà Mau',
         provinceName: 'Tỉnh Cà Mau',
+        localityName: 'Xã Trần Văn Thời',
         phone: '0900000006',
         email: 'registrant@ocop.test',
         registrationType: 'FIRST',
@@ -480,6 +512,7 @@ export async function seedSampleOcopData(
         representativeTitle: 'Giám đốc Hợp tác xã',
         contactAddress: 'Ấp Mũi, Xã Đất Mũi, Tỉnh Cà Mau',
         provinceName: 'Tỉnh Cà Mau',
+        localityName: 'Xã Đất Mũi',
         phone: '0900000006',
         email: 'registrant@ocop.test',
         registrationType: 'FIRST',
@@ -505,6 +538,7 @@ export async function seedSampleOcopData(
         representativeTitle: 'Chủ nhiệm Hợp tác xã',
         contactAddress: 'Ấp 1, Xã Khánh An, Tỉnh Cà Mau',
         provinceName: 'Tỉnh Cà Mau',
+        localityName: 'Xã Khánh An',
         phone: '0900000007',
         email: 'htx.uminh@ocop.test',
         registrationType: 'FIRST',
@@ -529,6 +563,7 @@ export async function seedSampleOcopData(
         representativeTitle: 'Giám đốc Hợp tác xã',
         contactAddress: 'Ấp Công Nghiệp, Xã Trần Văn Thời, Tỉnh Cà Mau',
         provinceName: 'Tỉnh Cà Mau',
+        localityName: 'Xã Trần Văn Thời',
         phone: '0900000006',
         email: 'registrant@ocop.test',
         registrationType: 'FIRST',
@@ -553,6 +588,7 @@ export async function seedSampleOcopData(
         representativeTitle: 'Chủ cơ sở',
         contactAddress: 'Ấp Khai Long, Xã Đất Mũi, Tỉnh Cà Mau',
         provinceName: 'Tỉnh Cà Mau',
+        localityName: 'Xã Đất Mũi',
         phone: '0900000006',
         email: 'registrant@ocop.test',
         registrationType: 'FIRST',
@@ -569,6 +605,9 @@ export async function seedSampleOcopData(
     select: {
       id: true,
       name: true,
+      agencyLinks: {
+        select: { agency: { select: { id: true, code: true, name: true } } },
+      },
       criteriaSet: {
         select: {
           id: true,
@@ -609,23 +648,6 @@ export async function seedSampleOcopData(
     loadedCategories.map((c) => [c.id, c]),
   );
 
-  // Assign judge1 and judge2 full-scope on all sample categories
-  for (const categoryId of categoryIds) {
-    for (const judge of [judge1, judge2]) {
-      await prisma.judgeAssignment.upsert({
-        where: {
-          judgeId_categoryId: { judgeId: judge.id, categoryId },
-        },
-        update: { criterionIds: [] },
-        create: {
-          judgeId: judge.id,
-          categoryId,
-          criterionIds: [],
-        },
-      });
-    }
-  }
-
   for (const spec of sampleProductsSpec) {
     const category = categoryById.get(spec.categoryId);
     const registrant = usersByEmail.get(spec.registrantEmail);
@@ -634,6 +656,7 @@ export async function seedSampleOcopData(
 
     const createdAt = new Date(spec.createdAt);
     const submittedAt = spec.submittedAt ? new Date(spec.submittedAt) : null;
+    const approvedAt = spec.approvedAt ? new Date(spec.approvedAt) : null;
     const scoringAt = spec.scoringAt ? new Date(spec.scoringAt) : null;
     const completedAt = spec.completedAt ? new Date(spec.completedAt) : null;
 
@@ -665,6 +688,14 @@ export async function seedSampleOcopData(
         }) as unknown as Prisma.InputJsonValue)
       : Prisma.DbNull;
 
+    const requiredAgencySnapshot = approvedAt
+      ? (category.agencyLinks.map(({ agency }) => ({
+          id: agency.id,
+          code: agency.code,
+          name: agency.name,
+        })) as unknown as Prisma.InputJsonValue)
+      : Prisma.DbNull;
+
     await prisma.product.upsert({
       where: { id: spec.id },
       update: {
@@ -678,8 +709,11 @@ export async function seedSampleOcopData(
         status: spec.status,
         createdAt,
         submittedAt,
+        approvedAt,
+        approvedById: approvedAt ? chair.id : null,
         completedAt,
         registrationSnapshot,
+        requiredAgencySnapshot,
         localityCodeAtSubmit: submittedAt ? locality.code : null,
         localityNameAtSubmit: submittedAt ? locality.name : null,
         provinceNameAtSubmit: submittedAt ? locality.provinceName : null,
@@ -696,15 +730,17 @@ export async function seedSampleOcopData(
         status: spec.status,
         createdAt,
         submittedAt,
+        approvedAt,
+        approvedById: approvedAt ? chair.id : null,
         completedAt,
         registrationSnapshot,
+        requiredAgencySnapshot,
         localityCodeAtSubmit: submittedAt ? locality.code : null,
         localityNameAtSubmit: submittedAt ? locality.name : null,
         provinceNameAtSubmit: submittedAt ? locality.provinceName : null,
       },
     });
 
-    // Replace status events deterministically
     const statusEvents: Array<{
       sequence: number;
       fromStatus: ProductStatus | null;
@@ -720,19 +756,29 @@ export async function seedSampleOcopData(
         createdAt,
       },
     ];
+    let seq = 2;
     if (submittedAt) {
       statusEvents.push({
-        sequence: 2,
+        sequence: seq++,
         fromStatus: ProductStatus.DRAFT,
         toStatus: ProductStatus.SUBMITTED,
         actorId: registrant.id,
         createdAt: submittedAt,
       });
     }
+    if (approvedAt) {
+      statusEvents.push({
+        sequence: seq++,
+        fromStatus: ProductStatus.SUBMITTED,
+        toStatus: ProductStatus.APPROVED,
+        actorId: chair.id,
+        createdAt: approvedAt,
+      });
+    }
     if (scoringAt) {
       statusEvents.push({
-        sequence: 3,
-        fromStatus: ProductStatus.SUBMITTED,
+        sequence: seq++,
+        fromStatus: approvedAt ? ProductStatus.APPROVED : ProductStatus.SUBMITTED,
         toStatus: ProductStatus.SCORING,
         actorId: judge1.id,
         createdAt: scoringAt,
@@ -740,7 +786,7 @@ export async function seedSampleOcopData(
     }
     if (completedAt) {
       statusEvents.push({
-        sequence: 4,
+        sequence: seq++,
         fromStatus: ProductStatus.SCORING,
         toStatus: ProductStatus.COMPLETED,
         actorId: judge2.id,
@@ -784,7 +830,6 @@ export async function seedSampleOcopData(
       },
     });
 
-    // Build evaluations & scores for SCORING and COMPLETED products
     const criteriaSet = category.criteriaSet;
     if (
       !criteriaSet ||
@@ -792,6 +837,35 @@ export async function seedSampleOcopData(
         spec.status !== ProductStatus.COMPLETED)
     ) {
       continue;
+    }
+
+    // Assign judge1 and judge2 on product_judge_assignments for approved/scoring/completed sample products
+    for (const judge of [judge1, judge2]) {
+      await prisma.productJudgeAssignment.upsert({
+        where: {
+          productId_judgeId: { productId: spec.id, judgeId: judge.id },
+        },
+        update: {
+          managingAgencyId: judge.organizationUnit?.managingAgencyId ?? null,
+          organizationUnitId: judge.organizationUnit?.id ?? null,
+          isActive: true,
+          isManual: false,
+          mustSubmitToComplete: false,
+          assignedById: chair.id,
+          assignedAt: approvedAt ?? scoringAt ?? createdAt,
+        },
+        create: {
+          productId: spec.id,
+          judgeId: judge.id,
+          managingAgencyId: judge.organizationUnit?.managingAgencyId ?? null,
+          organizationUnitId: judge.organizationUnit?.id ?? null,
+          isActive: true,
+          isManual: false,
+          mustSubmitToComplete: false,
+          assignedById: chair.id,
+          assignedAt: approvedAt ?? scoringAt ?? createdAt,
+        },
+      });
     }
 
     const tier = spec.scoreTier ?? 'high';
@@ -853,7 +927,13 @@ export async function seedSampleOcopData(
             judge: {
               id: judge.id,
               fullName: judge.fullName,
-              organizationUnit: judge.organizationUnit,
+              organizationUnit: judge.organizationUnit
+                ? {
+                    id: judge.organizationUnit.id,
+                    code: judge.organizationUnit.code,
+                    name: judge.organizationUnit.name,
+                  }
+                : null,
             },
             assignedCriterionIds: allCriterionIds,
             scores: chosen.map((item) => ({
@@ -939,7 +1019,15 @@ export async function seedSampleOcopData(
 
       await prisma.product.update({
         where: { id: spec.id },
-        data: { finalScore, starRating },
+        data: {
+          finalScore,
+          starRating,
+          publicationState: ProductPublicationState.PUBLISHED,
+          publishedFinalScore: finalScore,
+          publishedStarRating: starRating,
+          publishedAt: completedAt,
+          publishedById: chair.id,
+        },
       });
     } else if (spec.status === ProductStatus.SCORING && scoringAt) {
       if (spec.scoringMode === 'one_submitted_one_draft') {

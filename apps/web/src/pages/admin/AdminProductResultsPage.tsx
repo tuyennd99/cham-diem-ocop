@@ -3,21 +3,32 @@ import AlertError from '@/components/alert-error';
 import PageSpin from '@/components/page-spin';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  EVALUATION_STATUS,
+  PRODUCT_STATUS,
+  PRODUCT_WORKSPACE_MODE,
+  STAFF_PERMISSION,
+} from '../../constants/consts';
 import type { AdminProductSearch } from '../../lib/admin-search';
 import { errorText } from '../../lib/api-error';
 import { useSession } from '../../lib/auth';
 import { formatExactScore, formatStarRatingLabel } from '../../lib/print-format';
 import { hasStaffPermission } from '../../lib/session-contract';
-import { useAdminProductResults, type AdminProductMode } from '../../queries/admin-products';
+import {
+  useAdminProductMutations,
+  useAdminProductResults,
+  type AdminProductMode,
+} from '../../queries/admin-products';
 
 const EVALUATION_STATUS_LABEL: Record<string, string> = {
   IN_PROGRESS: 'Đang chấm (nháp)',
   SUBMITTED: 'Đã nộp phiếu chấm',
+  EXCLUDED: 'Đã loại khỏi kết quả (đã gỡ giám khảo)',
 };
 
 export function AdminProductResultsPage({
   productId,
-  mode: _mode = 'products',
+  mode = PRODUCT_WORKSPACE_MODE.PRODUCTS,
   printSearch,
 }: {
   productId: string;
@@ -25,13 +36,15 @@ export function AdminProductResultsPage({
   printSearch?: AdminProductSearch;
 }) {
   const session = useSession();
-  const canManage = hasStaffPermission(session?.user, 'MANAGE');
+  const canManage = hasStaffPermission(session?.user, STAFF_PERMISSION.MANAGE);
+  const canView = hasStaffPermission(session?.user, STAFF_PERMISSION.VIEW);
   const {
     data: product = null,
     error: loadError,
     isPending,
     refetch,
   } = useAdminProductResults(productId, canManage);
+  const mutations = useAdminProductMutations(productId, mode, canManage);
   const error = errorText(loadError);
 
   if (error) {
@@ -55,9 +68,9 @@ export function AdminProductResultsPage({
         <div>
           <h2>Kết quả chấm</h2>
           <p className='route-intro'>
-            {product.status === 'COMPLETED' && product.finalScore !== null
+            {product.status === PRODUCT_STATUS.COMPLETED && product.finalScore !== null
               ? `Tổng điểm cuối: ${formatExactScore(product.finalScore)} điểm · ${formatStarRatingLabel(product.starRating)}`
-              : 'Hồ sơ chưa hoàn tất tổng hợp điểm cuối. Điểm từng giám khảo dưới đây là điểm trong phạm vi được phân công.'}
+              : 'Hồ sơ chưa hoàn tất tổng hợp điểm cuối. Điểm từng giám khảo dưới đây là điểm trên phiếu chấm của giám khảo đó.'}
           </p>
         </div>
         <div className='admin-actions'>
@@ -83,16 +96,18 @@ export function AdminProductResultsPage({
                   <Badge
                     variant='outline'
                     className={
-                      evaluation.status === 'SUBMITTED'
+                      evaluation.status === EVALUATION_STATUS.SUBMITTED
                         ? 'status-badge status-completed'
-                        : 'status-badge status-scoring'
+                        : evaluation.status === EVALUATION_STATUS.EXCLUDED
+                          ? 'status-badge status-draft'
+                          : 'status-badge status-scoring'
                     }
                   >
                     {EVALUATION_STATUS_LABEL[evaluation.status] ?? evaluation.status}
                   </Badge>
                 </div>
                 <p className='text-muted mt-1 text-sm'>
-                  {evaluation.judge.email} · Điểm trong phạm vi:{' '}
+                  {evaluation.judge.email} · Điểm trên phiếu:{' '}
                   <strong style={{ fontVariantNumeric: 'tabular-nums' }}>
                     {evaluation.total !== null
                       ? `${formatExactScore(evaluation.total)} điểm`
@@ -100,13 +115,33 @@ export function AdminProductResultsPage({
                   </strong>
                 </p>
               </div>
-              {evaluation.id && (
-                <Button asChild variant='secondary' size='sm'>
-                  <Link to='/print/evaluations/$id' params={{ id: evaluation.id }}>
-                    In phiếu chấm
-                  </Link>
-                </Button>
-              )}
+              <div className='admin-actions'>
+                {canView && evaluation.id && evaluation.status === EVALUATION_STATUS.SUBMITTED && (
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    size='sm'
+                    onClick={() => {
+                      const r = window.prompt(
+                        `Nhập lý do mở lại phiếu chấm của giám khảo ${evaluation.judge.fullName}:`,
+                        'Mở lại phiếu nộp nhầm theo đề nghị của giám khảo',
+                      );
+                      if (r !== null && evaluation.id) {
+                        void mutations.reopenEvaluation(evaluation.id, r.trim() || undefined);
+                      }
+                    }}
+                  >
+                    Mở lại phiếu chấm
+                  </Button>
+                )}
+                {evaluation.id && (
+                  <Button asChild variant='secondary' size='sm'>
+                    <Link to='/print/evaluations/$id' params={{ id: evaluation.id }}>
+                      In phiếu chấm
+                    </Link>
+                  </Button>
+                )}
+              </div>
             </div>
             <div className='record-list'>
               {evaluation.scores.map((score, index) => (

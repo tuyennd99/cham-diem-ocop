@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 const ROLE_LABEL: Record<string, string> = {
   ADMIN: 'Quản trị viên',
-  VIEWER: 'Cán bộ tra cứu',
+  VIEWER: 'Chủ trì',
   JUDGE: 'Giám khảo',
   REGISTRANT: 'Người đăng ký',
 };

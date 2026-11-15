@@ -99,6 +99,26 @@ describe('update DTO validation', () => {
     ).resolves.toMatchObject({ note: null });
   });
 
+  it('rejects whitespace-only required strings and out-of-range sampleQuantity in ProductUpdateDto while allowing partial formData', async () => {
+    await expect(
+      validate({ name: '   ' }, ProductUpdateDto),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      validate({ formData: { entityName: '   ' } }, ProductUpdateDto),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      validate({ formData: { sampleQuantity: 0 } }, ProductUpdateDto),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      validate(
+        { formData: { contactAddress: '  Số 10  ', phone: '   ' } },
+        ProductUpdateDto,
+      ),
+    ).resolves.toMatchObject({
+      formData: { contactAddress: 'Số 10', phone: '' },
+    });
+  });
+
   it('rejects invalid PUT bodies before calling the write services', async () => {
     const app = await NestFactory.create(ValidationTestModule, {
       logger: false,

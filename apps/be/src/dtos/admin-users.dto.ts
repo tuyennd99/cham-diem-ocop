@@ -28,7 +28,8 @@ import type {
   OrganizationUnitQuery,
   UpdateOrganizationUnitInput,
 } from '@ocop/shared';
-import { StaffPermission } from '@prisma/client';
+import { Role, StaffPermission } from '@prisma/client';
+import { USER_KIND, type UserKind } from '../constants/auth';
 
 const trimString = ({ value }: TransformFnParams) =>
   typeof value === 'string' ? value.trim() : value;
@@ -66,6 +67,13 @@ export class OrganizationUnitsQueryDto implements OrganizationUnitQuery {
   )
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({ maxLength: 100 })
+  @IsOptional()
+  @Transform(trimString)
+  @IsString()
+  @MaxLength(100)
+  managingAgencyId?: string;
 }
 
 export class CreateOrganizationUnitDto implements CreateOrganizationUnitInput {
@@ -97,6 +105,15 @@ export class CreateOrganizationUnitDto implements CreateOrganizationUnitInput {
   @ApiProperty()
   @IsBoolean()
   isActive!: boolean;
+
+  @ApiPropertyOptional({ maxLength: 100, nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null && value !== undefined)
+  @Transform(trimString)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  managingAgencyId?: string | null;
 
   @ApiProperty({ minLength: 1, maxLength: 255 })
   @Transform(trimString)
@@ -131,6 +148,15 @@ export class UpdateOrganizationUnitDto implements UpdateOrganizationUnitInput {
   @ValidateIf((_object, value) => value !== undefined)
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({ maxLength: 100, nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null && value !== undefined)
+  @Transform(trimString)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  managingAgencyId?: string | null;
 
   @ApiProperty({ minLength: 1, maxLength: 255 })
   @Transform(trimString)
@@ -167,6 +193,11 @@ export class AdminUsersQueryDto implements AdminUserQuery {
   @IsEnum(StaffPermission)
   permission?: StaffPermission;
 
+  @ApiPropertyOptional({ enum: Role })
+  @IsOptional()
+  @IsEnum(Role)
+  role?: Role;
+
   @ApiPropertyOptional({ maxLength: 100 })
   @IsOptional()
   @IsString()
@@ -185,10 +216,10 @@ export class AdminUsersQueryDto implements AdminUserQuery {
   @IsBoolean()
   verified?: boolean;
 
-  @ApiPropertyOptional({ enum: ['STAFF', 'REGISTRANT'] })
+  @ApiPropertyOptional({ enum: USER_KIND })
   @IsOptional()
-  @IsEnum(['STAFF', 'REGISTRANT'])
-  kind?: 'STAFF' | 'REGISTRANT';
+  @IsEnum(USER_KIND)
+  kind?: UserKind;
 }
 
 export class CreateAdminUserDto implements CreateAdminUserInput {
@@ -225,12 +256,22 @@ export class CreateAdminUserDto implements CreateAdminUserInput {
   organizationUnitId!: string;
 
   @ApiProperty({ enum: StaffPermission, isArray: true, uniqueItems: true, minItems: 1, maxItems: 3 })
+  @ValidateIf((obj: CreateAdminUserDto) => !Array.isArray(obj.roles) || obj.roles.length === 0 || obj.staffPermissions !== undefined)
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(3)
   @ArrayUnique()
   @IsEnum(StaffPermission, { each: true })
   staffPermissions!: StaffPermission[];
+
+  @ApiPropertyOptional({ enum: Role, isArray: true, uniqueItems: true, minItems: 1, maxItems: 3 })
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(3)
+  @ArrayUnique()
+  @IsEnum(Role, { each: true })
+  roles?: Role[];
 
   @ApiProperty({ minLength: 1, maxLength: 255 })
   @Transform(trimString)

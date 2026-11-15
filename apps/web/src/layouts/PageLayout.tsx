@@ -50,7 +50,7 @@ export const PageHeader = memo(function PageHeader({
         ) : (
           <h1 className={backLink ? 'mt-1' : undefined}>{title}</h1>
         )}
-        {/* {description && <p className='route-intro'>{description}</p>} */}
+        {description && <p className='route-intro'>{description}</p>}
       </div>
       {actions && <div className='admin-actions'>{actions}</div>}
     </div>

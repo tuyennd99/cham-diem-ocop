@@ -5,6 +5,7 @@
   "engines": { "node": ">=24.7 <25" },
   "scripts": {
     "dev": "pnpm --parallel --filter @ocop/web --filter @ocop/api dev",
+    "dev:cloud": "node scripts/dev-cloud.mjs",
     "build": "pnpm --filter @ocop/web --filter @ocop/api build",
     "typecheck": "pnpm --filter @ocop/web --filter @ocop/api typecheck",
     "format": "pnpm --filter @ocop/web --filter @ocop/api format"

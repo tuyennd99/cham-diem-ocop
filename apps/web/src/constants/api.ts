@@ -4,6 +4,7 @@ const seg = encodeURIComponent;
 
 export const API = {
   auth: {
+    seedAccounts: '/auth/seed-accounts',
     login: '/auth/login',
     register: '/auth/register',
     verifyOtp: '/auth/verify-otp',
@@ -31,6 +32,8 @@ export const API = {
   },
   my: {
     products: '/my/products',
+    registrationUnits: '/my/registration-units',
+    registrationUnit: (id: string) => `/my/registration-units/${seg(id)}`,
     product: (id: string) => `/my/products/${seg(id)}`,
     submit: (id: string) => `/my/products/${seg(id)}/submit`,
     registrationPrintData: (id: string) => `/my/products/${seg(id)}/registration-print-data`,
@@ -49,6 +52,7 @@ export const API = {
   },
   admin: {
     dashboard: '/admin/dashboard',
+    managingAgencies: '/admin/managing-agencies',
     judges: '/admin/judges',
     judge: (id: string) => `/admin/judges/${seg(id)}`,
     judgeResetPassword: (id: string) => `/admin/judges/${seg(id)}/reset-password`,
@@ -74,6 +78,16 @@ export const API = {
     products: '/admin/products',
     product: (id: string) => `/admin/products/${seg(id)}`,
     productSubmit: (id: string) => `/admin/products/${seg(id)}/submit`,
+    productApprove: (id: string) => `/admin/products/${seg(id)}/approve`,
+    productReturn: (id: string) => `/admin/products/${seg(id)}/return`,
+    productPublishResults: (id: string) => `/admin/products/${seg(id)}/publish-results`,
+    productReopen: (id: string) => `/admin/products/${seg(id)}/reopen`,
+    productEligibleJudges: (id: string) => `/admin/products/${seg(id)}/eligible-judges`,
+    productAssignments: (id: string) => `/admin/products/${seg(id)}/assignments`,
+    productAssignment: (id: string, judgeId: string) =>
+      `/admin/products/${seg(id)}/assignments/${seg(judgeId)}`,
+    productEvaluationReopen: (id: string, evaluationId: string) =>
+      `/admin/products/${seg(id)}/evaluations/${seg(evaluationId)}/reopen`,
     productRegistrationPrintData: (id: string) =>
       `/admin/products/${seg(id)}/registration-print-data`,
     productResultsPrintData: (id: string) => `/admin/products/${seg(id)}/results/print-data`,

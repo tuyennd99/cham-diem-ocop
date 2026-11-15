@@ -69,6 +69,7 @@ describe('print-data builders', () => {
       },
       currentProduct: {
         id: 'prod-1',
+        codeNumber: 42,
         name: 'Tên mới sau khi đổi',
         formData: { entityName: 'Tên chủ thể mới' },
         category: {
@@ -139,6 +140,9 @@ describe('print-data builders', () => {
     expect(result.judge.fullName).toBe('Nguyễn Văn Giám Khảo (Lúc nộp)');
     expect(result.judge.organizationUnitName).toBe('Sở Nông nghiệp (Lúc nộp)');
     expect(result.product.name).toBe('Trà Shan Tuyết cổ thụ');
+    expect(result.product.codeNumber).toBe(42);
+    expect(result.product.code).toBe('OCOP-000042');
+    expect(result.product.codeFromCurrentProduct).toBe(true);
     expect(result.product.entityName).toBe('HTX Trà vùng cao');
     expect(result.isPartialScope).toBe(true);
     expect(result.total).toBe(50);
@@ -241,6 +245,7 @@ describe('print-data builders', () => {
       generatedAt: new Date('2026-10-24T08:00:00.000Z'),
       product: {
         id: 'prod-1',
+        codeNumber: 1234567,
         name: 'Tên hiện tại đã sửa',
         description: 'Mô tả hiện tại',
         status: 'SUBMITTED',
@@ -321,6 +326,9 @@ describe('print-data builders', () => {
     expect(result.isDraft).toBe(false);
     expect(result.hasSubmissionSnapshot).toBe(true);
     expect(result.product.name).toBe('Tên sản phẩm lúc nộp');
+    expect(result.product.codeNumber).toBe(1234567);
+    expect(result.product.code).toBe('OCOP-1234567');
+    expect(result.product.codeFromCurrentProduct).toBe(true);
     expect(result.registrant.fullName).toBe('Chủ thể lúc nộp');
     expect(result.category).toEqual({ id: 'cat-1', name: 'Phân loại lúc nộp' });
     expect(result.locality?.name).toBe('Xã lúc nộp');

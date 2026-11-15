@@ -2,6 +2,9 @@ import { Transform, Type } from 'class-transformer';
 import type { TransformFnParams } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayMaxSize,
+  ArrayUnique,
+  IsArray,
   IsBoolean,
   IsDateString,
   IsInt,
@@ -102,7 +105,17 @@ abstract class CatalogQueryDto {
   isActive?: boolean;
 }
 
-export class AdminCategoriesQueryDto extends CatalogQueryDto implements AdminCategoryQuery {}
+export class AdminCategoriesQueryDto
+  extends CatalogQueryDto
+  implements AdminCategoryQuery
+{
+  @ApiPropertyOptional({ maxLength: 100 })
+  @IsOptional()
+  @Transform(trimString)
+  @IsString()
+  @MaxLength(100)
+  managingAgencyId?: string;
+}
 
 export class CreateAdminCategoryDto implements CreateAdminCategoryInput {
   @ApiProperty({ minLength: 1, maxLength: 255 })
@@ -124,6 +137,16 @@ export class CreateAdminCategoryDto implements CreateAdminCategoryInput {
   @IsInt()
   @Min(0)
   order?: number;
+
+  @ApiPropertyOptional({ type: [String], maxItems: 20, uniqueItems: true })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
+  @MaxLength(100, { each: true })
+  managingAgencyIds?: string[];
 
   @ApiProperty({ minLength: 1, maxLength: 255 })
   @Transform(trimString)
@@ -159,6 +182,16 @@ export class UpdateAdminCategoryDto implements UpdateAdminCategoryInput {
   @ValidateIf((_object, value) => value !== undefined)
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({ type: [String], maxItems: 20, uniqueItems: true })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
+  @MaxLength(100, { each: true })
+  managingAgencyIds?: string[];
 
   @ApiProperty({ minLength: 1, maxLength: 255 })
   @Transform(trimString)

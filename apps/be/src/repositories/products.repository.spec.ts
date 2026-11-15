@@ -1,6 +1,20 @@
-import { ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProductsRepository } from './products.repository';
+
+const validFormData = {
+  entityName: 'HTX Rạch Gốc',
+  representativeName: 'Nguyễn Văn A',
+  representativeTitle: 'Giám đốc',
+  contactAddress: 'Số 1 Đường Bạch Đằng',
+  provinceName: 'Cao Bằng',
+  localityName: 'Xã Bạch Đằng',
+  phone: '0900000008',
+  registrationType: 'FIRST',
+  sampleQuantity: 2,
+  assessmentYear: 2026,
+  declarationAccepted: true,
+};
 
 describe('ProductsRepository history and category availability', () => {
   let tx: any;
@@ -12,6 +26,23 @@ describe('ProductsRepository history and category availability', () => {
       'postgresql://127.0.0.1/ocop_test?schema=ocop_test_unit';
     tx = {
       $queryRaw: jest.fn().mockResolvedValue([]),
+      $executeRaw: jest.fn().mockResolvedValue(1),
+      locality: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'locality-1',
+          code: 'L1',
+          name: 'Xã Bạch Đằng',
+          provinceName: 'Cao Bằng',
+          isActive: true,
+        }),
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'locality-1',
+          code: 'L1',
+          name: 'Xã Bạch Đằng',
+          provinceName: 'Cao Bằng',
+          isActive: true,
+        }),
+      },
       productCategory: {
         count: jest.fn().mockResolvedValue(1),
         findMany: jest.fn(({ where }: { where?: { id?: { in?: string[] } } }) =>
@@ -32,9 +63,13 @@ describe('ProductsRepository history and category availability', () => {
           id: 'product',
           createdAt: new Date('2026-10-22T00:00:00Z'),
         }),
-        findFirst: jest
-          .fn()
-          .mockResolvedValue({ id: 'product', categoryId: 'old-category' }),
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'product',
+          categoryId: 'old-category',
+          localityId: 'locality-1',
+          name: 'Product',
+          formData: validFormData,
+        }),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 'product' }),
       },
@@ -58,8 +93,9 @@ describe('ProductsRepository history and category availability', () => {
       {
         registrantId: 'registrant',
         categoryId: 'category',
+        localityId: 'locality-1',
         name: 'Product',
-        formData: {},
+        formData: validFormData,
       },
       { kind: 'OWNER', id: 'registrant' },
     );
@@ -180,6 +216,97 @@ describe('ProductsRepository history and category availability', () => {
         },
       ),
     ).rejects.toThrow(ConflictException);
+  });
+
+  it('rejects creating a draft with missing mandatory fields without writing to DB', async () => {
+    await expect(
+      repository.create(
+        {
+          registrantId: 'registrant',
+          categoryId: 'category',
+          name: 'Product',
+          formData: {},
+        },
+        { kind: 'OWNER', id: 'registrant' },
+      ),
+    ).rejects.toThrow(BadRequestException);
+    expect(tx.product.create).not.toHaveBeenCalled();
+  });
+
+  it('merges partial updates with existing draft data and blocks incomplete legacy drafts until completed', async () => {
+    await expect(
+      repository.updateDraft(
+        'product',
+        { kind: 'OWNER', id: 'registrant' },
+        {
+          formData: {
+            contactAddress: 'Số 99 Đường Mới',
+          },
+        },
+      ),
+    ).resolves.toEqual({ id: 'product' });
+    expect(tx.product.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          formData: expect.objectContaining({
+            entityName: 'HTX Rạch Gốc',
+            contactAddress: 'Số 99 Đường Mới',
+            phone: '0900000008',
+          }),
+        }),
+      }),
+    );
+
+    tx.product.updateMany.mockClear();
+    tx.product.findFirst.mockResolvedValue({
+      id: 'legacy-draft',
+      categoryId: 'old-category',
+      localityId: 'locality-1',
+      name: 'Legacy draft',
+      formData: {
+        entityName: 'HTX Cũ',
+      },
+    });
+    await expect(
+      repository.updateDraft(
+        'legacy-draft',
+        { kind: 'OWNER', id: 'registrant' },
+        { name: 'Still incomplete' },
+      ),
+    ).rejects.toThrow(BadRequestException);
+    expect(tx.product.updateMany).not.toHaveBeenCalled();
+
+    await expect(
+      repository.updateDraft(
+        'legacy-draft',
+        { kind: 'OWNER', id: 'registrant' },
+        {
+          formData: {
+            representativeName: 'Nguyễn Văn B',
+            representativeTitle: 'Chủ nhiệm',
+            contactAddress: 'Thôn 1',
+            provinceName: 'Cao Bằng',
+            localityName: 'Xã Bạch Đằng',
+            email: 'htx@ocop.test',
+            registrationType: 'FIRST',
+            sampleQuantity: 1,
+            assessmentYear: 2026,
+            declarationAccepted: true,
+          },
+        },
+      ),
+    ).resolves.toEqual({ id: 'product' });
+    expect(tx.product.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          formData: expect.objectContaining({
+            entityName: 'HTX Cũ',
+            representativeName: 'Nguyễn Văn B',
+            email: 'htx@ocop.test',
+          }),
+        }),
+      }),
+    );
   });
 });
 

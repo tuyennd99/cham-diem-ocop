@@ -1,4 +1,5 @@
 import { createFileRoute, redirect } from '@tanstack/react-router';
+import { VERIFICATION_STATE_KIND } from '../constants/auth';
 import { loadPendingRegistration } from '../pages/auth/pending-email';
 import { VerifyOtpPage } from '../pages/auth/VerifyOtpPage';
 
@@ -8,7 +9,7 @@ export const Route = createFileRoute('/_auth/verify-otp')({
   loaderDeps: ({ search }) => ({ legacy: search.legacy === true }),
   loader: async ({ deps }) => {
     const state = await loadPendingRegistration(deps.legacy);
-    if (state.kind === 'error' && state.restartTo)
+    if (state.kind === VERIFICATION_STATE_KIND.ERROR && state.restartTo)
       throw redirect({ to: state.restartTo, replace: true });
     return state;
   },

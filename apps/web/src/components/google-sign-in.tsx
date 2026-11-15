@@ -2,6 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useForm } from '@tanstack/react-form';
 import { useNavigate } from '@tanstack/react-router';
 import { authApi } from '../api/auth';
+import {
+  GOOGLE_AUTH_INTENT,
+  GOOGLE_RESULT_KIND,
+  GOOGLE_SIGN_IN_PHASE,
+  REGISTRATION_VERIFICATION_MODE,
+} from '../constants/auth';
 import { ApiError, messageOf } from '../lib/api-error';
 import { homeFor, setSession } from '../lib/auth';
 import { optionalText } from '../lib/utils';
@@ -85,22 +91,22 @@ function ConfiguredGoogleSignIn({
   const navigate = useNavigate();
   const container = useRef<HTMLDivElement>(null);
   const [attempt, setAttempt] = useState(0);
-  const [phase, setPhase] = useState<'loading' | 'ready' | 'waiting' | 'posting' | 'error'>(
-    'loading',
-  );
+  const [phase, setPhase] = useState<
+    (typeof GOOGLE_SIGN_IN_PHASE)[keyof typeof GOOGLE_SIGN_IN_PHASE]
+  >(GOOGLE_SIGN_IN_PHASE.LOADING);
   const [error, setError] = useState('');
   const [profile, setProfile] = useState<GoogleProfileResult | null>(null);
 
   async function accept(result: GoogleResult) {
-    if (result.kind === 'session') {
+    if (result.kind === GOOGLE_RESULT_KIND.SESSION) {
       clearPendingEmail();
       setSession({ accessToken: result.accessToken, user: result.user });
       await navigate({ to: homeFor(result.user.role, result.user.staffPermissions) });
-    } else if (result.kind === 'profile') {
+    } else if (result.kind === GOOGLE_RESULT_KIND.PROFILE) {
       setProfile(result);
       profileForm.setFieldValue('fullName', result.suggestedName ?? '');
     } else {
-      writePendingEmail({ ...result, mode: 'google-link' });
+      writePendingEmail({ ...result, mode: REGISTRATION_VERIFICATION_MODE.GOOGLE_LINK });
       await navigate({ to: '/verify-otp', search: {} });
     }
   }
@@ -185,15 +191,15 @@ function ConfiguredGoogleSignIn({
           theme: 'outline',
           size: 'large',
           locale: 'vi',
-          text: intent === 'login' ? 'signin_with' : 'signup_with',
+          text: intent === GOOGLE_AUTH_INTENT.LOGIN ? 'signin_with' : 'signup_with',
           click_listener: () => {
             if (active && !used) {
               setError('');
-              setPhase('waiting');
+              setPhase(GOOGLE_SIGN_IN_PHASE.WAITING);
             }
           },
         });
-        setPhase('ready');
+        setPhase(GOOGLE_SIGN_IN_PHASE.READY);
       } catch (cause) {
         if (!active) return;
         setError(
@@ -201,7 +207,7 @@ function ConfiguredGoogleSignIn({
             ? cause.message
             : 'Không thể tải đăng nhập Google. Kiểm tra kết nối và thử lại.',
         );
-        setPhase('error');
+        setPhase(GOOGLE_SIGN_IN_PHASE.ERROR);
       }
     }
     void prepare();
@@ -213,7 +219,7 @@ function ConfiguredGoogleSignIn({
   function restart() {
     setProfile(null);
     setError(
-      phase === 'waiting'
+      phase === GOOGLE_SIGN_IN_PHASE.WAITING
         ? 'Đăng nhập Google đã bị hủy hoặc chưa hoàn tất. Bạn có thể thử lại.'
         : '',
     );
@@ -285,19 +291,25 @@ function ConfiguredGoogleSignIn({
         <>
           <div
             ref={container}
-            hidden={phase === 'loading' || phase === 'error'}
-            inert={phase === 'posting' || phase === 'waiting'}
+            hidden={phase === GOOGLE_SIGN_IN_PHASE.LOADING || phase === GOOGLE_SIGN_IN_PHASE.ERROR}
+            inert={phase === GOOGLE_SIGN_IN_PHASE.POSTING || phase === GOOGLE_SIGN_IN_PHASE.WAITING}
           />
-          {phase === 'loading' && <p role='status'>Đang chuẩn bị đăng nhập Google…</p>}
-          {phase === 'posting' && <p role='status'>Đang xác minh tài khoản Google…</p>}
-          {phase === 'waiting' && (
+          {phase === GOOGLE_SIGN_IN_PHASE.LOADING && (
+            <p role='status'>Đang chuẩn bị đăng nhập Google…</p>
+          )}
+          {phase === GOOGLE_SIGN_IN_PHASE.POSTING && (
+            <p role='status'>Đang xác minh tài khoản Google…</p>
+          )}
+          {phase === GOOGLE_SIGN_IN_PHASE.WAITING && (
             <p role='status'>
               Hoàn tất trong cửa sổ Google. Nếu đã đóng cửa sổ, chọn hủy và thử lại.
             </p>
           )}
-          {(phase === 'waiting' || phase === 'error') && (
+          {(phase === GOOGLE_SIGN_IN_PHASE.WAITING || phase === GOOGLE_SIGN_IN_PHASE.ERROR) && (
             <Button type='button' variant='secondary' onClick={restart}>
-              {phase === 'waiting' ? 'Hủy và thử lại' : 'Thử lại đăng nhập Google'}
+              {phase === GOOGLE_SIGN_IN_PHASE.WAITING
+                ? 'Hủy và thử lại'
+                : 'Thử lại đăng nhập Google'}
             </Button>
           )}
         </>

@@ -42,14 +42,34 @@ const criteriaSetSummary = {
   _count: { select: { criteria: true } },
 } as const;
 
+const agencyLinkSelect = {
+  orderBy: [
+    { agency: { order: 'asc' as const } },
+    { agency: { code: 'asc' as const } },
+  ],
+  select: {
+    agency: {
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        order: true,
+        isActive: true,
+      },
+    },
+  },
+} satisfies Prisma.ProductCategory$agencyLinksArgs;
+
 const adminCategorySelect = {
   ...categoryFields,
+  agencyLinks: agencyLinkSelect,
   criteriaSet: { select: criteriaSetSummary },
   _count: { select: { products: true } },
 } satisfies Prisma.ProductCategorySelect;
 
 const adminCategoryDetailSelect = {
   ...categoryFields,
+  agencyLinks: agencyLinkSelect,
   criteriaSet: {
     select: {
       ...criteriaSetSummary,
@@ -85,10 +105,13 @@ const adminCategoryDetailSelect = {
 
 const categoryMutationSelect = {
   ...categoryFields,
+  agencyLinks: agencyLinkSelect,
 } satisfies Prisma.ProductCategorySelect;
 
 const submittedStatuses: ProductStatus[] = [
   ProductStatus.SUBMITTED,
+  ProductStatus.RETURNED,
+  ProductStatus.APPROVED,
   ProductStatus.SCORING,
   ProductStatus.COMPLETED,
 ];
@@ -245,6 +268,13 @@ async function assertNoOverlappingEvent(
 export class AdminCatalogsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  listManagingAgencies() {
+    return this.prisma.managingAgency.findMany({
+      where: { isActive: true },
+      orderBy: [{ order: 'asc' }, { code: 'asc' }],
+    });
+  }
+
   async listLocalities(query: LocalityQuery, publicOnly = false) {
     const { page, limit, q, provinceName } = query;
     const skip = (page - 1) * limit;
@@ -253,7 +283,6 @@ export class AdminCatalogsRepository {
         'Pagination exceeds the safe integer range',
       );
     }
-    const now = new Date();
     const where: Prisma.LocalityWhereInput = {
       ...(provinceName
         ? { provinceName: { contains: provinceName, mode: 'insensitive' } }
@@ -271,26 +300,6 @@ export class AdminCatalogsRepository {
       ...(publicOnly
         ? {
             isActive: true,
-            AND: [
-              {
-                OR: [{ effectiveFrom: null }, { effectiveFrom: { lte: now } }],
-              },
-              {
-                OR: [{ effectiveTo: null }, { effectiveTo: { gt: now } }],
-              },
-              {
-                OR: [
-                  { registrationFrom: null },
-                  { registrationFrom: { lte: now } },
-                ],
-              },
-              {
-                OR: [
-                  { registrationTo: null },
-                  { registrationTo: { gt: now } },
-                ],
-              },
-            ],
           }
         : query.isActive === undefined
           ? {}
@@ -491,7 +500,7 @@ export class AdminCatalogsRepository {
   }
 
   async listCategories(query: AdminCategoriesQueryDto) {
-    const { page, limit, q, isActive } = query;
+    const { page, limit, q, isActive, managingAgencyId } = query;
     const skip = (page - 1) * limit;
     if (!Number.isSafeInteger(page) || !Number.isSafeInteger(skip)) {
       throw new BadRequestException(
@@ -500,6 +509,9 @@ export class AdminCatalogsRepository {
     }
     const where: Prisma.ProductCategoryWhereInput = {
       ...(isActive === undefined ? {} : { isActive }),
+      ...(managingAgencyId
+        ? { agencyLinks: { some: { agencyId: managingAgencyId } } }
+        : {}),
       ...(q
         ? {
             OR: [
@@ -575,20 +587,47 @@ export class AdminCatalogsRepository {
     };
   }
 
+  private async validateAgencyIds(
+    tx: Prisma.TransactionClient,
+    managingAgencyIds: string[] | undefined,
+  ) {
+    if (!managingAgencyIds || !managingAgencyIds.length) return [];
+    const unique = [...new Set(managingAgencyIds)];
+    const found = await tx.managingAgency.findMany({
+      where: { id: { in: unique }, isActive: true },
+      select: { id: true },
+    });
+    if (found.length !== unique.length) {
+      throw new BadRequestException('Invalid managing agency ID');
+    }
+    return unique;
+  }
+
   createCategory(
     input: CreateAdminCategoryDto,
     actorId: string,
     meta: RequestMeta,
   ) {
-    const { reason, ...fields } = input;
+    const { reason, managingAgencyIds, ...fields } = input;
     return this.prisma.$transaction(
       async (tx) => {
+        const validAgencyIds = await this.validateAgencyIds(
+          tx,
+          managingAgencyIds,
+        );
         const category = await tx.productCategory.create({
           data: {
             ...fields,
             isActive: false,
             order: input.order ?? 0,
             description: input.description ?? null,
+            ...(validAgencyIds.length
+              ? {
+                  agencyLinks: {
+                    create: validAgencyIds.map((agencyId) => ({ agencyId })),
+                  },
+                }
+              : {}),
           },
           select: adminCategorySelect,
         });
@@ -614,7 +653,7 @@ export class AdminCatalogsRepository {
     actorId: string,
     meta: RequestMeta,
   ) {
-    const { reason, ...requested } = input;
+    const { reason, managingAgencyIds, ...requested } = input;
     return this.prisma.$transaction(
       async (tx) => {
         await this.lockCategories(tx, [id]);
@@ -640,6 +679,20 @@ export class AdminCatalogsRepository {
           });
           assertCriteriaSetReady(currentSet);
         }
+
+        let validAgencyIds: string[] | undefined;
+        let agenciesChanged = false;
+        if (managingAgencyIds !== undefined) {
+          validAgencyIds = await this.validateAgencyIds(tx, managingAgencyIds);
+          const beforeAgencyIds = before.agencyLinks
+            .map((l) => l.agency.id)
+            .sort();
+          const nextSorted = [...validAgencyIds].sort();
+          agenciesChanged =
+            beforeAgencyIds.length !== nextSorted.length ||
+            beforeAgencyIds.some((aId, idx) => aId !== nextSorted[idx]);
+        }
+
         const data: Prisma.ProductCategoryUncheckedUpdateInput = {
           ...(requested.name === undefined ? {} : { name: requested.name }),
           ...(requested.description === undefined
@@ -650,7 +703,7 @@ export class AdminCatalogsRepository {
             ? {}
             : { isActive: requested.isActive }),
         };
-        if (!Object.keys(data).length) {
+        if (!Object.keys(data).length && !agenciesChanged) {
           const row = await tx.productCategory.findUnique({
             where: { id },
             select: adminCategorySelect,
@@ -661,11 +714,31 @@ export class AdminCatalogsRepository {
           });
           return this.categoryRecord(row, submittedReferenceCount);
         }
-        const row = await tx.productCategory.update({
-          where: { id },
-          data,
-          select: adminCategorySelect,
-        });
+
+        if (agenciesChanged && validAgencyIds !== undefined) {
+          await tx.productCategoryAgency.deleteMany({
+            where: { categoryId: id },
+          });
+          if (validAgencyIds.length > 0) {
+            await tx.productCategoryAgency.createMany({
+              data: validAgencyIds.map((agencyId) => ({
+                categoryId: id,
+                agencyId,
+              })),
+            });
+          }
+        }
+
+        const row = Object.keys(data).length
+          ? await tx.productCategory.update({
+              where: { id },
+              data,
+              select: adminCategorySelect,
+            })
+          : await tx.productCategory.findUniqueOrThrow({
+              where: { id },
+              select: adminCategorySelect,
+            });
         const submittedReferenceCount = await tx.product.count({
           where: { categoryId: id, status: { in: submittedStatuses } },
         });
@@ -675,7 +748,10 @@ export class AdminCatalogsRepository {
           action: 'product_category.update',
           entityType: 'ProductCategory',
           entityId: id,
-          beforeData: before,
+          beforeData: {
+            ...before,
+            managingAgencies: before.agencyLinks.map((l) => l.agency),
+          },
           afterData: after,
           reason,
           ...meta,
@@ -691,11 +767,12 @@ export class AdminCatalogsRepository {
       select: typeof adminCategorySelect;
     }>,
   >(row: T, submittedReferenceCount: number): AdminCategoryRecord {
-    const { _count, criteriaSet, ...category } = row;
+    const { _count, criteriaSet, agencyLinks, ...category } = row;
     return {
       ...category,
       referenceCount: _count.products,
       submittedReferenceCount,
+      managingAgencies: agencyLinks.map((l) => l.agency),
       criteriaSet: criteriaSet
         ? {
             id: criteriaSet.id,

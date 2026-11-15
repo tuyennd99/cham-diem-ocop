@@ -347,7 +347,7 @@ describe('H5 scoring forms and print-data endpoints', () => {
 
       await prisma.product.update({
         where: { id: productId },
-        data: { finalScore: 90, starRating: 5 },
+        data: { finalScore: 90, starRating: 5, publicationState: 'PUBLISHED' },
       });
       const completed5Star = await f.call(
         'owner',

@@ -19,11 +19,19 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { Permissions } from '../decorators/permissions.decorator';
+import { ResponseMessage } from '../decorators/response-message.decorator';
 import {
+  AddProductJudgeAssignmentDto,
   AdminProductCreateDto,
   AdminProductQueryDto,
   AdminProductUpdateDto,
+  ApproveProductDto,
   ProductMutationReasonDto,
+  PublishProductResultsDto,
+  RemoveProductJudgeAssignmentDto,
+  ReopenEvaluationDto,
+  ReopenProductDto,
+  ReturnProductDto,
 } from '../dtos/admin-products.dto';
 import { AdminService } from '../services/admin.service';
 import { ProductsService } from '../services/products.service';
@@ -118,6 +126,135 @@ export class AdminProductsController {
   ): Promise<StreamableFile> {
     return asDownload(
       await this.products.getAdminAttachment(id, attachmentId, principal),
+    );
+  }
+
+  @Post(':id/approve')
+  @Permissions(StaffPermission.VIEW)
+  @ResponseMessage('Duyệt hồ sơ sản phẩm thành công')
+  approve(
+    @Param('id') id: string,
+    @Body() body: ApproveProductDto,
+    @CurrentUser() principal: AuthenticatedPrincipal,
+    @Req() request: Request,
+  ) {
+    return this.admin.approveProduct(
+      id,
+      body,
+      principal,
+      requestMeta(request),
+    );
+  }
+
+  @Post(':id/return')
+  @Permissions(StaffPermission.VIEW)
+  @ResponseMessage('Trả lại hồ sơ sản phẩm thành công')
+  returnProduct(
+    @Param('id') id: string,
+    @Body() body: ReturnProductDto,
+    @CurrentUser() principal: AuthenticatedPrincipal,
+    @Req() request: Request,
+  ) {
+    return this.admin.returnProduct(
+      id,
+      body,
+      principal,
+      requestMeta(request),
+    );
+  }
+
+  @Post(':id/publish-results')
+  @Permissions(StaffPermission.VIEW)
+  @ResponseMessage('Công bố kết quả chấm điểm thành công')
+  publishResults(
+    @Param('id') id: string,
+    @Body() body: PublishProductResultsDto,
+    @CurrentUser() principal: AuthenticatedPrincipal,
+    @Req() request: Request,
+  ) {
+    return this.admin.publishProductResults(
+      id,
+      body,
+      principal,
+      requestMeta(request),
+    );
+  }
+
+  @Post(':id/reopen')
+  @Permissions(StaffPermission.VIEW)
+  @ResponseMessage('Mở lại hồ sơ sản phẩm thành công')
+  reopen(
+    @Param('id') id: string,
+    @Body() body: ReopenProductDto,
+    @CurrentUser() principal: AuthenticatedPrincipal,
+    @Req() request: Request,
+  ) {
+    return this.admin.reopenProduct(
+      id,
+      body,
+      principal,
+      requestMeta(request),
+    );
+  }
+
+  @Get(':id/eligible-judges')
+  @Permissions(StaffPermission.VIEW)
+  eligibleJudges(@Param('id') id: string) {
+    return this.admin.listEligibleJudgesForProduct(id);
+  }
+
+  @Post(':id/assignments')
+  @Permissions(StaffPermission.VIEW)
+  @ResponseMessage('Cập nhật phân công giám khảo thành công')
+  addAssignment(
+    @Param('id') id: string,
+    @Body() body: AddProductJudgeAssignmentDto,
+    @CurrentUser() principal: AuthenticatedPrincipal,
+    @Req() request: Request,
+  ) {
+    return this.admin.addProductJudgeAssignment(
+      id,
+      body,
+      principal,
+      requestMeta(request),
+    );
+  }
+
+  @Delete(':id/assignments/:judgeId')
+  @Permissions(StaffPermission.VIEW)
+  @ResponseMessage('Gỡ giám khảo khỏi hồ sơ thành công')
+  removeAssignment(
+    @Param('id') id: string,
+    @Param('judgeId') judgeId: string,
+    @Body() body: RemoveProductJudgeAssignmentDto,
+    @CurrentUser() principal: AuthenticatedPrincipal,
+    @Req() request: Request,
+  ) {
+    return this.admin.removeProductJudgeAssignment(
+      id,
+      judgeId,
+      body,
+      principal,
+      requestMeta(request),
+    );
+  }
+
+  @Post(':id/evaluations/:evaluationId/reopen')
+  @Permissions(StaffPermission.VIEW)
+  @ResponseMessage('Mở lại phiếu chấm điểm thành công')
+  reopenEvaluation(
+    @Param('id') id: string,
+    @Param('evaluationId') evaluationId: string,
+    @Body() body: ReopenEvaluationDto,
+    @CurrentUser() principal: AuthenticatedPrincipal,
+    @Req() request: Request,
+  ) {
+    return this.admin.reopenEvaluation(
+      id,
+      evaluationId,
+      body,
+      principal,
+      requestMeta(request),
     );
   }
 

@@ -1,26 +1,136 @@
 import { useEffect, useState } from 'react';
 import { ImageOff, Loader2 } from 'lucide-react';
+import { PRODUCT_WORKSPACE_MODE } from '@/constants/consts';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { judgeApi, myProductsApi } from '../../api';
 import { adminProductsApi } from '../../api/admin-products';
 import { messageOf } from '../../lib/api-error';
 import { openAttachment } from '../../lib/attachments';
+import { sessionStore } from '../../stores/session-store';
 
-export type ProductAttachmentMode = 'owner' | 'admin' | 'judge';
+export type ProductAttachmentMode =
+  | typeof PRODUCT_WORKSPACE_MODE.OWNER
+  | typeof PRODUCT_WORKSPACE_MODE.ADMIN
+  | typeof PRODUCT_WORKSPACE_MODE.JUDGE;
 
-function fetchAttachmentBlob(
+interface CachedAttachmentEntry {
+  blob: Blob;
+  objectUrl: string;
+}
+
+const MAX_CACHED_ATTACHMENTS = 150;
+const attachmentCache = new Map<string, CachedAttachmentEntry>();
+const inflightRequests = new Map<string, Promise<CachedAttachmentEntry>>();
+
+function buildAttachmentCacheKey(productId: string, attachmentId: string): string {
+  return `${productId}:${attachmentId}`;
+}
+
+export function clearAttachmentBlobCache(): void {
+  for (const entry of attachmentCache.values()) {
+    try {
+      URL.revokeObjectURL(entry.objectUrl);
+    } catch {
+      // ignore revoke errors
+    }
+  }
+  attachmentCache.clear();
+  inflightRequests.clear();
+}
+
+// Clear private attachment object URLs whenever the authenticated user changes or logs out.
+let lastUserId: string | null = sessionStore.getState().session?.user.id ?? null;
+sessionStore.subscribe((state) => {
+  const nextUserId = state.session?.user.id ?? null;
+  if (nextUserId !== lastUserId) {
+    lastUserId = nextUserId;
+    clearAttachmentBlobCache();
+  }
+});
+
+function requestRawAttachmentBlob(
   mode: ProductAttachmentMode,
   productId: string,
   attachmentId: string,
 ): Promise<Blob> {
-  if (mode === 'admin') {
+  if (mode === PRODUCT_WORKSPACE_MODE.ADMIN) {
     return adminProductsApi.attachment(productId, attachmentId);
   }
-  if (mode === 'judge') {
+  if (mode === PRODUCT_WORKSPACE_MODE.JUDGE) {
     return judgeApi.attachment(productId, attachmentId);
   }
   return myProductsApi.attachment(productId, attachmentId);
+}
+
+function touchCacheEntry(key: string, entry: CachedAttachmentEntry): CachedAttachmentEntry {
+  attachmentCache.delete(key);
+  attachmentCache.set(key, entry);
+  while (attachmentCache.size > MAX_CACHED_ATTACHMENTS) {
+    const oldestKey = attachmentCache.keys().next().value;
+    if (!oldestKey) break;
+    const oldest = attachmentCache.get(oldestKey);
+    attachmentCache.delete(oldestKey);
+    if (oldest) {
+      try {
+        URL.revokeObjectURL(oldest.objectUrl);
+      } catch {
+        // ignore
+      }
+    }
+  }
+  return entry;
+}
+
+export function getCachedAttachmentObjectUrl(
+  productId: string,
+  attachmentId: string,
+): string | null {
+  const key = buildAttachmentCacheKey(productId, attachmentId);
+  const existing = attachmentCache.get(key);
+  if (!existing) return null;
+  return touchCacheEntry(key, existing).objectUrl;
+}
+
+export function loadAttachmentWithCache(
+  mode: ProductAttachmentMode,
+  productId: string,
+  attachmentId: string,
+): Promise<CachedAttachmentEntry> {
+  const key = buildAttachmentCacheKey(productId, attachmentId);
+  const cached = attachmentCache.get(key);
+  if (cached) {
+    return Promise.resolve(touchCacheEntry(key, cached));
+  }
+  const existingPromise = inflightRequests.get(key);
+  if (existingPromise) {
+    return existingPromise;
+  }
+  const promise = requestRawAttachmentBlob(mode, productId, attachmentId)
+    .then((blob) => {
+      const objectUrl = URL.createObjectURL(blob);
+      const entry = touchCacheEntry(key, { blob, objectUrl });
+      inflightRequests.delete(key);
+      return entry;
+    })
+    .catch((err) => {
+      inflightRequests.delete(key);
+      throw err;
+    });
+  inflightRequests.set(key, promise);
+  return promise;
+}
+
+export function prefetchProductAttachments(
+  mode: ProductAttachmentMode,
+  productId: string,
+  attachmentIds: readonly string[],
+): void {
+  for (const attachmentId of attachmentIds) {
+    void loadAttachmentWithCache(mode, productId, attachmentId).catch(() => {
+      // ignore background prefetch errors
+    });
+  }
 }
 
 export async function openProductAttachmentByMode(
@@ -30,7 +140,7 @@ export async function openProductAttachmentByMode(
   name: string,
 ) {
   try {
-    const blob = await fetchAttachmentBlob(mode, productId, attachmentId);
+    const { blob } = await loadAttachmentWithCache(mode, productId, attachmentId);
     await openAttachment(blob, name, true);
   } catch (e) {
     window.alert(messageOf(e));
@@ -38,7 +148,7 @@ export async function openProductAttachmentByMode(
 }
 
 export function AttachmentLink({
-  mode = 'owner',
+  mode = PRODUCT_WORKSPACE_MODE.OWNER,
   productId,
   attachmentId,
   name,
@@ -80,27 +190,30 @@ export function PrivateAttachmentThumbnail({
   className?: string;
   onImageLoad?: (dimensions: { width: number; height: number; src: string }) => void;
 }) {
-  const [src, setSrc] = useState('');
+  const [src, setSrc] = useState<string>(
+    () => getCachedAttachmentObjectUrl(productId, attachmentId) ?? '',
+  );
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let active = true;
-    let objectUrl = '';
+    const cachedUrl = getCachedAttachmentObjectUrl(productId, attachmentId);
+    if (cachedUrl) {
+      setSrc(cachedUrl);
+      setFailed(false);
+      return;
+    }
     setSrc('');
     setFailed(false);
-    const request = fetchAttachmentBlob(mode, productId, attachmentId);
-    void request
-      .then((blob) => {
-        objectUrl = URL.createObjectURL(blob);
-        if (active) setSrc(objectUrl);
-        else URL.revokeObjectURL(objectUrl);
+    void loadAttachmentWithCache(mode, productId, attachmentId)
+      .then((entry) => {
+        if (active) setSrc(entry.objectUrl);
       })
       .catch(() => {
         if (active) setFailed(true);
       });
     return () => {
       active = false;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [attachmentId, mode, productId]);
 

@@ -36,6 +36,8 @@ describe('AdminService dashboard', () => {
       productsByStatus: {
         DRAFT: 0,
         SUBMITTED: 2,
+        RETURNED: 0,
+        APPROVED: 0,
         SCORING: 0,
         COMPLETED: 1,
       },

@@ -17,19 +17,32 @@ import type {
   ProductRegistrationType,
   ReportGroupBy,
 } from '@ocop/shared';
-import { productRegistrationTypes } from '../constants/products';
+import {
+  productRegistrationTypes,
+  reportGroupByValues,
+} from '../constants/products';
 
-export const reportGroupByValues = [
-  'month',
-  'year',
-  'locality',
-  'category',
-] as const satisfies readonly ReportGroupBy[];
+export { reportGroupByValues };
 
 const trimString = ({ value }: TransformFnParams) =>
   typeof value === 'string' ? value.trim() || undefined : value;
 
 export class AdminDashboardQueryDto implements AdminReportFilterQuery {
+  @ApiPropertyOptional({ minimum: 1, maximum: 100000 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100000)
+  queuePage?: number;
+
+  @ApiPropertyOptional({ maxLength: 100 })
+  @IsOptional()
+  @Transform(trimString)
+  @IsString()
+  @MaxLength(100)
+  queueSearch?: string;
+
   @ApiPropertyOptional({ minimum: 2020, maximum: 2100 })
   @IsOptional()
   @Type(() => Number)

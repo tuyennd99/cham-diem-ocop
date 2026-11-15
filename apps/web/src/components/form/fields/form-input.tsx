@@ -1,25 +1,42 @@
-import { Input } from '@/components/ui/input';
 import type { InputProps } from '@/types/ui';
 import { numberInputValue } from '@/components/form/field-values';
 import { resolveFieldDescribedBy } from '@/components/form/form-errors';
-import { FormFieldLayout, useNativeFieldError, useResolvedField, type BaseFieldLayoutProps } from '@/components/form/form-field-layout';
+import {
+  FormFieldLayout,
+  useNativeFieldError,
+  useResolvedField,
+  type BaseFieldLayoutProps,
+} from '@/components/form/form-field-layout';
+import { Input } from '@/components/ui/input';
 
 type NativeInputProps = Omit<
   InputProps,
   'id' | 'name' | 'value' | 'defaultValue' | 'onChange' | 'onBlur' | 'type' | 'aria-invalid'
 >;
-type FormInputProps = BaseFieldLayoutProps & NativeInputProps & (
-  | { type: 'number'; onValueChange?: (value: number | undefined) => void }
-  | { type?: 'text' | 'email' | 'tel' | 'url' | 'search'; onValueChange?: (value: string) => void }
-);
+type FormInputProps = BaseFieldLayoutProps &
+  NativeInputProps &
+  (
+    | { type: 'number'; onValueChange?: (value: number | undefined) => void }
+    | {
+        type?: 'text' | 'email' | 'tel' | 'url' | 'search';
+        onValueChange?: (value: string) => void;
+      }
+  );
 
 export function FormInput(props: FormInputProps) {
   const meta = useResolvedField<string | number | undefined>(props.id);
   const native = useNativeFieldError(meta.field);
   const error = meta.error || native.error;
   const {
-    label, hint, hintId, optional, required, className, id: _id,
-    onValueChange: _onValueChange, ...inputProps
+    label,
+    hint,
+    hintId,
+    optional,
+    required,
+    className,
+    id: _id,
+    onValueChange: _onValueChange,
+    ...inputProps
   } = props;
 
   return (
@@ -43,7 +60,11 @@ export function FormInput(props: FormInputProps) {
         aria-invalid={Boolean(error)}
         onBlur={meta.handleBlur}
         aria-describedby={resolveFieldDescribedBy(
-          meta.id, Boolean(hint), Boolean(error), hintId, props['aria-describedby'],
+          meta.id,
+          Boolean(hint),
+          Boolean(error),
+          hintId,
+          props['aria-describedby'],
         )}
         onInvalid={(event) => {
           props.onInvalid?.(event);
@@ -52,7 +73,10 @@ export function FormInput(props: FormInputProps) {
         onChange={(event) => {
           native.validate(event.currentTarget);
           if (props.type === 'number') {
-            const next = numberInputValue(event.currentTarget.value, event.currentTarget.valueAsNumber);
+            const next = numberInputValue(
+              event.currentTarget.value,
+              event.currentTarget.valueAsNumber,
+            );
             meta.handleChange(next);
             props.onValueChange?.(next);
           } else {

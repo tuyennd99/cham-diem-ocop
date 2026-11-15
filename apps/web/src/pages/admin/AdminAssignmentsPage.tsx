@@ -31,7 +31,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { adminApi, productsApi } from '../../api';
-import { ALL } from '../../constants/consts';
+import { ALL, ASSIGNMENT_SCOPE_MODE, STAFF_PERMISSION } from '../../constants/consts';
 import { queryKeys } from '../../constants/query-key';
 import { assignmentPayload, assignmentScopeFor } from '../../lib/admin-assignment-form';
 import { parseAdminAssignmentSearch, type AdminAssignmentSearch } from '../../lib/admin-search';
@@ -67,7 +67,7 @@ export function AdminAssignmentsPage({
   onSearchChange,
 }: AdminAssignmentsPageProps) {
   const session = useSession();
-  const canManage = hasStaffPermission(session?.user, 'MANAGE');
+  const canManage = hasStaffPermission(session?.user, STAFF_PERMISSION.MANAGE);
   const queryClient = useQueryClient();
 
   const [fallbackSearch, setFallbackSearch] = useState<AdminAssignmentSearch>({});
@@ -93,7 +93,9 @@ export function AdminAssignmentsPage({
 
   const [judgeId, setJudgeId] = useState('');
   const [categoryId, setCategoryId] = useState('');
-  const [scopeMode, setScopeMode] = useState<'all' | 'specific'>('all');
+  const [scopeMode, setScopeMode] = useState<
+    (typeof ASSIGNMENT_SCOPE_MODE)[keyof typeof ASSIGNMENT_SCOPE_MODE]
+  >(ASSIGNMENT_SCOPE_MODE.ALL);
   const [criterionIds, setCriterionIds] = useState<string[]>([]);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -149,15 +151,15 @@ export function AdminAssignmentsPage({
   function syncScopeState(nextJudgeId: string, nextCategoryId: string, source = assignments) {
     const scoped = assignmentScopeFor(source, nextJudgeId, nextCategoryId);
     setCriterionIds(scoped);
-    setScopeMode(scoped.length > 0 ? 'specific' : 'all');
+    setScopeMode(scoped.length > 0 ? ASSIGNMENT_SCOPE_MODE.SPECIFIC : ASSIGNMENT_SCOPE_MODE.ALL);
   }
 
   function applyScope() {
     if (!judgeId || !categoryId || !selectedCategory) return;
-    if (scopeMode === 'specific' && criterionIds.length === 0) return;
+    if (scopeMode === ASSIGNMENT_SCOPE_MODE.SPECIFIC && criterionIds.length === 0) return;
     const judge = judges.find((item) => item.id === judgeId);
     if (!judge) return;
-    const effectiveCriterionIds = scopeMode === 'all' ? [] : criterionIds;
+    const effectiveCriterionIds = scopeMode === ASSIGNMENT_SCOPE_MODE.ALL ? [] : criterionIds;
     const existing = assignments.find(
       (item) => item.judgeId === judgeId && item.categoryId === categoryId,
     );
@@ -183,7 +185,7 @@ export function AdminAssignmentsPage({
       );
       if (judgeId === targetJudgeId && categoryId === targetCategoryId) {
         setCriterionIds([]);
-        setScopeMode('all');
+        setScopeMode(ASSIGNMENT_SCOPE_MODE.ALL);
       }
       return next;
     });
@@ -255,7 +257,7 @@ export function AdminAssignmentsPage({
       item.criterionIds.length ? `${item.criterionIds.length} tiêu chí` : 'Toàn bộ tiêu chí'
     })`;
 
-  const specificInvalid = scopeMode === 'specific' && criterionIds.length === 0;
+  const specificInvalid = scopeMode === ASSIGNMENT_SCOPE_MODE.SPECIFIC && criterionIds.length === 0;
 
   return (
     <section className='admin-page'>
@@ -441,22 +443,28 @@ export function AdminAssignmentsPage({
                     <RadioGroup
                       value={scopeMode}
                       onValueChange={(value) => {
-                        if (value === 'all') {
-                          setScopeMode('all');
+                        if (value === ASSIGNMENT_SCOPE_MODE.ALL) {
+                          setScopeMode(ASSIGNMENT_SCOPE_MODE.ALL);
                           setCriterionIds([]);
                         } else {
-                          setScopeMode('specific');
+                          setScopeMode(ASSIGNMENT_SCOPE_MODE.SPECIFIC);
                         }
                       }}
                     >
                       <div className='flex items-center gap-2'>
-                        <RadioGroupItem value='all' id='assignment-scope-all' />
+                        <RadioGroupItem
+                          value={ASSIGNMENT_SCOPE_MODE.ALL}
+                          id='assignment-scope-all'
+                        />
                         <Label htmlFor='assignment-scope-all' className='cursor-pointer'>
                           Toàn bộ tiêu chí của danh mục ({selectedCategory.name})
                         </Label>
                       </div>
                       <div className='flex items-center gap-2'>
-                        <RadioGroupItem value='specific' id='assignment-scope-specific' />
+                        <RadioGroupItem
+                          value={ASSIGNMENT_SCOPE_MODE.SPECIFIC}
+                          id='assignment-scope-specific'
+                        />
                         <Label htmlFor='assignment-scope-specific' className='cursor-pointer'>
                           Chọn tiêu chí cụ thể
                         </Label>
@@ -464,7 +472,7 @@ export function AdminAssignmentsPage({
                     </RadioGroup>
                   </fieldset>
 
-                  {scopeMode === 'specific' && (
+                  {scopeMode === ASSIGNMENT_SCOPE_MODE.SPECIFIC && (
                     <FormField
                       label='Tiêu chí cụ thể'
                       htmlFor='assignment-specific-criteria'

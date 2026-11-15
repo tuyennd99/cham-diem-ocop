@@ -15,6 +15,10 @@ import type { RequestMeta } from '../types/auth';
 export class AdminCatalogsService {
   constructor(private readonly repository: AdminCatalogsRepository) {}
 
+  listManagingAgencies() {
+    return this.repository.listManagingAgencies();
+  }
+
   async listAdminLocalities(query: AdminLocalitiesQueryDto) {
     return this.listLocalities(query, false);
   }

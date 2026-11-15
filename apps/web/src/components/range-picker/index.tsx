@@ -336,7 +336,10 @@ const DateRangePicker: FC<RangePickerProps> = ({
                 }));
               }}
             />
-            <ArrowRight className='text-muted-foreground mt-2 size-3.5 shrink-0' aria-hidden='true' />
+            <ArrowRight
+              className='text-muted-foreground mt-2 size-3.5 shrink-0'
+              aria-hidden='true'
+            />
             <DateInput
               key={`to-${dateInputVersion}`}
               label='Ngày kết thúc'
@@ -408,7 +411,7 @@ const DateRangePicker: FC<RangePickerProps> = ({
                     type='button'
                     onClick={() => setPreset(preset.name)}
                     className={cn(
-                      'text-fg hover:bg-accent-soft flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      'text-fg hover:bg-accent-soft focus-visible:ring-ring flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left text-xs font-medium transition-colors outline-none focus-visible:ring-2',
                       isSelected && 'bg-accent-soft text-primary font-semibold',
                     )}
                   >

@@ -13,6 +13,30 @@ The web app is available at `http://localhost:5173`; the API is `http://localhos
 
 Run a single app with `pnpm --filter @ocop/web dev` or `pnpm --filter @ocop/api dev`. Root `pnpm build` and `pnpm typecheck` cover both workspace apps.
 
+## Development with the cloud database
+
+For an SSH-accessible PostgreSQL server, `pnpm dev:cloud` opens a tunnel from `127.0.0.1:15432` to the server's `127.0.0.1:5432`, waits for SSH to confirm it, then runs `pnpm dev`. It closes its tunnel when the app stops and stops the app if the tunnel is lost. It does not reconnect automatically.
+
+First, configure an `ocop-cloud` host in your personal `~/.ssh/config` (on Windows, `%USERPROFILE%\.ssh\config`), before any matching `Host *` settings:
+
+```sshconfig
+Host ocop-cloud
+    HostName <ssh-host>
+    User <ssh-user>
+    IdentityFile ~/.ssh/<private-key>
+    IdentitiesOnly yes
+```
+
+Register the corresponding **public** key on the server, load the private key into `ssh-agent`, and connect once with `ssh ocop-cloud` to verify the host key. Then check `ssh -o BatchMode=yes ocop-cloud exit` succeeds without a password prompt. The tunnel uses noninteractive SSH and never stores a password. On Windows, enabling the `ssh-agent` service may require administrator access; see [Microsoft's SSH key guidance](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_keymanagement).
+
+Set `DATABASE_URL` in `apps/be/.env` to the intended database through `127.0.0.1:15432`, then run:
+
+```sh
+pnpm dev:cloud
+```
+
+Stop an existing tunnel using port `15432` first. If authentication or forwarding fails, `dev:cloud` reports the error and does not start the app. `pnpm dev` remains available for local databases.
+
 ## Google sign-in and email verification
 
 Email and Google registration create a user only after mailbox OTP verification. Google registration first asks the user to confirm their name and optional phone. Linking a Google identity with a third-party email can also require mailbox OTP; it keeps the existing account and permissions. Password reset continues to use email, code, and new password.

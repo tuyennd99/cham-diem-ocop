@@ -1,37 +1,65 @@
-import type {
-  AdminCategoryQuery,
-  AdminCriteriaSetQuery,
-  AdminEvaluationQuery,
-  AdminProductQuery,
-  AdminReportFilterQuery,
-  AdminReportQuery,
-  AdminUserQuery,
-  EvaluationRecordStatus,
-  LocalityQuery,
-  OrganizationUnitQuery,
-  ProductRegistrationType,
-  ProductStatus,
-  ReportGroupBy,
-  StaffPermission,
+import {
+  EVALUATION_STATUS,
+  PRODUCT_DATE_BASIS,
+  PRODUCT_REGISTRATION_TYPE,
+  PRODUCT_SORT_BY,
+  PRODUCT_STATUS,
+  REPORT_GROUP_BY,
+  SORT_DIRECTION,
+  STAFF_PERMISSION,
+  USER_KIND,
+  type AdminCategoryQuery,
+  type AdminCriteriaSetQuery,
+  type AdminEvaluationQuery,
+  type AdminProductQuery,
+  type AdminReportFilterQuery,
+  type AdminReportQuery,
+  type AdminUserQuery,
+  type EvaluationRecordStatus,
+  type LocalityQuery,
+  type OrganizationUnitQuery,
+  type ProductRegistrationType,
+  type ProductStatus,
+  type ReportGroupBy,
+  type StaffPermission,
 } from '@ocop/shared';
+import {
+  ADMIN_CATALOG_TAB,
+  ADMIN_PRODUCT_DETAIL_TAB,
+  ADMIN_REPORT_TAB,
+  ADMIN_SCORING_TAB,
+  ADMIN_USERS_TAB,
+  PRODUCT_WORKSPACE_MODE,
+} from '../constants/consts';
 import { currentVietnameseYear, isValidIsoWithOffset } from './admin-date';
 
 export type AdminProductDetailTab =
-  'information' | 'registration' | 'files' | 'progress' | 'results';
+  (typeof ADMIN_PRODUCT_DETAIL_TAB)[keyof typeof ADMIN_PRODUCT_DETAIL_TAB];
 
 export type AdminProductSearch = AdminProductQuery & {
   tab?: AdminProductDetailTab;
-  returnMode?: 'products' | 'registrations';
+  returnMode?: typeof PRODUCT_WORKSPACE_MODE.PRODUCTS | typeof PRODUCT_WORKSPACE_MODE.REGISTRATIONS;
 };
 
-const PRODUCT_STATUSES: readonly ProductStatus[] = ['DRAFT', 'SUBMITTED', 'SCORING', 'COMPLETED'];
-const REGISTRATION_TYPES: readonly ProductRegistrationType[] = ['FIRST', 'UPGRADE', 'REASSESSMENT'];
+const PRODUCT_STATUSES: readonly ProductStatus[] = [
+  PRODUCT_STATUS.DRAFT,
+  PRODUCT_STATUS.SUBMITTED,
+  PRODUCT_STATUS.RETURNED,
+  PRODUCT_STATUS.APPROVED,
+  PRODUCT_STATUS.SCORING,
+  PRODUCT_STATUS.COMPLETED,
+];
+const REGISTRATION_TYPES: readonly ProductRegistrationType[] = [
+  PRODUCT_REGISTRATION_TYPE.FIRST,
+  PRODUCT_REGISTRATION_TYPE.UPGRADE,
+  PRODUCT_REGISTRATION_TYPE.REASSESSMENT,
+];
 const DETAIL_TABS: readonly AdminProductDetailTab[] = [
-  'information',
-  'registration',
-  'files',
-  'progress',
-  'results',
+  ADMIN_PRODUCT_DETAIL_TAB.INFORMATION,
+  ADMIN_PRODUCT_DETAIL_TAB.REGISTRATION,
+  ADMIN_PRODUCT_DETAIL_TAB.FILES,
+  ADMIN_PRODUCT_DETAIL_TAB.PROGRESS,
+  ADMIN_PRODUCT_DETAIL_TAB.RESULTS,
 ];
 
 function parseScalarInt(
@@ -107,7 +135,10 @@ export function parseAdminProductSearch(search: Record<string, unknown>): AdminP
   const assessmentYear = parseScalarInt(search.assessmentYear, 2020, 2100);
   if (assessmentYear !== undefined) result.assessmentYear = assessmentYear;
 
-  const dateBasis = parseEnum(search.dateBasis, ['submittedAt', 'completedAt'] as const);
+  const dateBasis = parseEnum(search.dateBasis, [
+    PRODUCT_DATE_BASIS.SUBMITTED_AT,
+    PRODUCT_DATE_BASIS.COMPLETED_AT,
+  ] as const);
   if (dateBasis !== undefined) result.dateBasis = dateBasis;
 
   if (search.from !== undefined && search.from !== null && search.from !== '') {
@@ -139,16 +170,26 @@ export function parseAdminProductSearch(search: Record<string, unknown>): AdminP
   const starRating = parseScalarInt(search.starRating, 1, 5) as 1 | 2 | 3 | 4 | 5 | undefined;
   if (starRating !== undefined) result.starRating = starRating;
 
-  const sortBy = parseEnum(search.sortBy, ['submittedAt', 'name', 'finalScore'] as const);
+  const sortBy = parseEnum(search.sortBy, [
+    PRODUCT_SORT_BY.SUBMITTED_AT,
+    PRODUCT_SORT_BY.NAME,
+    PRODUCT_SORT_BY.FINAL_SCORE,
+  ] as const);
   if (sortBy !== undefined) result.sortBy = sortBy;
 
-  const sortDirection = parseEnum(search.sortDirection, ['asc', 'desc'] as const);
+  const sortDirection = parseEnum(search.sortDirection, [
+    SORT_DIRECTION.ASC,
+    SORT_DIRECTION.DESC,
+  ] as const);
   if (sortDirection !== undefined) result.sortDirection = sortDirection;
 
   const tab = parseEnum(search.tab, DETAIL_TABS);
   if (tab !== undefined) result.tab = tab;
 
-  const returnMode = parseEnum(search.returnMode, ['products', 'registrations'] as const);
+  const returnMode = parseEnum(search.returnMode, [
+    PRODUCT_WORKSPACE_MODE.PRODUCTS,
+    PRODUCT_WORKSPACE_MODE.REGISTRATIONS,
+  ] as const);
   if (returnMode !== undefined) result.returnMode = returnMode;
 
   return result;
@@ -167,14 +208,17 @@ export function toAdminProductApiQuery(search: AdminProductSearch): AdminProduct
   return query;
 }
 
-export type AdminCatalogTab = 'catalog' | 'localities';
+export type AdminCatalogTab = (typeof ADMIN_CATALOG_TAB)[keyof typeof ADMIN_CATALOG_TAB];
 
 export type AdminCatalogSearch = AdminCategoryQuery &
   Pick<LocalityQuery, 'provinceName'> & {
     tab?: AdminCatalogTab;
   };
 
-const CATALOG_TABS: readonly AdminCatalogTab[] = ['catalog', 'localities'];
+const CATALOG_TABS: readonly AdminCatalogTab[] = [
+  ADMIN_CATALOG_TAB.CATALOG,
+  ADMIN_CATALOG_TAB.LOCALITIES,
+];
 
 export function parseAdminCatalogSearch(search: Record<string, unknown>): AdminCatalogSearch {
   const result: AdminCatalogSearch = {
@@ -222,15 +266,19 @@ export function toAdminLocalityApiQuery(search: AdminCatalogSearch): LocalityQue
   return query;
 }
 
-export type AdminUsersTab = 'users' | 'units';
+export type AdminUsersTab = (typeof ADMIN_USERS_TAB)[keyof typeof ADMIN_USERS_TAB];
 
 export type AdminUsersSearch = AdminUserQuery & {
   tab?: AdminUsersTab;
 };
 
-const STAFF_PERMISSIONS: readonly StaffPermission[] = ['MANAGE', 'VIEW', 'SCORE'];
-const USER_KINDS = ['STAFF', 'REGISTRANT'] as const;
-const USERS_TABS: readonly AdminUsersTab[] = ['users', 'units'];
+const STAFF_PERMISSIONS: readonly StaffPermission[] = [
+  STAFF_PERMISSION.MANAGE,
+  STAFF_PERMISSION.VIEW,
+  STAFF_PERMISSION.SCORE,
+];
+const USER_KINDS = [USER_KIND.STAFF, USER_KIND.REGISTRANT] as const;
+const USERS_TABS: readonly AdminUsersTab[] = [ADMIN_USERS_TAB.USERS, ADMIN_USERS_TAB.UNITS];
 
 export function parseAdminUsersSearch(search: Record<string, unknown>): AdminUsersSearch {
   const result: AdminUsersSearch = {
@@ -286,15 +334,22 @@ export function toAdminUnitsApiQuery(search: AdminUsersSearch): OrganizationUnit
   return query;
 }
 
-export type AdminScoringTab = 'sets' | 'evaluations';
+export type AdminScoringTab = (typeof ADMIN_SCORING_TAB)[keyof typeof ADMIN_SCORING_TAB];
 
 export type AdminScoringSearch = AdminCriteriaSetQuery &
   AdminEvaluationQuery & {
     tab?: AdminScoringTab;
   };
 
-const SCORING_TABS: readonly AdminScoringTab[] = ['sets', 'evaluations'];
-const EVALUATION_STATUSES: readonly EvaluationRecordStatus[] = ['IN_PROGRESS', 'SUBMITTED'];
+const SCORING_TABS: readonly AdminScoringTab[] = [
+  ADMIN_SCORING_TAB.SETS,
+  ADMIN_SCORING_TAB.EVALUATIONS,
+];
+const EVALUATION_STATUSES: readonly EvaluationRecordStatus[] = [
+  EVALUATION_STATUS.IN_PROGRESS,
+  EVALUATION_STATUS.SUBMITTED,
+  EVALUATION_STATUS.EXCLUDED,
+];
 
 export function parseAdminScoringSearch(search: Record<string, unknown>): AdminScoringSearch {
   const result: AdminScoringSearch = {
@@ -388,20 +443,28 @@ export function parseAdminDashboardSearch(search: Record<string, unknown>): Admi
   return result;
 }
 
-export type AdminReportTab = 'registrations' | 'results';
+export type AdminReportTab = (typeof ADMIN_REPORT_TAB)[keyof typeof ADMIN_REPORT_TAB];
 
 export type AdminReportsSearch = AdminReportQuery & {
   tab?: AdminReportTab;
 };
 
-const REPORT_GROUP_BYS: readonly ReportGroupBy[] = ['month', 'year', 'locality', 'category'];
-const REPORT_TABS: readonly AdminReportTab[] = ['registrations', 'results'];
+const REPORT_GROUP_BYS: readonly ReportGroupBy[] = [
+  REPORT_GROUP_BY.MONTH,
+  REPORT_GROUP_BY.YEAR,
+  REPORT_GROUP_BY.LOCALITY,
+  REPORT_GROUP_BY.CATEGORY,
+];
+const REPORT_TABS: readonly AdminReportTab[] = [
+  ADMIN_REPORT_TAB.REGISTRATIONS,
+  ADMIN_REPORT_TAB.RESULTS,
+];
 
 export function parseAdminReportsSearch(search: Record<string, unknown>): AdminReportsSearch {
   const base = parseAdminDashboardSearch(search);
   const result: AdminReportsSearch = {
     ...base,
-    groupBy: parseEnum(search.groupBy, REPORT_GROUP_BYS) ?? 'month',
+    groupBy: parseEnum(search.groupBy, REPORT_GROUP_BYS) ?? REPORT_GROUP_BY.MONTH,
   };
   const tab = parseEnum(search.tab, REPORT_TABS);
   if (tab !== undefined) result.tab = tab;
@@ -411,4 +474,73 @@ export function parseAdminReportsSearch(search: Record<string, unknown>): AdminR
 export function toAdminReportApiQuery(search: AdminReportsSearch): AdminReportQuery {
   const { tab: _tab, ...query } = search;
   return query;
+}
+
+export interface PublicProductsSearch {
+  page?: number;
+  limit?: number;
+  q?: string;
+  categoryId?: string;
+}
+
+export function parsePublicProductsSearch(search: Record<string, unknown>): PublicProductsSearch {
+  const result: PublicProductsSearch = {};
+  if (search.page !== undefined && search.page !== null && search.page !== '') {
+    result.page = parseScalarInt(search.page, 1, 100000, 1) ?? 1;
+  }
+  if (search.limit !== undefined && search.limit !== null && search.limit !== '') {
+    result.limit = parseScalarInt(search.limit, 1, 100, 10) ?? 10;
+  }
+  const q = parseScalarString(search.q, 100);
+  if (q !== undefined) result.q = q;
+  const categoryId = parseScalarString(search.categoryId, 100);
+  if (categoryId !== undefined) result.categoryId = categoryId;
+  return result;
+}
+
+export function normalizePublicProductsSearch(
+  search: PublicProductsSearch,
+  defaultLimit = 10,
+): PublicProductsSearch {
+  const result: PublicProductsSearch = {};
+  const page = search.page ?? 1;
+  const limit = search.limit ?? defaultLimit;
+  if (page > 1) result.page = page;
+  if (limit !== defaultLimit) result.limit = limit;
+  const q = parseScalarString(search.q, 100);
+  if (q !== undefined) result.q = q;
+  const categoryId = parseScalarString(search.categoryId, 100);
+  if (categoryId !== undefined) result.categoryId = categoryId;
+  return result;
+}
+
+export interface JudgeQueueSearch {
+  page?: number;
+  limit?: number;
+  q?: string;
+  categoryId?: string;
+  evaluationStatus?: EvaluationRecordStatus;
+  sortBy?: string;
+  sortDirection?: 'asc' | 'desc';
+}
+
+export function parseJudgeQueueSearch(search: Record<string, unknown>): JudgeQueueSearch {
+  const result: JudgeQueueSearch = {
+    page: parseScalarInt(search.page, 1, 100000, 1) ?? 1,
+    limit: parseScalarInt(search.limit, 1, 100, 10) ?? 10,
+  };
+  const q = parseScalarString(search.q, 100);
+  if (q !== undefined) result.q = q;
+  const categoryId = parseScalarString(search.categoryId, 100);
+  if (categoryId !== undefined) result.categoryId = categoryId;
+  const evaluationStatus = parseEnum(search.evaluationStatus, EVALUATION_STATUSES);
+  if (evaluationStatus !== undefined) result.evaluationStatus = evaluationStatus;
+  const sortBy = parseScalarString(search.sortBy, 50);
+  if (sortBy !== undefined) result.sortBy = sortBy;
+  const sortDirection = parseEnum(search.sortDirection, [
+    SORT_DIRECTION.ASC,
+    SORT_DIRECTION.DESC,
+  ] as const);
+  if (sortDirection !== undefined) result.sortDirection = sortDirection;
+  return result;
 }

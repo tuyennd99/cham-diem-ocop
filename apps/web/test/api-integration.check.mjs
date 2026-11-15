@@ -155,12 +155,19 @@ try {
   assert.equal(authConstants.PENDING_EMAIL_STORAGE_KEY, 'ocop.pendingEmail');
   assert.equal(DEFAULT_PAGE_SIZE, 10);
   assert.deepEqual(Object.keys(authConstants).sort(), [
+    'ADMIN_SIDEBAR_COLLAPSED_STORAGE_KEY',
     'AUTH_ACCESS_TOKEN_STORAGE_KEY',
+    'AUTH_FRAME_MODE',
     'AUTH_REFRESH_TOKEN_STORAGE_KEY',
     'AUTH_TOKEN_STORAGE_KEY',
     'AUTH_USER_STORAGE_KEY',
+    'GOOGLE_AUTH_INTENT',
+    'GOOGLE_RESULT_KIND',
+    'GOOGLE_SIGN_IN_PHASE',
     'PENDING_EMAIL_STORAGE_KEY',
+    'REGISTRATION_VERIFICATION_MODE',
     'SESSION_STORAGE_KEY',
+    'VERIFICATION_STATE_KIND',
   ]);
   console.log('PASS file contract');
 

@@ -3,9 +3,45 @@ import { it } from 'node:test';
 import baseRequest from '../src/api/base-request';
 import { scoringPrintApi } from '../src/api/scoring-print';
 import {
+  displayProductCode,
   formatExactScore,
+  formatProductCode,
   formatStarRatingLabel,
+  matchesProductSearchKeyword,
 } from '../src/lib/print-format';
+
+it('formats OCOP product codes with at least 6 digits without truncating larger numbers and matches search keywords', () => {
+  assert.equal(formatProductCode(1), 'OCOP-000001');
+  assert.equal(formatProductCode(123), 'OCOP-000123');
+  assert.equal(formatProductCode(999999), 'OCOP-999999');
+  assert.equal(formatProductCode(1234567), 'OCOP-1234567');
+  assert.equal(formatProductCode(null), '');
+  assert.equal(formatProductCode(0), '');
+  assert.equal(formatProductCode(-5), '');
+
+  assert.equal(
+    displayProductCode({ id: 'legacy-id', codeNumber: 123 }),
+    'OCOP-000123',
+  );
+  assert.equal(
+    displayProductCode({ id: 'legacy-id', code: 'OCOP-1234567' }),
+    'OCOP-1234567',
+  );
+  assert.equal(displayProductCode({ id: 'legacy-id' }), 'legacy-id');
+
+  const item = {
+    id: 'c2-legacy-id-99',
+    codeNumber: 123,
+    code: 'OCOP-000123',
+    name: 'Mật ong rừng tràm',
+  };
+  assert.equal(matchesProductSearchKeyword(item, 'OCOP-000123'), true);
+  assert.equal(matchesProductSearchKeyword(item, 'ocop-000123'), true);
+  assert.equal(matchesProductSearchKeyword(item, '000123'), true);
+  assert.equal(matchesProductSearchKeyword(item, 'legacy-id-99'), true);
+  assert.equal(matchesProductSearchKeyword(item, 'mật ong'), true);
+  assert.equal(matchesProductSearchKeyword(item, 'OCOP-999999'), false);
+});
 
 it('formats exact score without rounding 89.99 up to 90.00 and labels 5 stars as proposed consideration', () => {
   assert.equal(formatExactScore(0), '0');

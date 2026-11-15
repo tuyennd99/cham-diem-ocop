@@ -1,7 +1,8 @@
 import type { AdminProductQuery } from '@ocop/shared';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { adminProductsApi, myProductsApi } from '../api';
+import { PRODUCT_WORKSPACE_MODE } from '../constants/consts';
 import { queryKeys } from '../constants/query-key';
 import { messageOf } from '../lib/api-error';
 import type { ProductDraftCommands } from '../lib/save-product-draft';
@@ -9,7 +10,8 @@ import type { AdminProductDetail } from '../types/admin';
 import type { ApiResult } from '../types/api';
 import type { ProductWriteInput, RegistrantProduct } from '../types/registrant';
 
-export type AdminProductMode = 'products' | 'registrations';
+export type AdminProductMode =
+  typeof PRODUCT_WORKSPACE_MODE.PRODUCTS | typeof PRODUCT_WORKSPACE_MODE.REGISTRATIONS;
 
 export function useAdminProductList(
   mode: AdminProductMode,
@@ -20,6 +22,7 @@ export function useAdminProductList(
   return useQuery({
     queryKey: queryKeys.adminProducts.list(mode, canManage, query),
     queryFn: () => adminProductsApi.list(query),
+    placeholderData: keepPreviousData,
     enabled,
   });
 }
@@ -45,14 +48,22 @@ export function useAdminProductResults(id: string, canManage: boolean) {
   });
 }
 
+export function useProductEligibleJudges(id: string, enabled = true) {
+  return useQuery({
+    queryKey: ['admin-products', 'eligible-judges', id] as const,
+    queryFn: async () => (await adminProductsApi.eligibleJudges(id)).data,
+    enabled: Boolean(id) && enabled,
+  });
+}
+
 export function useProductDraftCommands(
-  mode: 'owner' | 'admin',
+  mode: typeof PRODUCT_WORKSPACE_MODE.OWNER | typeof PRODUCT_WORKSPACE_MODE.ADMIN,
   options: { registrantId?: string; reason?: string } = {},
 ): ProductDraftCommands {
   const queryClient = useQueryClient();
   const create = useMutation<ApiResult<RegistrantProduct>, unknown, ProductWriteInput>({
     mutationFn: (payload) => {
-      if (mode === 'owner') return myProductsApi.create(payload);
+      if (mode === PRODUCT_WORKSPACE_MODE.OWNER) return myProductsApi.create(payload);
       if (!options.registrantId) throw new Error('Chọn người đăng ký trước khi lưu.');
       if (!options.reason?.trim()) throw new Error('Nhập lý do thao tác trước khi lưu.');
       return adminProductsApi.create({
@@ -70,7 +81,7 @@ export function useProductDraftCommands(
     { id: string; payload: ProductWriteInput }
   >({
     mutationFn: ({ id, payload }) => {
-      if (mode === 'owner') return myProductsApi.update(id, payload);
+      if (mode === PRODUCT_WORKSPACE_MODE.OWNER) return myProductsApi.update(id, payload);
       if (!options.reason?.trim()) throw new Error('Nhập lý do thao tác trước khi lưu.');
       return adminProductsApi.update(id, { ...payload, reason: options.reason });
     },
@@ -83,11 +94,25 @@ export function useProductDraftCommands(
     { id: string; file: File }
   >({
     mutationFn: ({ id, file }) => {
-      if (mode === 'owner') return myProductsApi.upload(id, file);
+      if (mode === PRODUCT_WORKSPACE_MODE.OWNER) return myProductsApi.upload(id, file);
       if (!options.reason?.trim()) throw new Error('Nhập lý do thao tác trước khi tải tệp.');
       return adminProductsApi.upload(id, file, options.reason);
     },
     onSuccess: () => invalidateDraftViews(queryClient, mode),
+    retry: false,
+  });
+  const submit = useMutation<ApiResult<RegistrantProduct>, unknown, string>({
+    mutationFn: (id) => {
+      if (mode === PRODUCT_WORKSPACE_MODE.OWNER) return myProductsApi.submit(id);
+      if (!options.reason?.trim()) throw new Error('Nhập lý do thao tác trước khi nộp hồ sơ.');
+      return adminProductsApi.submit(id, options.reason);
+    },
+    onSuccess: () => {
+      invalidateDraftViews(queryClient, mode);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.judge.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.publicProducts.all });
+    },
     retry: false,
   });
 
@@ -95,8 +120,9 @@ export function useProductDraftCommands(
     create: (payload) => create.mutateAsync(payload),
     update: (id, payload) => update.mutateAsync({ id, payload }),
     upload: (id, file) => upload.mutateAsync({ id, file }),
+    submit: (id) => submit.mutateAsync(id),
     detail: async (id) => {
-      if (mode === 'owner') return myProductsApi.detail(id);
+      if (mode === PRODUCT_WORKSPACE_MODE.OWNER) return myProductsApi.detail(id);
       const result = await adminProductsApi.detail(id);
       return { ...result, data: result.data as unknown as RegistrantProduct };
     },
@@ -113,6 +139,10 @@ export function useAdminProductMutations(id: string, mode: AdminProductMode, can
     void queryClient.invalidateQueries({
       queryKey: queryKeys.adminProducts.results(canManage, id),
     });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.admin.all });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.judge.all });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.myProducts.all });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.publicProducts.all });
   };
   const submit = useMutation({
     mutationFn: (reason: string) => adminProductsApi.submit(id, reason),
@@ -142,20 +172,102 @@ export function useAdminProductMutations(id: string, mode: AdminProductMode, can
     onError: (err) => toast.error(messageOf(err)),
     retry: false,
   });
+  const approve = useMutation({
+    mutationFn: (reason?: string) => adminProductsApi.approve(id, reason),
+    onSuccess: () => {
+      invalidate();
+      toast.success('Đã duyệt hồ sơ và tự động phân công giám khảo theo cơ quan quản lý.');
+    },
+    onError: (err) => toast.error(messageOf(err)),
+    retry: false,
+  });
+  const returnProduct = useMutation({
+    mutationFn: (reason: string) => adminProductsApi.returnProduct(id, reason),
+    onSuccess: () => {
+      invalidate();
+      toast.success('Đã trả lại hồ sơ cho người đăng ký.');
+    },
+    onError: (err) => toast.error(messageOf(err)),
+    retry: false,
+  });
+  const publishResults = useMutation({
+    mutationFn: (reason?: string) => adminProductsApi.publishResults(id, reason),
+    onSuccess: () => {
+      invalidate();
+      toast.success('Đã công bố kết quả chấm điểm cho người đăng ký.');
+    },
+    onError: (err) => toast.error(messageOf(err)),
+    retry: false,
+  });
+  const reopen = useMutation({
+    mutationFn: (reason: string) => adminProductsApi.reopen(id, reason),
+    onSuccess: () => {
+      invalidate();
+      toast.success('Đã mở lại hồ sơ để tiếp tục phân công/chấm điểm.');
+    },
+    onError: (err) => toast.error(messageOf(err)),
+    retry: false,
+  });
+  const addAssignment = useMutation({
+    mutationFn: (data: { judgeId: string; reason?: string; confirmRestore?: boolean }) =>
+      adminProductsApi.addAssignment(id, data),
+    onSuccess: (res) => {
+      invalidate();
+      if (!('requiresRestoreConfirmation' in res.data && res.data.requiresRestoreConfirmation)) {
+        toast.success('Đã cập nhật phân công giám khảo.');
+      }
+    },
+    onError: (err) => toast.error(messageOf(err)),
+    retry: false,
+  });
+  const removeAssignment = useMutation({
+    mutationFn: ({ judgeId, reason }: { judgeId: string; reason?: string }) =>
+      adminProductsApi.removeAssignment(id, judgeId, reason),
+    onSuccess: () => {
+      invalidate();
+      toast.success('Đã gỡ giám khảo khỏi hồ sơ.');
+    },
+    onError: (err) => toast.error(messageOf(err)),
+    retry: false,
+  });
+  const reopenEvaluation = useMutation({
+    mutationFn: ({ evaluationId, reason }: { evaluationId: string; reason?: string }) =>
+      adminProductsApi.reopenEvaluation(id, evaluationId, reason),
+    onSuccess: () => {
+      invalidate();
+      toast.success('Đã mở lại phiếu chấm để giám khảo chỉnh sửa.');
+    },
+    onError: (err) => toast.error(messageOf(err)),
+    retry: false,
+  });
+
   return {
     submit: (reason: string) => submit.mutateAsync(reason),
     remove: (reason: string) => remove.mutateAsync(reason),
     removeAttachment: (attachmentId: string, reason: string) =>
       removeAttachment.mutateAsync({ attachmentId, reason }),
+    approve: (reason?: string) => approve.mutateAsync(reason),
+    returnProduct: (reason: string) => returnProduct.mutateAsync(reason),
+    publishResults: (reason?: string) => publishResults.mutateAsync(reason),
+    reopen: (reason: string) => reopen.mutateAsync(reason),
+    addAssignment: (data: { judgeId: string; reason?: string; confirmRestore?: boolean }) =>
+      addAssignment.mutateAsync(data),
+    removeAssignment: (judgeId: string, reason?: string) =>
+      removeAssignment.mutateAsync({ judgeId, reason }),
+    reopenEvaluation: (evaluationId: string, reason?: string) =>
+      reopenEvaluation.mutateAsync({ evaluationId, reason }),
   };
 }
 
 function invalidateDraftViews(
   queryClient: ReturnType<typeof useQueryClient>,
-  mode: 'owner' | 'admin',
+  mode: typeof PRODUCT_WORKSPACE_MODE.OWNER | typeof PRODUCT_WORKSPACE_MODE.ADMIN,
 ) {
   void queryClient.invalidateQueries({
-    queryKey: mode === 'owner' ? queryKeys.myProducts.all : queryKeys.adminProducts.all,
+    queryKey:
+      mode === PRODUCT_WORKSPACE_MODE.OWNER
+        ? queryKeys.myProducts.all
+        : queryKeys.adminProducts.all,
   });
 }
 

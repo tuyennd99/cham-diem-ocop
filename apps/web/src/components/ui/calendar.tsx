@@ -1,11 +1,6 @@
 import * as React from 'react';
 import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
-import {
-  DayPicker,
-  getDefaultClassNames,
-  type DayButton,
-  type Locale,
-} from 'react-day-picker';
+import { DayPicker, getDefaultClassNames, type DayButton, type Locale } from 'react-day-picker';
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
 
@@ -83,10 +78,7 @@ function Calendar({
         ),
         week: cn('mt-1.5 flex w-full', defaultClassNames.week),
         week_number_header: cn('w-9 select-none', defaultClassNames.week_number_header),
-        week_number: cn(
-          'text-xs text-muted-foreground select-none',
-          defaultClassNames.week_number,
-        ),
+        week_number: cn('text-xs text-muted-foreground select-none', defaultClassNames.week_number),
         day: cn(
           'group/day relative size-9 p-0 text-center text-sm select-none [&:last-child[data-selected=true]_button]:rounded-r-(--cell-radius)',
           props.showWeekNumber
@@ -103,10 +95,7 @@ function Calendar({
           'relative isolate z-0 rounded-r-(--cell-radius) bg-accent-soft',
           defaultClassNames.range_end,
         ),
-        today: cn(
-          'rounded-(--cell-radius) font-semibold text-primary',
-          defaultClassNames.today,
-        ),
+        today: cn('rounded-(--cell-radius) font-semibold text-primary', defaultClassNames.today),
         outside: cn(
           'text-muted-foreground/45 aria-selected:text-muted-foreground/70',
           defaultClassNames.outside,
@@ -174,12 +163,12 @@ function CalendarDayButton({
       data-range-end={modifiers.range_end}
       data-range-middle={modifiers.range_middle}
       className={cn(
-        'text-fg hover:bg-accent-soft relative isolate z-10 inline-flex size-9 items-center justify-center rounded-(--cell-radius) border-0 bg-transparent p-0 text-sm leading-none font-normal transition-colors outline-none select-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40',
-        'group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-10 group-data-[focused=true]/day:ring-2 group-data-[focused=true]/day:ring-ring/60',
+        'text-fg hover:bg-accent-soft focus-visible:ring-ring relative isolate z-10 inline-flex size-9 items-center justify-center rounded-(--cell-radius) border-0 bg-transparent p-0 text-sm leading-none font-normal transition-colors outline-none select-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-40',
+        'group-data-[focused=true]/day:ring-ring/60 group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-10 group-data-[focused=true]/day:ring-2',
         'data-[range-middle=true]:bg-accent-soft data-[range-middle=true]:text-fg data-[range-middle=true]:rounded-none data-[range-middle=true]:font-medium',
-        'data-[range-start=true]:bg-primary data-[range-start=true]:text-primary-foreground data-[range-start=true]:rounded-(--cell-radius) data-[range-start=true]:font-semibold data-[range-start=true]:hover:bg-accent-hover',
-        'data-[range-end=true]:bg-primary data-[range-end=true]:text-primary-foreground data-[range-end=true]:rounded-(--cell-radius) data-[range-end=true]:font-semibold data-[range-end=true]:hover:bg-accent-hover',
-        'data-[selected-single=true]:bg-primary data-[selected-single=true]:text-primary-foreground data-[selected-single=true]:font-semibold data-[selected-single=true]:hover:bg-accent-hover',
+        'data-[range-start=true]:bg-primary data-[range-start=true]:text-primary-foreground data-[range-start=true]:hover:bg-accent-hover data-[range-start=true]:rounded-(--cell-radius) data-[range-start=true]:font-semibold',
+        'data-[range-end=true]:bg-primary data-[range-end=true]:text-primary-foreground data-[range-end=true]:hover:bg-accent-hover data-[range-end=true]:rounded-(--cell-radius) data-[range-end=true]:font-semibold',
+        'data-[selected-single=true]:bg-primary data-[selected-single=true]:text-primary-foreground data-[selected-single=true]:hover:bg-accent-hover data-[selected-single=true]:font-semibold',
         modifiers.today &&
           !modifiers.selected &&
           'ring-primary/40 text-primary font-semibold ring-1 ring-inset',

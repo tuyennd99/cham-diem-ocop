@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { PRISMA_ERROR_CODE } from '../constants/auth';
 import { ApiError } from '../types/api';
 import { requestMeta } from '../utils/request-meta';
 
@@ -46,13 +47,13 @@ export class ApiExceptionFilter implements ExceptionFilter {
             : `${request.method} ${request.path} failed`;
     } else if (isPrismaError) {
       const code = String((exception as { code: string }).code);
-      if (code === 'P2000') {
+      if (code === PRISMA_ERROR_CODE.VALUE_TOO_LONG) {
         statusCode = HttpStatus.BAD_REQUEST;
         message = 'Giá trị đầu vào vượt quá độ dài cho phép';
-      } else if (code === 'P2002') {
+      } else if (code === PRISMA_ERROR_CODE.UNIQUE_CONSTRAINT) {
         statusCode = HttpStatus.CONFLICT;
         message = 'Dữ liệu đã tồn tại hoặc vi phạm ràng buộc duy nhất';
-      } else if (code === 'P2025') {
+      } else if (code === PRISMA_ERROR_CODE.RECORD_NOT_FOUND) {
         statusCode = HttpStatus.NOT_FOUND;
         message = 'Bản ghi yêu cầu không tồn tại';
       } else {

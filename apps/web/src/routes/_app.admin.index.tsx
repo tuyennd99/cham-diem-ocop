@@ -1,10 +1,11 @@
+import { STAFF_PERMISSION } from '@ocop/shared';
 import { createFileRoute } from '@tanstack/react-router';
 import { parseAdminDashboardSearch } from '../lib/admin-search';
 import { requirePermission } from '../lib/route-guards';
 import { AdminDashboardPage } from '../pages/admin/AdminDashboardPage';
 
 export const Route = createFileRoute('/_app/admin/')({
-  beforeLoad: requirePermission('VIEW'),
+  beforeLoad: requirePermission(STAFF_PERMISSION.VIEW),
   validateSearch: parseAdminDashboardSearch,
   component: AdminDashboardRoute,
 });

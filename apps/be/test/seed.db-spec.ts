@@ -459,6 +459,7 @@ it('seeds sample OCOP products across multiple categories and all 4 statuses ide
           cwd: sandbox.root,
           env: {
             ...process.env,
+            SEED_ONLY_SAMPLE_DATA: 'true',
             DOTENV_CONFIG_PATH: join(sandbox.root, '.env'),
           },
           encoding: 'utf8',

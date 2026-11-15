@@ -1,5 +1,5 @@
 import type { LocalityQuery } from '@ocop/shared';
-import { DEFAULT_PAGE_SIZE } from '../../constants/consts';
+import { DEFAULT_PAGE_SIZE, STAFF_PERMISSION } from '../../constants/consts';
 import { parseAdminLocalitiesSearch } from '../../lib/admin-search';
 import { useSession } from '../../lib/auth';
 import { hasStaffPermission } from '../../lib/session-contract';
@@ -16,7 +16,7 @@ export function AdminLocalitiesPage({
   onSearchChange,
 }: AdminLocalitiesPageProps) {
   const session = useSession();
-  const canManage = hasStaffPermission(session?.user, 'MANAGE');
+  const canManage = hasStaffPermission(session?.user, STAFF_PERMISSION.MANAGE);
   const mutations = useAdminCatalogMutations();
 
   const appliedSearch: LocalityQuery = controlledSearch ?? {

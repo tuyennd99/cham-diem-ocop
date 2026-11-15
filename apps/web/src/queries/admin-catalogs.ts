@@ -6,17 +6,27 @@ import type {
   UpdateAdminCategoryInput,
   UpdateLocalityInput,
 } from '@ocop/shared';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { adminCatalogsApi } from '../api/admin-catalogs';
 import { HTTP_STATUS } from '../constants/http-status';
 import { queryKeys } from '../constants/query-key';
 import { ApiError, messageOf } from '../lib/api-error';
 
+export function useManagingAgencies(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.adminCatalogs.managingAgencies,
+    queryFn: async () => (await adminCatalogsApi.managingAgencies()).data,
+    staleTime: 5 * 60_000,
+    enabled,
+  });
+}
+
 export function useAdminCategories(query: AdminCategoryQuery, enabled = true) {
   return useQuery({
     queryKey: queryKeys.adminCatalogs.categories.list(query),
     queryFn: () => adminCatalogsApi.categories(query),
+    placeholderData: keepPreviousData,
     enabled,
   });
 }
@@ -33,6 +43,7 @@ export function useAdminLocalities(query: LocalityQuery) {
   return useQuery({
     queryKey: queryKeys.adminCatalogs.localities.list(query),
     queryFn: () => adminCatalogsApi.localities(query),
+    placeholderData: keepPreviousData,
   });
 }
 

@@ -1,5 +1,5 @@
 import type {
-  AdminReportFilterQuery,
+  AdminDashboardQuery,
   AdminReportQuery,
   RegistrationReportResponse,
   ResultsReportResponse,
@@ -20,7 +20,7 @@ import type {
 import { requestJson } from './base-request';
 
 export const adminApi = {
-  dashboard: (query?: AdminReportFilterQuery) =>
+  dashboard: (query?: AdminDashboardQuery) =>
     requestJson<AdminDashboard>({ url: API.admin.dashboard, params: query }),
   registrationsReport: (query: AdminReportQuery) =>
     requestJson<RegistrationReportResponse>({

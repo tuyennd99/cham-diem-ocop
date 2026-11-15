@@ -666,7 +666,30 @@ describe('OCOP E2E honey flow, judge scoring, and public privacy (E2E-01..06, JD
         total: 76,
       });
 
-      // Verify finalScore = 79 and starRating = 4 across Registrant, Admin, and Public endpoints
+      // Verify finalScore = 79 and starRating = 4 across Admin; Registrant and Public require publication first
+      const registrantBeforePublish = await apiRequest<{
+        data: { status: string; finalScore: number | null; starRating: number | null };
+      }>(baseUrl, `/my/products/${productId}`, {
+        headers: authHeaders(registrantToken),
+      });
+      expect(registrantBeforePublish.status).toBe(200);
+      expect(registrantBeforePublish.body.data).toMatchObject({
+        status: ProductStatus.COMPLETED,
+        finalScore: null,
+        starRating: null,
+      });
+
+      const publishRes = await apiRequest(
+        baseUrl,
+        `/admin/products/${productId}/publish-results`,
+        {
+          method: 'POST',
+          headers: authHeaders(adminToken),
+          body: JSON.stringify({ reason: 'Công bố kết quả đánh giá OCOP' }),
+        },
+      );
+      expect(publishRes.status).toBe(201);
+
       const registrantProduct = await apiRequest<{
         data: { status: string; finalScore: number; starRating: number };
       }>(baseUrl, `/my/products/${productId}`, {

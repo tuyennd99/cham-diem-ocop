@@ -1,5 +1,7 @@
+import { STAFF_PERMISSION } from '@ocop/shared';
 import { create } from 'zustand';
 import type { SessionUser } from '@/types/auth';
+import { ADMIN_SIDEBAR_COLLAPSED_STORAGE_KEY } from '@/constants/auth';
 import { hasStaffPermission } from '@/lib/session-contract';
 import { getSession, setSession } from './session-store';
 
@@ -25,7 +27,7 @@ export const useAppStore = create<AppState & AppActions>((set) => ({
   auth: { user: initialSession?.user ?? null },
   sidebarOpen:
     typeof window !== 'undefined'
-      ? localStorage.getItem('admin_sidebar_collapsed') !== 'true'
+      ? localStorage.getItem(ADMIN_SIDEBAR_COLLAPSED_STORAGE_KEY) !== 'true'
       : true,
   sidebarOpenMobile: false,
   year: new Date().getFullYear(),
@@ -46,7 +48,7 @@ export const useAppStore = create<AppState & AppActions>((set) => ({
 
   setSidebarOpen: (open: boolean) => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('admin_sidebar_collapsed', String(!open));
+      localStorage.setItem(ADMIN_SIDEBAR_COLLAPSED_STORAGE_KEY, String(!open));
     }
     set({ sidebarOpen: open });
   },
@@ -56,7 +58,7 @@ export const useAppStore = create<AppState & AppActions>((set) => ({
 // Selector hooks to prevent subscribing to the entire store
 export const useAuth = () => useAppStore((state) => state.auth);
 export const useIsAdmin = () =>
-  useAppStore((state) => hasStaffPermission(state.auth.user, 'MANAGE'));
+  useAppStore((state) => hasStaffPermission(state.auth.user, STAFF_PERMISSION.MANAGE));
 export const useSidebarOpen = () => useAppStore((state) => state.sidebarOpen);
 export const useSidebarOpenMobile = () => useAppStore((state) => state.sidebarOpenMobile);
 

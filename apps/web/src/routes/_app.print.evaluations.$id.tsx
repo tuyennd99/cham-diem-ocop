@@ -1,3 +1,4 @@
+import { STAFF_PERMISSION } from '@ocop/shared';
 import { createFileRoute } from '@tanstack/react-router';
 import { requireAnyPermission } from '../lib/route-guards';
 import { AdminEvaluationPrintPreviewPage } from '../pages/print/PrintPreviewPages';
@@ -8,6 +9,6 @@ function RouteComponent() {
 }
 
 export const Route = createFileRoute('/_app/print/evaluations/$id')({
-  beforeLoad: requireAnyPermission('VIEW', 'SCORE'),
+  beforeLoad: requireAnyPermission(STAFF_PERMISSION.VIEW, STAFF_PERMISSION.SCORE),
   component: RouteComponent,
 });

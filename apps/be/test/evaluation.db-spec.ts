@@ -255,8 +255,13 @@ describe('evaluation persistence', () => {
       withFixture(prisma, async (fixture) => {
         const products = new ProductsRepository(app.get(PrismaService));
         const evaluations = app.get(EvaluationsRepository);
-        const draft = await products.create({ registrantId: fixture.registrantId, categoryId: fixture.categoryId, name: 'Old draft', formData: {}, localityId: fixture.localityId }, { kind: 'OWNER', id: fixture.registrantId });
-        await expect(products.submitDraft(draft.id, { kind: 'OWNER', id: fixture.registrantId })).rejects.toThrow(BadRequestException);
+        const validFormData = {
+          entityName: 'Entity', representativeName: 'Representative', representativeTitle: 'Title',
+          contactAddress: 'Address', provinceName: 'Province', phone: '123', registrationType: 'FIRST' as const,
+          sampleQuantity: 1, assessmentYear: 2026, declarationAccepted: true,
+        };
+        await expect(products.create({ registrantId: fixture.registrantId, categoryId: fixture.categoryId, name: 'Incomplete draft', formData: {}, localityId: fixture.localityId }, { kind: 'OWNER', id: fixture.registrantId })).rejects.toThrow(BadRequestException);
+        const draft = await products.create({ registrantId: fixture.registrantId, categoryId: fixture.categoryId, name: 'Old draft', formData: validFormData, localityId: fixture.localityId }, { kind: 'OWNER', id: fixture.registrantId });
         await expect(prisma.product.findUniqueOrThrow({ where: { id: draft.id } })).resolves.toMatchObject({ status: ProductStatus.DRAFT, submittedAt: null });
         await expect(prisma.productStatusEvent.count({ where: { productId: draft.id } })).resolves.toBe(1);
         await prisma.productCategory.update({ where: { id: fixture.categoryId }, data: { isActive: false } });

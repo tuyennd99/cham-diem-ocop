@@ -1,14 +1,15 @@
-import type {
-  AdminUserQuery,
-  AdminUserRecord,
-  CreateAdminUserInput,
-  CreateOrganizationUnitInput,
-  OrganizationUnitQuery,
-  OrganizationUnitRecord,
-  ResetAdminUserPasswordInput,
-  UpdateAdminUserProfileInput,
-  UpdateAdminUserStatusInput,
-  UpdateOrganizationUnitInput,
+import {
+  USER_KIND,
+  type AdminUserQuery,
+  type AdminUserRecord,
+  type CreateAdminUserInput,
+  type CreateOrganizationUnitInput,
+  type OrganizationUnitQuery,
+  type OrganizationUnitRecord,
+  type ResetAdminUserPasswordInput,
+  type UpdateAdminUserProfileInput,
+  type UpdateAdminUserStatusInput,
+  type UpdateOrganizationUnitInput,
 } from '@ocop/shared';
 import { API } from '../constants/api';
 import type { UpdateAdminUserStaffAccessInput } from '../types/admin';
@@ -46,7 +47,7 @@ export const adminUsersApi = {
   listRegistrantOwners: (query: Pick<AdminUserQuery, 'page' | 'limit' | 'q'> = {}) =>
     requestJson<AdminUserRecord[]>({
       url: API.admin.users,
-      params: { ...query, kind: 'REGISTRANT', isActive: true, verified: true },
+      params: { ...query, kind: USER_KIND.REGISTRANT, isActive: true, verified: true },
     }),
 };
 

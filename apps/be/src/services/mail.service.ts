@@ -1,7 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import nodemailer from 'nodemailer';
 import { env } from '../config/env';
-import { OTP_TTL_MS } from '../constants/auth';
+import {
+  MAIL_OTP_PURPOSE,
+  OTP_TTL_MS,
+  type MailOtpPurpose,
+} from '../constants/auth';
 
 @Injectable()
 export class MailService {
@@ -21,14 +25,19 @@ export class MailService {
     return this.transporter;
   }
 
-  async sendOtp(email: string, code: string, purpose: 'REGISTER' | 'RESET_PASSWORD' | 'GOOGLE_LINK') {
+  async sendOtp(email: string, code: string, purpose: MailOtpPurpose) {
     const config = env(process.env);
     if (config.smtpHost === 'smtp.example.com' && process.env.NODE_ENV !== 'production') {
       // shortcut: skip delivery with placeholder SMTP in development; configure real SMTP to receive codes.
       this.logger.log(`[DEV OTP] ${purpose} delivery skipped for ${email}`);
       return;
     }
-    const action = purpose === 'REGISTER' ? 'xác thực tài khoản' : purpose === 'GOOGLE_LINK' ? 'liên kết tài khoản Google với tài khoản' : 'đặt lại mật khẩu';
+    const action =
+      purpose === MAIL_OTP_PURPOSE.REGISTER
+        ? 'xác thực tài khoản'
+        : purpose === MAIL_OTP_PURPOSE.GOOGLE_LINK
+          ? 'liên kết tài khoản Google với tài khoản'
+          : 'đặt lại mật khẩu';
     await this.getTransporter().sendMail({
       from: config.smtpFrom,
       to: email,

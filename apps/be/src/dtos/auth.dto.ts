@@ -10,6 +10,16 @@ import {
   MinLength,
 } from 'class-validator';
 
+import {
+  GOOGLE_AUTH_INTENT,
+  type GoogleAuthIntent,
+} from '../constants/auth';
+
+const googleAuthIntents = [
+  GOOGLE_AUTH_INTENT.LOGIN,
+  GOOGLE_AUTH_INTENT.REGISTER,
+] as const;
+
 export class EmailDto {
   @ApiProperty({ format: 'email', maxLength: 320 })
   @Transform(({ value }) =>
@@ -33,9 +43,9 @@ export class GoogleLoginDto {
   @MaxLength(16384)
   credential!: string;
 
-  @ApiProperty({ enum: ['login', 'register'] })
-  @IsIn(['login', 'register'])
-  intent!: 'login' | 'register';
+  @ApiProperty({ enum: googleAuthIntents })
+  @IsIn(googleAuthIntents)
+  intent!: GoogleAuthIntent;
 }
 
 export class RegisterDto extends EmailDto {

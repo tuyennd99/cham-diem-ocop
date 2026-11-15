@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { myProductsApi } from '../api';
+import { myProductsApi, myRegistrationUnitsApi } from '../api';
 import { queryKeys } from '../constants/query-key';
 
 export function useMyProducts(enabled = true) {
@@ -15,5 +15,13 @@ export function useMyProduct(id: string | undefined) {
     queryKey: queryKeys.myProducts.detail(id ?? ''),
     queryFn: async () => (await myProductsApi.detail(id ?? '')).data,
     enabled: Boolean(id),
+  });
+}
+
+export function useMyRegistrationUnits(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.myRegistrationUnits.list,
+    queryFn: async () => (await myRegistrationUnitsApi.list()).data,
+    enabled,
   });
 }

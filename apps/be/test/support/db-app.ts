@@ -17,11 +17,15 @@ let sharedSchema: string | undefined;
 let sharedClientUrl: string | undefined;
 
 async function clearExistingData(client: Client) {
+  await client.query('DELETE FROM "evaluation_history_events"');
+  await client.query('DELETE FROM "product_result_history"');
+  await client.query('DELETE FROM "product_judge_assignments"');
   await client.query('DELETE FROM "scores"');
   await client.query('DELETE FROM "evaluations"');
   await client.query('DELETE FROM "judge_assignments"');
   await client.query('DELETE FROM "attachments"');
   await client.query('DELETE FROM "products"');
+  await client.query('DELETE FROM "registration_units"');
   await client.query('DELETE FROM "localities"');
   await client.query('DELETE FROM "otp_codes"');
   await client.query('DELETE FROM "audit_logs"');
@@ -46,8 +50,17 @@ async function copySeedData(client: Client, schema: string) {
     }
     await client.query(`SET search_path TO "${schema}"`);
     await client.query('BEGIN');
+    await client.query('DELETE FROM "product_category_agencies"');
+    await client.query('DELETE FROM "product_categories"');
+    await client.query('DELETE FROM "managing_agencies"');
+    await client.query(
+      'INSERT INTO "managing_agencies" SELECT * FROM public."managing_agencies"',
+    );
     await client.query(
       'INSERT INTO "product_categories" ("id", "name", "description", "order", "isActive", "createdAt", "updatedAt") SELECT "id", "name", "description", "order", "isActive", "createdAt", "updatedAt" FROM public."product_categories"',
+    );
+    await client.query(
+      'INSERT INTO "product_category_agencies" SELECT * FROM public."product_category_agencies"',
     );
     for (const table of [
       'criteria_sets',

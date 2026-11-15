@@ -1,12 +1,18 @@
 import type { ComponentProps } from 'react';
-import { Textarea } from '@/components/ui/textarea';
 import { resolveFieldDescribedBy } from '@/components/form/form-errors';
-import { FormFieldLayout, useNativeFieldError, useResolvedField, type BaseFieldLayoutProps } from '@/components/form/form-field-layout';
+import {
+  FormFieldLayout,
+  useNativeFieldError,
+  useResolvedField,
+  type BaseFieldLayoutProps,
+} from '@/components/form/form-field-layout';
+import { Textarea } from '@/components/ui/textarea';
 
-type FormTextareaProps = BaseFieldLayoutProps & Omit<
-  ComponentProps<typeof Textarea>,
-  'id' | 'name' | 'value' | 'defaultValue' | 'onChange' | 'onBlur' | 'aria-invalid'
->;
+type FormTextareaProps = BaseFieldLayoutProps &
+  Omit<
+    ComponentProps<typeof Textarea>,
+    'id' | 'name' | 'value' | 'defaultValue' | 'onChange' | 'onBlur' | 'aria-invalid'
+  >;
 
 export function FormTextarea(props: FormTextareaProps) {
   const meta = useResolvedField<string>(props.id);
@@ -15,7 +21,16 @@ export function FormTextarea(props: FormTextareaProps) {
   const { label, hint, hintId, optional, required, className, id: _id, ...controlProps } = props;
 
   return (
-    <FormFieldLayout id={meta.id} label={label} hint={hint} hintId={hintId} optional={optional} required={required} className={className} error={error}>
+    <FormFieldLayout
+      id={meta.id}
+      label={label}
+      hint={hint}
+      hintId={hintId}
+      optional={optional}
+      required={required}
+      className={className}
+      error={error}
+    >
       <Textarea
         {...controlProps}
         id={meta.id}
@@ -33,7 +48,13 @@ export function FormTextarea(props: FormTextareaProps) {
         }}
         onBlur={meta.handleBlur}
         aria-invalid={Boolean(error)}
-        aria-describedby={resolveFieldDescribedBy(meta.id, Boolean(hint), Boolean(error), hintId, controlProps['aria-describedby'])}
+        aria-describedby={resolveFieldDescribedBy(
+          meta.id,
+          Boolean(hint),
+          Boolean(error),
+          hintId,
+          controlProps['aria-describedby'],
+        )}
       />
     </FormFieldLayout>
   );

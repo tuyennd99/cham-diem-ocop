@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { ArrowLeft } from 'lucide-react';
+import { AUTH_FRAME_MODE } from '@/constants/auth';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { SiteHeader } from '../../layouts/PublicLayout';
@@ -18,7 +19,7 @@ export function AuthFrame({
   eyebrow: string;
   title: string;
   intro: string;
-  mode?: 'login' | 'register';
+  mode?: (typeof AUTH_FRAME_MODE)[keyof typeof AUTH_FRAME_MODE];
   backTo?: '/login' | '/register' | '/';
   backLabel?: string;
   aside?: ReactNode;
@@ -32,16 +33,16 @@ export function AuthFrame({
       {mode && (
         <div className='auth-tabs' aria-label='Chuyển đổi đăng nhập và đăng ký'>
           <Link
-            className={cn('auth-tab', mode === 'login' && 'is-active')}
+            className={cn('auth-tab', mode === AUTH_FRAME_MODE.LOGIN && 'is-active')}
             to='/login'
-            aria-current={mode === 'login' ? 'page' : undefined}
+            aria-current={mode === AUTH_FRAME_MODE.LOGIN ? 'page' : undefined}
           >
             Đăng nhập
           </Link>
           <Link
-            className={cn('auth-tab', mode === 'register' && 'is-active')}
+            className={cn('auth-tab', mode === AUTH_FRAME_MODE.REGISTER && 'is-active')}
             to='/register'
-            aria-current={mode === 'register' ? 'page' : undefined}
+            aria-current={mode === AUTH_FRAME_MODE.REGISTER ? 'page' : undefined}
           >
             Đăng ký tài khoản
           </Link>

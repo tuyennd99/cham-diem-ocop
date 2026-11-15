@@ -53,3 +53,5 @@ export interface ProductWriteInput {
   description?: string | null;
   formData: Partial<ProductApplicationForm>;
 }
+
+export type { RegistrationUnitRecord, RegistrationUnitWriteInput } from '@ocop/shared';

@@ -15,18 +15,25 @@ import { createHash, createHmac, randomBytes, randomInt, randomUUID } from 'node
 import { env } from '../config/env';
 import {
   ACCESS_TOKEN_TTL_SECONDS,
+  GOOGLE_CHALLENGE_STATUS,
+  GOOGLE_RESULT_KIND,
+  JWT_ALGORITHM,
   JWT_AUDIENCE,
   JWT_ISSUER,
+  MAIL_OTP_PURPOSE,
+  OTP_TTL_MS,
+  OTP_VERIFY_STATUS,
   PASSWORD_MAX_BYTES,
   PASSWORD_ROUNDS,
-  OTP_TTL_MS,
+  PRISMA_ERROR_CODE,
+  type GoogleAuthIntent,
 } from '../constants/auth';
 import { AuthRepository } from '../repositories/auth.repository';
 import { MailService } from './mail.service';
 import { OtpService } from './otp.service';
 import { GoogleIdentityService } from './google-identity.service';
 import type { AccessTokenPayload, PublicUser } from '../types/auth';
-import { effectiveStaffPermissions } from '../utils/staff-permissions';
+import { effectiveStaffPermissions, effectiveUserRoles } from '../utils/staff-permissions';
 
 const DUMMY_BCRYPT_HASH = bcrypt.hashSync(randomBytes(32).toString('hex'), PASSWORD_ROUNDS);
 
@@ -54,7 +61,7 @@ export class AuthService {
     return { challengeToken, nonce };
   }
 
-  async google(input: { challengeToken: string; credential: string; intent: 'login' | 'register' }) {
+  async google(input: { challengeToken: string; credential: string; intent: GoogleAuthIntent }) {
     if (!env(process.env).googleClientId) throw new ServiceUnavailableException('Google sign-in is not configured');
     const tokenHash = this.hashToken(input.challengeToken);
     const challenge = await this.repository.findGoogleChallenge(tokenHash);
@@ -69,7 +76,7 @@ export class AuthService {
       result = await this.repository.consumeGoogleChallenge(tokenHash, identity, input.intent, {
         id, kind: PendingAuthKind.GOOGLE_PROFILE, tokenHash: this.hashToken(registrationToken),
         email: identity.email, googleSub: identity.sub, fullName: identity.suggestedName,
-        otpHash: createHmac('sha256', env(process.env).jwtSecret).update(`${id}:GOOGLE_LINK:${code}`).digest('hex'),
+        otpHash: createHmac('sha256', env(process.env).jwtSecret).update(`${id}:${MAIL_OTP_PURPOSE.GOOGLE_LINK}:${code}`).digest('hex'),
         createdAt: now, expiresAt: new Date(now.getTime() + 15 * 60_000),
         otpExpiresAt: new Date(now.getTime() + OTP_TTL_MS), resendAvailableAt: new Date(now.getTime() + 60_000),
       });
@@ -77,27 +84,27 @@ export class AuthService {
       if (this.isUniqueConstraint(error)) throw new ConflictException('Google account is already linked; sign in again');
       throw error;
     }
-    if (result.status === 'used_sub') throw new ConflictException('Tài khoản Google này đã được dùng');
-    if (result.status === 'email_exists') throw new ConflictException('Email đã được đăng ký; hãy đăng nhập để liên kết tài khoản Google');
-    if (result.status === 'collision') throw new ConflictException('Google account is already linked; sign in again');
-    if (result.status === 'invalid') throw new UnauthorizedException('Invalid or expired Google challenge');
-    if (result.status === 'unavailable') throw new UnauthorizedException('Account is unavailable');
-    if (result.status === 'session') {
+    if (result.status === GOOGLE_CHALLENGE_STATUS.USED_SUB) throw new ConflictException('Tài khoản Google này đã được dùng');
+    if (result.status === GOOGLE_CHALLENGE_STATUS.EMAIL_EXISTS) throw new ConflictException('Email đã được đăng ký; hãy đăng nhập để liên kết tài khoản Google');
+    if (result.status === GOOGLE_CHALLENGE_STATUS.COLLISION) throw new ConflictException('Google account is already linked; sign in again');
+    if (result.status === GOOGLE_CHALLENGE_STATUS.INVALID) throw new UnauthorizedException('Invalid or expired Google challenge');
+    if (result.status === GOOGLE_CHALLENGE_STATUS.UNAVAILABLE) throw new UnauthorizedException('Account is unavailable');
+    if (result.status === GOOGLE_CHALLENGE_STATUS.SESSION) {
       const user = result.user;
-      return { kind: 'session' as const, ...await this.issueToken({
+      return { kind: GOOGLE_RESULT_KIND.SESSION, ...await this.issueToken({
         sub: user.id, email: user.email, role: user.role, tokenVersion: user.tokenVersion,
       }, this.publicUser(user)) };
     }
     const pending = result.pending;
     if (pending.kind === PendingAuthKind.GOOGLE_PROFILE) {
-      return { kind: 'profile' as const, registrationToken, email: pending.email, suggestedName: pending.fullName };
+      return { kind: GOOGLE_RESULT_KIND.PROFILE, registrationToken, email: pending.email, suggestedName: pending.fullName };
     }
     try {
-      await this.mailService.sendOtp(pending.email!, code, 'GOOGLE_LINK');
+      await this.mailService.sendOtp(pending.email!, code, MAIL_OTP_PURPOSE.GOOGLE_LINK);
     } catch {
       throw new InternalServerErrorException('Could not send verification email');
     }
-    return { kind: 'link_otp' as const, registrationToken, email: pending.email, expiresAt: pending.expiresAt,
+    return { kind: GOOGLE_RESULT_KIND.LINK_OTP, registrationToken, email: pending.email, expiresAt: pending.expiresAt,
       otpExpiresAt: pending.otpExpiresAt, resendAvailableAt: pending.resendAvailableAt };
   }
 
@@ -118,17 +125,17 @@ export class AuthService {
       if (this.isUniqueConstraint(error)) throw new ConflictException('Google account is already linked; sign in again');
       throw error;
     }
-    if (result.status === 'collision') throw new ConflictException('Google account is already linked; sign in again');
+    if (result.status === OTP_VERIFY_STATUS.COLLISION) throw new ConflictException('Google account is already linked; sign in again');
     const user = result.user;
-    return { kind: 'session' as const, ...await this.issueToken({
+    return { kind: GOOGLE_RESULT_KIND.SESSION, ...await this.issueToken({
       sub: user.id, email: user.email, role: user.role, tokenVersion: user.tokenVersion,
     }, this.publicUser(user)) };
   }
 
   async googleLinkResend(registrationToken: string) {
-    const { pending, code } = await this.otpService.resendRegistration(registrationToken, 'GOOGLE_LINK');
+    const { pending, code } = await this.otpService.resendRegistration(registrationToken, MAIL_OTP_PURPOSE.GOOGLE_LINK);
     try {
-      await this.mailService.sendOtp(pending.email!, code, 'GOOGLE_LINK');
+      await this.mailService.sendOtp(pending.email!, code, MAIL_OTP_PURPOSE.GOOGLE_LINK);
     } catch {
       throw new InternalServerErrorException('Could not send verification email');
     }
@@ -179,7 +186,7 @@ export class AuthService {
 
   private async sendRegistrationOtp(email: string, code: string) {
     try {
-      await this.mailService.sendOtp(email, code, 'REGISTER');
+      await this.mailService.sendOtp(email, code, MAIL_OTP_PURPOSE.REGISTER);
     } catch {
       throw new InternalServerErrorException('Could not send verification email');
     }
@@ -196,7 +203,7 @@ export class AuthService {
     if (user?.role === Role.REGISTRANT && !user.verified && user.isActive) {
       try {
         const code = await this.otpService.issue(email, OtpPurpose.REGISTER, user.id);
-        await this.mailService.sendOtp(email, code, 'REGISTER');
+        await this.mailService.sendOtp(email, code, MAIL_OTP_PURPOSE.REGISTER);
       } catch {
         this.logger.error('Registration verification email could not be sent');
       }
@@ -223,13 +230,25 @@ export class AuthService {
     }, this.publicUser(user));
   }
 
+  async seedAccounts() {
+    if (process.env.NODE_ENV === 'production') return [];
+    const users = await this.repository.findSeedAccounts();
+    return users.map((user) => ({
+      email: user.email,
+      fullName: user.fullName,
+      role: user.role,
+      roles: effectiveUserRoles(user),
+      staffPermissions: effectiveStaffPermissions(user),
+    }));
+  }
+
   async forgotPassword(rawEmail: string) {
     const email = this.normalizeEmail(rawEmail);
     const user = await this.repository.findUserByEmail(email);
     if (user?.verified && user.isActive) {
       try {
         const code = await this.otpService.issue(email, OtpPurpose.RESET_PASSWORD, user.id);
-        await this.mailService.sendOtp(email, code, 'RESET_PASSWORD');
+        await this.mailService.sendOtp(email, code, MAIL_OTP_PURPOSE.RESET_PASSWORD);
       } catch {
         this.logger.error('Password reset email could not be sent');
       }
@@ -299,7 +318,7 @@ export class AuthService {
     return {
       accessToken: await this.jwtService.signAsync(payload, {
         secret: env(process.env).jwtSecret,
-        algorithm: 'HS256',
+        algorithm: JWT_ALGORITHM,
         issuer: JWT_ISSUER,
         audience: JWT_AUDIENCE,
         expiresIn,
@@ -315,6 +334,7 @@ export class AuthService {
     fullName: string;
     phone: string | null;
     role: Role;
+    roles?: Role[];
     verified: boolean;
     staffPermissions: StaffPermission[];
     organizationUnitId: string | null;
@@ -326,6 +346,7 @@ export class AuthService {
       fullName: user.fullName,
       phone: user.phone,
       role: user.role,
+      roles: effectiveUserRoles(user),
       verified: user.verified,
       staffPermissions: effectiveStaffPermissions(user),
       organizationUnitId: user.organizationUnitId,
@@ -344,6 +365,11 @@ export class AuthService {
   }
 
   private isUniqueConstraint(error: unknown): boolean {
-    return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === PRISMA_ERROR_CODE.UNIQUE_CONSTRAINT
+    );
   }
 }

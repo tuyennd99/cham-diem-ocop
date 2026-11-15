@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { STAFF_PERMISSION, USER_ROLE } from '@ocop/shared';
 import { Plus } from 'lucide-react';
 import {
   accountNavItems,
@@ -29,9 +30,9 @@ export const AppSidebar = memo(function AppSidebar() {
   const session = useSession();
   const role = session?.user.role;
   const permissions = session?.user.staffPermissions ?? [];
-  const canView = hasStaffPermission(session?.user, 'VIEW');
-  const canManage = hasStaffPermission(session?.user, 'MANAGE');
-  const canScore = hasStaffPermission(session?.user, 'SCORE');
+  const canView = hasStaffPermission(session?.user, STAFF_PERMISSION.VIEW);
+  const canManage = hasStaffPermission(session?.user, STAFF_PERMISSION.MANAGE);
+  const canScore = hasStaffPermission(session?.user, STAFF_PERMISSION.SCORE);
   const homePath = role ? homeFor(role, permissions) : '/';
 
   const evalItems = [
@@ -71,7 +72,7 @@ export const AppSidebar = memo(function AppSidebar() {
             </Button>
           </div>
         )}
-        {role === 'REGISTRANT' && (
+        {role === USER_ROLE.REGISTRANT && (
           <NavMainCollapsible label='Người đăng ký' items={registrantNavItems} groups={[]} />
         )}
         {canView && <NavMainCollapsible label='Làm việc' items={mainNavItems} groups={[]} />}

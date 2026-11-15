@@ -1,6 +1,7 @@
 import { ArgumentsHost, BadRequestException, Logger } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { ApiExceptionFilter } from './api-exception.filter';
+import { validateProductApplicationForm } from '../utils/registration-snapshot';
 
 function hostFor(request: Partial<Request>) {
   const response = {
@@ -67,6 +68,24 @@ describe('ApiExceptionFilter', () => {
     expect(payload.requestId).toMatch(/^[0-9a-f-]{36}$/i);
     expect(response.setHeader).toHaveBeenCalledWith('x-request-id', payload.requestId);
     expect(log).not.toHaveBeenCalled();
+  });
+
+  it('returns the missing application fields in the HTTP error message', () => {
+    const { host, response } = hostFor({ headers: {} as Request['headers'] });
+    try {
+      validateProductApplicationForm({ entityName: 'Đơn vị đã nhập' });
+      throw new Error('Expected validation to fail');
+    } catch (error) {
+      filter.catch(error, host);
+    }
+    expect(response.status).toHaveBeenCalledWith(400);
+    expect(response.json).toHaveBeenCalledWith(expect.objectContaining({
+      statusCode: 400,
+      message: expect.stringContaining('thiếu người đại diện'),
+    }));
+    const payload = (response.json as jest.Mock).mock.calls[0][0];
+    expect(payload.message).toContain('chưa xác nhận cam kết hồ sơ');
+    expect(payload.message).not.toContain('Đơn vị đã nhập');
   });
 
   it.each([

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import type {
   AdminProductListItem,
@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import AlertError from '@/components/alert-error';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { FormField } from '@/components/form-field';
+import { ImagePreviewDialog, type ImagePreviewItem } from '@/components/image-preview-dialog';
 import PageSpin from '@/components/page-spin';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -32,13 +33,26 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { myProductsApi } from '../../api';
-import { ALL } from '../../constants/consts';
+import {
+  ADMIN_MODAL_ACTION,
+  ALL,
+  ATTACHMENT_TYPE,
+  PRODUCT_DATE_BASIS,
+  PRODUCT_PUBLICATION_STATE,
+  PRODUCT_REGISTRATION_TYPE,
+  PRODUCT_SORT_BY,
+  PRODUCT_STATUS,
+  PRODUCT_WORKSPACE_MODE,
+  SORT_DIRECTION,
+  STAFF_PERMISSION,
+} from '../../constants/consts';
 import {
   ADMIN_DASHBOARD_STATUS_LABEL,
   PRODUCT_STATUS_TONE,
   REGISTRANT_PRODUCT_STATUS_LABEL,
 } from '../../constants/product-status';
 import { queryKeys } from '../../constants/query-key';
+import { usePaginatedList } from '../../hooks/use-paginated-list';
 import { PageContainer, PageHeader } from '../../layouts';
 import {
   nextVietnameseDayIso,
@@ -55,7 +69,13 @@ import {
 import { ADMINISTRATIVE_PROVINCES } from '../../lib/administrative-divisions';
 import { errorText, messageOf } from '../../lib/api-error';
 import { useSession } from '../../lib/auth';
-import { formatExactScore, formatStarRatingLabel } from '../../lib/print-format';
+import {
+  displayProductCode,
+  formatExactScore,
+  formatStarRatingLabel,
+  matchesProductSearchKeyword,
+} from '../../lib/print-format';
+import { getSavedProductSubmitIssues } from '../../lib/save-product-draft';
 import { hasStaffPermission } from '../../lib/session-contract';
 import { PrivateAttachmentThumbnail } from '../../pages/registrant/AttachmentLink';
 import { useAdminCategories, useAdminCategoryDetail } from '../../queries/admin-catalogs';
@@ -64,7 +84,7 @@ import { useCategories, useLocalities } from '../../queries/common';
 import { useMyProducts } from '../../queries/registrant';
 import type { RegistrantProduct } from '../../types/registrant';
 
-export type ProductListViewMode = AdminProductMode | 'owner';
+export type ProductListViewMode = AdminProductMode | typeof PRODUCT_WORKSPACE_MODE.OWNER;
 
 type ProductRowItem = AdminProductListItem | RegistrantProduct;
 
@@ -80,14 +100,16 @@ const DEFAULT_SEARCH: AdminProductSearch = {
 };
 
 function formatRegistrationType(type?: unknown) {
-  if (type === 'FIRST') return 'Lần đầu';
-  if (type === 'UPGRADE') return 'Nâng hạng';
-  if (type === 'REASSESSMENT') return 'Đánh giá lại';
+  if (type === PRODUCT_REGISTRATION_TYPE.FIRST) return 'Lần đầu';
+  if (type === PRODUCT_REGISTRATION_TYPE.UPGRADE) return 'Nâng hạng';
+  if (type === PRODUCT_REGISTRATION_TYPE.REASSESSMENT) return 'Đánh giá lại';
   return typeof type === 'string' && type ? type : 'Chưa khai báo';
 }
 
-function formatDateBasisLabel(basis?: 'submittedAt' | 'completedAt') {
-  return basis === 'completedAt' ? 'Ngày hoàn tất' : 'Ngày nộp';
+function formatDateBasisLabel(
+  basis?: typeof PRODUCT_DATE_BASIS.SUBMITTED_AT | typeof PRODUCT_DATE_BASIS.COMPLETED_AT,
+) {
+  return basis === PRODUCT_DATE_BASIS.COMPLETED_AT ? 'Ngày hoàn tất' : 'Ngày nộp';
 }
 
 function formatStatusBadge(status: ProductStatus, isOwner: boolean) {
@@ -127,29 +149,35 @@ function deriveDateInputs(search: AdminProductSearch): {
 }
 
 export function AdminProductsPage({
-  mode = 'products',
+  mode = PRODUCT_WORKSPACE_MODE.PRODUCTS,
   search: controlledSearch,
   onSearchChange,
 }: AdminProductsPageProps) {
-  const isOwner = mode === 'owner';
-  const adminMode: AdminProductMode = mode === 'registrations' ? 'registrations' : 'products';
+  const isOwner = mode === PRODUCT_WORKSPACE_MODE.OWNER;
+  const adminMode: AdminProductMode =
+    mode === PRODUCT_WORKSPACE_MODE.REGISTRATIONS
+      ? PRODUCT_WORKSPACE_MODE.REGISTRATIONS
+      : PRODUCT_WORKSPACE_MODE.PRODUCTS;
   const queryClient = useQueryClient();
   const session = useSession();
-  const canManage = hasStaffPermission(session?.user, 'MANAGE');
-  const [fallbackSearch, setFallbackSearch] = useState<AdminProductSearch>(DEFAULT_SEARCH);
-  const appliedSearch = controlledSearch ?? fallbackSearch;
-
-  const applySearch = useCallback(
-    (next: AdminProductSearch) => {
-      const normalized = parseAdminProductSearch(next as Record<string, unknown>);
-      if (onSearchChange) {
-        onSearchChange(normalized);
-      } else {
-        setFallbackSearch(normalized);
-      }
-    },
-    [onSearchChange],
-  );
+  const canManage = hasStaffPermission(session?.user, STAFF_PERMISSION.MANAGE);
+  const {
+    appliedSearch,
+    applySearch,
+    page: requestedPage,
+    pageSize,
+    setPage: changePage,
+    setPageSize,
+    sorting,
+    setSorting,
+  } = usePaginatedList<AdminProductSearch>({
+    search: controlledSearch,
+    onSearchChange,
+    parseSearch: parseAdminProductSearch,
+    defaultSearch: DEFAULT_SEARCH,
+    defaultSortBy: PRODUCT_SORT_BY.SUBMITTED_AT,
+    defaultSortDirection: SORT_DIRECTION.DESC,
+  });
 
   const [draftFilters, setDraftFilters] = useState<AdminProductSearch>(appliedSearch);
   const [dateRange, setDateRange] = useState(() => deriveDateInputs(appliedSearch));
@@ -160,8 +188,13 @@ export function AdminProductsPage({
   const [actionError, setActionError] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirmState, setConfirmState] = useState<{
-    mode: 'submit' | 'delete';
+    mode: typeof ADMIN_MODAL_ACTION.SUBMIT | typeof ADMIN_MODAL_ACTION.DELETE;
     product: RegistrantProduct;
+  } | null>(null);
+  const [previewGallery, setPreviewGallery] = useState<{
+    items: ImagePreviewItem[];
+    index: number;
+    label: string;
   } | null>(null);
 
   useEffect(() => {
@@ -212,17 +245,33 @@ export function AdminProductsPage({
   const localities = localityQuery.data?.data ?? [];
   const localityMeta = localityQuery.data?.meta;
 
+  const ownerStatusCounts = useMemo(() => {
+    const counts: Record<ProductStatus, number> & { total: number } = {
+      total: 0,
+      DRAFT: 0,
+      SUBMITTED: 0,
+      RETURNED: 0,
+      APPROVED: 0,
+      SCORING: 0,
+      COMPLETED: 0,
+    };
+    if (!isOwner) return counts;
+    for (const item of ownerListQuery.data ?? []) {
+      counts.total += 1;
+      if (item.status in counts) {
+        counts[item.status] += 1;
+      }
+    }
+    return counts;
+  }, [isOwner, ownerListQuery.data]);
+
   const ownerFilteredResult = useMemo(() => {
     if (!isOwner) return { rows: [] as ProductRowItem[], total: 0, page: 1 };
     const source = ownerListQuery.data ?? [];
     const keyword = appliedSearch.q?.trim().toLowerCase();
     const filtered = source.filter((item) => {
       if (appliedSearch.status && item.status !== appliedSearch.status) return false;
-      if (
-        keyword &&
-        !item.name.toLowerCase().includes(keyword) &&
-        !item.id.toLowerCase().includes(keyword)
-      ) {
+      if (keyword && !matchesProductSearchKeyword(item, keyword)) {
         return false;
       }
       if (appliedSearch.categoryId && item.category.id !== appliedSearch.categoryId) return false;
@@ -241,7 +290,7 @@ export function AdminProductsPage({
       if (appliedSearch.starRating && item.starRating !== appliedSearch.starRating) return false;
       if (appliedSearch.from || appliedSearch.toExclusive) {
         const rawDate =
-          appliedSearch.dateBasis === 'completedAt'
+          appliedSearch.dateBasis === PRODUCT_DATE_BASIS.COMPLETED_AT
             ? item.completedAt
             : (item.submittedAt ?? item.updatedAt);
         if (!rawDate) return false;
@@ -252,13 +301,14 @@ export function AdminProductsPage({
       return true;
     });
 
-    const sortBy = appliedSearch.sortBy ?? 'submittedAt';
-    const dir = (appliedSearch.sortDirection ?? 'desc') === 'asc' ? 1 : -1;
+    const sortBy = appliedSearch.sortBy ?? PRODUCT_SORT_BY.SUBMITTED_AT;
+    const dir =
+      (appliedSearch.sortDirection ?? SORT_DIRECTION.DESC) === SORT_DIRECTION.ASC ? 1 : -1;
     const sorted = [...filtered].sort((a, b) => {
-      if (sortBy === 'name') {
+      if (sortBy === PRODUCT_SORT_BY.NAME) {
         return a.name.localeCompare(b.name, 'vi') * dir;
       }
-      if (sortBy === 'finalScore') {
+      if (sortBy === PRODUCT_SORT_BY.FINAL_SCORE) {
         const scoreA = a.finalScore ?? -1;
         const scoreB = b.finalScore ?? -1;
         return (scoreA - scoreB) * dir;
@@ -288,7 +338,15 @@ export function AdminProductsPage({
     : (adminListQuery.data?.meta?.total ?? data.length);
   const currentPage = isOwner
     ? ownerFilteredResult.page
-    : (adminListQuery.data?.meta?.page ?? appliedSearch.page ?? 1);
+    : (adminListQuery.data?.meta?.page ?? requestedPage);
+
+  useEffect(() => {
+    if (loading) return;
+    const maxPage = Math.max(1, Math.ceil(totalCount / pageSize));
+    if (requestedPage > maxPage) {
+      changePage(maxPage);
+    }
+  }, [changePage, loading, pageSize, requestedPage, totalCount]);
 
   async function executeOwnerConfirm() {
     if (!confirmState || busy) return;
@@ -296,13 +354,19 @@ export function AdminProductsPage({
     setBusy(true);
     setActionError('');
     try {
-      if (confirmMode === 'delete') {
+      if (confirmMode === ADMIN_MODAL_ACTION.DELETE) {
         await myProductsApi.remove(product.id);
         queryClient.setQueryData<RegistrantProduct[]>(queryKeys.myProducts.list, (rows = []) =>
           rows.filter((item) => item.id !== product.id),
         );
         toast.success('Đã xóa bản nháp sản phẩm.');
       } else {
+        const issues = getSavedProductSubmitIssues(product);
+        if (issues.length > 0) {
+          setActionError(issues[0]);
+          toast.error(issues[0]);
+          return;
+        }
         const { data: updated } = await myProductsApi.submit(product.id);
         queryClient.setQueryData<RegistrantProduct[]>(queryKeys.myProducts.list, (rows = []) =>
           rows.map((item) => (item.id === product.id ? { ...item, ...updated } : item)),
@@ -326,22 +390,26 @@ export function AdminProductsPage({
   const statusOptions: Array<{ value: ProductStatus | undefined; label: string }> = isOwner
     ? [
         { value: undefined, label: 'Tất cả hồ sơ' },
-        { value: 'DRAFT', label: REGISTRANT_PRODUCT_STATUS_LABEL.DRAFT },
-        { value: 'SUBMITTED', label: REGISTRANT_PRODUCT_STATUS_LABEL.SUBMITTED },
-        { value: 'SCORING', label: REGISTRANT_PRODUCT_STATUS_LABEL.SCORING },
-        { value: 'COMPLETED', label: REGISTRANT_PRODUCT_STATUS_LABEL.COMPLETED },
+        { value: PRODUCT_STATUS.DRAFT, label: REGISTRANT_PRODUCT_STATUS_LABEL.DRAFT },
+        { value: PRODUCT_STATUS.SUBMITTED, label: REGISTRANT_PRODUCT_STATUS_LABEL.SUBMITTED },
+        { value: PRODUCT_STATUS.RETURNED, label: REGISTRANT_PRODUCT_STATUS_LABEL.RETURNED },
+        { value: PRODUCT_STATUS.APPROVED, label: REGISTRANT_PRODUCT_STATUS_LABEL.APPROVED },
+        { value: PRODUCT_STATUS.SCORING, label: REGISTRANT_PRODUCT_STATUS_LABEL.SCORING },
+        { value: PRODUCT_STATUS.COMPLETED, label: REGISTRANT_PRODUCT_STATUS_LABEL.COMPLETED },
       ]
     : [
         {
           value: undefined,
-          label: mode === 'products' ? 'Tất cả sản phẩm' : 'Tất cả phiếu',
+          label: mode === PRODUCT_WORKSPACE_MODE.PRODUCTS ? 'Tất cả sản phẩm' : 'Tất cả phiếu',
         },
         ...(canManage
-          ? [{ value: 'DRAFT' as const, label: ADMIN_DASHBOARD_STATUS_LABEL.DRAFT }]
+          ? [{ value: PRODUCT_STATUS.DRAFT, label: ADMIN_DASHBOARD_STATUS_LABEL.DRAFT }]
           : []),
-        { value: 'SUBMITTED', label: ADMIN_DASHBOARD_STATUS_LABEL.SUBMITTED },
-        { value: 'SCORING', label: ADMIN_DASHBOARD_STATUS_LABEL.SCORING },
-        { value: 'COMPLETED', label: ADMIN_DASHBOARD_STATUS_LABEL.COMPLETED },
+        { value: PRODUCT_STATUS.SUBMITTED, label: ADMIN_DASHBOARD_STATUS_LABEL.SUBMITTED },
+        { value: PRODUCT_STATUS.RETURNED, label: ADMIN_DASHBOARD_STATUS_LABEL.RETURNED },
+        { value: PRODUCT_STATUS.APPROVED, label: ADMIN_DASHBOARD_STATUS_LABEL.APPROVED },
+        { value: PRODUCT_STATUS.SCORING, label: ADMIN_DASHBOARD_STATUS_LABEL.SCORING },
+        { value: PRODUCT_STATUS.COMPLETED, label: ADMIN_DASHBOARD_STATUS_LABEL.COMPLETED },
       ];
 
   const productColumns = useMemo<DataTableColumnDef<ProductRowItem>[]>(() => {
@@ -351,16 +419,45 @@ export function AdminProductsPage({
         header: 'Sản phẩm / Mã hồ sơ',
         cell: ({ row }) => {
           const product = row.original;
-          const image = product.attachments.find((file) => file.type === 'IMAGE');
+          const imageAttachments = product.attachments.filter(
+            (file) => file.type === ATTACHMENT_TYPE.IMAGE,
+          );
+          const image = imageAttachments[0];
+          const attachmentMode = isOwner
+            ? PRODUCT_WORKSPACE_MODE.OWNER
+            : PRODUCT_WORKSPACE_MODE.ADMIN;
           return (
             <div className='product-cell'>
               {image ? (
-                <PrivateAttachmentThumbnail
-                  mode={isOwner ? 'owner' : 'admin'}
-                  productId={product.id}
-                  attachmentId={image.id}
-                  name={product.name}
-                />
+                <button
+                  type='button'
+                  className='product-thumb cursor-zoom-in overflow-hidden p-0'
+                  aria-label={`Xem phóng to ảnh ${product.name}`}
+                  onClick={() =>
+                    setPreviewGallery({
+                      items: imageAttachments.map((file, idx) => ({
+                        kind: 'private',
+                        id: file.id,
+                        name:
+                          'fileName' in file && typeof file.fileName === 'string' && file.fileName
+                            ? file.fileName
+                            : `${product.name} — Ảnh ${idx + 1}`,
+                        mode: attachmentMode,
+                        productId: product.id,
+                      })),
+                      index: 0,
+                      label: `Hồ sơ: ${product.name}`,
+                    })
+                  }
+                >
+                  <PrivateAttachmentThumbnail
+                    mode={attachmentMode}
+                    productId={product.id}
+                    attachmentId={image.id}
+                    name={product.name}
+                    className='size-full object-cover'
+                  />
+                </button>
               ) : (
                 <div
                   className='product-thumb text-muted flex items-center justify-center'
@@ -372,7 +469,7 @@ export function AdminProductsPage({
               <div>
                 <div className='product-title'>{product.name}</div>
                 <div className='product-code'>
-                  <span title={product.id}>{product.id}</span>
+                  <span title={product.id}>{displayProductCode(product)}</span>
                 </div>
                 <Badge variant='secondary' className='mt-1'>
                   {product.category.name}
@@ -388,6 +485,7 @@ export function AdminProductsPage({
       columns.push({
         id: 'registrant',
         header: 'Người đăng ký',
+        enableSorting: false,
         cell: ({ row }) => {
           const product = row.original as AdminProductListItem;
           return (
@@ -402,7 +500,8 @@ export function AdminProductsPage({
 
     columns.push(
       {
-        id: 'locality',
+        id: PRODUCT_SORT_BY.SUBMITTED_AT,
+        accessorFn: (row) => row.submittedAt ?? ('updatedAt' in row ? row.updatedAt : '') ?? '',
         header: isOwner ? 'Địa bàn / Cập nhật' : 'Địa bàn / Năm',
         cell: ({ row }) => {
           const product = row.original;
@@ -431,10 +530,13 @@ export function AdminProductsPage({
       {
         accessorKey: 'status',
         header: 'Trạng thái',
+        enableSorting: false,
+        meta: { align: 'center' },
         cell: ({ row }) => formatStatusBadge(row.original.status, isOwner),
       },
       {
-        id: 'result',
+        id: PRODUCT_SORT_BY.FINAL_SCORE,
+        accessorFn: (row) => row.finalScore ?? -1,
         header: 'Kết quả',
         meta: {
           align: 'right',
@@ -442,11 +544,29 @@ export function AdminProductsPage({
         },
         cell: ({ row }) => {
           const product = row.original;
-          return product.status === 'COMPLETED' && product.finalScore !== null ? (
+          if (isOwner) {
+            if (product.publicationState === PRODUCT_PUBLICATION_STATE.UPDATING) {
+              return <span className='text-muted text-xs'>Đang cập nhật kết quả</span>;
+            }
+            if (
+              product.status === PRODUCT_STATUS.COMPLETED &&
+              product.publicationState !== PRODUCT_PUBLICATION_STATE.PUBLISHED
+            ) {
+              return <span className='text-muted text-xs'>Chờ công bố kết quả</span>;
+            }
+          }
+          return product.status === PRODUCT_STATUS.COMPLETED && product.finalScore !== null ? (
             <div>
               <div className='score-val'>{formatExactScore(product.finalScore)} điểm</div>
               <div className='text-muted mt-0.5 text-xs'>
                 {formatStarRatingLabel(product.starRating)}
+                {!isOwner && product.publicationState === PRODUCT_PUBLICATION_STATE.PUBLISHED
+                  ? ' · Đã công bố'
+                  : !isOwner && product.publicationState === PRODUCT_PUBLICATION_STATE.UPDATING
+                    ? ' · Chờ công bố lại'
+                    : !isOwner
+                      ? ' · Chưa công bố'
+                      : ''}
               </div>
             </div>
           ) : (
@@ -457,13 +577,14 @@ export function AdminProductsPage({
       {
         id: 'actions',
         header: 'Thao tác',
-        meta: { align: 'right' },
+        enableSorting: false,
+        meta: { align: 'center' },
         cell: ({ row }) => {
           const product = row.original;
           if (isOwner) {
             const ownerProduct = product as RegistrantProduct;
             return (
-              <div className='flex items-center justify-end gap-1.5'>
+              <div className='flex items-center justify-center gap-1.5'>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button asChild variant='secondary' size='icon-sm'>
@@ -478,7 +599,8 @@ export function AdminProductsPage({
                   </TooltipTrigger>
                   <TooltipContent>Mở hồ sơ</TooltipContent>
                 </Tooltip>
-                {ownerProduct.status === 'DRAFT' && (
+                {(ownerProduct.status === PRODUCT_STATUS.DRAFT ||
+                  ownerProduct.status === PRODUCT_STATUS.RETURNED) && (
                   <>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -486,13 +608,21 @@ export function AdminProductsPage({
                           <Link
                             to='/my/products/$id/edit'
                             params={{ id: ownerProduct.id }}
-                            aria-label={`Sửa bản nháp ${ownerProduct.name}`}
+                            aria-label={
+                              ownerProduct.status === PRODUCT_STATUS.RETURNED
+                                ? `Chỉnh sửa hồ sơ bị trả lại ${ownerProduct.name}`
+                                : `Sửa bản nháp ${ownerProduct.name}`
+                            }
                           >
                             <Pencil className='size-4' aria-hidden='true' />
                           </Link>
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>Sửa bản nháp</TooltipContent>
+                      <TooltipContent>
+                        {ownerProduct.status === PRODUCT_STATUS.RETURNED
+                          ? 'Chỉnh sửa hồ sơ'
+                          : 'Sửa bản nháp'}
+                      </TooltipContent>
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -501,30 +631,50 @@ export function AdminProductsPage({
                           variant='secondary'
                           size='icon-sm'
                           disabled={busy}
-                          aria-label={`Nộp hồ sơ ${ownerProduct.name}`}
-                          onClick={() => setConfirmState({ mode: 'submit', product: ownerProduct })}
+                          aria-label={
+                            ownerProduct.status === PRODUCT_STATUS.RETURNED
+                              ? `Nộp lại hồ sơ ${ownerProduct.name}`
+                              : `Nộp hồ sơ ${ownerProduct.name}`
+                          }
+                          onClick={() =>
+                            setConfirmState({
+                              mode: ADMIN_MODAL_ACTION.SUBMIT,
+                              product: ownerProduct,
+                            })
+                          }
                         >
                           <Send className='size-4' aria-hidden='true' />
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>Nộp hồ sơ</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type='button'
-                          variant='destructive'
-                          size='icon-sm'
-                          disabled={busy}
-                          aria-label={`Xóa bản nháp ${ownerProduct.name}`}
-                          onClick={() => setConfirmState({ mode: 'delete', product: ownerProduct })}
-                        >
-                          <Trash2 className='size-4' aria-hidden='true' />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Xóa bản nháp</TooltipContent>
+                      <TooltipContent>
+                        {ownerProduct.status === PRODUCT_STATUS.RETURNED
+                          ? 'Nộp lại hồ sơ'
+                          : 'Nộp hồ sơ'}
+                      </TooltipContent>
                     </Tooltip>
                   </>
+                )}
+                {ownerProduct.status === PRODUCT_STATUS.DRAFT && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type='button'
+                        variant='destructive'
+                        size='icon-sm'
+                        disabled={busy}
+                        aria-label={`Xóa bản nháp ${ownerProduct.name}`}
+                        onClick={() =>
+                          setConfirmState({
+                            mode: ADMIN_MODAL_ACTION.DELETE,
+                            product: ownerProduct,
+                          })
+                        }
+                      >
+                        <Trash2 className='size-4' aria-hidden='true' />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Xóa bản nháp</TooltipContent>
+                  </Tooltip>
                 )}
               </div>
             );
@@ -534,24 +684,30 @@ export function AdminProductsPage({
             <div className='flex items-center justify-end gap-2'>
               <Button asChild variant='secondary' size='sm'>
                 <Link
-                  to={mode === 'products' ? '/admin/products/$id' : '/admin/registrations/$id'}
+                  to={
+                    mode === PRODUCT_WORKSPACE_MODE.PRODUCTS
+                      ? '/admin/products/$id'
+                      : '/admin/registrations/$id'
+                  }
                   params={{ id: product.id }}
                   search={appliedSearch}
                 >
                   Mở hồ sơ
                 </Link>
               </Button>
-              {canManage && product.status === 'DRAFT' && (
-                <Button asChild variant='secondary' size='sm'>
-                  <Link
-                    to='/admin/registrations/$id/edit'
-                    params={{ id: product.id }}
-                    search={appliedSearch}
-                  >
-                    Sửa phiếu
-                  </Link>
-                </Button>
-              )}
+              {canManage &&
+                (product.status === PRODUCT_STATUS.DRAFT ||
+                  product.status === PRODUCT_STATUS.RETURNED) && (
+                  <Button asChild variant='secondary' size='sm'>
+                    <Link
+                      to='/admin/registrations/$id/edit'
+                      params={{ id: product.id }}
+                      search={appliedSearch}
+                    >
+                      Sửa phiếu
+                    </Link>
+                  </Button>
+                )}
             </div>
           );
         },
@@ -626,27 +782,10 @@ export function AdminProductsPage({
     setLocalitySearch('');
     setLocalityPage(1);
     setSelectedLocality(null);
-    applySearch({ page: 1, limit: appliedSearch.limit ?? 20 });
-  }
-
-  function changePage(nextPage: number) {
-    applySearch({
-      ...appliedSearch,
-      page: Math.max(1, nextPage),
-    });
+    applySearch({ page: 1, limit: pageSize });
   }
 
   const appliedChips: Array<{ key: string; label: string }> = [];
-  if (appliedSearch.status) {
-    appliedChips.push({
-      key: 'status',
-      label: `Trạng thái: ${
-        isOwner
-          ? REGISTRANT_PRODUCT_STATUS_LABEL[appliedSearch.status]
-          : ADMIN_DASHBOARD_STATUS_LABEL[appliedSearch.status]
-      }`,
-    });
-  }
   if (appliedSearch.q) {
     appliedChips.push({ key: 'q', label: `Từ khóa: ${appliedSearch.q}` });
   }
@@ -704,7 +843,7 @@ export function AdminProductsPage({
     });
   }
 
-  const hasActiveFilters = appliedChips.length > 0;
+  const hasActiveFilters = appliedChips.length > 0 || Boolean(appliedSearch.status);
   const currentCategoryOptionMissing =
     Boolean(draftFilters.categoryId) &&
     !categories.some((item) => item.id === draftFilters.categoryId);
@@ -715,12 +854,12 @@ export function AdminProductsPage({
 
   const pageTitle = isOwner
     ? 'Hồ sơ của tôi'
-    : mode === 'products'
+    : mode === PRODUCT_WORKSPACE_MODE.PRODUCTS
       ? 'Sản phẩm OCOP'
       : 'Phiếu đăng ký';
   const pageDescription = isOwner
     ? 'Theo dõi hồ sơ sản phẩm, tiến độ chấm điểm và mức sao đạt được.'
-    : mode === 'products'
+    : mode === PRODUCT_WORKSPACE_MODE.PRODUCTS
       ? 'Theo dõi hồ sơ, tiến độ chấm và mức sao theo điểm.'
       : 'Nhập và quản lý phiếu đăng ký cho người đăng ký.';
 
@@ -735,7 +874,9 @@ export function AdminProductsPage({
     <Button asChild>
       <Link to='/admin/registrations/new' search={appliedSearch}>
         <Plus className='size-4' aria-hidden='true' />
-        <span>{mode === 'products' ? 'Thêm phiếu đăng ký' : 'Nhập phiếu đăng ký'}</span>
+        <span>
+          {mode === PRODUCT_WORKSPACE_MODE.PRODUCTS ? 'Thêm phiếu đăng ký' : 'Nhập phiếu đăng ký'}
+        </span>
       </Link>
     </Button>
   ) : undefined;
@@ -744,9 +885,101 @@ export function AdminProductsPage({
     <PageContainer>
       <PageHeader title={pageTitle} description={pageDescription} actions={headerActions} />
 
+      {isOwner && !loading && !error && ownerStatusCounts.RETURNED > 0 && (
+        <div className='registrant-returned-banner' role='status'>
+          <div>
+            <strong>
+              Có {ownerStatusCounts.RETURNED} hồ sơ bị trả lại cần bổ sung hoặc chỉnh sửa
+            </strong>
+            <p>
+              Vui lòng mở hồ sơ để xem lý do trả lại, cập nhật thông tin minh chứng và nộp lại cho
+              hội đồng.
+            </p>
+          </div>
+          {appliedSearch.status !== PRODUCT_STATUS.RETURNED && (
+            <Button
+              type='button'
+              variant='secondary'
+              size='sm'
+              onClick={() => handleStatusSelect(PRODUCT_STATUS.RETURNED)}
+            >
+              Xem hồ sơ bị trả lại ({ownerStatusCounts.RETURNED})
+            </Button>
+          )}
+        </div>
+      )}
+
+      {isOwner && !loading && !error && ownerStatusCounts.total > 0 && (
+        <div
+          className='registrant-summary-strip'
+          role='group'
+          aria-label='Tóm tắt số lượng hồ sơ theo trạng thái'
+        >
+          <button
+            type='button'
+            className='registrant-summary-card'
+            aria-pressed={!appliedSearch.status}
+            onClick={() => handleStatusSelect(undefined)}
+          >
+            <span>Tất cả hồ sơ</span>
+            <strong>{ownerStatusCounts.total}</strong>
+          </button>
+          <button
+            type='button'
+            className='registrant-summary-card'
+            aria-pressed={appliedSearch.status === PRODUCT_STATUS.DRAFT}
+            onClick={() => handleStatusSelect(PRODUCT_STATUS.DRAFT)}
+          >
+            <span>{REGISTRANT_PRODUCT_STATUS_LABEL.DRAFT}</span>
+            <strong>{ownerStatusCounts.DRAFT}</strong>
+          </button>
+          <button
+            type='button'
+            className='registrant-summary-card'
+            aria-pressed={appliedSearch.status === PRODUCT_STATUS.SUBMITTED}
+            onClick={() => handleStatusSelect(PRODUCT_STATUS.SUBMITTED)}
+          >
+            <span>{REGISTRANT_PRODUCT_STATUS_LABEL.SUBMITTED}</span>
+            <strong>{ownerStatusCounts.SUBMITTED}</strong>
+          </button>
+          <button
+            type='button'
+            className='registrant-summary-card'
+            aria-pressed={appliedSearch.status === PRODUCT_STATUS.RETURNED}
+            onClick={() => handleStatusSelect(PRODUCT_STATUS.RETURNED)}
+          >
+            <span>{REGISTRANT_PRODUCT_STATUS_LABEL.RETURNED}</span>
+            <strong>{ownerStatusCounts.RETURNED}</strong>
+          </button>
+          <button
+            type='button'
+            className='registrant-summary-card'
+            aria-pressed={appliedSearch.status === PRODUCT_STATUS.SCORING}
+            onClick={() => handleStatusSelect(PRODUCT_STATUS.SCORING)}
+          >
+            <span>{REGISTRANT_PRODUCT_STATUS_LABEL.SCORING}</span>
+            <strong>{ownerStatusCounts.SCORING}</strong>
+          </button>
+          <button
+            type='button'
+            className='registrant-summary-card'
+            aria-pressed={appliedSearch.status === PRODUCT_STATUS.COMPLETED}
+            onClick={() => handleStatusSelect(PRODUCT_STATUS.COMPLETED)}
+          >
+            <span>{REGISTRANT_PRODUCT_STATUS_LABEL.COMPLETED}</span>
+            <strong>{ownerStatusCounts.COMPLETED}</strong>
+          </button>
+        </div>
+      )}
+
       <div className='status-tabs' role='group' aria-label='Lọc nhanh theo trạng thái hồ sơ'>
         {statusOptions.map((option) => {
           const pressed = (appliedSearch.status ?? undefined) === option.value;
+          const count = isOwner
+            ? option.value
+              ? ownerStatusCounts[option.value]
+              : ownerStatusCounts.total
+            : undefined;
           return (
             <button
               key={option.value ?? ALL}
@@ -756,6 +989,7 @@ export function AdminProductsPage({
               onClick={() => handleStatusSelect(option.value)}
             >
               {option.label}
+              {count !== undefined && !loading ? ` (${count})` : ''}
             </button>
           );
         })}
@@ -829,11 +1063,11 @@ export function AdminProductsPage({
             >
               <Filter className='size-4' aria-hidden='true' />
               <span>Bộ lọc khác</span>
-              {hasActiveFilters && (
+              {appliedChips.length > 0 && (
                 <span className='admin-filter-count'>{appliedChips.length}</span>
               )}
             </Button>
-            {hasActiveFilters && (
+            {appliedChips.length > 0 && (
               <Button type='button' variant='secondary' onClick={resetFilters}>
                 <RotateCcw className='size-4' aria-hidden='true' />
                 <span>Xóa bộ lọc</span>
@@ -885,9 +1119,11 @@ export function AdminProductsPage({
               <ComboboxContent>
                 <ComboboxEmpty>Không tìm thấy loại đăng ký.</ComboboxEmpty>
                 <ComboboxItem value={ALL}>Tất cả loại đăng ký</ComboboxItem>
-                <ComboboxItem value='FIRST'>Lần đầu</ComboboxItem>
-                <ComboboxItem value='UPGRADE'>Nâng hạng</ComboboxItem>
-                <ComboboxItem value='REASSESSMENT'>Đánh giá lại</ComboboxItem>
+                <ComboboxItem value={PRODUCT_REGISTRATION_TYPE.FIRST}>Lần đầu</ComboboxItem>
+                <ComboboxItem value={PRODUCT_REGISTRATION_TYPE.UPGRADE}>Nâng hạng</ComboboxItem>
+                <ComboboxItem value={PRODUCT_REGISTRATION_TYPE.REASSESSMENT}>
+                  Đánh giá lại
+                </ComboboxItem>
               </ComboboxContent>
             </Combobox>
           </FormField>
@@ -1097,11 +1333,12 @@ export function AdminProductsPage({
 
           <FormField label='Căn cứ lọc ngày' htmlFor='admin-product-date-basis'>
             <Combobox
-              value={draftFilters.dateBasis ?? 'submittedAt'}
+              value={draftFilters.dateBasis ?? PRODUCT_DATE_BASIS.SUBMITTED_AT}
               onValueChange={(value) =>
                 setDraftFilters((old) => ({
                   ...old,
-                  dateBasis: value as 'submittedAt' | 'completedAt',
+                  dateBasis: value as
+                    typeof PRODUCT_DATE_BASIS.SUBMITTED_AT | typeof PRODUCT_DATE_BASIS.COMPLETED_AT,
                 }))
               }
             >
@@ -1111,8 +1348,8 @@ export function AdminProductsPage({
               </ComboboxAnchor>
               <ComboboxContent>
                 <ComboboxEmpty>Không tìm thấy căn cứ lọc ngày.</ComboboxEmpty>
-                <ComboboxItem value='submittedAt'>Ngày nộp</ComboboxItem>
-                <ComboboxItem value='completedAt'>Ngày hoàn tất</ComboboxItem>
+                <ComboboxItem value={PRODUCT_DATE_BASIS.SUBMITTED_AT}>Ngày nộp</ComboboxItem>
+                <ComboboxItem value={PRODUCT_DATE_BASIS.COMPLETED_AT}>Ngày hoàn tất</ComboboxItem>
               </ComboboxContent>
             </Combobox>
           </FormField>
@@ -1155,7 +1392,7 @@ export function AdminProductsPage({
 
           <FormField label='Sắp xếp theo' htmlFor='admin-product-sort-by'>
             <Combobox
-              value={draftFilters.sortBy ?? 'submittedAt'}
+              value={draftFilters.sortBy ?? PRODUCT_SORT_BY.SUBMITTED_AT}
               onValueChange={(value) =>
                 setDraftFilters((old) => ({
                   ...old,
@@ -1169,16 +1406,16 @@ export function AdminProductsPage({
               </ComboboxAnchor>
               <ComboboxContent>
                 <ComboboxEmpty>Không tìm thấy tiêu chí sắp xếp.</ComboboxEmpty>
-                <ComboboxItem value='submittedAt'>Ngày nộp</ComboboxItem>
-                <ComboboxItem value='name'>Tên sản phẩm</ComboboxItem>
-                <ComboboxItem value='finalScore'>Điểm số</ComboboxItem>
+                <ComboboxItem value={PRODUCT_SORT_BY.SUBMITTED_AT}>Ngày nộp</ComboboxItem>
+                <ComboboxItem value={PRODUCT_SORT_BY.NAME}>Tên sản phẩm</ComboboxItem>
+                <ComboboxItem value={PRODUCT_SORT_BY.FINAL_SCORE}>Điểm số</ComboboxItem>
               </ComboboxContent>
             </Combobox>
           </FormField>
 
           <FormField label='Thứ tự sắp xếp' htmlFor='admin-product-sort-direction'>
             <Combobox
-              value={draftFilters.sortDirection ?? 'desc'}
+              value={draftFilters.sortDirection ?? SORT_DIRECTION.DESC}
               onValueChange={(value) =>
                 setDraftFilters((old) => ({
                   ...old,
@@ -1192,8 +1429,8 @@ export function AdminProductsPage({
               </ComboboxAnchor>
               <ComboboxContent>
                 <ComboboxEmpty>Không tìm thấy thứ tự sắp xếp.</ComboboxEmpty>
-                <ComboboxItem value='desc'>Giảm dần</ComboboxItem>
-                <ComboboxItem value='asc'>Tăng dần</ComboboxItem>
+                <ComboboxItem value={SORT_DIRECTION.DESC}>Giảm dần</ComboboxItem>
+                <ComboboxItem value={SORT_DIRECTION.ASC}>Tăng dần</ComboboxItem>
               </ComboboxContent>
             </Combobox>
           </FormField>
@@ -1201,7 +1438,7 @@ export function AdminProductsPage({
 
         {filterError && <AlertError title='Bộ lọc chưa hợp lệ' errors={[filterError]} />}
 
-        {hasActiveFilters && (
+        {appliedChips.length > 0 && (
           <div className='admin-applied-filters' aria-label='Điều kiện đang áp dụng'>
             <span className='text-muted text-xs font-semibold'>Đang lọc:</span>
             {appliedChips.map((chip) => (
@@ -1225,7 +1462,7 @@ export function AdminProductsPage({
             title={
               isOwner
                 ? 'Không thể tải hồ sơ'
-                : mode === 'products'
+                : mode === PRODUCT_WORKSPACE_MODE.PRODUCTS
                   ? 'Không tải được danh sách sản phẩm'
                   : 'Không tải được danh sách phiếu đăng ký'
             }
@@ -1255,7 +1492,7 @@ export function AdminProductsPage({
               aria-label={
                 isOwner
                   ? 'Bảng hồ sơ của tôi'
-                  : mode === 'products'
+                  : mode === PRODUCT_WORKSPACE_MODE.PRODUCTS
                     ? 'Bảng sản phẩm OCOP'
                     : 'Bảng phiếu đăng ký OCOP'
               }
@@ -1270,16 +1507,13 @@ export function AdminProductsPage({
                 data={data}
                 total={totalCount}
                 page={currentPage}
-                pageSize={appliedSearch.limit ?? 20}
+                pageSize={pageSize}
+                enableSorting
+                sorting={sorting}
+                onSortingChange={setSorting}
                 getRowId={(row) => row.id}
                 onPageChange={(nextPage) => changePage(nextPage)}
-                onPageSizeChange={(nextLimit) =>
-                  applySearch({
-                    ...appliedSearch,
-                    page: 1,
-                    limit: nextLimit,
-                  })
-                }
+                onPageSizeChange={(nextLimit) => setPageSize(nextLimit)}
               />
             </div>
           ) : (
@@ -1306,14 +1540,14 @@ export function AdminProductsPage({
                   <h2 className='text-fg mb-1 text-lg font-semibold'>
                     {isOwner
                       ? 'Chưa có hồ sơ'
-                      : mode === 'products'
+                      : mode === PRODUCT_WORKSPACE_MODE.PRODUCTS
                         ? 'Chưa có hồ sơ sản phẩm nào'
                         : 'Chưa có phiếu đăng ký nào'}
                   </h2>
                   <p className='text-muted text-sm'>
                     {isOwner
                       ? 'Tạo bản nháp để bắt đầu đăng ký sản phẩm OCOP.'
-                      : mode === 'products'
+                      : mode === PRODUCT_WORKSPACE_MODE.PRODUCTS
                         ? 'Khi người đăng ký nộp hồ sơ hoặc quản trị viên nhập hộ phiếu đăng ký, sản phẩm sẽ hiển thị tại đây.'
                         : 'Bắt đầu bằng cách nhập phiếu đăng ký mới cho người đăng ký.'}
                   </p>
@@ -1333,7 +1567,9 @@ export function AdminProductsPage({
                           <Link to='/admin/registrations/new' search={appliedSearch}>
                             <Plus className='size-4' aria-hidden='true' />
                             <span>
-                              {mode === 'products' ? 'Thêm phiếu đăng ký' : 'Nhập phiếu đăng ký'}
+                              {mode === PRODUCT_WORKSPACE_MODE.PRODUCTS
+                                ? 'Thêm phiếu đăng ký'
+                                : 'Nhập phiếu đăng ký'}
                             </span>
                           </Link>
                         </Button>
@@ -1347,32 +1583,58 @@ export function AdminProductsPage({
         </>
       )}
 
-      {isOwner && (
-        <ConfirmDialog
-          open={confirmState !== null}
-          onOpenChange={(open) => {
-            if (!open && !busy) {
-              setConfirmState(null);
-              setActionError('');
-            }
-          }}
-          title={
-            confirmState?.mode === 'delete'
-              ? `Xóa bản nháp: ${confirmState.product.name}`
-              : `Nộp hồ sơ: ${confirmState?.product.name ?? ''}`
+      {isOwner &&
+        (() => {
+          const confirmSubmitIssues =
+            confirmState?.mode === ADMIN_MODAL_ACTION.SUBMIT
+              ? getSavedProductSubmitIssues(confirmState.product)
+              : [];
+          return (
+            <ConfirmDialog
+              open={confirmState !== null}
+              onOpenChange={(open) => {
+                if (!open && !busy) {
+                  setConfirmState(null);
+                  setActionError('');
+                }
+              }}
+              title={
+                confirmState?.mode === ADMIN_MODAL_ACTION.DELETE
+                  ? `Xóa bản nháp: ${confirmState.product.name}`
+                  : `Nộp hồ sơ: ${confirmState?.product.name ?? ''}`
+              }
+              description={
+                confirmState?.mode === ADMIN_MODAL_ACTION.DELETE
+                  ? 'Bản nháp sản phẩm sẽ bị xóa vĩnh viễn và không thể khôi phục.'
+                  : confirmSubmitIssues.length > 0
+                    ? 'Hồ sơ chưa đủ thông tin đã lưu. Hãy mở trang sửa bản nháp để bổ sung và lưu trước khi nộp.'
+                    : 'Nộp hồ sơ này để bắt đầu đánh giá? Sau khi nộp, không thể sửa bản nháp.'
+              }
+              confirmLabel={
+                confirmState?.mode === ADMIN_MODAL_ACTION.DELETE ? 'Xóa bản nháp' : 'Nộp hồ sơ'
+              }
+              destructive={confirmState?.mode === ADMIN_MODAL_ACTION.DELETE}
+              pending={busy}
+              confirmDisabled={
+                confirmState?.mode === ADMIN_MODAL_ACTION.SUBMIT && confirmSubmitIssues.length > 0
+              }
+              error={confirmSubmitIssues.length > 0 ? confirmSubmitIssues : actionError}
+              onConfirm={() => void executeOwnerConfirm()}
+            />
+          );
+        })()}
+      <ImagePreviewDialog
+        items={previewGallery?.items ?? []}
+        activeIndex={previewGallery ? previewGallery.index : null}
+        onIndexChange={(nextIndex) => {
+          if (nextIndex === null) {
+            setPreviewGallery(null);
+          } else {
+            setPreviewGallery((prev) => (prev ? { ...prev, index: nextIndex } : null));
           }
-          description={
-            confirmState?.mode === 'delete'
-              ? 'Bản nháp sản phẩm sẽ bị xóa vĩnh viễn và không thể khôi phục.'
-              : 'Nộp hồ sơ này để bắt đầu đánh giá? Sau khi nộp, không thể sửa bản nháp.'
-          }
-          confirmLabel={confirmState?.mode === 'delete' ? 'Xóa bản nháp' : 'Nộp hồ sơ'}
-          destructive={confirmState?.mode === 'delete'}
-          pending={busy}
-          error={actionError}
-          onConfirm={() => void executeOwnerConfirm()}
-        />
-      )}
+        }}
+        contextLabel={previewGallery?.label}
+      />
     </PageContainer>
   );
 }

@@ -1,9 +1,14 @@
 import { Link } from '@tanstack/react-router';
+import { PRODUCT_WORKSPACE_MODE } from '@/constants/consts';
 import AlertError from '@/components/alert-error';
 import { Button } from '@/components/ui/button';
 
-export default function AdminFilterError({ mode }: { mode: 'products' | 'registrations' }) {
-  const isProducts = mode === 'products';
+export default function AdminFilterError({
+  mode,
+}: {
+  mode: typeof PRODUCT_WORKSPACE_MODE.PRODUCTS | typeof PRODUCT_WORKSPACE_MODE.REGISTRATIONS;
+}) {
+  const isProducts = mode === PRODUCT_WORKSPACE_MODE.PRODUCTS;
   return (
     <section className='admin-page'>
       <div className='admin-page-heading'>

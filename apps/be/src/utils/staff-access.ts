@@ -3,18 +3,23 @@ import {
   ConflictException,
   ForbiddenException,
 } from '@nestjs/common';
-import { Prisma, Role, StaffPermission } from '@prisma/client';
+import { Prisma, ProductStatus, Role, StaffPermission } from '@prisma/client';
 import type { User } from '@prisma/client';
 import type { UpdateStaffAccessDto } from '../dtos/admin.dto';
 import type { RequestMeta } from '../types/auth';
 import { databaseObject } from '../prisma/sql';
 import { writeAudit } from './audit-log';
-import { effectiveStaffPermissions, staffRole } from './staff-permissions';
+import {
+  effectiveStaffPermissions,
+  effectiveUserRoles,
+  resolveRolesAndPermissions,
+} from './staff-permissions';
 
 export type StaffAccessRecord = Pick<
   User,
   | 'id'
   | 'role'
+  | 'roles'
   | 'staffPermissions'
   | 'organizationUnitId'
   | 'isActive'
@@ -24,6 +29,7 @@ export type StaffAccessRecord = Pick<
 const accessSelect = {
   id: true,
   role: true,
+  roles: true,
   staffPermissions: true,
   organizationUnitId: true,
   isActive: true,
@@ -48,6 +54,7 @@ export async function assertStaffManager(
     where: { id: actorId },
     select: {
       role: true,
+      roles: true,
       staffPermissions: true,
       isActive: true,
       verified: true,
@@ -57,6 +64,31 @@ export async function assertStaffManager(
     !actor?.isActive ||
     !actor.verified ||
     !effectiveStaffPermissions(actor).includes(StaffPermission.MANAGE)
+  ) {
+    throw new ForbiddenException('Insufficient permission');
+  }
+}
+
+export async function assertStaffViewerOrManager(
+  tx: Prisma.TransactionClient,
+  actorId: string,
+) {
+  const actor = await tx.user.findUnique({
+    where: { id: actorId },
+    select: {
+      role: true,
+      roles: true,
+      staffPermissions: true,
+      isActive: true,
+      verified: true,
+    },
+  });
+  const perms = actor ? effectiveStaffPermissions(actor) : [];
+  if (
+    !actor?.isActive ||
+    !actor.verified ||
+    (!perms.includes(StaffPermission.VIEW) &&
+      !perms.includes(StaffPermission.MANAGE))
   ) {
     throw new ForbiddenException('Insufficient permission');
   }
@@ -81,7 +113,8 @@ export async function createStaff(
     phone: string | null;
     password: string;
     organizationUnitId: string;
-    staffPermissions: StaffPermission[];
+    staffPermissions?: StaffPermission[];
+    roles?: Role[];
     reason: string;
   },
   actorId: string,
@@ -90,11 +123,12 @@ export async function createStaff(
 ) {
   await lockStaffMutation(tx);
   await assertStaffManager(tx, actorId);
-  const staffPermissions = effectiveStaffPermissions({
-    role: Role.VIEWER,
+  const resolved = resolveRolesAndPermissions({
+    roles: input.roles,
     staffPermissions: input.staffPermissions,
+    currentRole: Role.VIEWER,
   });
-  if (!staffPermissions.length) {
+  if (!resolved.staffPermissions.length && !resolved.roles.includes(Role.REGISTRANT)) {
     throw new BadRequestException(
       'Active staff must have at least one permission',
     );
@@ -114,8 +148,9 @@ export async function createStaff(
       fullName: input.fullName,
       phone: input.phone,
       password: input.password,
-      role: staffRole(staffPermissions),
-      staffPermissions,
+      role: resolved.role,
+      roles: resolved.roles,
+      staffPermissions: resolved.staffPermissions,
       organizationUnitId: input.organizationUnitId,
       verified: true,
       isActive: true,
@@ -126,9 +161,18 @@ export async function createStaff(
       fullName: true,
       phone: true,
       role: true,
+      roles: true,
       staffPermissions: true,
       organizationUnitId: true,
-      organizationUnit: { select: { id: true, code: true, name: true } },
+      organizationUnit: {
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          managingAgencyId: true,
+          managingAgency: { select: { id: true, code: true, name: true } },
+        },
+      },
       verified: true,
       isActive: true,
       createdAt: true,
@@ -156,22 +200,50 @@ export async function applyStaffAccess(
 ): Promise<StaffAccessRecord | null> {
   await assertStaffManager(tx, actorId);
   const before = await tx.user.findFirst({
-    where: { id, role: { not: Role.REGISTRANT } },
+    where: {
+      id,
+      OR: [
+        { role: { not: Role.REGISTRANT } },
+        ...(Array.isArray(input.roles) && input.roles.length > 0 ? [{ id }] : []),
+      ],
+    },
     select: accessSelect,
   });
   if (!before) return null;
   const isActive = input.isActive ?? before.isActive;
-  const permissions = effectiveStaffPermissions({
-    role: before.role,
-    staffPermissions: input.staffPermissions,
-  });
   const currentPermissions = effectiveStaffPermissions(before);
-  if (isActive && !permissions.length) {
+  const currentRoles = effectiveUserRoles(before);
+
+  const sanitizedDefaultRoles =
+    input.roles === undefined
+      ? currentRoles.filter(
+          (r) =>
+            !(
+              r === Role.REGISTRANT &&
+              input.staffPermissions?.includes(StaffPermission.SCORE)
+            ),
+        )
+      : undefined;
+
+  const resolved = resolveRolesAndPermissions({
+    roles: input.roles,
+    staffPermissions: input.staffPermissions,
+    currentRole: before.role,
+    currentRoles: sanitizedDefaultRoles,
+  });
+  const permissions = resolved.staffPermissions;
+  const roles = resolved.roles;
+
+  if (isActive && !permissions.length && !roles.includes(Role.REGISTRANT)) {
     throw new BadRequestException(
       'Active staff must have at least one permission',
     );
   }
-  if (before.organizationUnitId && input.organizationUnitId === null) {
+  if (
+    before.organizationUnitId &&
+    input.organizationUnitId === null &&
+    !roles.includes(Role.REGISTRANT)
+  ) {
     throw new BadRequestException('Organization unit cannot be cleared');
   }
   if (
@@ -183,7 +255,7 @@ export async function applyStaffAccess(
   if (
     before.isActive &&
     before.verified &&
-    before.staffPermissions.includes(StaffPermission.MANAGE) &&
+    currentPermissions.includes(StaffPermission.MANAGE) &&
     (!isActive || !permissions.includes(StaffPermission.MANAGE))
   ) {
     const others = await tx.user.count({
@@ -201,7 +273,11 @@ export async function applyStaffAccess(
       );
     }
   }
-  const role = permissions.length ? staffRole(permissions) : before.role;
+  const role = permissions.length
+    ? resolved.role
+    : roles.includes(Role.REGISTRANT)
+      ? Role.REGISTRANT
+      : before.role;
   const changed =
     before.role !== role ||
     before.isActive !== isActive ||
@@ -209,19 +285,44 @@ export async function applyStaffAccess(
     currentPermissions.length !== permissions.length ||
     currentPermissions.some(
       (permission) => !permissions.includes(permission),
-    );
+    ) ||
+    currentRoles.length !== roles.length ||
+    currentRoles.some((r) => !roles.includes(r));
   if (!changed) return before;
   if (
-    before.staffPermissions.includes(StaffPermission.SCORE) &&
+    currentPermissions.includes(StaffPermission.SCORE) &&
     (!isActive || !permissions.includes(StaffPermission.SCORE))
   ) {
-    const openProducts = await tx.product.count({
-      where: {
-        status: { in: ['SUBMITTED', 'SCORING'] },
-        category: { assignments: { some: { judgeId: id } } },
-      },
-    });
-    if (openProducts) {
+    const [openCategoryProducts, openProductAssignments] = await Promise.all([
+      tx.product.count({
+        where: {
+          status: {
+            in: [
+              ProductStatus.SUBMITTED,
+              ProductStatus.APPROVED,
+              ProductStatus.SCORING,
+            ],
+          },
+          category: { assignments: { some: { judgeId: id } } },
+        },
+      }),
+      tx.productJudgeAssignment.count({
+        where: {
+          judgeId: id,
+          isActive: true,
+          product: {
+            status: {
+              in: [
+                ProductStatus.SUBMITTED,
+                ProductStatus.APPROVED,
+                ProductStatus.SCORING,
+              ],
+            },
+          },
+        },
+      }),
+    ]);
+    if (openCategoryProducts || openProductAssignments) {
       throw new ConflictException(
         'Reassign open products before removing scoring access',
       );
@@ -232,6 +333,7 @@ export async function applyStaffAccess(
     where: { id },
     data: {
       role,
+      roles,
       staffPermissions: permissions,
       organizationUnitId: input.organizationUnitId,
       isActive,

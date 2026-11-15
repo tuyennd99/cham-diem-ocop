@@ -7,10 +7,11 @@ allowBuilds:
   '@prisma/engines': true
   '@scarf/scarf': true
   esbuild: true
-  node-pty: set this to true or false
+  node-pty: false
   prisma: true
   unrs-resolver: true
 minimumReleaseAgeExclude:
+  - '@tanstack/*'
   - '@tanstack/react-router@1.170.44'
   - '@tanstack/router-core@1.171.37'
   - '@tanstack/router-generator@1.167.43'

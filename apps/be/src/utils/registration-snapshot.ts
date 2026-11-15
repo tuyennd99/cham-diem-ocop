@@ -5,12 +5,17 @@ import type {
   ProductCategory,
   User,
 } from '@prisma/client';
-import type {
-  ProductApplicationForm,
-  ProductRegistrationType,
+import {
+  formatProductCode,
+  type ProductApplicationForm,
+  type ProductRegistrationType,
+  type RegistrationSnapshotV2,
+} from '@ocop/shared';
+export type {
+  RegistrationSnapshot,
+  RegistrationSnapshotV1,
   RegistrationSnapshotV2,
 } from '@ocop/shared';
-export type { RegistrationSnapshot, RegistrationSnapshotV1, RegistrationSnapshotV2 } from '@ocop/shared';
 import { productRegistrationTypes } from '../constants/products';
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -23,65 +28,164 @@ function text(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-export function validateProductApplicationForm(
-  value: unknown,
-): ProductApplicationForm {
-  const form = record(value);
+function collectProductApplicationFormErrors(
+  form: Record<string, unknown>,
+): string[] {
+  const errors: string[] = [];
+  for (const [key, label] of [
+    ['entityName', 'tên đơn vị sản xuất'],
+    ['representativeName', 'người đại diện'],
+    ['representativeTitle', 'chức vụ người đại diện'],
+    ['contactAddress', 'địa chỉ liên hệ'],
+    ['provinceName', 'tỉnh/thành phố'],
+  ]) {
+    if (!text(form[key])) errors.push(`thiếu ${label}`);
+  }
+  if (!(text(form.phone) || text(form.email))) {
+    errors.push('thiếu số điện thoại hoặc email liên hệ');
+  }
   if (
-    !form ||
-    ![
-      'entityName',
-      'representativeName',
-      'representativeTitle',
-      'contactAddress',
-      'provinceName',
-    ].every((key) => text(form[key])) ||
-    !(text(form.phone) || text(form.email)) ||
     !productRegistrationTypes.includes(
       form.registrationType as ProductRegistrationType,
-    ) ||
+    )
+  ) {
+    errors.push('chọn lần đăng ký đánh giá hợp lệ');
+  }
+  if (
     typeof form.sampleQuantity !== 'number' ||
     !Number.isInteger(form.sampleQuantity) ||
     form.sampleQuantity < 1 ||
-    form.sampleQuantity > 100000 ||
+    form.sampleQuantity > 100000
+  ) {
+    errors.push('số lượng mẫu phải là số nguyên từ 1 đến 100000');
+  }
+  if (
     typeof form.assessmentYear !== 'number' ||
     !Number.isInteger(form.assessmentYear) ||
     form.assessmentYear < 2020 ||
-    form.assessmentYear > 2100 ||
-    form.declarationAccepted !== true
+    form.assessmentYear > 2100
   ) {
-    throw new BadRequestException(
-      'Complete all required application fields and accept the declaration before submitting',
-    );
+    errors.push('năm đăng ký phải là số nguyên từ 2020 đến 2100');
   }
+  if (form.declarationAccepted !== true)
+    errors.push('chưa xác nhận cam kết hồ sơ');
+  return errors;
+}
 
+function normalizeValidatedApplicationForm(
+  form: Record<string, unknown>,
+): ProductApplicationForm {
   return {
-    entityName: form.entityName as string,
-    representativeName: form.representativeName as string,
-    representativeTitle: form.representativeTitle as string,
-    contactAddress: form.contactAddress as string,
-    provinceName: form.provinceName as string,
-    ...(text(form.phone) ? { phone: form.phone } : {}),
-    ...(text(form.email) ? { email: form.email } : {}),
+    entityName: (form.entityName as string).trim(),
+    representativeName: (form.representativeName as string).trim(),
+    representativeTitle: (form.representativeTitle as string).trim(),
+    contactAddress: (form.contactAddress as string).trim(),
+    provinceName: (form.provinceName as string).trim(),
+    ...(text(form.localityName)
+      ? { localityName: form.localityName.trim() }
+      : {}),
+    ...(text(form.localityCode)
+      ? { localityCode: form.localityCode.trim() }
+      : {}),
+    ...(text(form.phone) ? { phone: form.phone.trim() } : {}),
+    ...(text(form.email) ? { email: form.email.trim() } : {}),
     registrationType: form.registrationType as ProductRegistrationType,
-    sampleQuantity: form.sampleQuantity,
-    assessmentYear: form.assessmentYear,
+    sampleQuantity: form.sampleQuantity as number,
+    assessmentYear: form.assessmentYear as number,
     declarationAccepted: true,
   };
 }
 
+export function mergeProductApplicationFormData(
+  current: unknown,
+  patch: unknown,
+): Record<string, unknown> {
+  const base: Record<string, unknown> = { ...(record(current) ?? {}) };
+  const incoming = record(patch);
+  if (!incoming) return base;
+  for (const [key, value] of Object.entries(incoming)) {
+    if (value === undefined) continue;
+    if (
+      (key === 'phone' ||
+        key === 'email' ||
+        key === 'localityName' ||
+        key === 'localityCode') &&
+      (value === null || (typeof value === 'string' && !value.trim()))
+    ) {
+      delete base[key];
+    } else {
+      base[key] = typeof value === 'string' ? value.trim() : value;
+    }
+  }
+  return base;
+}
+
+export function validateProductDraftWrite(input: {
+  name: unknown;
+  categoryId: unknown;
+  localityId?: string | null;
+  formData: unknown;
+}): {
+  name: string;
+  categoryId: string;
+  formData: ProductApplicationForm;
+} {
+  const form = record(input.formData) ?? {};
+  const errors: string[] = [];
+  if (!text(input.name)) errors.push('thiếu tên sản phẩm');
+  if (!text(input.categoryId)) errors.push('thiếu danh mục sản phẩm');
+  const formErrors = collectProductApplicationFormErrors(form);
+  const hasLocality =
+    text(input.localityId) ||
+    (text(form.provinceName) && text(form.localityName));
+  if (!hasLocality) {
+    errors.push('thiếu địa bàn hành chính (xã/phường)');
+  }
+  errors.push(...formErrors);
+  if (errors.length) {
+    throw new BadRequestException(`Không thể lưu hồ sơ: ${errors.join('; ')}.`);
+  }
+  return {
+    name: (input.name as string).trim(),
+    categoryId: (input.categoryId as string).trim(),
+    formData: normalizeValidatedApplicationForm(form),
+  };
+}
+
+export function validateProductApplicationForm(
+  value: unknown,
+): ProductApplicationForm {
+  const form = record(value) ?? {};
+  const errors = collectProductApplicationFormErrors(form);
+  if (errors.length) {
+    throw new BadRequestException(`Không thể nộp hồ sơ: ${errors.join('; ')}.`);
+  }
+
+  return normalizeValidatedApplicationForm(form);
+}
+
 export function buildRegistrationSnapshot(input: {
   submittedAt: Date;
-  product: Pick<Product, 'id' | 'name' | 'description' | 'formData'>;
+  product: Pick<Product, 'id' | 'name' | 'description' | 'formData'> & {
+    codeNumber?: number | null;
+  };
   registrant: Pick<User, 'id' | 'fullName' | 'email' | 'phone'>;
   category: Pick<ProductCategory, 'id' | 'name'>;
   locality: Pick<Locality, 'id' | 'code' | 'name' | 'provinceName'>;
 }): RegistrationSnapshotV2 {
+  const code =
+    typeof input.product.codeNumber === 'number'
+      ? formatProductCode(input.product.codeNumber)
+      : undefined;
   return {
     version: 2,
     submittedAt: input.submittedAt.toISOString(),
     product: {
       id: input.product.id,
+      ...(typeof input.product.codeNumber === 'number'
+        ? { codeNumber: input.product.codeNumber }
+        : {}),
+      ...(code ? { code } : {}),
       name: input.product.name,
       description: input.product.description,
     },

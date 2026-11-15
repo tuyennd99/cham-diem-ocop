@@ -32,6 +32,7 @@ export async function adminFixture(
         verified: true,
         isActive: true,
         role,
+        roles: [role],
         staffPermissions,
         organizationUnitId: role === Role.REGISTRANT ? null : unit.id,
       },

@@ -1,6 +1,6 @@
 export { authApi } from './auth';
 export { productsApi } from './products';
-export { myProductsApi } from './my-products';
+export { myProductsApi, myRegistrationUnitsApi } from './my-products';
 export { adminProductsApi } from './admin-products';
 export { adminCatalogsApi } from './admin-catalogs';
 export { scoringPrintApi } from './scoring-print';

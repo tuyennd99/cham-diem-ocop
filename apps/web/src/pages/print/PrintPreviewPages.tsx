@@ -1,3 +1,4 @@
+import { STAFF_PERMISSION } from '@ocop/shared';
 import AlertError from '@/components/alert-error';
 import PageSpin from '@/components/page-spin';
 import { Button } from '@/components/ui/button';
@@ -8,6 +9,7 @@ import {
   ProductResultsPrintSheet,
   RegistrationPrintSheet,
 } from '../../components/print/OcopPrintSheets';
+import { PRODUCT_WORKSPACE_MODE } from '../../constants/consts';
 import type { AdminProductSearch } from '../../lib/admin-search';
 import { errorText } from '../../lib/api-error';
 import { useSession } from '../../lib/auth';
@@ -91,10 +93,11 @@ export function ProductRegistrationPrintPreviewPage({
 }) {
   const session = useSession();
   const isStaffViewer =
-    hasStaffPermission(session?.user, 'VIEW') || hasStaffPermission(session?.user, 'MANAGE');
-  const mode: 'admin' | 'owner' = isStaffViewer ? 'admin' : 'owner';
+    hasStaffPermission(session?.user, STAFF_PERMISSION.VIEW) ||
+    hasStaffPermission(session?.user, STAFF_PERMISSION.MANAGE);
+  const mode = isStaffViewer ? PRODUCT_WORKSPACE_MODE.ADMIN : PRODUCT_WORKSPACE_MODE.OWNER;
   const backTo = isStaffViewer
-    ? `/admin/${search.returnMode ?? 'registrations'}/${encodeURIComponent(productId)}`
+    ? `/admin/${search.returnMode ?? PRODUCT_WORKSPACE_MODE.REGISTRATIONS}/${encodeURIComponent(productId)}`
     : `/my/products/${encodeURIComponent(productId)}`;
   const { returnMode: _returnMode, ...backSearch } = search;
 
@@ -124,10 +127,11 @@ export function ProductResultsPrintPreviewPage({
 }) {
   const session = useSession();
   const isStaffViewer =
-    hasStaffPermission(session?.user, 'VIEW') || hasStaffPermission(session?.user, 'MANAGE');
-  const mode: 'admin' | 'owner' = isStaffViewer ? 'admin' : 'owner';
+    hasStaffPermission(session?.user, STAFF_PERMISSION.VIEW) ||
+    hasStaffPermission(session?.user, STAFF_PERMISSION.MANAGE);
+  const mode = isStaffViewer ? PRODUCT_WORKSPACE_MODE.ADMIN : PRODUCT_WORKSPACE_MODE.OWNER;
   const backTo = isStaffViewer
-    ? `/admin/${search.returnMode ?? 'products'}/${encodeURIComponent(productId)}`
+    ? `/admin/${search.returnMode ?? PRODUCT_WORKSPACE_MODE.PRODUCTS}/${encodeURIComponent(productId)}`
     : `/my/products/${encodeURIComponent(productId)}`;
   const { returnMode: _returnMode, ...backSearch } = search;
 

@@ -19,7 +19,15 @@ import {
 import { DataTable, type DataTableColumnDef } from '@/components/ui/data-table';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ALL, DEFAULT_PAGE_SIZE } from '../../constants/consts';
+import {
+  ADMIN_USERS_TAB,
+  ALL,
+  DEFAULT_PAGE_SIZE,
+  STAFF_PERMISSION,
+  USER_KIND,
+  USER_ROLE,
+} from '../../constants/consts';
+import { usePaginatedList } from '../../hooks/use-paginated-list';
 import {
   parseAdminUsersSearch,
   toAdminUnitsApiQuery,
@@ -36,7 +44,11 @@ import {
 import { OrganizationUnitsPanel } from './OrganizationUnitsPanel';
 import { STAFF_PERMISSION_LABELS, UserEditorDialog } from './UserEditorDialog';
 
-const permissions: StaffPermission[] = ['MANAGE', 'VIEW', 'SCORE'];
+const permissions: StaffPermission[] = [
+  STAFF_PERMISSION.MANAGE,
+  STAFF_PERMISSION.VIEW,
+  STAFF_PERMISSION.SCORE,
+];
 
 interface AdminUsersPageProps {
   search?: AdminUsersSearch;
@@ -44,21 +56,23 @@ interface AdminUsersPageProps {
 }
 
 export function AdminUsersPage({ search: controlledSearch, onSearchChange }: AdminUsersPageProps) {
-  const [fallbackSearch, setFallbackSearch] = useState<AdminUsersSearch>({
-    page: 1,
-    limit: DEFAULT_PAGE_SIZE,
+  const {
+    appliedSearch,
+    applySearch,
+    page: requestedPage,
+    pageSize,
+    setPage,
+    setPageSize,
+  } = usePaginatedList<AdminUsersSearch>({
+    search: controlledSearch,
+    onSearchChange,
+    parseSearch: parseAdminUsersSearch,
+    defaultSearch: {
+      page: 1,
+      limit: DEFAULT_PAGE_SIZE,
+    },
   });
-  const appliedSearch = controlledSearch ?? fallbackSearch;
-  const selectedTab: AdminUsersTab = appliedSearch.tab ?? 'users';
-
-  function applySearch(next: AdminUsersSearch) {
-    const normalized = parseAdminUsersSearch(next as Record<string, unknown>);
-    if (onSearchChange) {
-      onSearchChange(normalized);
-    } else {
-      setFallbackSearch(normalized);
-    }
-  }
+  const selectedTab: AdminUsersTab = appliedSearch.tab ?? ADMIN_USERS_TAB.USERS;
 
   const [draftFilters, setDraftFilters] = useState<AdminUsersSearch>(appliedSearch);
   const [showAdvanced, setShowAdvanced] = useState(
@@ -88,6 +102,14 @@ export function AdminUsersPage({ search: controlledSearch, onSearchChange }: Adm
   const userError = errorText(usersQuery.error);
   const unitError = errorText(unitsQuery.error);
 
+  useEffect(() => {
+    if (selectedTab !== ADMIN_USERS_TAB.USERS || usersQuery.isPending || !usersMeta) return;
+    const maxPage = Math.max(1, usersMeta.totalPages);
+    if (requestedPage > maxPage) {
+      setPage(maxPage);
+    }
+  }, [requestedPage, selectedTab, setPage, usersMeta, usersQuery.isPending]);
+
   const userColumns = useMemo<DataTableColumnDef<AdminUserRecord>[]>(
     () => [
       {
@@ -109,18 +131,32 @@ export function AdminUsersPage({ search: controlledSearch, onSearchChange }: Adm
       },
       {
         id: 'access',
-        header: 'Loại / Quyền',
+        header: 'Vai trò / Quyền',
+        enableSorting: false,
         cell: ({ row }) => {
           const user = row.original;
-          if (user.role === 'REGISTRANT') {
-            return <Badge variant='secondary'>Người đăng ký</Badge>;
+          const badges: Array<{ key: string; label: string; variant: 'secondary' | 'outline' }> =
+            [];
+          if (user.role === USER_ROLE.REGISTRANT || user.roles?.includes(USER_ROLE.REGISTRANT)) {
+            badges.push({
+              key: USER_ROLE.REGISTRANT,
+              label: 'Người dùng (Người đăng ký)',
+              variant: 'secondary',
+            });
           }
-          if (user.staffPermissions.length > 0) {
+          for (const permission of user.staffPermissions) {
+            badges.push({
+              key: permission,
+              label: STAFF_PERMISSION_LABELS[permission],
+              variant: 'outline',
+            });
+          }
+          if (badges.length > 0) {
             return (
               <div className='flex flex-wrap gap-1'>
-                {user.staffPermissions.map((permission) => (
-                  <Badge key={permission} variant='outline'>
-                    {STAFF_PERMISSION_LABELS[permission]}
+                {badges.map((b) => (
+                  <Badge key={b.key} variant={b.variant}>
+                    {b.label}
                   </Badge>
                 ))}
               </div>
@@ -131,6 +167,7 @@ export function AdminUsersPage({ search: controlledSearch, onSearchChange }: Adm
       },
       {
         id: 'unit',
+        accessorFn: (row) => row.organizationUnit?.name ?? '',
         header: 'Đơn vị',
         cell: ({ row }) => {
           const user = row.original;
@@ -156,7 +193,8 @@ export function AdminUsersPage({ search: controlledSearch, onSearchChange }: Adm
       {
         id: 'actions',
         header: 'Thao tác',
-        meta: { align: 'right' },
+        enableSorting: false,
+        meta: { align: 'center' },
         cell: ({ row }) => (
           <Button
             type='button'
@@ -176,7 +214,8 @@ export function AdminUsersPage({ search: controlledSearch, onSearchChange }: Adm
   );
 
   function changeTab(value: string) {
-    const nextTab: AdminUsersTab = value === 'units' ? 'units' : 'users';
+    const nextTab: AdminUsersTab =
+      value === ADMIN_USERS_TAB.UNITS ? ADMIN_USERS_TAB.UNITS : ADMIN_USERS_TAB.USERS;
     applySearch({
       page: 1,
       limit: appliedSearch.limit ?? DEFAULT_PAGE_SIZE,
@@ -186,7 +225,7 @@ export function AdminUsersPage({ search: controlledSearch, onSearchChange }: Adm
 
   function handleUnitsQueryChange(nextUnitsQuery: OrganizationUnitQuery) {
     applySearch({
-      tab: 'units',
+      tab: ADMIN_USERS_TAB.UNITS,
       page: nextUnitsQuery.page ?? 1,
       limit: nextUnitsQuery.limit ?? DEFAULT_PAGE_SIZE,
       q: nextUnitsQuery.q,
@@ -216,7 +255,7 @@ export function AdminUsersPage({ search: controlledSearch, onSearchChange }: Adm
             Quản lý tài khoản nội bộ, tài khoản người đăng ký và đơn vị công tác.
           </p>
         </div>
-        {selectedTab === 'users' && (
+        {selectedTab === ADMIN_USERS_TAB.USERS && (
           <div className='admin-actions'>
             <Button
               type='button'
@@ -233,11 +272,11 @@ export function AdminUsersPage({ search: controlledSearch, onSearchChange }: Adm
 
       <Tabs value={selectedTab} onValueChange={changeTab}>
         <TabsList aria-label='Phân hệ quản lý người dùng và đơn vị'>
-          <TabsTrigger value='users'>Người dùng</TabsTrigger>
-          <TabsTrigger value='units'>Đơn vị</TabsTrigger>
+          <TabsTrigger value={ADMIN_USERS_TAB.USERS}>Người dùng</TabsTrigger>
+          <TabsTrigger value={ADMIN_USERS_TAB.UNITS}>Đơn vị</TabsTrigger>
         </TabsList>
 
-        <TabsContent value='users'>
+        <TabsContent value={ADMIN_USERS_TAB.USERS}>
           <div className='admin-page'>
             <form
               className='admin-form filter-card admin-filter-panel'
@@ -281,7 +320,10 @@ export function AdminUsersPage({ search: controlledSearch, onSearchChange }: Adm
                     onValueChange={(value) =>
                       setDraftFilters((old) => ({
                         ...old,
-                        kind: value === ALL ? undefined : (value as 'STAFF' | 'REGISTRANT'),
+                        kind:
+                          value === ALL
+                            ? undefined
+                            : (value as typeof USER_KIND.STAFF | typeof USER_KIND.REGISTRANT),
                       }))
                     }
                   >
@@ -292,8 +334,10 @@ export function AdminUsersPage({ search: controlledSearch, onSearchChange }: Adm
                     <ComboboxContent>
                       <ComboboxEmpty>Không tìm thấy loại tài khoản.</ComboboxEmpty>
                       <ComboboxItem value={ALL}>Tất cả loại tài khoản</ComboboxItem>
-                      <ComboboxItem value='STAFF'>Nội bộ (cán bộ / giám khảo)</ComboboxItem>
-                      <ComboboxItem value='REGISTRANT'>Người đăng ký</ComboboxItem>
+                      <ComboboxItem value={USER_KIND.STAFF}>
+                        Nội bộ (cán bộ / giám khảo)
+                      </ComboboxItem>
+                      <ComboboxItem value={USER_KIND.REGISTRANT}>Người đăng ký</ComboboxItem>
                     </ComboboxContent>
                   </Combobox>
                 </FormField>
@@ -499,29 +543,19 @@ export function AdminUsersPage({ search: controlledSearch, onSearchChange }: Adm
                   columns={userColumns}
                   data={users}
                   total={usersMeta?.total ?? users.length}
-                  page={usersMeta?.page ?? appliedSearch.page ?? 1}
-                  pageSize={appliedSearch.limit ?? DEFAULT_PAGE_SIZE}
+                  page={usersMeta?.page ?? requestedPage}
+                  pageSize={pageSize}
+                  enableSorting
                   getRowId={(row) => row.id}
-                  onPageChange={(nextPage) =>
-                    applySearch({
-                      ...appliedSearch,
-                      page: nextPage,
-                    })
-                  }
-                  onPageSizeChange={(nextLimit) =>
-                    applySearch({
-                      ...appliedSearch,
-                      page: 1,
-                      limit: nextLimit,
-                    })
-                  }
+                  onPageChange={setPage}
+                  onPageSizeChange={setPageSize}
                 />
               </div>
             )}
           </div>
         </TabsContent>
 
-        <TabsContent value='units'>
+        <TabsContent value={ADMIN_USERS_TAB.UNITS}>
           <OrganizationUnitsPanel
             query={unitsApiQuery}
             onQueryChange={handleUnitsQueryChange}
@@ -541,7 +575,7 @@ export function AdminUsersPage({ search: controlledSearch, onSearchChange }: Adm
           setCreateOpen(false);
           setSelectedUser(null);
         }}
-        onManageUnits={() => changeTab('units')}
+        onManageUnits={() => changeTab(ADMIN_USERS_TAB.UNITS)}
         onCreate={mutations.createUser}
         onUpdateProfile={mutations.updateProfile}
         onUpdateAccess={mutations.updateAccess}

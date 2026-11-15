@@ -35,6 +35,12 @@ import { requestMeta } from '../utils/request-meta';
 export class AdminCatalogsController {
   constructor(private readonly catalogs: AdminCatalogsService) {}
 
+  @Get('managing-agencies')
+  @Permissions(StaffPermission.VIEW)
+  listManagingAgencies() {
+    return this.catalogs.listManagingAgencies();
+  }
+
   @Get('localities')
   @Permissions(StaffPermission.VIEW)
   listLocalities(@Query() query: AdminLocalitiesQueryDto) {

@@ -1,7 +1,12 @@
 import { API } from '../constants/api';
 import { validateProductFile } from '../lib/attachments';
 import type { ProductAttachmentRecord } from '../types/product';
-import type { ProductWriteInput, RegistrantProduct } from '../types/registrant';
+import type {
+  ProductWriteInput,
+  RegistrantProduct,
+  RegistrationUnitRecord,
+  RegistrationUnitWriteInput,
+} from '../types/registrant';
 import { requestBlob, requestJson } from './base-request';
 
 export const myProductsApi = {
@@ -29,4 +34,25 @@ export const myProductsApi = {
     requestBlob(API.my.attachment(id, attachmentId)),
   removeAttachment: (id: string, attachmentId: string) =>
     requestJson<{ id: string }>({ url: API.my.attachment(id, attachmentId), method: 'DELETE' }),
+};
+
+export const myRegistrationUnitsApi = {
+  list: () => requestJson<RegistrationUnitRecord[]>({ url: API.my.registrationUnits }),
+  create: (data: RegistrationUnitWriteInput) =>
+    requestJson<RegistrationUnitRecord>({
+      url: API.my.registrationUnits,
+      method: 'POST',
+      data,
+    }),
+  update: (id: string, data: RegistrationUnitWriteInput) =>
+    requestJson<RegistrationUnitRecord>({
+      url: API.my.registrationUnit(id),
+      method: 'PUT',
+      data,
+    }),
+  remove: (id: string) =>
+    requestJson<{ deleted: boolean }>({
+      url: API.my.registrationUnit(id),
+      method: 'DELETE',
+    }),
 };

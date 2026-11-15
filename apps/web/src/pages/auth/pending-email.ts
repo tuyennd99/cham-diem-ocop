@@ -1,5 +1,10 @@
 import { authApi } from '../../api/auth';
-import { PENDING_EMAIL_STORAGE_KEY } from '../../constants/auth';
+import {
+  PENDING_EMAIL_STORAGE_KEY,
+  REGISTRATION_VERIFICATION_MODE,
+  VERIFICATION_STATE_KIND,
+} from '../../constants/auth';
+import { HTTP_STATUS } from '../../constants/http-status';
 import { ApiError } from '../../lib/api-error';
 import type { PendingRegistration } from '../../types/auth';
 
@@ -14,7 +19,8 @@ function parsePending(raw: string | null): PendingRegistration | null {
       value.registrationToken.length > 256 ||
       typeof value.email !== 'string' ||
       !value.email ||
-      (value.mode !== 'register' && value.mode !== 'google-link') ||
+      (value.mode !== REGISTRATION_VERIFICATION_MODE.REGISTER &&
+        value.mode !== REGISTRATION_VERIFICATION_MODE.GOOGLE_LINK) ||
       ![value.expiresAt, value.otpExpiresAt, value.resendAvailableAt].every(
         (date) => typeof date === 'string' && Number.isFinite(Date.parse(date)),
       )
@@ -68,7 +74,7 @@ export async function verifyPendingRegistration(
   email: string,
   code: string,
 ) {
-  if (pending?.mode === 'google-link') {
+  if (pending?.mode === REGISTRATION_VERIFICATION_MODE.GOOGLE_LINK) {
     const { data } = await authApi.googleLinkVerify({
       registrationToken: pending.registrationToken,
       code,
@@ -83,9 +89,14 @@ export async function verifyPendingRegistration(
 }
 
 export type VerificationState =
-  | { kind: 'legacy'; email: string }
-  | { kind: 'pending'; pending: PendingRegistration }
-  | { kind: 'error'; message: string; retryable: boolean; restartTo?: '/register' | '/login' };
+  | { kind: typeof VERIFICATION_STATE_KIND.LEGACY; email: string }
+  | { kind: typeof VERIFICATION_STATE_KIND.PENDING; pending: PendingRegistration }
+  | {
+      kind: typeof VERIFICATION_STATE_KIND.ERROR;
+      message: string;
+      retryable: boolean;
+      restartTo?: '/register' | '/login';
+    };
 
 export async function loadPendingRegistration(legacy = false): Promise<VerificationState> {
   let raw: string | null;
@@ -93,7 +104,7 @@ export async function loadPendingRegistration(legacy = false): Promise<Verificat
     raw = window.sessionStorage.getItem(PENDING_EMAIL_STORAGE_KEY);
   } catch {
     return {
-      kind: 'error',
+      kind: VERIFICATION_STATE_KIND.ERROR,
       message: 'Không thể đọc phiên xác thực. Vui lòng cho phép lưu trữ trong trình duyệt.',
       retryable: false,
     };
@@ -102,9 +113,9 @@ export async function loadPendingRegistration(legacy = false): Promise<Verificat
   const legacyEmail =
     raw && !/[{}\[\]"]/.test(raw) && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw) ? raw : '';
   if (legacy || !raw || legacyEmail)
-    return { kind: 'legacy', email: pending?.email ?? legacyEmail };
+    return { kind: VERIFICATION_STATE_KIND.LEGACY, email: pending?.email ?? legacyEmail };
   const invalid = {
-    kind: 'error',
+    kind: VERIFICATION_STATE_KIND.ERROR,
     message: 'Phiên xác thực không hợp lệ hoặc đã hết hạn. Vui lòng đăng ký lại.',
     retryable: false,
   } as const;
@@ -118,15 +129,25 @@ export async function loadPendingRegistration(legacy = false): Promise<Verificat
     );
     if (!checked || Date.parse(checked.expiresAt) <= Date.now()) return invalid;
     writePendingEmail(checked);
-    return { kind: 'pending', pending: checked };
+    return { kind: VERIFICATION_STATE_KIND.PENDING, pending: checked };
   } catch (cause) {
-    if (cause instanceof ApiError && cause.status === 410) {
+    if (cause instanceof ApiError && cause.status === HTTP_STATUS.GONE) {
       clearPendingEmail();
-      return { ...invalid, restartTo: pending.mode === 'google-link' ? '/login' : '/register' };
+      return {
+        ...invalid,
+        restartTo:
+          pending.mode === REGISTRATION_VERIFICATION_MODE.GOOGLE_LINK ? '/login' : '/register',
+      };
     }
-    if (cause instanceof ApiError && [400, 401, 404].includes(cause.status)) return invalid;
+    if (
+      cause instanceof ApiError &&
+      [HTTP_STATUS.BAD_REQUEST, HTTP_STATUS.UNAUTHORIZED, HTTP_STATUS.NOT_FOUND].includes(
+        cause.status as never,
+      )
+    )
+      return invalid;
     return {
-      kind: 'error',
+      kind: VERIFICATION_STATE_KIND.ERROR,
       message: 'Chưa thể kiểm tra phiên xác thực. Kiểm tra kết nối và thử lại.',
       retryable: true,
     };

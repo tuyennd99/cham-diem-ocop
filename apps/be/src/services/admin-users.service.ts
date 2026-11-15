@@ -18,7 +18,11 @@ import {
 } from '../dtos/admin-users.dto';
 import { AdminUsersRepository } from '../repositories/admin-users.repository';
 import type { RequestMeta } from '../types/auth';
-import { PASSWORD_MAX_BYTES, PASSWORD_ROUNDS } from '../constants/auth';
+import {
+  PASSWORD_MAX_BYTES,
+  PASSWORD_ROUNDS,
+  PRISMA_ERROR_CODE,
+} from '../constants/auth';
 
 @Injectable()
 export class AdminUsersService {
@@ -170,6 +174,11 @@ export class AdminUsersService {
   }
 
   private isUniqueConstraint(error: unknown): boolean {
-    return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === PRISMA_ERROR_CODE.UNIQUE_CONSTRAINT
+    );
   }
 }

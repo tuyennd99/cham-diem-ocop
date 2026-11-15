@@ -1,4 +1,4 @@
-import { createRootRouteWithContext, Outlet } from '@tanstack/react-router';
+import { createRootRouteWithContext, HeadContent, Outlet } from '@tanstack/react-router';
 import { NavigationLoadingBar } from '@/components/navigation-bar';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -8,6 +8,7 @@ import type { RouterContext } from '../types/router-context';
 export const Route = createRootRouteWithContext<RouterContext>()({
   shellComponent: ({ children }) => (
     <TooltipProvider delayDuration={200}>
+      <HeadContent />
       <a className='skip-link' href='#content'>
         Bỏ qua điều hướng
       </a>

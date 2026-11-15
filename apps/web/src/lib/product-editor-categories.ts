@@ -1,3 +1,4 @@
+import { PRODUCT_STATUS } from '@ocop/shared';
 import type { RegistrantCategory, RegistrantProduct } from '../types/registrant';
 
 export type ProductEditorCategory = RegistrantCategory & { unavailable?: boolean };
@@ -8,7 +9,7 @@ export function productEditorCategories(
 ): ProductEditorCategory[] {
   if (
     !product ||
-    product.status !== 'DRAFT' ||
+    (product.status !== PRODUCT_STATUS.DRAFT && product.status !== PRODUCT_STATUS.RETURNED) ||
     activeCategories.some(({ id }) => id === product.category.id)
   )
     return activeCategories;

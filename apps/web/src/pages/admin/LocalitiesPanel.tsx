@@ -5,13 +5,13 @@ import type {
   LocalityRecord,
   UpdateLocalityInput,
 } from '@ocop/shared';
-import { useBlocker } from '@tanstack/react-router';
 import { useSelector } from '@tanstack/react-form';
+import { useBlocker } from '@tanstack/react-router';
 import { format } from 'date-fns';
 import AlertError from '@/components/alert-error';
 import { AppForm, useAppForm } from '@/components/form';
-import type { FormDateRangeValue } from '@/components/form/field-values';
 import { FormField } from '@/components/form-field';
+import type { FormDateRangeValue } from '@/components/form/field-values';
 import PageSpin from '@/components/page-spin';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -35,16 +35,14 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { ALL, DEFAULT_PAGE_SIZE } from '../../constants/consts';
+import { usePaginatedList } from '../../hooks/use-paginated-list';
 import {
   nextVietnameseDayIso,
   vietnameseDateInput,
   vietnameseDayStartIso,
   vietnameseInclusiveEndInput,
 } from '../../lib/admin-date';
-import {
-  ADMINISTRATIVE_PROVINCES,
-  useWardsByProvince,
-} from '../../lib/administrative-divisions';
+import { ADMINISTRATIVE_PROVINCES, useWardsByProvince } from '../../lib/administrative-divisions';
 import { errorText, messageOf } from '../../lib/api-error';
 import { useAdminLocalities } from '../../queries/admin-catalogs';
 
@@ -248,8 +246,7 @@ function LocalityFormDialog({
           <form.AppField
             name='eventName'
             validators={{
-              onChange: ({ value }) =>
-                !value.trim() ? 'Vui lòng nhập tên sự kiện.' : undefined,
+              onChange: ({ value }) => (!value.trim() ? 'Vui lòng nhập tên sự kiện.' : undefined),
             }}
           >
             {(field) => (
@@ -288,8 +285,7 @@ function LocalityFormDialog({
           <form.AppField
             name='name'
             validators={{
-              onChange: ({ value }) =>
-                !value.trim() ? 'Vui lòng chọn xã / phường.' : undefined,
+              onChange: ({ value }) => (!value.trim() ? 'Vui lòng chọn xã / phường.' : undefined),
             }}
           >
             {(field) => (
@@ -388,19 +384,21 @@ export function LocalitiesPanel({
   onCreate,
   onUpdate,
 }: LocalitiesPanelProps) {
-  const [fallbackQuery, setFallbackQuery] = useState<LocalityQuery>({
-    page: 1,
-    limit: DEFAULT_PAGE_SIZE,
+  const {
+    appliedSearch: appliedQuery,
+    applySearch: applyQuery,
+    page: requestedPage,
+    pageSize: currentLimit,
+    setPage,
+    setPageSize,
+  } = usePaginatedList<LocalityQuery>({
+    search: controlledQuery,
+    onSearchChange: onQueryChange,
+    defaultSearch: {
+      page: 1,
+      limit: DEFAULT_PAGE_SIZE,
+    },
   });
-  const appliedQuery: LocalityQuery = controlledQuery ?? fallbackQuery;
-
-  function applyQuery(next: LocalityQuery) {
-    if (onQueryChange) {
-      onQueryChange(next);
-    } else {
-      setFallbackQuery(next);
-    }
-  }
 
   const [draftProvinceName, setDraftProvinceName] = useState<string | undefined>(
     appliedQuery.provinceName,
@@ -432,9 +430,16 @@ export function LocalitiesPanel({
   });
 
   const localities = data?.data ?? [];
-  const currentPage = data?.meta?.page ?? appliedQuery.page ?? 1;
-  const currentLimit = appliedQuery.limit ?? DEFAULT_PAGE_SIZE;
+  const currentPage = data?.meta?.page ?? requestedPage;
   const loadErrorText = errorText(loadError);
+
+  useEffect(() => {
+    if (isPending || !data?.meta) return;
+    const maxPage = Math.max(1, data.meta.totalPages);
+    if (requestedPage > maxPage) {
+      setPage(maxPage);
+    }
+  }, [data?.meta, isPending, requestedPage, setPage]);
 
   const columns = useMemo<DataTableColumnDef<LocalityRecord>[]>(() => {
     const cols: DataTableColumnDef<LocalityRecord>[] = [
@@ -459,6 +464,7 @@ export function LocalitiesPanel({
       },
       {
         id: 'effectiveRange',
+        accessorFn: (row) => row.effectiveFrom ?? '',
         header: 'Thời gian sự kiện',
         meta: { cellClassName: 'text-xs text-muted' },
         cell: ({ row }) => {
@@ -473,6 +479,7 @@ export function LocalitiesPanel({
       },
       {
         id: 'registrationRange',
+        accessorFn: (row) => row.registrationFrom ?? row.effectiveFrom ?? '',
         header: 'Thời gian mở đăng ký',
         meta: { cellClassName: 'text-xs text-muted' },
         cell: ({ row }) => {
@@ -502,7 +509,8 @@ export function LocalitiesPanel({
       cols.push({
         id: 'actions',
         header: 'Thao tác',
-        meta: { align: 'right' },
+        enableSorting: false,
+        meta: { align: 'center' },
         cell: ({ row }) => (
           <Button
             type='button'
@@ -688,8 +696,8 @@ export function LocalitiesPanel({
         <Card className='admin-table-region empty-card'>
           <h3>Chưa có sự kiện phù hợp</h3>
           <p className='text-muted text-sm'>
-            Tạo sự kiện đánh giá OCOP tại Xã/Phường để mở cổng cho chủ thể đăng ký hồ sơ và thống
-            kê báo cáo.
+            Tạo sự kiện đánh giá OCOP tại Xã/Phường để mở cổng cho chủ thể đăng ký hồ sơ và thống kê
+            báo cáo.
           </p>
         </Card>
       )}
@@ -707,11 +715,10 @@ export function LocalitiesPanel({
             total={data?.meta?.total ?? localities.length}
             page={currentPage}
             pageSize={currentLimit}
+            enableSorting
             getRowId={(row) => row.id}
-            onPageChange={(nextPage) => applyQuery({ ...appliedQuery, page: nextPage })}
-            onPageSizeChange={(nextLimit) =>
-              applyQuery({ ...appliedQuery, page: 1, limit: nextLimit })
-            }
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
           />
         </div>
       )}

@@ -30,6 +30,7 @@ import { Route as AppAdminReportsRouteImport } from './routes/_app.admin.reports
 import { Route as AppAdminScoringFormsRouteImport } from './routes/_app.admin.scoring-forms'
 import { Route as AppAdminUsersRouteImport } from './routes/_app.admin.users'
 import { Route as AppJudgeIndexRouteImport } from './routes/_app.judge.index'
+import { Route as AppMySettingsRouteImport } from './routes/_app.my.settings'
 import { Route as PublicProductsIndexRouteImport } from './routes/_public.products.index'
 import { Route as PublicProductsIdRouteImport } from './routes/_public.products.$id'
 import { Route as AppAdminProductsIndexRouteImport } from './routes/_app.admin.products.index'
@@ -151,6 +152,11 @@ const AppJudgeIndexRoute = AppJudgeIndexRouteImport.update({
   path: '/judge/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppMySettingsRoute = AppMySettingsRouteImport.update({
+  id: '/my/settings',
+  path: '/my/settings',
+  getParentRoute: () => AppRoute,
+} as any)
 const PublicProductsIndexRoute = PublicProductsIndexRouteImport.update({
   id: '/products/',
   path: '/products/',
@@ -264,6 +270,7 @@ export interface FileRoutesByFullPath {
   '/admin/reports': typeof AppAdminReportsRoute
   '/admin/scoring-forms': typeof AppAdminScoringFormsRoute
   '/admin/users': typeof AppAdminUsersRoute
+  '/my/settings': typeof AppMySettingsRoute
   '/products/$id': typeof PublicProductsIdRoute
   '/account/': typeof AppAccountIndexRoute
   '/admin/': typeof AppAdminIndexRoute
@@ -302,6 +309,7 @@ export interface FileRoutesByTo {
   '/admin/reports': typeof AppAdminReportsRoute
   '/admin/scoring-forms': typeof AppAdminScoringFormsRoute
   '/admin/users': typeof AppAdminUsersRoute
+  '/my/settings': typeof AppMySettingsRoute
   '/products/$id': typeof PublicProductsIdRoute
   '/account': typeof AppAccountIndexRoute
   '/admin': typeof AppAdminIndexRoute
@@ -344,6 +352,7 @@ export interface FileRoutesById {
   '/_app/admin/reports': typeof AppAdminReportsRoute
   '/_app/admin/scoring-forms': typeof AppAdminScoringFormsRoute
   '/_app/admin/users': typeof AppAdminUsersRoute
+  '/_app/my/settings': typeof AppMySettingsRoute
   '/_public/products/$id': typeof PublicProductsIdRoute
   '/_app/account/': typeof AppAccountIndexRoute
   '/_app/admin/': typeof AppAdminIndexRoute
@@ -384,6 +393,7 @@ export interface FileRouteTypes {
     | '/admin/reports'
     | '/admin/scoring-forms'
     | '/admin/users'
+    | '/my/settings'
     | '/products/$id'
     | '/account/'
     | '/admin/'
@@ -422,6 +432,7 @@ export interface FileRouteTypes {
     | '/admin/reports'
     | '/admin/scoring-forms'
     | '/admin/users'
+    | '/my/settings'
     | '/products/$id'
     | '/account'
     | '/admin'
@@ -463,6 +474,7 @@ export interface FileRouteTypes {
     | '/_app/admin/reports'
     | '/_app/admin/scoring-forms'
     | '/_app/admin/users'
+    | '/_app/my/settings'
     | '/_public/products/$id'
     | '/_app/account/'
     | '/_app/admin/'
@@ -643,6 +655,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppJudgeIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/my/settings': {
+      id: '/_app/my/settings'
+      path: '/my/settings'
+      fullPath: '/my/settings'
+      preLoaderRoute: typeof AppMySettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_public/products/': {
       id: '/_public/products/'
       path: '/products'
@@ -781,6 +800,7 @@ interface AppRouteChildren {
   AppAdminReportsRoute: typeof AppAdminReportsRoute
   AppAdminScoringFormsRoute: typeof AppAdminScoringFormsRoute
   AppAdminUsersRoute: typeof AppAdminUsersRoute
+  AppMySettingsRoute: typeof AppMySettingsRoute
   AppAccountIndexRoute: typeof AppAccountIndexRoute
   AppAdminIndexRoute: typeof AppAdminIndexRoute
   AppJudgeIndexRoute: typeof AppJudgeIndexRoute
@@ -811,6 +831,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAdminReportsRoute: AppAdminReportsRoute,
   AppAdminScoringFormsRoute: AppAdminScoringFormsRoute,
   AppAdminUsersRoute: AppAdminUsersRoute,
+  AppMySettingsRoute: AppMySettingsRoute,
   AppAccountIndexRoute: AppAccountIndexRoute,
   AppAdminIndexRoute: AppAdminIndexRoute,
   AppJudgeIndexRoute: AppJudgeIndexRoute,

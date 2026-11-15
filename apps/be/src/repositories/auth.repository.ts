@@ -4,7 +4,14 @@ import type { PendingAuth } from '@prisma/client';
 import { timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { databaseObject } from '../prisma/sql';
-import { OTP_MAX_ATTEMPTS, OTP_TTL_MS } from '../constants/auth';
+import {
+  GOOGLE_AUTH_INTENT,
+  GOOGLE_CHALLENGE_STATUS,
+  OTP_MAX_ATTEMPTS,
+  OTP_TTL_MS,
+  OTP_VERIFY_STATUS,
+  type GoogleAuthIntent,
+} from '../constants/auth';
 import type { PublicUser } from '../types/auth';
 
 @Injectable()
@@ -12,7 +19,25 @@ export class AuthRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   findUserByEmail(email: string) {
-    return this.prisma.user.findUnique({ where: { email }, include: { organizationUnit: { select: { id: true, code: true, name: true } } } });
+    return this.prisma.user.findUnique({ where: { email }, include: { organizationUnit: { select: { id: true, code: true, name: true, managingAgencyId: true, managingAgency: { select: { id: true, code: true, name: true } } } } } });
+  }
+
+  findSeedAccounts() {
+    return this.prisma.user.findMany({
+      where: {
+        email: { endsWith: '@ocop.test', mode: 'insensitive' },
+        verified: true,
+        isActive: true,
+      },
+      orderBy: [{ phone: 'asc' }, { email: 'asc' }],
+      select: {
+        email: true,
+        fullName: true,
+        role: true,
+        roles: true,
+        staffPermissions: true,
+      },
+    });
   }
 
   createGoogleChallenge(data: Prisma.PendingAuthUncheckedCreateInput) {
@@ -26,7 +51,7 @@ export class AuthRepository {
   async consumeGoogleChallenge(
     tokenHash: string,
     identity: { sub: string; email: string; authoritative: boolean },
-    intent: 'login' | 'register',
+    intent: GoogleAuthIntent,
     nextPending: Prisma.PendingAuthUncheckedCreateInput,
   ) {
     return this.prisma.$transaction(async (tx) => {
@@ -36,14 +61,24 @@ export class AuthRepository {
         FOR UPDATE
       `);
       const challenge = rows[0];
-      if (!challenge || challenge.expiresAt <= new Date()) return { status: 'invalid' as const };
-      const include = { organizationUnit: { select: { id: true, code: true, name: true } } };
+      if (!challenge || challenge.expiresAt <= new Date()) {
+        return { status: GOOGLE_CHALLENGE_STATUS.INVALID };
+      }
+      const include = { organizationUnit: { select: { id: true, code: true, name: true, managingAgencyId: true, managingAgency: { select: { id: true, code: true, name: true } } } } };
       const linked = await tx.user.findUnique({ where: { googleSub: identity.sub }, include });
-      if (linked && intent === 'register') return { status: 'used_sub' as const };
+      if (linked && intent === GOOGLE_AUTH_INTENT.REGISTER) {
+        return { status: GOOGLE_CHALLENGE_STATUS.USED_SUB };
+      }
       const user = linked ?? await tx.user.findUnique({ where: { email: identity.email }, include });
-      if (user && intent === 'register') return { status: 'email_exists' as const };
-      if (user && (!user.verified || !user.isActive)) return { status: 'unavailable' as const };
-      if (user && !linked && user.googleSub) return { status: 'collision' as const };
+      if (user && intent === GOOGLE_AUTH_INTENT.REGISTER) {
+        return { status: GOOGLE_CHALLENGE_STATUS.EMAIL_EXISTS };
+      }
+      if (user && (!user.verified || !user.isActive)) {
+        return { status: GOOGLE_CHALLENGE_STATUS.UNAVAILABLE };
+      }
+      if (user && !linked && user.googleSub) {
+        return { status: GOOGLE_CHALLENGE_STATUS.COLLISION };
+      }
 
       if (user && (linked || identity.authoritative)) {
         if (!linked) {
@@ -51,10 +86,12 @@ export class AuthRepository {
             where: { id: user.id, googleSub: null, verified: true, isActive: true },
             data: { googleSub: identity.sub },
           });
-          if (updated.count !== 1) return { status: 'collision' as const };
+          if (updated.count !== 1) {
+            return { status: GOOGLE_CHALLENGE_STATUS.COLLISION };
+          }
         }
         await tx.pendingAuth.delete({ where: { id: challenge.id } });
-        return { status: 'session' as const, user };
+        return { status: GOOGLE_CHALLENGE_STATUS.SESSION, user };
       }
       const pending = await tx.pendingAuth.create({ data: {
         ...nextPending,
@@ -63,15 +100,15 @@ export class AuthRepository {
         ...(!user ? { otpHash: null, otpExpiresAt: null, resendAvailableAt: null } : {}),
       } });
       await tx.pendingAuth.delete({ where: { id: challenge.id } });
-      return { status: 'pending' as const, pending };
+      return { status: GOOGLE_CHALLENGE_STATUS.PENDING, pending };
     });
   }
 
   findUserById(id: string): Promise<(PublicUser & { isActive: boolean; tokenVersion: number }) | null> {
     return this.prisma.user.findUnique({
       where: { id },
-      select: { id: true, email: true, fullName: true, phone: true, role: true, verified: true, isActive: true, tokenVersion: true,
-        staffPermissions: true, organizationUnitId: true, organizationUnit: { select: { id: true, code: true, name: true } } },
+      select: { id: true, email: true, fullName: true, phone: true, role: true, roles: true, verified: true, isActive: true, tokenVersion: true,
+        staffPermissions: true, organizationUnitId: true, organizationUnit: { select: { id: true, code: true, name: true, managingAgencyId: true, managingAgency: { select: { id: true, code: true, name: true } } } } },
     });
   }
 
@@ -88,12 +125,13 @@ export class AuthRepository {
         fullName: true,
         phone: true,
         role: true,
+        roles: true,
         verified: true,
         isActive: true,
         tokenVersion: true,
         staffPermissions: true,
         organizationUnitId: true,
-        organizationUnit: { select: { id: true, code: true, name: true } },
+        organizationUnit: { select: { id: true, code: true, name: true, managingAgencyId: true, managingAgency: { select: { id: true, code: true, name: true } } } },
       },
     });
   }
@@ -128,9 +166,13 @@ export class AuthRepository {
         FOR UPDATE
       `);
       const pending = rows[0];
-      if (!pending || pending.expiresAt <= new Date()) return { status: 'invalid' as const };
-      if (pending.attempts >= OTP_MAX_ATTEMPTS) return { status: 'locked' as const };
-      return { status: 'ok' as const, pending };
+      if (!pending || pending.expiresAt <= new Date()) {
+        return { status: OTP_VERIFY_STATUS.INVALID };
+      }
+      if (pending.attempts >= OTP_MAX_ATTEMPTS) {
+        return { status: OTP_VERIFY_STATUS.LOCKED };
+      }
+      return { status: OTP_VERIFY_STATUS.OK, pending };
     });
   }
 
@@ -159,24 +201,35 @@ export class AuthRepository {
       `);
       const pending = rows[0];
       const now = new Date();
-      if (pending && pending.attempts >= OTP_MAX_ATTEMPTS) return { status: 'locked' as const };
+      if (pending && pending.attempts >= OTP_MAX_ATTEMPTS) {
+        return { status: OTP_VERIFY_STATUS.LOCKED };
+      }
       if (!pending || pending.expiresAt <= now || !pending.otpExpiresAt || pending.otpExpiresAt <= now ||
         !pending.otpHash || !pending.userId || !pending.email || !pending.googleSub) {
-        return { status: 'invalid' as const };
+        return { status: OTP_VERIFY_STATUS.INVALID };
       }
       if (!this.equal(pending.otpHash, codeHash)) {
         await tx.pendingAuth.update({ where: { id: pending.id }, data: { attempts: { increment: 1 } } });
-        return { status: pending.attempts + 1 >= OTP_MAX_ATTEMPTS ? 'locked' as const : 'invalid' as const };
+        return {
+          status:
+            pending.attempts + 1 >= OTP_MAX_ATTEMPTS
+              ? OTP_VERIFY_STATUS.LOCKED
+              : OTP_VERIFY_STATUS.INVALID,
+        };
       }
       await tx.$queryRaw(Prisma.sql`SELECT "id" FROM ${databaseObject('users')} WHERE "id" = ${pending.userId} FOR UPDATE`);
-      const include = { organizationUnit: { select: { id: true, code: true, name: true } } };
+      const include = { organizationUnit: { select: { id: true, code: true, name: true, managingAgencyId: true, managingAgency: { select: { id: true, code: true, name: true } } } } };
       const user = await tx.user.findUnique({ where: { id: pending.userId }, include });
       if (!user || !user.isActive || !user.verified || user.email !== pending.email || user.googleSub !== null ||
-        pending.expiresAt <= new Date() || pending.otpExpiresAt <= new Date()) return { status: 'invalid' as const };
-      if (await tx.user.findUnique({ where: { googleSub: pending.googleSub } })) return { status: 'collision' as const };
+        pending.expiresAt <= new Date() || pending.otpExpiresAt <= new Date()) {
+        return { status: OTP_VERIFY_STATUS.INVALID };
+      }
+      if (await tx.user.findUnique({ where: { googleSub: pending.googleSub } })) {
+        return { status: OTP_VERIFY_STATUS.COLLISION };
+      }
       const updated = await tx.user.update({ where: { id: user.id }, data: { googleSub: pending.googleSub }, include });
       await tx.pendingAuth.delete({ where: { id: pending.id } });
-      return { status: 'session' as const, user: updated };
+      return { status: OTP_VERIFY_STATUS.SESSION, user: updated };
     });
   }
 
@@ -189,13 +242,13 @@ export class AuthRepository {
       `);
       const pending = rows[0];
       const now = new Date();
-      if (pending && pending.attempts >= OTP_MAX_ATTEMPTS) return 'locked' as const;
+      if (pending && pending.attempts >= OTP_MAX_ATTEMPTS) return OTP_VERIFY_STATUS.LOCKED;
       if (!pending || pending.expiresAt <= now || !pending.otpExpiresAt || pending.otpExpiresAt <= now ||
         !pending.otpHash) return false;
       if (!this.equal(pending.otpHash, codeHash)) {
         // Return instead of throwing so the failed attempt is committed.
         await tx.pendingAuth.update({ where: { id: pending.id }, data: { attempts: { increment: 1 } } });
-        return pending.attempts + 1 >= OTP_MAX_ATTEMPTS ? 'locked' as const : false;
+        return pending.attempts + 1 >= OTP_MAX_ATTEMPTS ? OTP_VERIFY_STATUS.LOCKED : false;
       }
       if (!pending.email || !pending.fullName ||
         (pending.kind === PendingAuthKind.EMAIL_REGISTER ? !pending.passwordHash : !pending.googleSub)) return false;
@@ -203,7 +256,7 @@ export class AuthRepository {
         email: pending.email, fullName: pending.fullName, phone: pending.phone,
         password: pending.kind === PendingAuthKind.EMAIL_REGISTER ? pending.passwordHash : null,
         googleSub: pending.kind === PendingAuthKind.GOOGLE_REGISTER ? pending.googleSub : null,
-        role: Role.REGISTRANT, verified: true,
+        role: Role.REGISTRANT, roles: [Role.REGISTRANT], verified: true,
       } });
       await tx.pendingAuth.delete({ where: { id: pending.id } });
       return true;
@@ -219,9 +272,15 @@ export class AuthRepository {
       `);
       const pending = rows[0];
       const now = new Date();
-      if (pending && pending.attempts >= OTP_MAX_ATTEMPTS) return { status: 'locked' as const };
-      if (!pending || pending.expiresAt <= now) return { status: 'invalid' as const };
-      if (pending.resendAvailableAt && pending.resendAvailableAt > now) return { status: 'cooldown' as const };
+      if (pending && pending.attempts >= OTP_MAX_ATTEMPTS) {
+        return { status: OTP_VERIFY_STATUS.LOCKED };
+      }
+      if (!pending || pending.expiresAt <= now) {
+        return { status: OTP_VERIFY_STATUS.INVALID };
+      }
+      if (pending.resendAvailableAt && pending.resendAvailableAt > now) {
+        return { status: OTP_VERIFY_STATUS.COOLDOWN };
+      }
       const updated = await tx.pendingAuth.update({
         where: { id: pending.id },
         data: {
@@ -230,7 +289,7 @@ export class AuthRepository {
           resendAvailableAt: new Date(now.getTime() + 60_000),
         },
       });
-      return { status: 'ok' as const, pending: updated };
+      return { status: OTP_VERIFY_STATUS.OK, pending: updated };
     });
   }
 

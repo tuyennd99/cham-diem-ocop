@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, StreamableFile } from '@nestjs/common';
+import { Controller, Get, Header, Param, Query, StreamableFile } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Public } from '../decorators/public.decorator';
 import { ResponseMessage } from '../decorators/response-message.decorator';
@@ -14,11 +14,12 @@ export class ProductsController {
   @Public()
   @Get()
   list(@Query() query: PublicProductQueryDto) {
-    return this.products.listPublic(query.page, query.limit, query.categoryId, query.q);
+    return this.products.listPublic(query);
   }
 
   @Public()
   @Get(':id/attachments/:attachmentId')
+  @Header('Cache-Control', 'public, max-age=86400, immutable')
   @ResponseMessage('Tải ảnh sản phẩm thành công')
   async image(
     @Param('id') id: string,

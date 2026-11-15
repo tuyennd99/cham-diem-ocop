@@ -20,6 +20,7 @@ const viewer: Session = {
     fullName: 'Viewer',
     phone: null,
     role: 'VIEWER',
+    roles: ['VIEWER'],
     verified: true,
     staffPermissions: ['VIEW'],
     organizationUnitId: 'unit-1',

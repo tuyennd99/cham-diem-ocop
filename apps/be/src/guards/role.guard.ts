@@ -6,7 +6,7 @@ import { ADMIN_ONLY_KEY } from '../decorators/admin-only.decorator';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 import type { AuthenticatedPrincipal } from '../types/auth';
 import { PERMISSIONS_KEY } from '../decorators/permissions.decorator';
-import { effectiveStaffPermissions } from '../utils/staff-permissions';
+import { effectiveStaffPermissions, effectiveUserRoles } from '../utils/staff-permissions';
 
 @Injectable()
 export class RoleGuard implements CanActivate {
@@ -25,9 +25,23 @@ export class RoleGuard implements CanActivate {
     if (!required?.length && !adminOnly && !permissions?.length) return true;
 
     const user = context.switchToHttp().getRequest<Request & { user?: AuthenticatedPrincipal }>().user;
-    if (!user || (adminOnly && !effectiveStaffPermissions(user).includes(StaffPermission.MANAGE)) ||
-      (required?.length && !required.includes(user.role)) ||
-      permissions?.some((permission) => !effectiveStaffPermissions(user).includes(permission))) {
+    if (!user) {
+      throw new ForbiddenException('Insufficient role');
+    }
+    const userPerms = effectiveStaffPermissions(user);
+    const userRoles = effectiveUserRoles(user);
+    const isAdmin = userPerms.includes(StaffPermission.MANAGE);
+
+    if (adminOnly && !isAdmin) {
+      throw new ForbiddenException('Insufficient role');
+    }
+    if (required?.length) {
+      const hasRequiredRole = required.some((role) => userRoles.includes(role));
+      if (!hasRequiredRole) {
+        throw new ForbiddenException('Insufficient role');
+      }
+    }
+    if (permissions?.some((permission) => !userPerms.includes(permission))) {
       throw new ForbiddenException('Insufficient role');
     }
     return true;

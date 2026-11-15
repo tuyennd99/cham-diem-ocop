@@ -1,19 +1,51 @@
-import { useState } from 'react';
-import { Link, Outlet } from '@tanstack/react-router';
+import { useCallback, useState } from 'react';
+import { STAFF_PERMISSION, USER_ROLE } from '@ocop/shared';
+import { Link, Outlet, useNavigate } from '@tanstack/react-router';
+import {
+  FileSpreadsheet,
+  FileText,
+  KeyRound,
+  LayoutDashboard,
+  LogOut,
+  Package,
+  User,
+  UserCog,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { homeFor, useSession } from '../lib/auth';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { homeFor, setSession, useSession } from '../lib/auth';
+import { hasStaffPermission } from '../lib/session-contract';
 
 export function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const navigate = useNavigate();
   const session = useSession();
   const signedIn = Boolean(session);
+  const user = session?.user;
+  const isRegistrant = user?.role === USER_ROLE.REGISTRANT;
+  const canView = hasStaffPermission(user, STAFF_PERMISSION.VIEW);
+  const canScore = hasStaffPermission(user, STAFF_PERMISSION.SCORE);
   const workPath = session
     ? homeFor(session.user.role, session.user.staffPermissions, '/my/products/new')
     : '/my/products/new';
 
+  const handleLogout = useCallback(() => {
+    setMenuOpen(false);
+    setSession(null);
+    void navigate({ to: '/login' });
+  }, [navigate]);
+
   return (
     <header className='site-header'>
-      <div className={`container header-inner ${menuOpen ? 'menu-open' : ''}`}>
+      <div className={`header-inner container ${menuOpen ? 'menu-open' : ''}`}>
         <Link className='brand' to='/' hash='home' aria-label='OCOP Đánh Giá — Trang chủ'>
           <span className='brand-mark' aria-hidden='true'>
             ★
@@ -53,22 +85,121 @@ export function SiteHeader() {
               </Link>
             </Button>
             {signedIn && (
-              <Button asChild className='mobile-cta'>
-                <Link to={workPath} onClick={() => setMenuOpen(false)}>
-                  Mở hồ sơ
-                </Link>
-              </Button>
+              <>
+                <Button asChild variant='secondary' className='mobile-cta'>
+                  <Link to='/account' onClick={() => setMenuOpen(false)}>
+                    Thông tin tài khoản
+                  </Link>
+                </Button>
+                <Button
+                  type='button'
+                  variant='destructive'
+                  className='mobile-cta'
+                  onClick={handleLogout}
+                >
+                  Đăng xuất
+                </Button>
+              </>
             )}
           </div>
         </nav>
         <div className='header-actions'>
-          <Link className='header-login' to={signedIn ? workPath : '/login'}>
-            {signedIn ? session?.user.fullName : 'Đăng nhập'}
-          </Link>
-          {signedIn && (
-            <Button asChild className='header-cta'>
-              <Link to={workPath}>Khu vực làm việc</Link>
-            </Button>
+          {!signedIn ? (
+            <Link className='header-login' to='/login'>
+              Đăng nhập
+            </Link>
+          ) : (
+            <>
+              <span className='header-user-name'>{user?.fullName}</span>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    size='icon'
+                    className='header-user-trigger'
+                    aria-label={`Tài khoản ${user?.fullName ?? ''}`}
+                  >
+                    <User className='size-5' aria-hidden='true' />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align='end' sideOffset={8} className='header-user-dropdown'>
+                  <DropdownMenuLabel className='header-user-dropdown-label'>
+                    <strong>{user?.fullName}</strong>
+                    {user?.email && <span>{user.email}</span>}
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    {isRegistrant && (
+                      <>
+                        <DropdownMenuItem asChild>
+                          <Link to='/my/products' className='cursor-pointer'>
+                            <Package className='size-4' aria-hidden='true' />
+                            <span>Hồ sơ của tôi</span>
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link to='/my/products/new' className='cursor-pointer'>
+                            <FileText className='size-4' aria-hidden='true' />
+                            <span>Tạo hồ sơ mới</span>
+                          </Link>
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                    {canView && (
+                      <>
+                        <DropdownMenuItem asChild>
+                          <Link to='/admin' className='cursor-pointer'>
+                            <LayoutDashboard className='size-4' aria-hidden='true' />
+                            <span>Tổng quan quản trị</span>
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link to='/admin/products' className='cursor-pointer'>
+                            <Package className='size-4' aria-hidden='true' />
+                            <span>Danh sách sản phẩm</span>
+                          </Link>
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                    {canScore && (
+                      <DropdownMenuItem asChild>
+                        <Link to='/judge' className='cursor-pointer'>
+                          <FileSpreadsheet className='size-4' aria-hidden='true' />
+                          <span>Hồ sơ được phân công</span>
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem asChild>
+                      <Link to='/account' className='cursor-pointer'>
+                        <UserCog className='size-4' aria-hidden='true' />
+                        <span>Thông tin tài khoản</span>
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to='/account/password' className='cursor-pointer'>
+                        <KeyRound className='size-4' aria-hidden='true' />
+                        <span>Đổi mật khẩu</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem variant='destructive' asChild>
+                    <button
+                      type='button'
+                      onClick={handleLogout}
+                      className='flex w-full cursor-pointer items-center gap-2'
+                    >
+                      <LogOut className='size-4' aria-hidden='true' />
+                      <span>Đăng xuất</span>
+                    </button>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
           )}
         </div>
       </div>

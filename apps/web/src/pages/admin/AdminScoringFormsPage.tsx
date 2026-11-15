@@ -31,7 +31,14 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ALL, DEFAULT_PAGE_SIZE } from '../../constants/consts';
+import {
+  ADMIN_SCORING_TAB,
+  ALL,
+  DEFAULT_PAGE_SIZE,
+  EVALUATION_STATUS,
+  STAFF_PERMISSION,
+} from '../../constants/consts';
+import { usePaginatedList } from '../../hooks/use-paginated-list';
 import {
   parseAdminScoringSearch,
   toAdminCriteriaSetsApiQuery,
@@ -41,7 +48,7 @@ import {
 } from '../../lib/admin-search';
 import { errorText } from '../../lib/api-error';
 import { useSession } from '../../lib/auth';
-import { formatExactScore } from '../../lib/print-format';
+import { displayProductCode, formatExactScore } from '../../lib/print-format';
 import { hasStaffPermission } from '../../lib/session-contract';
 import { useAdminCategories } from '../../queries/admin-catalogs';
 import {
@@ -60,24 +67,26 @@ export function AdminScoringFormsPage({
   onSearchChange,
 }: AdminScoringFormsPageProps) {
   const session = useSession();
-  const canView = hasStaffPermission(session?.user, 'VIEW');
-  const canManage = hasStaffPermission(session?.user, 'MANAGE');
+  const canView = hasStaffPermission(session?.user, STAFF_PERMISSION.VIEW);
+  const canManage = hasStaffPermission(session?.user, STAFF_PERMISSION.MANAGE);
 
-  const [fallbackSearch, setFallbackSearch] = useState<AdminScoringSearch>({
-    page: 1,
-    limit: DEFAULT_PAGE_SIZE,
+  const {
+    appliedSearch,
+    applySearch,
+    page: requestedPage,
+    pageSize,
+    setPage,
+    setPageSize,
+  } = usePaginatedList<AdminScoringSearch>({
+    search: controlledSearch,
+    onSearchChange,
+    parseSearch: parseAdminScoringSearch,
+    defaultSearch: {
+      page: 1,
+      limit: DEFAULT_PAGE_SIZE,
+    },
   });
-  const appliedSearch = controlledSearch ?? fallbackSearch;
-  const selectedTab: AdminScoringTab = appliedSearch.tab ?? 'sets';
-
-  function applySearch(next: AdminScoringSearch) {
-    const normalized = parseAdminScoringSearch(next as Record<string, unknown>);
-    if (onSearchChange) {
-      onSearchChange(normalized);
-    } else {
-      setFallbackSearch(normalized);
-    }
-  }
+  const selectedTab: AdminScoringTab = appliedSearch.tab ?? ADMIN_SCORING_TAB.SETS;
 
   const [draftFilters, setDraftFilters] = useState<AdminScoringSearch>(appliedSearch);
   const [showEvalAdvanced, setShowEvalAdvanced] = useState(
@@ -113,6 +122,27 @@ export function AdminScoringFormsPage({
   const setDetailError = errorText(setDetailQuery.error);
   const evaluationsError = errorText(evaluationsQuery.error);
 
+  useEffect(() => {
+    const activeMeta = selectedTab === ADMIN_SCORING_TAB.EVALUATIONS ? evalsMeta : setsMeta;
+    const activePending =
+      selectedTab === ADMIN_SCORING_TAB.EVALUATIONS
+        ? evaluationsQuery.isPending
+        : setsQuery.isPending;
+    if (activePending || !activeMeta) return;
+    const maxPage = Math.max(1, activeMeta.totalPages);
+    if (requestedPage > maxPage) {
+      setPage(maxPage);
+    }
+  }, [
+    evalsMeta,
+    evaluationsQuery.isPending,
+    requestedPage,
+    selectedTab,
+    setPage,
+    setsMeta,
+    setsQuery.isPending,
+  ]);
+
   const setColumns = useMemo<DataTableColumnDef<AdminCriteriaSetRecord>[]>(
     () => [
       {
@@ -133,6 +163,7 @@ export function AdminScoringFormsPage({
       },
       {
         id: 'source',
+        accessorFn: (row) => `${row.source ?? ''} v${row.version}`,
         header: 'Nguồn / Phiên bản',
         cell: ({ row }) => {
           const set = row.original;
@@ -169,7 +200,8 @@ export function AdminScoringFormsPage({
       {
         id: 'actions',
         header: 'Thao tác',
-        meta: { align: 'right' },
+        enableSorting: false,
+        meta: { align: 'center' },
         cell: ({ row }) => {
           const set = row.original;
           return (
@@ -199,6 +231,7 @@ export function AdminScoringFormsPage({
     () => [
       {
         id: 'product',
+        accessorFn: (row) => row.product.name,
         header: 'Sản phẩm / Nhóm',
         meta: { isRowHeader: true, cellClassName: 'font-normal' },
         cell: ({ row }) => {
@@ -207,7 +240,10 @@ export function AdminScoringFormsPage({
             <>
               <div className='text-fg font-semibold'>{ev.product.name}</div>
               <div className='text-muted mt-0.5 text-xs'>
-                <code className='font-mono'>{ev.product.id}</code> · {ev.product.categoryName}
+                <code className='font-mono' title={ev.product.id}>
+                  {displayProductCode(ev.product)}
+                </code>{' '}
+                · {ev.product.categoryName}
               </div>
             </>
           );
@@ -215,6 +251,7 @@ export function AdminScoringFormsPage({
       },
       {
         id: 'judge',
+        accessorFn: (row) => row.judge.fullName,
         header: 'Người chấm & Đơn vị (khi nộp)',
         cell: ({ row }) => {
           const ev = row.original;
@@ -230,6 +267,7 @@ export function AdminScoringFormsPage({
       },
       {
         id: 'scope',
+        accessorFn: (row) => row.assignedCriterionCount,
         header: 'Phạm vi phân công',
         cell: ({ row }) => {
           const ev = row.original;
@@ -245,12 +283,16 @@ export function AdminScoringFormsPage({
           <Badge
             variant='outline'
             className={
-              row.original.status === 'SUBMITTED'
+              row.original.status === EVALUATION_STATUS.SUBMITTED
                 ? 'status-badge status-completed'
                 : 'status-badge status-draft'
             }
           >
-            {row.original.status === 'SUBMITTED' ? 'Đã nộp' : 'Bản nháp'}
+            {row.original.status === EVALUATION_STATUS.SUBMITTED
+              ? 'Đã nộp'
+              : row.original.status === EVALUATION_STATUS.EXCLUDED
+                ? 'Đã loại (đã gỡ)'
+                : 'Bản nháp'}
           </Badge>
         ),
       },
@@ -286,7 +328,8 @@ export function AdminScoringFormsPage({
       {
         id: 'actions',
         header: 'Thao tác',
-        meta: { align: 'right' },
+        enableSorting: false,
+        meta: { align: 'center' },
         cell: ({ row }) => {
           const ev = row.original;
           return (
@@ -312,7 +355,10 @@ export function AdminScoringFormsPage({
   );
 
   function changeTab(value: string) {
-    const nextTab: AdminScoringTab = value === 'evaluations' ? 'evaluations' : 'sets';
+    const nextTab: AdminScoringTab =
+      value === ADMIN_SCORING_TAB.EVALUATIONS
+        ? ADMIN_SCORING_TAB.EVALUATIONS
+        : ADMIN_SCORING_TAB.SETS;
     applySearch({
       page: 1,
       limit: DEFAULT_PAGE_SIZE,
@@ -330,29 +376,22 @@ export function AdminScoringFormsPage({
             in biểu mẫu A4.
           </p>
         </div>
-        {canView && (
-          <div className='admin-actions'>
-            <Button asChild variant='secondary'>
-              <Link to='/admin/assignments'>Quản lý phân công giám khảo</Link>
-            </Button>
-          </div>
-        )}
       </div>
 
       <Tabs value={selectedTab} onValueChange={changeTab}>
         <TabsList aria-label='Các tab phân hệ phiếu chấm OCOP'>
-          <TabsTrigger value='sets'>Bộ phiếu</TabsTrigger>
-          <TabsTrigger value='evaluations'>Phiếu chấm thực tế</TabsTrigger>
+          <TabsTrigger value={ADMIN_SCORING_TAB.SETS}>Bộ phiếu</TabsTrigger>
+          <TabsTrigger value={ADMIN_SCORING_TAB.EVALUATIONS}>Phiếu chấm thực tế</TabsTrigger>
         </TabsList>
 
-        <TabsContent value='sets'>
+        <TabsContent value={ADMIN_SCORING_TAB.SETS}>
           <div className='admin-page'>
             <form
               className='admin-form filter-card admin-filter-panel'
               onSubmit={(event) => {
                 event.preventDefault();
                 applySearch({
-                  tab: 'sets',
+                  tab: ADMIN_SCORING_TAB.SETS,
                   page: 1,
                   limit: appliedSearch.limit ?? DEFAULT_PAGE_SIZE,
                   q: draftFilters.q,
@@ -495,36 +534,26 @@ export function AdminScoringFormsPage({
                   columns={setColumns}
                   data={sets}
                   total={setsMeta?.total ?? sets.length}
-                  page={setsMeta?.page ?? appliedSearch.page ?? 1}
-                  pageSize={appliedSearch.limit ?? DEFAULT_PAGE_SIZE}
+                  page={setsMeta?.page ?? requestedPage}
+                  pageSize={pageSize}
+                  enableSorting
                   getRowId={(row) => row.id}
-                  onPageChange={(nextPage) =>
-                    applySearch({
-                      ...appliedSearch,
-                      page: nextPage,
-                    })
-                  }
-                  onPageSizeChange={(nextLimit) =>
-                    applySearch({
-                      ...appliedSearch,
-                      page: 1,
-                      limit: nextLimit,
-                    })
-                  }
+                  onPageChange={setPage}
+                  onPageSizeChange={setPageSize}
                 />
               </div>
             )}
           </div>
         </TabsContent>
 
-        <TabsContent value='evaluations'>
+        <TabsContent value={ADMIN_SCORING_TAB.EVALUATIONS}>
           <div className='admin-page'>
             <form
               className='admin-form filter-card admin-filter-panel'
               onSubmit={(event) => {
                 event.preventDefault();
                 applySearch({
-                  tab: 'evaluations',
+                  tab: ADMIN_SCORING_TAB.EVALUATIONS,
                   page: 1,
                   limit: appliedSearch.limit ?? DEFAULT_PAGE_SIZE,
                   q: draftFilters.q,
@@ -608,8 +637,15 @@ export function AdminScoringFormsPage({
                     <ComboboxContent>
                       <ComboboxEmpty>Không tìm thấy trạng thái phiếu.</ComboboxEmpty>
                       <ComboboxItem value={ALL}>Tất cả</ComboboxItem>
-                      <ComboboxItem value='SUBMITTED'>Đã nộp</ComboboxItem>
-                      {canManage && <ComboboxItem value='IN_PROGRESS'>Đang chấm nháp</ComboboxItem>}
+                      <ComboboxItem value={EVALUATION_STATUS.SUBMITTED}>Đã nộp</ComboboxItem>
+                      <ComboboxItem value={EVALUATION_STATUS.EXCLUDED}>
+                        Đã loại (đã gỡ)
+                      </ComboboxItem>
+                      {canManage && (
+                        <ComboboxItem value={EVALUATION_STATUS.IN_PROGRESS}>
+                          Đang chấm nháp
+                        </ComboboxItem>
+                      )}
                     </ComboboxContent>
                   </Combobox>
                 </FormField>
@@ -716,22 +752,12 @@ export function AdminScoringFormsPage({
                   columns={evaluationColumns}
                   data={evaluations}
                   total={evalsMeta?.total ?? evaluations.length}
-                  page={evalsMeta?.page ?? appliedSearch.page ?? 1}
-                  pageSize={appliedSearch.limit ?? DEFAULT_PAGE_SIZE}
+                  page={evalsMeta?.page ?? requestedPage}
+                  pageSize={pageSize}
+                  enableSorting
                   getRowId={(row) => row.id}
-                  onPageChange={(nextPage) =>
-                    applySearch({
-                      ...appliedSearch,
-                      page: nextPage,
-                    })
-                  }
-                  onPageSizeChange={(nextLimit) =>
-                    applySearch({
-                      ...appliedSearch,
-                      page: 1,
-                      limit: nextLimit,
-                    })
-                  }
+                  onPageChange={setPage}
+                  onPageSizeChange={setPageSize}
                 />
               </div>
             )}

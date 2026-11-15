@@ -8,6 +8,7 @@ import { FormField } from '@/components/form-field';
 import PasswordInput from '@/components/password-input';
 import { Button } from '@/components/ui/button';
 import { authApi } from '../../api';
+import { HTTP_STATUS } from '../../constants/http-status';
 import { ApiError, messageOf } from '../../lib/api-error';
 import { setSession, validatePasswordBytes } from '../../lib/auth';
 
@@ -70,7 +71,7 @@ export function ChangePasswordPage() {
         window.location.replace('/login');
       } catch (cause) {
         const msg =
-          cause instanceof ApiError && cause.status === 401
+          cause instanceof ApiError && cause.status === HTTP_STATUS.UNAUTHORIZED
             ? 'Mật khẩu hiện tại không đúng.'
             : messageOf(cause);
         setError(msg);

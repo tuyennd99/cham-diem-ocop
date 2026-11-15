@@ -1,10 +1,11 @@
+import { STAFF_PERMISSION } from '@ocop/shared';
 import { createFileRoute } from '@tanstack/react-router';
 import { parseAdminLocalitiesSearch } from '../lib/admin-search';
 import { requirePermission } from '../lib/route-guards';
 import { AdminLocalitiesPage } from '../pages/admin/AdminLocalitiesPage';
 
 export const Route = createFileRoute('/_app/admin/localities')({
-  beforeLoad: requirePermission('VIEW'),
+  beforeLoad: requirePermission(STAFF_PERMISSION.VIEW),
   validateSearch: parseAdminLocalitiesSearch,
   component: LocalitiesRoute,
 });

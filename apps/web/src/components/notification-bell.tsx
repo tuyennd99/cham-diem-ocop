@@ -1,4 +1,5 @@
 import { useAdminDashboard } from '@/queries/admin';
+import { STAFF_PERMISSION } from '@ocop/shared';
 import { Bell } from 'lucide-react';
 import { useSession } from '@/lib/auth';
 import { hasStaffPermission } from '@/lib/session-contract';
@@ -8,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 
 export function NotificationBell() {
   const session = useSession();
-  const canView = hasStaffPermission(session?.user, 'VIEW');
+  const canView = hasStaffPermission(session?.user, STAFF_PERMISSION.VIEW);
   const dashboardQuery = useAdminDashboard({}, canView);
 
   if (!session?.user || !canView) return null;

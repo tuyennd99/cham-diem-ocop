@@ -39,7 +39,7 @@ export function validateProductFile(file: Pick<File, 'name' | 'type' | 'size'>):
   const mime = file.type.toLowerCase();
 
   if (videoTypes[extension]) {
-    if (videoTypes[extension] !== mime || file.size < 1) {
+    if ((mime && videoTypes[extension] !== mime) || file.size < 1) {
       throw new Error('Video chỉ nhận định dạng MP4, WebM hoặc MOV hợp lệ.');
     }
     if (file.size > MAX_PRODUCT_VIDEO_BYTES) {
@@ -50,7 +50,7 @@ export function validateProductFile(file: Pick<File, 'name' | 'type' | 'size'>):
 
   if (
     !documentAndImageTypes[extension] ||
-    documentAndImageTypes[extension] !== mime ||
+    (mime && documentAndImageTypes[extension] !== mime) ||
     file.size < 1
   ) {
     throw new Error(

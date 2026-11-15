@@ -12,6 +12,7 @@ import { AuthController } from '../controllers/auth.controller';
 describe('AuthService', () => {
   const repository = {
     findUserByEmail: jest.fn(),
+    findSeedAccounts: jest.fn(),
     findUserById: jest.fn(),
     findCredentialsById: jest.fn(),
     changePassword: jest.fn(),
@@ -207,6 +208,34 @@ describe('AuthService', () => {
       fullName: 'New Name',
       phone: '0901234567',
     });
+  });
+
+  it('returns active seed accounts from DB in non-production and empty list in production', async () => {
+    repository.findSeedAccounts.mockResolvedValue([
+      {
+        email: 'viewer@ocop.test',
+        fullName: 'Cán bộ Chủ trì (Chủ trì)',
+        role: Role.VIEWER,
+        roles: [Role.VIEWER],
+        staffPermissions: ['VIEW'],
+      },
+    ]);
+    await expect(service.seedAccounts()).resolves.toEqual([
+      {
+        email: 'viewer@ocop.test',
+        fullName: 'Cán bộ Chủ trì (Chủ trì)',
+        role: Role.VIEWER,
+        roles: [Role.VIEWER],
+        staffPermissions: ['VIEW'],
+      },
+    ]);
+    const prevNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      await expect(service.seedAccounts()).resolves.toEqual([]);
+    } finally {
+      process.env.NODE_ENV = prevNodeEnv;
+    }
   });
 
   it('MailService can be instantiated without SMTP environment variables until sendOtp is called', () => {

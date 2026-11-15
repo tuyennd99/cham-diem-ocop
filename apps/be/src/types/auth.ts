@@ -11,12 +11,14 @@ export interface AccessTokenPayload {
   sub: string;
   email: string;
   role: Role;
+  roles?: Role[];
   tokenVersion: number;
   iat?: number;
   exp?: number;
 }
 
 export interface AuthenticatedPrincipal extends AccessTokenPayload {
+  roles: Role[];
   staffPermissions: StaffPermission[];
   organizationUnitId: string | null;
   organizationUnit: OrganizationUnitSummary | null;
@@ -28,6 +30,7 @@ export interface PublicUser {
   fullName: string;
   phone: string | null;
   role: Role;
+  roles?: Role[];
   verified: boolean;
   staffPermissions: StaffPermission[];
   organizationUnitId: string | null;

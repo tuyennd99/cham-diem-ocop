@@ -9,7 +9,7 @@ import type { Attachment, Category } from './product';
 
 export type QueueProduct = Pick<
   Product,
-  'id' | 'name' | 'description' | 'status' | 'createdAt' | 'category'
+  'id' | 'code' | 'codeNumber' | 'name' | 'description' | 'status' | 'createdAt' | 'category'
 > & {
   createdAt: string;
   category: Category;
@@ -18,7 +18,7 @@ export type QueueProduct = Pick<
 };
 
 export interface EvaluationData {
-  product: Pick<Product, 'id' | 'name' | 'description'> & {
+  product: Pick<Product, 'id' | 'code' | 'codeNumber' | 'name' | 'description'> & {
     formData: Record<string, unknown>;
     category: Pick<Category, 'id' | 'name'>;
     attachments: Required<Pick<ProductAttachment, 'id' | 'fileName' | 'type'>>[];

@@ -1,9 +1,9 @@
 import type {
   AdminCategoryQuery,
   AdminCriteriaSetQuery,
+  AdminDashboardQuery,
   AdminEvaluationQuery,
   AdminProductQuery,
-  AdminReportFilterQuery,
   AdminReportQuery,
   AdminUserQuery,
   LocalityQuery,
@@ -20,6 +20,10 @@ export const queryKeys = {
     list: (params: PublicProductParams) => ['public-products', 'list', params] as const,
     detail: (id: string) => ['public-products', 'detail', id] as const,
   },
+  myRegistrationUnits: {
+    all: ['my-registration-units'] as const,
+    list: ['my-registration-units', 'list'] as const,
+  },
   myProducts: {
     all: ['my-products'] as const,
     list: ['my-products', 'list'] as const,
@@ -32,7 +36,7 @@ export const queryKeys = {
   },
   admin: {
     all: ['admin'] as const,
-    dashboard: (query: AdminReportFilterQuery = {}) => ['admin', 'dashboard', query] as const,
+    dashboard: (query: AdminDashboardQuery = {}) => ['admin', 'dashboard', query] as const,
     reports: {
       all: ['admin', 'reports'] as const,
       registrations: (query: AdminReportQuery) =>
@@ -71,6 +75,7 @@ export const queryKeys = {
       ['admin-users', 'owners', query] as const,
   },
   adminCatalogs: {
+    managingAgencies: ['admin-managing-agencies'] as const,
     categories: {
       all: ['admin-categories'] as const,
       list: (query: AdminCategoryQuery) => ['admin-categories', 'list', query] as const,

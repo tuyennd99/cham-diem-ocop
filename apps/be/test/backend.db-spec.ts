@@ -351,6 +351,7 @@ describe('HTTP production journey', () => {
       const imageId = image.body.data.id;
       const pdfId = pdf.body.data.id;
       expect((await post(baseUrl, `/my/products/${productId}/submit`, registrantToken, {})).status).toBe(201);
+      expect((await post(baseUrl, `/admin/products/${productId}/approve`, adminToken, { reason: 'Approve for scoring' })).status).toBe(201);
 
       const createdJudges = await Promise.all(
         [1, 2, 3].map((n) =>
@@ -525,6 +526,28 @@ describe('HTTP production journey', () => {
         finalScore: expectedScore,
       });
       expect(results.body.data.starRating).toBe(calculateStars(expectedScore));
+      const unpublishedPublicResult = await apiRequest<{
+        data: {
+          status: string;
+          finalScore: number | null;
+          starRating: number | null;
+          publicationState: string;
+        };
+      }>(baseUrl, `/products/${productId}`);
+      expect(unpublishedPublicResult.status).toBe(200);
+      expect(unpublishedPublicResult.body.data).toMatchObject({
+        status: 'COMPLETED',
+        publicationState: 'UNPUBLISHED',
+        finalScore: null,
+        starRating: null,
+      });
+      expect(
+        (
+          await post(baseUrl, `/admin/products/${productId}/publish-results`, adminToken, {
+            reason: 'Publish official score',
+          })
+        ).status,
+      ).toBe(201);
       const publicResult = await apiRequest<{
         data: {
           status: string;

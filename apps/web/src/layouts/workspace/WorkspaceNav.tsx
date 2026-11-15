@@ -1,9 +1,10 @@
 import { memo } from 'react';
 import type { ReactElement } from 'react';
-import type { Role } from '@ocop/shared';
+import { USER_ROLE, type Role } from '@ocop/shared';
 import { Link, useLocation } from '@tanstack/react-router';
 import {
   BarChart3,
+  Building2,
   ClipboardCheck,
   FileSpreadsheet,
   FileText,
@@ -11,9 +12,7 @@ import {
   Globe,
   LayoutDashboard,
   LogOut,
-  MapPin,
   Package,
-  UserCheck,
   UserCog,
   Users,
 } from 'lucide-react';
@@ -64,7 +63,7 @@ export const WorkspaceNav = memo(function WorkspaceNav({
 
   return (
     <div className='admin-nav-groups'>
-      {role === 'REGISTRANT' && (
+      {role === USER_ROLE.REGISTRANT && (
         <div className='admin-nav-group'>
           <span className='admin-nav-group-label'>Người đăng ký</span>
           <NavItemTooltip label='Hồ sơ của tôi' enabled={tooltipEnabled}>
@@ -82,6 +81,12 @@ export const WorkspaceNav = memo(function WorkspaceNav({
             <Link to='/my/products/new' title='Tạo hồ sơ' onClick={onNavigate}>
               <FileText className='size-4' aria-hidden='true' />
               <span>Tạo hồ sơ</span>
+            </Link>
+          </NavItemTooltip>
+          <NavItemTooltip label='Cấu hình chung' enabled={tooltipEnabled}>
+            <Link to='/my/settings' title='Cấu hình chung' onClick={onNavigate}>
+              <Building2 className='size-4' aria-hidden='true' />
+              <span>Cấu hình chung</span>
             </Link>
           </NavItemTooltip>
         </div>
@@ -106,12 +111,6 @@ export const WorkspaceNav = memo(function WorkspaceNav({
               <span>Danh mục sản phẩm</span>
             </Link>
           </NavItemTooltip>
-          <NavItemTooltip label='Sự kiện' enabled={tooltipEnabled}>
-            <Link to='/admin/localities' title='Sự kiện' onClick={onNavigate}>
-              <MapPin className='size-4' aria-hidden='true' />
-              <span>Sự kiện</span>
-            </Link>
-          </NavItemTooltip>
           <NavItemTooltip label='Sản phẩm' enabled={tooltipEnabled}>
             <Link to='/admin/products' title='Sản phẩm' onClick={onNavigate}>
               <Package className='size-4' aria-hidden='true' />
@@ -129,14 +128,6 @@ export const WorkspaceNav = memo(function WorkspaceNav({
       {(canView || canScore) && (
         <div className='admin-nav-group'>
           <span className='admin-nav-group-label'>Đánh giá</span>
-          {canView && (
-            <NavItemTooltip label='Phân công' enabled={tooltipEnabled}>
-              <Link to='/admin/assignments' title='Phân công' onClick={onNavigate}>
-                <UserCheck className='size-4' aria-hidden='true' />
-                <span>Phân công</span>
-              </Link>
-            </NavItemTooltip>
-          )}
           <NavItemTooltip label='Phiếu chấm OCOP' enabled={tooltipEnabled}>
             <Link to='/admin/scoring-forms' title='Phiếu chấm OCOP' onClick={onNavigate}>
               <ClipboardCheck className='size-4' aria-hidden='true' />

@@ -10,7 +10,13 @@ interface ComboboxUiContextValue {
   selectedLabel: string;
   searchQuery: string;
   multiple: boolean;
+  disabled: boolean;
+  readOnly: boolean;
+  manualFiltering: boolean;
+  visibleValues: Set<string> | null;
+  isListEmpty: boolean;
   setOpen: (open: boolean) => void;
+  onInputChange: (nextInput: string) => void;
 }
 
 const ComboboxUiContext = React.createContext<ComboboxUiContextValue | null>(null);
@@ -67,10 +73,16 @@ const Combobox = (({
   onFilter: onFilterProp,
   openOnFocus = true,
   multiple,
+  disabled,
+  readOnly,
+  manualFiltering,
   children,
   ...props
 }: React.ComponentProps<typeof ComboboxPrimitive.Root>) => {
   const isMultiple = Boolean(multiple);
+  const isDisabled = Boolean(disabled);
+  const isReadOnly = Boolean(readOnly);
+  const isManualFiltering = Boolean(manualFiltering);
   const [internalOpen, setInternalOpen] = React.useState(defaultOpen);
   const [internalValue, setInternalValue] = React.useState<string | string[]>(
     () => defaultValue ?? (isMultiple ? [] : ''),
@@ -79,6 +91,7 @@ const Combobox = (({
 
   const isOpen = openProp !== undefined ? openProp : internalOpen;
   const currentValue = value !== undefined ? value : internalValue;
+  const activeSearchQuery = inputValueProp !== undefined ? inputValueProp : searchQuery;
 
   const itemsMap = React.useMemo(() => extractComboboxItems(children), [children]);
 
@@ -110,6 +123,20 @@ const Combobox = (({
     [inputValueProp, onInputValueChange],
   );
 
+  const handleInputChange = React.useCallback(
+    (nextInput: string) => {
+      if (isDisabled || isReadOnly) return;
+      if (!isOpen) {
+        handleOpenChange(true);
+      }
+      if (inputValueProp === undefined) {
+        setSearchQuery(nextInput);
+      }
+      onInputValueChange?.(nextInput);
+    },
+    [isDisabled, isReadOnly, isOpen, handleOpenChange, inputValueProp, onInputValueChange],
+  );
+
   const handleValueChange = React.useCallback(
     (nextValue: string & string[]) => {
       if (!isMultiple && nextValue === '') {
@@ -139,6 +166,22 @@ const Combobox = (({
     [itemsMap],
   );
 
+  const activeFilter = onFilterProp ?? defaultOnFilter;
+
+  const visibleValues = React.useMemo(() => {
+    if (isManualFiltering) return null;
+    const trimmed = activeSearchQuery.trim();
+    if (!trimmed) return null;
+    const allValues = Array.from(itemsMap.keys());
+    return new Set(activeFilter(allValues, trimmed));
+  }, [isManualFiltering, activeSearchQuery, itemsMap, activeFilter]);
+
+  const isListEmpty = React.useMemo(() => {
+    if (isManualFiltering) return false;
+    if (!activeSearchQuery.trim()) return false;
+    return (visibleValues?.size ?? itemsMap.size) === 0;
+  }, [isManualFiltering, activeSearchQuery, visibleValues, itemsMap.size]);
+
   const effectiveInputValue =
     inputValueProp !== undefined
       ? inputValueProp
@@ -152,11 +195,29 @@ const Combobox = (({
     () => ({
       isOpen,
       selectedLabel,
-      searchQuery,
+      searchQuery: activeSearchQuery,
       multiple: isMultiple,
+      disabled: isDisabled,
+      readOnly: isReadOnly,
+      manualFiltering: isManualFiltering,
+      visibleValues,
+      isListEmpty,
       setOpen: handleOpenChange,
+      onInputChange: handleInputChange,
     }),
-    [isOpen, selectedLabel, searchQuery, isMultiple, handleOpenChange],
+    [
+      isOpen,
+      selectedLabel,
+      activeSearchQuery,
+      isMultiple,
+      isDisabled,
+      isReadOnly,
+      isManualFiltering,
+      visibleValues,
+      isListEmpty,
+      handleOpenChange,
+      handleInputChange,
+    ],
   );
 
   return (
@@ -170,9 +231,12 @@ const Combobox = (({
         onOpenChange={handleOpenChange}
         inputValue={effectiveInputValue}
         onInputValueChange={handleInputValueChange}
-        onFilter={onFilterProp ?? defaultOnFilter}
+        onFilter={activeFilter}
         openOnFocus={openOnFocus}
         multiple={multiple as never}
+        disabled={disabled}
+        readOnly={readOnly}
+        manualFiltering
         {...props}
       >
         {children}
@@ -216,6 +280,8 @@ function ComboboxInput({
   className,
   placeholder,
   onClick,
+  onChange,
+  onKeyDown,
   ...props
 }: React.ComponentProps<typeof ComboboxPrimitive.Input>) {
   const uiContext = React.useContext(ComboboxUiContext);
@@ -232,6 +298,27 @@ function ComboboxInput({
         onClick?.(event);
         if (!event.defaultPrevented && uiContext && !uiContext.isOpen) {
           uiContext.setOpen(true);
+        }
+      }}
+      onChange={(event) => {
+        onChange?.(event);
+        if (!event.defaultPrevented && uiContext) {
+          event.preventDefault();
+          uiContext.onInputChange(event.currentTarget.value);
+        }
+      }}
+      onKeyDown={(event) => {
+        onKeyDown?.(event);
+        if (
+          !event.defaultPrevented &&
+          event.key === 'Enter' &&
+          uiContext &&
+          (uiContext.isListEmpty ||
+            (uiContext.visibleValues !== null &&
+              !event.currentTarget.getAttribute('aria-activedescendant')))
+        ) {
+          event.preventDefault();
+          uiContext.setOpen(false);
         }
       }}
       className={cn(
@@ -373,11 +460,20 @@ function ComboboxLoading({
 function ComboboxEmpty({
   className,
   children,
+  keepVisible,
   ...props
 }: React.ComponentProps<typeof ComboboxPrimitive.Empty>) {
+  const uiContext = React.useContext(ComboboxUiContext);
+  if (uiContext && !uiContext.manualFiltering && !keepVisible && !uiContext.isListEmpty) {
+    return null;
+  }
+
   return (
     <ComboboxPrimitive.Empty
       data-slot='combobox-empty'
+      keepVisible={
+        keepVisible ?? (uiContext && !uiContext.manualFiltering ? uiContext.isListEmpty : undefined)
+      }
       className={cn('text-muted-foreground py-4 text-center text-sm', className)}
       {...props}
     >
@@ -420,6 +516,11 @@ function ComboboxItem({
 }: React.ComponentProps<typeof ComboboxPrimitive.Item> & {
   outset?: boolean;
 }) {
+  const uiContext = React.useContext(ComboboxUiContext);
+  if (uiContext?.visibleValues && !uiContext.visibleValues.has(props.value)) {
+    return null;
+  }
+
   return (
     <ComboboxPrimitive.Item
       data-slot='combobox-item'

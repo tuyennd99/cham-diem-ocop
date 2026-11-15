@@ -6,6 +6,7 @@ import type {
   CreateLocalityInput,
   LocalityQuery,
   LocalityRecord,
+  ManagingAgencySummary,
   UpdateAdminCategoryInput,
   UpdateLocalityInput,
 } from '@ocop/shared';
@@ -13,6 +14,7 @@ import { API } from '../constants/api';
 import { requestJson } from './base-request';
 
 export const adminCatalogsApi = {
+  managingAgencies: () => requestJson<ManagingAgencySummary[]>({ url: API.admin.managingAgencies }),
   categories: (query: AdminCategoryQuery) =>
     requestJson<AdminCategoryRecord[]>({ url: API.admin.categories, params: query }),
   category: (id: string) => requestJson<AdminCategoryDetail>({ url: API.admin.category(id) }),

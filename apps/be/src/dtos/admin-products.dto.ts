@@ -17,7 +17,14 @@ import {
   ValidateIf,
 } from 'class-validator';
 import { ProductUpdateDto, ProductWriteDto } from './products.dto';
-import { productRegistrationTypes } from '../constants/products';
+import {
+  PRODUCT_DATE_BASIS,
+  SORT_DIRECTION,
+  productDateBasisValues,
+  productRegistrationTypes,
+  productSortByValues,
+  sortDirectionValues,
+} from '../constants/products';
 
 const trimText = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
@@ -105,12 +112,13 @@ export class AdminProductQueryDto {
   assessmentYear?: number;
 
   @ApiPropertyOptional({
-    enum: ['submittedAt', 'completedAt'],
-    default: 'submittedAt',
+    enum: productDateBasisValues,
+    default: PRODUCT_DATE_BASIS.SUBMITTED_AT,
   })
   @IsOptional()
-  @IsIn(['submittedAt', 'completedAt'])
-  dateBasis: 'submittedAt' | 'completedAt' = 'submittedAt';
+  @IsIn(productDateBasisValues)
+  dateBasis: (typeof productDateBasisValues)[number] =
+    PRODUCT_DATE_BASIS.SUBMITTED_AT;
 
   @ApiPropertyOptional({ format: 'date-time' })
   @ValidateIf((_object, value) => value !== undefined)
@@ -132,15 +140,18 @@ export class AdminProductQueryDto {
   @Max(5)
   starRating?: 1 | 2 | 3 | 4 | 5;
 
-  @ApiPropertyOptional({ enum: ['submittedAt', 'name', 'finalScore'] })
+  @ApiPropertyOptional({ enum: productSortByValues })
   @IsOptional()
-  @IsIn(['submittedAt', 'name', 'finalScore'])
-  sortBy?: 'submittedAt' | 'name' | 'finalScore';
+  @IsIn(productSortByValues)
+  sortBy?: (typeof productSortByValues)[number];
 
-  @ApiPropertyOptional({ enum: ['asc', 'desc'], default: 'desc' })
+  @ApiPropertyOptional({
+    enum: sortDirectionValues,
+    default: SORT_DIRECTION.DESC,
+  })
   @IsOptional()
-  @IsIn(['asc', 'desc'])
-  sortDirection?: 'asc' | 'desc';
+  @IsIn(sortDirectionValues)
+  sortDirection?: (typeof sortDirectionValues)[number];
 }
 
 export class AdminProductCreateDto extends ProductWriteDto {
@@ -175,4 +186,79 @@ export class ProductMutationReasonDto {
   @MinLength(1)
   @MaxLength(255)
   reason!: string;
+}
+
+export class ApproveProductDto {
+  @ApiPropertyOptional({ maxLength: 255 })
+  @IsOptional()
+  @Transform(trimSearch)
+  @IsString()
+  @MaxLength(255)
+  reason?: string;
+}
+
+export class ReturnProductDto {
+  @ApiProperty({ minLength: 1, maxLength: 1000 })
+  @Transform(trimText)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(1000)
+  reason!: string;
+}
+
+export class PublishProductResultsDto {
+  @ApiPropertyOptional({ maxLength: 255 })
+  @IsOptional()
+  @Transform(trimSearch)
+  @IsString()
+  @MaxLength(255)
+  reason?: string;
+}
+
+export class ReopenProductDto {
+  @ApiProperty({ minLength: 1, maxLength: 255 })
+  @Transform(trimText)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(255)
+  reason!: string;
+}
+
+export class AddProductJudgeAssignmentDto {
+  @ApiProperty({ maxLength: 100 })
+  @Transform(trimText)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  judgeId!: string;
+
+  @ApiPropertyOptional({ maxLength: 255 })
+  @IsOptional()
+  @Transform(trimSearch)
+  @IsString()
+  @MaxLength(255)
+  reason?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  confirmRestore?: boolean;
+}
+
+export class RemoveProductJudgeAssignmentDto {
+  @ApiPropertyOptional({ maxLength: 255 })
+  @IsOptional()
+  @Transform(trimSearch)
+  @IsString()
+  @MaxLength(255)
+  reason?: string;
+}
+
+export class ReopenEvaluationDto {
+  @ApiPropertyOptional({ maxLength: 255 })
+  @IsOptional()
+  @Transform(trimSearch)
+  @IsString()
+  @MaxLength(255)
+  reason?: string;
 }

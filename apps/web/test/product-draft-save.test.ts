@@ -4,6 +4,7 @@ import { ApiError } from '../src/lib/api-error';
 import {
   canStartProductDraftSave,
   saveProductDraft,
+  validateProductDirectSubmitInput,
   type ProductDraftCommands,
 } from '../src/lib/save-product-draft';
 import type { ProductAttachmentRecord } from '../src/types/product';
@@ -93,9 +94,9 @@ describe('saveProductDraft', () => {
     assert.equal(writes, 0);
   });
 
-  it('rejects selections that would exceed the 20-file product limit or 10 MiB size limit before writing (FILE-02)', async () => {
+  it('rejects selections that would exceed the 5-file product limit or 2 MB size limit before writing (FILE-02)', async () => {
     let writes = 0;
-    const oversized = new File([new Uint8Array(10 * 1024 * 1024 + 1)], 'over-10mib.pdf', {
+    const oversized = new File([new Uint8Array(2 * 1024 * 1024 + 1)], 'over-2mb.pdf', {
       type: 'application/pdf',
       lastModified: 1,
     });
@@ -110,14 +111,14 @@ describe('saveProductDraft', () => {
           },
         }),
       }),
-      /10\s*MiB/i,
+      /2\s*MB/i,
     );
     assert.equal(writes, 0);
 
     await assert.rejects(
       saveProductDraft({
         payload,
-        files: Array.from({ length: 21 }, (_, index) => file(`new-${index}.png`)),
+        files: Array.from({ length: 6 }, (_, index) => file(`new-${index}.png`)),
         commands: commands({
           create: async () => {
             writes++;
@@ -125,18 +126,18 @@ describe('saveProductDraft', () => {
           },
         }),
       }),
-      /20/,
+      /5/,
     );
     assert.equal(writes, 0);
 
     const existing = product({
-      attachments: Array.from({ length: 19 }, (_, index) => attachment(`${index}`, `${index}.png`)),
+      attachments: Array.from({ length: 4 }, (_, index) => attachment(`${index}`, `${index}.png`)),
     });
     await assert.rejects(
       saveProductDraft({
         existingProduct: existing,
         payload,
-        files: [file('twenty.png'), file('twenty-one.png')],
+        files: [file('five.png'), file('six.png')],
         commands: commands({
           update: async () => {
             writes++;
@@ -144,7 +145,7 @@ describe('saveProductDraft', () => {
           },
         }),
       }),
-      /20/,
+      /5/,
     );
     assert.equal(writes, 0);
   });
@@ -351,5 +352,225 @@ describe('saveProductDraft', () => {
       }),
     });
     assert.deepEqual(savedPayload?.formData, { entityName: 'New', legacyField: 'Keep me' });
+  });
+
+  it('creates/updates, uploads files, and submits immediately when submitAfterSave is true (#27)', async () => {
+    const steps: string[] = [];
+    const seenSnapshots: string[] = [];
+    const result = await saveProductDraft({
+      payload,
+      files: [file('one.png'), file('two.png')],
+      submitAfterSave: true,
+      onDraftSaved: (saved) => {
+        seenSnapshots.push(`${saved.id}:${saved.status}:${saved.attachments.length}`);
+      },
+      commands: commands({
+        create: async () => {
+          steps.push('create');
+          return { data: product({ id: 'draft-27', status: 'DRAFT' as never }) };
+        },
+        upload: async (id, selected) => {
+          steps.push(`upload:${id}:${selected.name}`);
+          return { data: attachment(`att-${selected.name}`, selected.name) };
+        },
+        submit: async (id) => {
+          steps.push(`submit:${id}`);
+          return {
+            data: product({
+              id,
+              status: 'SUBMITTED' as never,
+              attachments: [
+                attachment('att-one.png', 'one.png'),
+                attachment('att-two.png', 'two.png'),
+              ],
+            }),
+          };
+        },
+      }),
+    });
+
+    assert.equal(result.kind, 'submitted');
+    assert.equal(result.product.id, 'draft-27');
+    assert.equal(result.product.status, 'SUBMITTED');
+    assert.deepEqual(steps, [
+      'create',
+      'upload:draft-27:one.png',
+      'upload:draft-27:two.png',
+      'submit:draft-27',
+    ]);
+    assert.deepEqual(seenSnapshots, [
+      'draft-27:DRAFT:0',
+      'draft-27:DRAFT:1',
+      'draft-27:DRAFT:2',
+      'draft-27:SUBMITTED:2',
+    ]);
+  });
+
+  it('does not call submit when an attachment upload fails during submitAfterSave (#27)', async () => {
+    let submitted = 0;
+    const result = await saveProductDraft({
+      payload,
+      files: [file('one.png')],
+      submitAfterSave: true,
+      commands: commands({
+        create: async () => ({ data: product({ id: 'draft-upload-fail' }) }),
+        upload: async () => {
+          throw new ApiError('File rejected', 415);
+        },
+        submit: async () => {
+          submitted++;
+          return { data: product({ id: 'draft-upload-fail', status: 'SUBMITTED' as never }) };
+        },
+      }),
+    });
+
+    assert.equal(result.kind, 'upload-failed');
+    assert.equal(submitted, 0);
+    assert.equal(result.product.id, 'draft-upload-fail');
+  });
+
+  it('retains the saved draft product via onDraftSaved if submit fails so retry updates instead of duplicating (#27)', async () => {
+    let capturedDraft: RegistrantProduct | undefined;
+    let creates = 0;
+    let updates = 0;
+    await assert.rejects(
+      saveProductDraft({
+        payload,
+        files: [file('one.png')],
+        submitAfterSave: true,
+        onDraftSaved: (saved) => {
+          capturedDraft = saved;
+        },
+        commands: commands({
+          create: async () => {
+            creates++;
+            return { data: product({ id: 'draft-keep-id' }) };
+          },
+          upload: async (_id, selected) => ({
+            data: attachment('att-1', selected.name),
+          }),
+          submit: async () => {
+            throw new ApiError('Submit failed', 400);
+          },
+        }),
+      }),
+      /Submit failed/,
+    );
+    assert.equal(creates, 1);
+    assert.equal(capturedDraft?.id, 'draft-keep-id');
+    assert.equal(capturedDraft?.attachments.length, 1);
+
+    const retryResult = await saveProductDraft({
+      existingProduct: capturedDraft,
+      payload,
+      files: [],
+      submitAfterSave: true,
+      commands: commands({
+        create: async () => {
+          creates++;
+          return { data: product({ id: 'duplicate' }) };
+        },
+        update: async (id) => {
+          updates++;
+          return { data: product({ id, attachments: capturedDraft?.attachments ?? [] }) };
+        },
+        submit: async (id) => ({
+          data: product({
+            id,
+            status: 'SUBMITTED' as never,
+            attachments: capturedDraft?.attachments ?? [],
+          }),
+        }),
+      }),
+    });
+
+    assert.equal(creates, 1);
+    assert.equal(updates, 1);
+    assert.equal(retryResult.kind, 'submitted');
+    assert.equal(retryResult.product.id, 'draft-keep-id');
+  });
+});
+
+describe('validateProductDirectSubmitInput (#27)', () => {
+  const validInput = {
+    name: 'Trà Shan Tuyết',
+    categoryId: 'cat-1',
+    provinceName: 'Tỉnh Hà Giang',
+    localityName: 'Xã Phương Độ',
+    entityName: 'HTX Trà Phương Độ',
+    representativeName: 'Nguyễn Văn A',
+    representativeTitle: 'Giám đốc',
+    contactAddress: 'Thôn Hạ Thành, Xã Phương Độ',
+    phone: '0901234567',
+    email: 'htx@example.com',
+    registrationType: 'FIRST',
+    sampleQuantity: '2',
+    assessmentYear: '2026',
+    declarationAccepted: true,
+  };
+
+  it('passes when all required Mẫu số 01 fields are present', () => {
+    assert.doesNotThrow(() => validateProductDirectSubmitInput(validInput));
+    assert.doesNotThrow(() =>
+      validateProductDirectSubmitInput({
+        ...validInput,
+        phone: '',
+        email: 'only-email@example.com',
+      }),
+    );
+    assert.doesNotThrow(() =>
+      validateProductDirectSubmitInput({
+        ...validInput,
+        localityName: '',
+        localityId: 'loc-1',
+      }),
+    );
+  });
+
+  it('rejects missing required fields with clear Vietnamese messages before calling API', () => {
+    assert.throws(
+      () => validateProductDirectSubmitInput({ ...validInput, provinceName: '' }),
+      /Tỉnh\/Thành phố/,
+    );
+    assert.throws(
+      () => validateProductDirectSubmitInput({ ...validInput, localityName: '', localityId: '' }),
+      /Xã\/Phường/,
+    );
+    assert.throws(
+      () => validateProductDirectSubmitInput({ ...validInput, entityName: '   ' }),
+      /tên đơn vị sản xuất/i,
+    );
+    assert.throws(
+      () => validateProductDirectSubmitInput({ ...validInput, representativeName: '' }),
+      /người đại diện/i,
+    );
+    assert.throws(
+      () => validateProductDirectSubmitInput({ ...validInput, representativeTitle: '' }),
+      /chức vụ/i,
+    );
+    assert.throws(
+      () => validateProductDirectSubmitInput({ ...validInput, contactAddress: '' }),
+      /địa chỉ liên hệ/i,
+    );
+    assert.throws(
+      () => validateProductDirectSubmitInput({ ...validInput, phone: '', email: '' }),
+      /số điện thoại hoặc email/i,
+    );
+    assert.throws(
+      () => validateProductDirectSubmitInput({ ...validInput, registrationType: '' }),
+      /hình thức đăng ký/i,
+    );
+    assert.throws(
+      () => validateProductDirectSubmitInput({ ...validInput, sampleQuantity: '0' }),
+      /từ 1 đến 100000/,
+    );
+    assert.throws(
+      () => validateProductDirectSubmitInput({ ...validInput, assessmentYear: '' }),
+      /Năm đánh giá/,
+    );
+    assert.throws(
+      () => validateProductDirectSubmitInput({ ...validInput, declarationAccepted: false }),
+      /xác nhận cam kết/i,
+    );
   });
 });

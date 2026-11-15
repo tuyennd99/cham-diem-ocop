@@ -21,6 +21,7 @@ export function ConfirmDialog({
   confirmLabel = 'Xác nhận',
   destructive,
   pending,
+  confirmDisabled,
   error,
   onConfirm,
 }: {
@@ -31,17 +32,22 @@ export function ConfirmDialog({
   confirmLabel?: string;
   destructive?: boolean;
   pending?: boolean;
-  error?: string;
+  confirmDisabled?: boolean;
+  error?: string | string[];
   onConfirm: () => void;
 }) {
+  const errors = Array.isArray(error) ? error : error ? [error] : [];
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-w-md'>
+      <DialogContent
+        className='admin-dialog max-h-[90vh] max-w-md overflow-y-auto'
+        data-admin-ui='true'
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
-        {error && <AlertError title='Không thể thực hiện thao tác' errors={[error]} />}
+        {errors.length > 0 && <AlertError title='Không thể thực hiện thao tác' errors={errors} />}
         <DialogFooter>
           <Button variant='outline' onClick={() => onOpenChange(false)}>
             Hủy
@@ -49,7 +55,7 @@ export function ConfirmDialog({
           <Button
             variant={destructive ? 'destructive' : 'default'}
             loading={pending}
-            disabled={pending}
+            disabled={pending || confirmDisabled}
             onClick={onConfirm}
           >
             {confirmLabel}

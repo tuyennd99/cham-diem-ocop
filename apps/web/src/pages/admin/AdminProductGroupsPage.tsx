@@ -27,7 +27,8 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { ALL, DEFAULT_PAGE_SIZE } from '../../constants/consts';
+import { ALL, DEFAULT_PAGE_SIZE, STAFF_PERMISSION } from '../../constants/consts';
+import { usePaginatedList } from '../../hooks/use-paginated-list';
 import {
   parseAdminCatalogSearch,
   toAdminCategoryApiQuery,
@@ -53,23 +54,25 @@ export function AdminProductGroupsPage({
   onSearchChange,
 }: AdminProductGroupsPageProps) {
   const session = useSession();
-  const canManage = hasStaffPermission(session?.user, 'MANAGE');
+  const canManage = hasStaffPermission(session?.user, STAFF_PERMISSION.MANAGE);
   const mutations = useAdminCatalogMutations();
 
-  const [fallbackSearch, setFallbackSearch] = useState<AdminCatalogSearch>({
-    page: 1,
-    limit: DEFAULT_PAGE_SIZE,
+  const {
+    appliedSearch,
+    applySearch,
+    page: requestedPage,
+    pageSize,
+    setPage,
+    setPageSize,
+  } = usePaginatedList<AdminCatalogSearch>({
+    search: controlledSearch,
+    onSearchChange,
+    parseSearch: parseAdminCatalogSearch,
+    defaultSearch: {
+      page: 1,
+      limit: DEFAULT_PAGE_SIZE,
+    },
   });
-  const appliedSearch = controlledSearch ?? fallbackSearch;
-
-  function applySearch(next: AdminCatalogSearch) {
-    const normalized = parseAdminCatalogSearch(next as Record<string, unknown>);
-    if (onSearchChange) {
-      onSearchChange(normalized);
-    } else {
-      setFallbackSearch(normalized);
-    }
-  }
 
   const [searchText, setSearchText] = useState(appliedSearch.q ?? '');
   const [statusFilter, setStatusFilter] = useState<boolean | undefined>(appliedSearch.isActive);
@@ -93,6 +96,14 @@ export function AdminProductGroupsPage({
   const categoriesError = errorText(categoriesQuery.error);
   const detailError = errorText(detailQuery.error);
 
+  useEffect(() => {
+    if (categoriesQuery.isPending || !categoryMeta) return;
+    const maxPage = Math.max(1, categoryMeta.totalPages);
+    if (requestedPage > maxPage) {
+      setPage(maxPage);
+    }
+  }, [categoriesQuery.isPending, categoryMeta, requestedPage, setPage]);
+
   const categoryColumns = useMemo<DataTableColumnDef<AdminCategoryRecord>[]>(
     () => [
       {
@@ -109,13 +120,34 @@ export function AdminProductGroupsPage({
         header: 'Danh mục sản phẩm',
         meta: { isRowHeader: true, width: '30%', cellClassName: 'font-normal' },
         cell: ({ row }) => (
-          <div className='text-fg min-w-[14rem] font-semibold leading-snug'>
+          <div className='text-fg min-w-[14rem] leading-snug font-semibold'>
             {row.original.name}
           </div>
         ),
       },
       {
+        id: 'managingAgencies',
+        header: 'Cơ quan chủ trì quản lý',
+        enableSorting: false,
+        cell: ({ row }) => {
+          const agencies = row.original.managingAgencies ?? [];
+          if (!agencies.length) {
+            return <span className='text-muted text-xs'>Chưa liên kết cơ quan</span>;
+          }
+          return (
+            <div className='flex flex-wrap gap-1'>
+              {agencies.map((agency) => (
+                <Badge key={agency.id} variant='outline' title={agency.name}>
+                  {agency.name}
+                </Badge>
+              ))}
+            </div>
+          );
+        },
+      },
+      {
         id: 'criteriaSet',
+        accessorFn: (row) => row.criteriaSet?.maxScore ?? -1,
         header: 'Bộ tiêu chí & Điểm',
         meta: { cellClassName: 'whitespace-nowrap tabular-nums' },
         cell: ({ row }) => {
@@ -161,6 +193,7 @@ export function AdminProductGroupsPage({
       {
         id: 'actions',
         header: 'Thao tác',
+        enableSorting: false,
         meta: { align: 'right', width: '8.5rem', cellClassName: 'whitespace-nowrap' },
         cell: ({ row }) => {
           const cat = row.original;
@@ -295,9 +328,7 @@ export function AdminProductGroupsPage({
         >
           <Combobox
             value={statusFilter === undefined ? ALL : String(statusFilter)}
-            onValueChange={(value) =>
-              setStatusFilter(value === ALL ? undefined : value === 'true')
-            }
+            onValueChange={(value) => setStatusFilter(value === ALL ? undefined : value === 'true')}
           >
             <ComboboxAnchor>
               <ComboboxInput id='catalog-search-status' placeholder='Tất cả' />
@@ -353,22 +384,12 @@ export function AdminProductGroupsPage({
             columns={categoryColumns}
             data={categories}
             total={categoryMeta?.total ?? categories.length}
-            page={categoryMeta?.page ?? appliedSearch.page ?? 1}
-            pageSize={appliedSearch.limit ?? DEFAULT_PAGE_SIZE}
+            page={categoryMeta?.page ?? requestedPage}
+            pageSize={pageSize}
+            enableSorting
             getRowId={(row) => row.id}
-            onPageChange={(nextPage) =>
-              applySearch({
-                ...appliedSearch,
-                page: nextPage,
-              })
-            }
-            onPageSizeChange={(nextLimit) =>
-              applySearch({
-                ...appliedSearch,
-                page: 1,
-                limit: nextLimit,
-              })
-            }
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
           />
         </div>
       )}

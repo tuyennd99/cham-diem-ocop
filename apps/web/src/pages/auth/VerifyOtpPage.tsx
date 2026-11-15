@@ -9,6 +9,8 @@ import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { authApi } from '../../api/auth';
+import { REGISTRATION_VERIFICATION_MODE, VERIFICATION_STATE_KIND } from '../../constants/auth';
+import { HTTP_STATUS } from '../../constants/http-status';
 import { ApiError, messageOf } from '../../lib/api-error';
 import { homeFor, setSession } from '../../lib/auth';
 import { normalizeEmail } from '../../lib/utils';
@@ -28,7 +30,8 @@ export function VerifyOtpPage() {
     <AuthFrame
       eyebrow='TÀI KHOẢN OCOP'
       title={
-        state.kind === 'pending' && state.pending.mode === 'google-link'
+        state.kind === VERIFICATION_STATE_KIND.PENDING &&
+        state.pending.mode === REGISTRATION_VERIFICATION_MODE.GOOGLE_LINK
           ? 'Liên kết tài khoản Google'
           : 'Xác thực email'
       }
@@ -36,7 +39,7 @@ export function VerifyOtpPage() {
       backTo='/login'
       backLabel='Quay lại trang đăng nhập'
     >
-      {state.kind === 'error' ? (
+      {state.kind === VERIFICATION_STATE_KIND.ERROR ? (
         <div className='account-form'>
           <AlertError title='Không thể mở phiên xác thực' errors={[state.message]} />
           {state.retryable && (
@@ -66,7 +69,11 @@ export function VerifyOtpPage() {
         </div>
       ) : (
         <VerificationForm
-          key={state.kind === 'pending' ? state.pending.registrationToken : 'legacy'}
+          key={
+            state.kind === VERIFICATION_STATE_KIND.PENDING
+              ? state.pending.registrationToken
+              : VERIFICATION_STATE_KIND.LEGACY
+          }
           initial={state}
         />
       )}
@@ -74,9 +81,15 @@ export function VerifyOtpPage() {
   );
 }
 
-function VerificationForm({ initial }: { initial: Exclude<VerificationState, { kind: 'error' }> }) {
+function VerificationForm({
+  initial,
+}: {
+  initial: Exclude<VerificationState, { kind: typeof VERIFICATION_STATE_KIND.ERROR }>;
+}) {
   const navigate = useNavigate();
-  const [pending, setPending] = useState(initial.kind === 'pending' ? initial.pending : null);
+  const [pending, setPending] = useState(
+    initial.kind === VERIFICATION_STATE_KIND.PENDING ? initial.pending : null,
+  );
   const [now, setNow] = useState(Date.now);
   const [legacyResendAt, setLegacyResendAt] = useState(0);
   const [cooldownEmail, setCooldownEmail] = useState('');
@@ -96,7 +109,8 @@ function VerificationForm({ initial }: { initial: Exclude<VerificationState, { k
 
   const verifyForm = useForm({
     defaultValues: {
-      email: initial.kind === 'pending' ? initial.pending.email : initial.email,
+      email:
+        initial.kind === VERIFICATION_STATE_KIND.PENDING ? initial.pending.email : initial.email,
       code: '',
     },
     onSubmit: async ({ value }) => {
@@ -132,18 +146,19 @@ function VerificationForm({ initial }: { initial: Exclude<VerificationState, { k
           setSuccess(true);
         }
       } catch (cause) {
-        if (pending && cause instanceof ApiError && cause.status === 410) {
+        if (pending && cause instanceof ApiError && cause.status === HTTP_STATUS.GONE) {
           clearPendingEmail();
           toast.error(messageOf(cause));
           await navigate({
-            to: pending.mode === 'google-link' ? '/login' : '/register',
+            to:
+              pending.mode === REGISTRATION_VERIFICATION_MODE.GOOGLE_LINK ? '/login' : '/register',
             replace: true,
           });
-        } else if (cause instanceof ApiError && cause.status === 409) {
+        } else if (cause instanceof ApiError && cause.status === HTTP_STATUS.CONFLICT) {
           const msg = 'Tài khoản hoặc email này đã được dùng. Vui lòng đăng nhập.';
           setError(msg);
           toast.error(msg);
-        } else if (cause instanceof ApiError && cause.status === 401) {
+        } else if (cause instanceof ApiError && cause.status === HTTP_STATUS.UNAUTHORIZED) {
           const msg =
             'Mã không đúng, đã hết hạn hoặc phiên không còn hiệu lực. Kiểm tra email hoặc gửi mã mới.';
           setCodeError(msg);
@@ -177,7 +192,7 @@ function VerificationForm({ initial }: { initial: Exclude<VerificationState, { k
     try {
       if (pending) {
         const input = { registrationToken: pending.registrationToken };
-        const { data } = await (pending.mode === 'google-link'
+        const { data } = await (pending.mode === REGISTRATION_VERIFICATION_MODE.GOOGLE_LINK
           ? authApi.googleLinkResend(input)
           : authApi.resendOtp(input));
         const next = {
@@ -198,16 +213,16 @@ function VerificationForm({ initial }: { initial: Exclude<VerificationState, { k
       setCodeError('');
       setNow(Date.now());
     } catch (cause) {
-      if (pending && cause instanceof ApiError && cause.status === 410) {
+      if (pending && cause instanceof ApiError && cause.status === HTTP_STATUS.GONE) {
         clearPendingEmail();
         await navigate({
-          to: pending.mode === 'google-link' ? '/login' : '/register',
+          to: pending.mode === REGISTRATION_VERIFICATION_MODE.GOOGLE_LINK ? '/login' : '/register',
           replace: true,
         });
         return;
       }
       setError(
-        cause instanceof ApiError && cause.status === 429
+        cause instanceof ApiError && cause.status === HTTP_STATUS.TOO_MANY_REQUESTS
           ? 'Vui lòng chờ trước khi gửi lại mã.'
           : messageOf(cause),
       );
@@ -348,7 +363,7 @@ function VerificationForm({ initial }: { initial: Exclude<VerificationState, { k
                 <ShieldCheck className='size-4' aria-hidden='true' />
                 {verifying
                   ? 'Đang xác thực…'
-                  : pending?.mode === 'google-link'
+                  : pending?.mode === REGISTRATION_VERIFICATION_MODE.GOOGLE_LINK
                     ? 'Xác thực và liên kết Google'
                     : 'Xác thực email'}
               </Button>
@@ -378,10 +393,14 @@ function VerificationForm({ initial }: { initial: Exclude<VerificationState, { k
               )}
               <Link
                 className='text-link'
-                to={pending?.mode === 'google-link' ? '/login' : '/register'}
+                to={
+                  pending?.mode === REGISTRATION_VERIFICATION_MODE.GOOGLE_LINK
+                    ? '/login'
+                    : '/register'
+                }
                 onClick={clearPendingEmail}
               >
-                {pending?.mode === 'google-link'
+                {pending?.mode === REGISTRATION_VERIFICATION_MODE.GOOGLE_LINK
                   ? 'Đăng nhập Google lại'
                   : 'Đăng ký lại với email khác'}
               </Link>

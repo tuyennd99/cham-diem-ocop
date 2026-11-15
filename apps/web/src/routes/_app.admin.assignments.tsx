@@ -1,10 +1,11 @@
+import { STAFF_PERMISSION } from '@ocop/shared';
 import { createFileRoute } from '@tanstack/react-router';
 import { parseAdminAssignmentSearch } from '../lib/admin-search';
 import { requirePermission } from '../lib/route-guards';
 import { AdminAssignmentsPage } from '../pages/admin/AdminAssignmentsPage';
 
 export const Route = createFileRoute('/_app/admin/assignments')({
-  beforeLoad: requirePermission('VIEW'),
+  beforeLoad: requirePermission(STAFF_PERMISSION.VIEW),
   validateSearch: parseAdminAssignmentSearch,
   component: AssignmentsRoute,
 });

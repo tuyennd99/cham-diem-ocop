@@ -31,15 +31,22 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { STAFF_PERMISSION, USER_ROLE } from '../../constants/consts';
 import { staffAccessPayloadForForm, staffPermissionsForForm } from '../../lib/admin-user-form';
 import { messageOf } from '../../lib/api-error';
 import { getSession, validatePasswordBytes } from '../../lib/auth';
 import type { UpdateAdminUserStaffAccessInput } from '../../types/admin';
 
+const STAFF_PERMISSIONS_LIST = [
+  STAFF_PERMISSION.MANAGE,
+  STAFF_PERMISSION.VIEW,
+  STAFF_PERMISSION.SCORE,
+] as const;
+
 export const STAFF_PERMISSION_LABELS: Record<StaffPermission, string> = {
-  MANAGE: 'Quản lý',
-  VIEW: 'Xem dữ liệu',
-  SCORE: 'Chấm điểm',
+  MANAGE: 'Quản trị (Quản lý)',
+  VIEW: 'Chủ trì (Xem dữ liệu)',
+  SCORE: 'Giám khảo (Chấm điểm)',
 };
 
 interface UserEditorDialogProps {
@@ -62,6 +69,7 @@ const emptyStaffForm = {
   password: '',
   organizationUnitId: '',
   staffPermissions: [] as StaffPermission[],
+  hasRegistrantRole: false,
   reason: '',
 };
 
@@ -79,7 +87,7 @@ function formatPermissionsList(perms: StaffPermission[]): string {
 
 export function UserEditorDialog(props: UserEditorDialogProps) {
   const { open, user } = props;
-  const isStaff = Boolean(user && user.role !== 'REGISTRANT');
+  const isStaff = Boolean(user && user.role !== USER_ROLE.REGISTRANT);
 
   const [createForm, setCreateForm] = useState(emptyStaffForm);
   const [profileBaseline, setProfileBaseline] = useState(() => ({
@@ -93,10 +101,14 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
 
   const [accessBaseline, setAccessBaseline] = useState(() => ({
     permissions: staffPermissionsForForm(user?.staffPermissions ?? []),
+    hasRegistrantRole: Boolean(user?.roles?.includes(USER_ROLE.REGISTRANT)),
     organizationUnitId: user?.organizationUnitId ?? '',
   }));
   const [permissions, setPermissions] = useState<StaffPermission[]>(
     staffPermissionsForForm(user?.staffPermissions ?? []),
+  );
+  const [hasRegistrantRole, setHasRegistrantRole] = useState<boolean>(
+    Boolean(user?.roles?.includes(USER_ROLE.REGISTRANT)),
   );
   const [organizationUnitId, setOrganizationUnitId] = useState(user?.organizationUnitId ?? '');
   const [accessReason, setAccessReason] = useState('');
@@ -141,6 +153,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
     open &&
     isStaff &&
     (!samePermissionSet(permissions, accessBaseline.permissions) ||
+      hasRegistrantRole !== accessBaseline.hasRegistrantRole ||
       organizationUnitId !== accessBaseline.organizationUnitId ||
       accessReason.trim().length > 0);
 
@@ -220,6 +233,9 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
   }
 
   function togglePermission(permission: StaffPermission, checked: boolean) {
+    if (permission === STAFF_PERMISSION.SCORE && checked) {
+      setHasRegistrantRole(false);
+    }
     setPermissions((current) =>
       staffPermissionsForForm(
         checked ? [...current, permission] : current.filter((item) => item !== permission),
@@ -235,7 +251,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
         <DialogTitle>Thông tin người dùng: {user.fullName}</DialogTitle>
         <DialogDescription>
           {user.email} ·{' '}
-          {user.role === 'REGISTRANT' ? 'Tài khoản người đăng ký' : 'Tài khoản nội bộ'} ·{' '}
+          {user.role === USER_ROLE.REGISTRANT ? 'Tài khoản người đăng ký' : 'Tài khoản nội bộ'} ·{' '}
           {user.verified ? 'Đã xác thực' : 'Chưa xác thực'}
         </DialogDescription>
       </DialogHeader>
@@ -305,8 +321,23 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
           onSubmit={(event) => {
             event.preventDefault();
             setAccessNotice('');
+            if (hasRegistrantRole && permissions.includes(STAFF_PERMISSION.SCORE)) {
+              setError(
+                'Người dùng (Người đăng ký) và Giám khảo không được gán chung một tài khoản.',
+              );
+              return;
+            }
+            const nextRoles: import('@ocop/shared').Role[] = [
+              ...(hasRegistrantRole ? ([USER_ROLE.REGISTRANT] as const) : []),
+              ...(permissions.includes(STAFF_PERMISSION.MANAGE)
+                ? ([USER_ROLE.ADMIN, USER_ROLE.VIEWER] as const)
+                : []),
+              ...(permissions.includes(STAFF_PERMISSION.VIEW) ? ([USER_ROLE.VIEWER] as const) : []),
+              ...(permissions.includes(STAFF_PERMISSION.SCORE) ? ([USER_ROLE.JUDGE] as const) : []),
+            ];
             const payload = staffAccessPayloadForForm({
               staffPermissions: permissions,
+              roles: [...new Set(nextRoles)],
               organizationUnitId: organizationUnitId || null,
               reason: accessReason,
             });
@@ -323,6 +354,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
               await props.onUpdateAccess(user.id, payload);
               setAccessBaseline({
                 permissions: payload.staffPermissions,
+                hasRegistrantRole,
                 organizationUnitId: payload.organizationUnitId ?? '',
               });
               setAccessReason('');
@@ -330,28 +362,51 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
             });
           }}
         >
-          <h3>Quyền và đơn vị</h3>
+          <h3>Vai trò, quyền và đơn vị</h3>
           <p className='text-muted text-xs'>
-            Quyền Quản lý (MANAGE) tự bao hàm Xem dữ liệu (VIEW), không tự bao hàm Chấm điểm
-            (SCORE).
+            Một tài khoản có thể có nhiều vai trò, trừ Người dùng (Người đăng ký) và Giám khảo không
+            được chung một tài khoản. Quyền Quản trị (MANAGE) tự bao hàm Chủ trì (VIEW), không tự
+            bao hàm Giám khảo (SCORE).
           </p>
           <div role='group' aria-label='Quyền nội bộ' className='grid gap-2'>
-            {(['MANAGE', 'VIEW', 'SCORE'] as const).map((permission) => (
+            {STAFF_PERMISSIONS_LIST.map((permission) => (
               <div key={permission} className='inline-flex items-center gap-2'>
                 <Checkbox
                   id={`user-editor-permission-${permission}`}
                   checked={permissions.includes(permission)}
-                  disabled={busy || (permission === 'VIEW' && permissions.includes('MANAGE'))}
+                  disabled={
+                    busy ||
+                    (permission === STAFF_PERMISSION.VIEW &&
+                      permissions.includes(STAFF_PERMISSION.MANAGE)) ||
+                    (permission === STAFF_PERMISSION.SCORE && hasRegistrantRole)
+                  }
                   onCheckedChange={(checked) => togglePermission(permission, checked === true)}
                 />
                 <Label htmlFor={`user-editor-permission-${permission}`} className='cursor-pointer'>
                   {STAFF_PERMISSION_LABELS[permission]} ({permission})
-                  {permission === 'VIEW' && permissions.includes('MANAGE')
-                    ? ' — được bao hàm bởi Quản lý'
-                    : ''}
+                  {permission === STAFF_PERMISSION.VIEW &&
+                  permissions.includes(STAFF_PERMISSION.MANAGE)
+                    ? ' — được bao hàm bởi Quản trị'
+                    : permission === STAFF_PERMISSION.SCORE && hasRegistrantRole
+                      ? ' — xung đột với vai trò Người dùng'
+                      : ''}
                 </Label>
               </div>
             ))}
+            <div className='inline-flex items-center gap-2'>
+              <Checkbox
+                id='user-editor-role-registrant'
+                checked={hasRegistrantRole}
+                disabled={busy || permissions.includes(STAFF_PERMISSION.SCORE)}
+                onCheckedChange={(checked) => setHasRegistrantRole(checked === true)}
+              />
+              <Label htmlFor='user-editor-role-registrant' className='cursor-pointer'>
+                Người dùng / Người đăng ký (REGISTRANT)
+                {permissions.includes(STAFF_PERMISSION.SCORE)
+                  ? ' — không được gán chung với Giám khảo'
+                  : ''}
+              </Label>
+            </div>
           </div>
           <FormField label='Đơn vị công tác' htmlFor='user-editor-5'>
             <Combobox
@@ -519,14 +574,32 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
           event.preventDefault();
           void perform(async () => {
             if (!createForm.staffPermissions.length) throw new Error('Chọn ít nhất một quyền.');
+            if (
+              createForm.hasRegistrantRole &&
+              createForm.staffPermissions.includes(STAFF_PERMISSION.SCORE)
+            ) {
+              throw new Error(
+                'Người dùng (Người đăng ký) và Giám khảo không được gán chung một tài khoản.',
+              );
+            }
             validatePasswordBytes(createForm.password);
+            const createPerms = staffPermissionsForForm(createForm.staffPermissions);
+            const createRoles: import('@ocop/shared').Role[] = [
+              ...(createForm.hasRegistrantRole ? ([USER_ROLE.REGISTRANT] as const) : []),
+              ...(createPerms.includes(STAFF_PERMISSION.MANAGE)
+                ? ([USER_ROLE.ADMIN, USER_ROLE.VIEWER] as const)
+                : []),
+              ...(createPerms.includes(STAFF_PERMISSION.VIEW) ? ([USER_ROLE.VIEWER] as const) : []),
+              ...(createPerms.includes(STAFF_PERMISSION.SCORE) ? ([USER_ROLE.JUDGE] as const) : []),
+            ];
             await props.onCreate({
               email: createForm.email,
               fullName: createForm.fullName,
               phone: createForm.phone || null,
               password: createForm.password,
               organizationUnitId: createForm.organizationUnitId,
-              staffPermissions: staffPermissionsForForm(createForm.staffPermissions),
+              staffPermissions: createPerms,
+              roles: [...new Set(createRoles)],
               reason: createForm.reason,
             });
             bypassBlockerRef.current = true;
@@ -601,18 +674,25 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
           </Combobox>
         </FormField>
         <fieldset className='account-form'>
-          <legend className='text-sm font-semibold'>Quyền nội bộ</legend>
-          {(['MANAGE', 'VIEW', 'SCORE'] as const).map((permission) => (
+          <legend className='text-sm font-semibold'>Vai trò &amp; Quyền nội bộ</legend>
+          {STAFF_PERMISSIONS_LIST.map((permission) => (
             <div key={permission} className='inline-flex items-center gap-2'>
               <Checkbox
                 id={`user-create-permission-${permission}`}
                 checked={createForm.staffPermissions.includes(permission)}
                 disabled={
-                  busy || (permission === 'VIEW' && createForm.staffPermissions.includes('MANAGE'))
+                  busy ||
+                  (permission === STAFF_PERMISSION.VIEW &&
+                    createForm.staffPermissions.includes(STAFF_PERMISSION.MANAGE)) ||
+                  (permission === STAFF_PERMISSION.SCORE && createForm.hasRegistrantRole)
                 }
                 onCheckedChange={(checked) =>
                   setCreateForm({
                     ...createForm,
+                    hasRegistrantRole:
+                      permission === STAFF_PERMISSION.SCORE && checked === true
+                        ? false
+                        : createForm.hasRegistrantRole,
                     staffPermissions: staffPermissionsForForm(
                       checked === true
                         ? [...createForm.staffPermissions, permission]
@@ -623,12 +703,34 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
               />
               <Label htmlFor={`user-create-permission-${permission}`} className='cursor-pointer'>
                 {STAFF_PERMISSION_LABELS[permission]} ({permission})
-                {permission === 'VIEW' && createForm.staffPermissions.includes('MANAGE')
-                  ? ' — được bao hàm bởi Quản lý'
-                  : ''}
+                {permission === STAFF_PERMISSION.VIEW &&
+                createForm.staffPermissions.includes(STAFF_PERMISSION.MANAGE)
+                  ? ' — được bao hàm bởi Quản trị'
+                  : permission === STAFF_PERMISSION.SCORE && createForm.hasRegistrantRole
+                    ? ' — xung đột với vai trò Người dùng'
+                    : ''}
               </Label>
             </div>
           ))}
+          <div className='inline-flex items-center gap-2'>
+            <Checkbox
+              id='user-create-role-registrant'
+              checked={createForm.hasRegistrantRole}
+              disabled={busy || createForm.staffPermissions.includes(STAFF_PERMISSION.SCORE)}
+              onCheckedChange={(checked) =>
+                setCreateForm({
+                  ...createForm,
+                  hasRegistrantRole: checked === true,
+                })
+              }
+            />
+            <Label htmlFor='user-create-role-registrant' className='cursor-pointer'>
+              Người dùng / Người đăng ký (REGISTRANT)
+              {createForm.staffPermissions.includes(STAFF_PERMISSION.SCORE)
+                ? ' — không được gán chung với Giám khảo'
+                : ''}
+            </Label>
+          </div>
         </fieldset>
         <FormField label='Lý do tạo tài khoản' htmlFor='user-editor-16'>
           <Input

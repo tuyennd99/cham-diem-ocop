@@ -1,16 +1,33 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Role, StaffPermission } from '@prisma/client';
-import type { AdminUsersQueryDto, CreateAdminUserDto, ResetAdminUserPasswordDto, UpdateAdminUserProfileDto, UpdateAdminUserStatusDto } from '../dtos/admin-users.dto';
+import { USER_KIND } from '../constants/auth';
 import type {
+  AdminUsersQueryDto,
+  CreateAdminUserDto,
   CreateOrganizationUnitDto,
   OrganizationUnitsQueryDto,
+  UpdateAdminUserProfileDto,
+  UpdateAdminUserStatusDto,
   UpdateOrganizationUnitDto,
 } from '../dtos/admin-users.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { databaseObject } from '../prisma/sql';
 import type { RequestMeta } from '../types/auth';
 import { writeAudit } from '../utils/audit-log';
-import { applyStaffAccess, assertStaffManager, createStaff, lockStaffMutation } from '../utils/staff-access';
+import {
+  applyStaffAccess,
+  assertStaffManager,
+  createStaff,
+  lockStaffMutation,
+} from '../utils/staff-access';
+
+const unitSummarySelect = {
+  id: true,
+  code: true,
+  name: true,
+  managingAgencyId: true,
+  managingAgency: { select: { id: true, code: true, name: true } },
+} as const;
 
 const adminUserSelect = {
   id: true,
@@ -18,12 +35,26 @@ const adminUserSelect = {
   fullName: true,
   phone: true,
   role: true,
+  roles: true,
   staffPermissions: true,
   organizationUnitId: true,
-  organizationUnit: { select: { id: true, code: true, name: true } },
+  organizationUnit: { select: unitSummarySelect },
   verified: true,
   isActive: true,
   createdAt: true,
+} as const;
+
+const organizationUnitSelect = {
+  id: true,
+  code: true,
+  name: true,
+  description: true,
+  order: true,
+  isActive: true,
+  managingAgencyId: true,
+  managingAgency: { select: { id: true, code: true, name: true } },
+  createdAt: true,
+  updatedAt: true,
 } as const;
 
 @Injectable()
@@ -31,32 +62,59 @@ export class AdminUsersRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async listUsers(query: AdminUsersQueryDto) {
-    const { page, limit, q, permission, organizationUnitId, isActive, verified, kind } = query;
+    const {
+      page,
+      limit,
+      q,
+      permission,
+      role,
+      organizationUnitId,
+      isActive,
+      verified,
+      kind,
+    } = query;
     const skip = (page - 1) * limit;
     if (!Number.isSafeInteger(page) || !Number.isSafeInteger(skip)) {
       throw new BadRequestException('Pagination exceeds the safe integer range');
     }
     const conditions: Prisma.UserWhereInput[] = [];
     if (q) {
-      conditions.push({ OR: [
-        { fullName: { contains: q, mode: 'insensitive' } },
-        { email: { contains: q, mode: 'insensitive' } },
-        { phone: { contains: q, mode: 'insensitive' } },
-      ] });
+      conditions.push({
+        OR: [
+          { fullName: { contains: q, mode: 'insensitive' } },
+          { email: { contains: q, mode: 'insensitive' } },
+          { phone: { contains: q, mode: 'insensitive' } },
+        ],
+      });
     }
     if (permission === StaffPermission.VIEW) {
-      conditions.push({ OR: [
-        { staffPermissions: { has: StaffPermission.VIEW } },
-        { staffPermissions: { has: StaffPermission.MANAGE } },
-      ], role: { not: Role.REGISTRANT } });
+      conditions.push({
+        OR: [
+          { staffPermissions: { has: StaffPermission.VIEW } },
+          { staffPermissions: { has: StaffPermission.MANAGE } },
+        ],
+        role: { not: Role.REGISTRANT },
+      });
     } else if (permission) {
       conditions.push({
         staffPermissions: { has: permission },
         role: { not: Role.REGISTRANT },
       });
     }
+    if (role) {
+      conditions.push({
+        OR: [{ role }, { roles: { has: role } }],
+      });
+    }
     const where: Prisma.UserWhereInput = {
-      ...(kind ? { role: kind === 'STAFF' ? { not: Role.REGISTRANT } : Role.REGISTRANT } : {}),
+      ...(kind
+        ? {
+            role:
+              kind === USER_KIND.STAFF
+                ? { not: Role.REGISTRANT }
+                : Role.REGISTRANT,
+          }
+        : {}),
       ...(organizationUnitId ? { organizationUnitId } : {}),
       ...(isActive === undefined ? {} : { isActive }),
       ...(verified === undefined ? {} : { verified }),
@@ -136,69 +194,81 @@ export class AdminUsersRepository {
     actorId: string,
     meta: RequestMeta,
   ) {
-    return this.prisma.$transaction(async (tx) => {
-      await lockStaffMutation(tx);
-      await assertStaffManager(tx, actorId);
-      const current = await tx.user.findUnique({
-        where: { id },
-        select: {
-          id: true,
-          role: true,
-          staffPermissions: true,
-          organizationUnitId: true,
-          isActive: true,
-          verified: true,
-        },
-      });
-      if (!current) return null;
-      if (current.role !== Role.REGISTRANT) {
-        await applyStaffAccess(
-          tx,
-          id,
-          {
-            staffPermissions: current.staffPermissions,
-            organizationUnitId: current.organizationUnitId,
-            isActive: input.isActive,
-            reason: input.reason,
+    return this.prisma.$transaction(
+      async (tx) => {
+        await lockStaffMutation(tx);
+        await assertStaffManager(tx, actorId);
+        const current = await tx.user.findUnique({
+          where: { id },
+          select: {
+            id: true,
+            role: true,
+            roles: true,
+            staffPermissions: true,
+            organizationUnitId: true,
+            isActive: true,
+            verified: true,
           },
-          actorId,
-          meta,
-          'user.status_update',
+        });
+        if (!current) return null;
+        if (current.role !== Role.REGISTRANT || current.staffPermissions.length > 0) {
+          await applyStaffAccess(
+            tx,
+            id,
+            {
+              staffPermissions: current.staffPermissions,
+              roles: current.roles,
+              organizationUnitId: current.organizationUnitId,
+              isActive: input.isActive,
+              reason: input.reason,
+            },
+            actorId,
+            meta,
+            'user.status_update',
+          );
+          return tx.user.findUnique({ where: { id }, select: adminUserSelect });
+        }
+        await tx.$queryRaw(
+          Prisma.sql`SELECT "id" FROM ${databaseObject('users')} WHERE "id" = ${id} FOR UPDATE`,
         );
-        return tx.user.findUnique({ where: { id }, select: adminUserSelect });
-      }
-      await tx.$queryRaw(
-        Prisma.sql`SELECT "id" FROM ${databaseObject('users')} WHERE "id" = ${id} FOR UPDATE`,
-      );
-      const before = await tx.user.findUnique({
-        where: { id },
-        select: { id: true, role: true, isActive: true, verified: true },
-      });
-      if (!before) return null;
-      if (before.isActive === input.isActive) {
-        return tx.user.findUnique({ where: { id }, select: adminUserSelect });
-      }
-      const after = await tx.user.update({
-        where: { id },
-        data: { isActive: input.isActive, tokenVersion: { increment: 1 } },
-        select: adminUserSelect,
-      });
-      await writeAudit(tx, {
-        actorId,
-        action: 'user.status_update',
-        entityType: 'User',
-        entityId: id,
-        beforeData: before,
-        afterData: { role: after.role, isActive: after.isActive, verified: after.verified },
-        reason: input.reason,
-        ...meta,
-      });
-      return after;
-    }, { timeout: 15000, maxWait: 10000 });
+        const before = await tx.user.findUnique({
+          where: { id },
+          select: { id: true, role: true, isActive: true, verified: true },
+        });
+        if (!before) return null;
+        if (before.isActive === input.isActive) {
+          return tx.user.findUnique({ where: { id }, select: adminUserSelect });
+        }
+        const after = await tx.user.update({
+          where: { id },
+          data: { isActive: input.isActive, tokenVersion: { increment: 1 } },
+          select: adminUserSelect,
+        });
+        await writeAudit(tx, {
+          actorId,
+          action: 'user.status_update',
+          entityType: 'User',
+          entityId: id,
+          beforeData: before,
+          afterData: {
+            role: after.role,
+            isActive: after.isActive,
+            verified: after.verified,
+          },
+          reason: input.reason,
+          ...meta,
+        });
+        return after;
+      },
+      { timeout: 15000, maxWait: 10000 },
+    );
   }
 
   findUserRole(id: string) {
-    return this.prisma.user.findUnique({ where: { id }, select: { role: true } });
+    return this.prisma.user.findUnique({
+      where: { id },
+      select: { role: true },
+    });
   }
 
   resetUserPassword(
@@ -228,7 +298,11 @@ export class AdminUsersRepository {
         entityType: 'User',
         entityId: id,
         beforeData: before,
-        afterData: { email: after.email, verified: after.verified, passwordReset: true },
+        afterData: {
+          email: after.email,
+          verified: after.verified,
+          passwordReset: true,
+        },
         reason,
         ...meta,
       });
@@ -237,7 +311,7 @@ export class AdminUsersRepository {
   }
 
   async listOrganizationUnits(query: OrganizationUnitsQueryDto) {
-    const { page, limit, q, isActive } = query;
+    const { page, limit, q, isActive, managingAgencyId } = query;
     const skip = (page - 1) * limit;
     if (!Number.isSafeInteger(page) || !Number.isSafeInteger(skip)) {
       throw new BadRequestException(
@@ -246,6 +320,7 @@ export class AdminUsersRepository {
     }
     const where: Prisma.OrganizationUnitWhereInput = {
       isActive,
+      ...(managingAgencyId ? { managingAgencyId } : {}),
       ...(q
         ? {
             OR: [
@@ -259,6 +334,7 @@ export class AdminUsersRepository {
       [
         this.prisma.organizationUnit.findMany({
           where,
+          select: organizationUnitSelect,
           orderBy: [{ order: 'asc' }, { id: 'asc' }],
           skip,
           take: limit,
@@ -277,7 +353,19 @@ export class AdminUsersRepository {
   ) {
     const { reason, ...data } = input;
     return this.prisma.$transaction(async (tx) => {
-      const unit = await tx.organizationUnit.create({ data });
+      if (data.managingAgencyId) {
+        const agency = await tx.managingAgency.findUnique({
+          where: { id: data.managingAgencyId },
+          select: { id: true },
+        });
+        if (!agency) {
+          throw new BadRequestException('Managing agency not found');
+        }
+      }
+      const unit = await tx.organizationUnit.create({
+        data,
+        select: organizationUnitSelect,
+      });
       await writeAudit(tx, {
         actorId,
         action: 'organization_unit.create',
@@ -302,11 +390,24 @@ export class AdminUsersRepository {
       await tx.$queryRaw(
         Prisma.sql`SELECT "id" FROM ${databaseObject('organization_units')} WHERE "id" = ${id} FOR UPDATE`,
       );
-      const before = await tx.organizationUnit.findUnique({ where: { id } });
+      const before = await tx.organizationUnit.findUnique({
+        where: { id },
+        select: organizationUnitSelect,
+      });
       if (!before) throw new NotFoundException('Organization unit not found');
+      if (changes.managingAgencyId) {
+        const agency = await tx.managingAgency.findUnique({
+          where: { id: changes.managingAgencyId },
+          select: { id: true },
+        });
+        if (!agency) {
+          throw new BadRequestException('Managing agency not found');
+        }
+      }
       const after = await tx.organizationUnit.update({
         where: { id },
         data: changes,
+        select: organizationUnitSelect,
       });
       await writeAudit(tx, {
         actorId,

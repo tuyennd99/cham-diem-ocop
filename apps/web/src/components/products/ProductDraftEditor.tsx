@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AdminUserRecord, LocalityRecord } from '@ocop/shared';
-import { useForm, useStore } from '@tanstack/react-form';
+import { useForm, useSelector } from '@tanstack/react-form';
+import { useQueryClient } from '@tanstack/react-query';
 import { Link, useBlocker, useNavigate } from '@tanstack/react-router';
 import { omit, toString } from 'lodash';
-import { toast } from 'sonner';
 import {
   Building2,
   CheckCircle2,
@@ -11,11 +11,14 @@ import {
   FileUp,
   Film,
   MapPin,
+  RefreshCw,
   Trash2,
   Upload,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import AlertError from '@/components/alert-error';
 import { FormField } from '@/components/form-field';
+import { ImagePreviewDialog, type ImagePreviewItem } from '@/components/image-preview-dialog';
 import PageSpin from '@/components/page-spin';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -43,13 +46,20 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { ALL } from '../../constants/consts';
-import { FilterPanel, PageContainer, PageHeader, PageSection } from '../../layouts';
+import { myRegistrationUnitsApi } from '../../api';
 import {
-  ADMINISTRATIVE_PROVINCES,
-  useWardsByProvince,
-} from '../../lib/administrative-divisions';
+  ALL,
+  ATTACHMENT_TYPE,
+  DRAFT_SAVE_RESULT_KIND,
+  PRODUCT_REGISTRATION_TYPE,
+  PRODUCT_STATUS,
+  PRODUCT_WORKSPACE_MODE,
+  STAFF_PERMISSION,
+} from '../../constants/consts';
+import { queryKeys } from '../../constants/query-key';
+import { FilterPanel, PageContainer, PageHeader, PageSection } from '../../layouts';
 import { toAdminProductApiQuery, type AdminProductSearch } from '../../lib/admin-search';
+import { ADMINISTRATIVE_PROVINCES, useWardsByProvince } from '../../lib/administrative-divisions';
 import { ApiError, messageOf } from '../../lib/api-error';
 import {
   isVideoFileName,
@@ -66,13 +76,26 @@ import {
   productEditorCategories,
   type ProductEditorCategory,
 } from '../../lib/product-editor-categories';
-import { canStartProductDraftSave, saveProductDraft } from '../../lib/save-product-draft';
+import {
+  applyRegistrationUnitToEditorValues,
+  hasEnteredUnitDataToConfirm,
+  QUICK_SAVE_UNIT_OUTCOME,
+  quickSaveRegistrationUnitAfterDraft,
+} from '../../lib/registration-units';
+import {
+  canStartProductDraftSave,
+  getFirstInvalidProductDraftElementId,
+  getProductDraftFieldErrors,
+  getProductSubmitValidationIssues,
+  getUnsavedPrefilledDraftFields,
+  saveProductDraft,
+} from '../../lib/save-product-draft';
 import { hasStaffPermission } from '../../lib/session-contract';
 import { AttachmentLink } from '../../pages/registrant/AttachmentLink';
 import { useAdminProductDetail, useProductDraftCommands } from '../../queries/admin-products';
 import { useRegistrantOwners } from '../../queries/admin-users';
 import { useCategories, useLocalities } from '../../queries/common';
-import { useMyProduct } from '../../queries/registrant';
+import { useMyProduct, useMyRegistrationUnits } from '../../queries/registrant';
 import type {
   RegistrantProduct as Product,
   RegistrantFormData as RegistrationFormData,
@@ -83,10 +106,12 @@ interface ProductEditorFormValues extends RegistrationFormData {
   description: string;
   categoryId: string;
   localityId: string;
+  localityName: string;
+  localityCode: string;
 }
 
 export interface ProductDraftEditorProps {
-  mode: 'owner' | 'admin';
+  mode: typeof PRODUCT_WORKSPACE_MODE.OWNER | typeof PRODUCT_WORKSPACE_MODE.ADMIN;
   productId?: string;
   returnSearch?: AdminProductSearch;
 }
@@ -104,6 +129,8 @@ const emptyEditorValues: ProductEditorFormValues = {
   description: '',
   categoryId: '',
   localityId: '',
+  localityName: '',
+  localityCode: '',
   entityName: '',
   representativeName: '',
   representativeTitle: '',
@@ -112,15 +139,15 @@ const emptyEditorValues: ProductEditorFormValues = {
   phone: '',
   email: '',
   registrationType: '',
-  sampleQuantity: '',
+  sampleQuantity: '1',
   assessmentYear: currentYear,
   declarationAccepted: false,
 };
 
 const validRegistrationTypes = new Set<RegistrationFormData['registrationType']>([
-  'FIRST',
-  'UPGRADE',
-  'REASSESSMENT',
+  PRODUCT_REGISTRATION_TYPE.FIRST,
+  PRODUCT_REGISTRATION_TYPE.UPGRADE,
+  PRODUCT_REGISTRATION_TYPE.REASSESSMENT,
 ]);
 
 function toEditorValues(
@@ -132,11 +159,15 @@ function toEditorValues(
   const savedPhone = toString(saved.phone);
   const savedEmail = toString(saved.email);
   const savedProvince = toString(saved.provinceName) || (product.locality?.provinceName ?? '');
+  const savedLocalityName = toString(saved.localityName) || (product.locality?.name ?? '');
+  const savedLocalityCode = toString(saved.localityCode) || (product.locality?.code ?? '');
   return {
     name: product.name,
     description: product.description ?? '',
     categoryId: product.category.id,
     localityId: product.localityId ?? '',
+    localityName: savedLocalityName,
+    localityCode: savedLocalityCode,
     entityName: toString(saved.entityName),
     representativeName: toString(saved.representativeName),
     representativeTitle: toString(saved.representativeTitle),
@@ -145,7 +176,7 @@ function toEditorValues(
     phone: savedPhone || (accountDefaults?.phone ?? ''),
     email: savedEmail || (accountDefaults?.email ?? ''),
     registrationType: validRegistrationTypes.has(rawType) ? rawType : '',
-    sampleQuantity: toString(saved.sampleQuantity),
+    sampleQuantity: saved.sampleQuantity == null ? '' : toString(saved.sampleQuantity),
     assessmentYear: saved.assessmentYear == null ? currentYear : toString(saved.assessmentYear),
     declarationAccepted: saved.declarationAccepted === true,
   };
@@ -157,6 +188,8 @@ function areEditorValuesEqual(a: ProductEditorFormValues, b: ProductEditorFormVa
     a.description === b.description &&
     a.categoryId === b.categoryId &&
     a.localityId === b.localityId &&
+    a.localityName === b.localityName &&
+    a.localityCode === b.localityCode &&
     a.entityName === b.entityName &&
     a.representativeName === b.representativeName &&
     a.representativeTitle === b.representativeTitle &&
@@ -172,23 +205,39 @@ function areEditorValuesEqual(a: ProductEditorFormValues, b: ProductEditorFormVa
 }
 
 const unitTextFields: Array<{
-  name: 'entityName' | 'phone' | 'email';
+  name: 'entityName' | 'representativeName' | 'representativeTitle' | 'phone' | 'email';
   label: string;
   maxLength: number;
   type?: string;
   autoComplete?: string;
   placeholder?: string;
   disabled?: boolean;
+  required?: boolean;
 }> = [
   {
     name: 'entityName',
     label: 'Tên đơn vị sản xuất',
     maxLength: 255,
-    placeholder: 'Nhập tên đầy đủ',
+    placeholder: 'Nhập tên đầy đủ của chủ thể / đơn vị sản xuất',
+    required: true,
+  },
+  {
+    name: 'representativeName',
+    label: 'Người đại diện',
+    maxLength: 255,
+    placeholder: 'Nhập họ và tên người đại diện pháp luật',
+    required: true,
+  },
+  {
+    name: 'representativeTitle',
+    label: 'Chức vụ người đại diện',
+    maxLength: 255,
+    placeholder: 'VD: Giám đốc, Chủ cơ sở…',
+    required: true,
   },
   {
     name: 'phone',
-    label: 'Số điện thoại liên hệ',
+    label: 'Số điện thoại',
     maxLength: 30,
     type: 'tel',
     autoComplete: 'tel',
@@ -196,7 +245,7 @@ const unitTextFields: Array<{
   },
   {
     name: 'email',
-    label: 'Email liên hệ',
+    label: 'Email',
     maxLength: 320,
     type: 'email',
     autoComplete: 'email',
@@ -207,29 +256,38 @@ const unitTextFields: Array<{
 
 export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDraftEditorProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const session = useSession();
-  const canManage = hasStaffPermission(session?.user, 'MANAGE');
+  const canManage = hasStaffPermission(session?.user, STAFF_PERMISSION.MANAGE);
   const listReturnSearch = returnSearch ? toAdminProductApiQuery(returnSearch) : undefined;
   const categoryQuery = useCategories();
-  const ownerProductQuery = useMyProduct(mode === 'owner' ? productId : undefined);
+  const ownerProductQuery = useMyProduct(
+    mode === PRODUCT_WORKSPACE_MODE.OWNER ? productId : undefined,
+  );
+  const registrationUnitsQuery = useMyRegistrationUnits(mode === PRODUCT_WORKSPACE_MODE.OWNER);
+  const [selectedUnitId, setSelectedUnitId] = useState('');
+  const [saveUnitToSettings, setSaveUnitToSettings] = useState(false);
+  const [unitSaveNotice, setUnitSaveNotice] = useState('');
   const adminProductQuery = useAdminProductDetail(
-    'registrations',
+    PRODUCT_WORKSPACE_MODE.REGISTRATIONS,
     canManage,
-    mode === 'admin' ? (productId ?? '') : '',
+    mode === PRODUCT_WORKSPACE_MODE.ADMIN ? (productId ?? '') : '',
   );
   const queryProduct =
-    mode === 'owner'
+    mode === PRODUCT_WORKSPACE_MODE.OWNER
       ? ownerProductQuery.data
       : (adminProductQuery.data?.data as Product | undefined);
-  const productError = mode === 'owner' ? ownerProductQuery.error : adminProductQuery.error;
+  const productError =
+    mode === PRODUCT_WORKSPACE_MODE.OWNER ? ownerProductQuery.error : adminProductQuery.error;
   const productPending =
     Boolean(productId) &&
-    (mode === 'owner' ? ownerProductQuery.isPending : adminProductQuery.isPending);
-  const [localityPage, setLocalityPage] = useState(1);
+    (mode === PRODUCT_WORKSPACE_MODE.OWNER
+      ? ownerProductQuery.isPending
+      : adminProductQuery.isPending);
   const [selectedProvince, setSelectedProvince] = useState('');
   const localityQuery = useLocalities(
     {
-      page: localityPage,
+      page: 1,
       limit: 100,
       provinceName: selectedProvince || undefined,
     },
@@ -240,9 +298,10 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
   const [loaded, setLoaded] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [videoFiles, setVideoFiles] = useState<File[]>([]);
-  const defaultPhone = mode === 'owner' ? (session?.user.phone ?? '') : '';
+  const [previewImageIndex, setPreviewImageIndex] = useState<number | null>(null);
+  const defaultPhone = mode === PRODUCT_WORKSPACE_MODE.OWNER ? (session?.user.phone ?? '') : '';
   const defaultEmail =
-    mode === 'owner'
+    mode === PRODUCT_WORKSPACE_MODE.OWNER
       ? (session?.user.email ?? '')
       : (adminProductQuery.data?.data.registrant.email ?? '');
   const firstCategoryId = categoryQuery.data?.[0]?.id ?? '';
@@ -254,6 +313,8 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
   }));
   const createStarted = useRef(false);
   const savedNavigation = useRef(false);
+  const submitIntentRef = useRef<'draft' | 'submit'>('draft');
+  const [activeSubmitIntent, setActiveSubmitIntent] = useState<'draft' | 'submit'>('draft');
   const initializedKeyRef = useRef<string | null>(null);
   const baselineRef = useRef<EditorBaselineSnapshot>({
     values: baselineValues,
@@ -261,6 +322,8 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
     reason: '',
   });
   const [error, setError] = useState('');
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
   const [reviewRequired, setReviewRequired] = useState(false);
   const [uploadFailureId, setUploadFailureId] = useState('');
   const [createOutcomeUnknown, setCreateOutcomeUnknown] = useState(false);
@@ -271,13 +334,9 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
   const [registrantPage, setRegistrantPage] = useState(1);
   const registrantLookup = useRegistrantOwners(
     { page: registrantPage, limit: 20, q: registrantSearch || undefined },
-    mode === 'admin' && canManage && !productId,
+    mode === PRODUCT_WORKSPACE_MODE.ADMIN && canManage && !productId,
   );
   const commands = useProductDraftCommands(mode, { registrantId, reason });
-  const localityResolve = useLocalities(
-    { page: 1, limit: 20, q: product?.locality?.code || undefined },
-    Boolean(product?.localityId),
-  );
 
   const form = useForm({
     defaultValues: baselineValues,
@@ -286,46 +345,68 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
         !canStartProductDraftSave({
           reviewRequired,
           createOutcomeUnknown,
-          declarationAccepted: value.declarationAccepted,
         })
       )
         return;
       setError('');
+      setValidationErrors([]);
+      setUnitSaveNotice('');
       createStarted.current = false;
       setCreateOutcomeUnknown(false);
       setUploadFailureId('');
+      const submitAfterSave = submitIntentRef.current === 'submit';
+      let latestSavedProduct: Product | null = product;
       try {
         const selectedFiles = [...files, ...videoFiles];
-        if (mode === 'admin' && !product && !registrantId) {
+        if (mode === PRODUCT_WORKSPACE_MODE.ADMIN && !product && !registrantId) {
           throw new Error('Chọn người đăng ký trước khi lưu hồ sơ.');
         }
-        if (mode === 'admin' && !reason.trim()) {
+        if (mode === PRODUCT_WORKSPACE_MODE.ADMIN && !reason.trim()) {
           throw new Error('Nhập lý do thao tác trước khi lưu hồ sơ.');
         }
-        if (!value.name.trim()) {
-          throw new Error('Nhập tên sản phẩm trước khi lưu hồ sơ.');
+        const categoryUnavailable =
+          submitAfterSave &&
+          categories.some((item) => item.id === value.categoryId && item.unavailable);
+        const intent = submitAfterSave ? 'submit' : 'draft';
+        const fieldErrors = getProductDraftFieldErrors(
+          {
+            ...value,
+            categoryUnavailable,
+          },
+          { intent },
+        );
+        const submitIssues = getProductSubmitValidationIssues(
+          {
+            ...value,
+            categoryUnavailable,
+          },
+          { intent },
+        );
+        if (submitIssues.length > 0) {
+          setHasAttemptedSubmit(true);
+          setValidationErrors(submitIssues);
+          setError(submitIssues[0]);
+          toast.error(submitIssues[0]);
+          const firstInvalidId = getFirstInvalidProductDraftElementId(fieldErrors);
+          if (firstInvalidId && typeof document !== 'undefined') {
+            requestAnimationFrame(() => {
+              const targetEl = document.getElementById(firstInvalidId);
+              if (targetEl) {
+                targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                targetEl.focus({ preventScroll: true });
+              }
+            });
+          }
+          return;
         }
-        if (!value.categoryId) {
-          throw new Error('Chọn danh mục sản phẩm trước khi lưu hồ sơ.');
-        }
-        if (!value.declarationAccepted) {
-          throw new Error('Vui lòng xác nhận cam kết trước khi lưu bản nháp.');
-        }
-        const sampleQuantity = value.sampleQuantity === '' ? 0 : Number(value.sampleQuantity);
-        if (!Number.isInteger(sampleQuantity) || sampleQuantity < 0 || sampleQuantity > 100000) {
-          throw new Error('Số lượng mẫu phải là số nguyên từ 0 đến 100000.');
-        }
-        const assessmentYear =
-          value.assessmentYear === '' ? undefined : Number(value.assessmentYear);
-        if (
-          assessmentYear !== undefined &&
-          (!Number.isInteger(assessmentYear) || assessmentYear < 2020 || assessmentYear > 2100)
-        ) {
-          throw new Error('Năm đánh giá phải là số nguyên từ 2020 đến 2100.');
-        }
+        setHasAttemptedSubmit(false);
+        const sampleQuantity = Number(value.sampleQuantity.trim());
+        const assessmentYear = Number(value.assessmentYear.trim());
         const registrationFields = omit(value, ['name', 'description', 'categoryId', 'localityId']);
         const formData = {
           ...registrationFields,
+          localityName: value.localityName?.trim() || undefined,
+          localityCode: value.localityCode?.trim() || undefined,
           registrationType: value.registrationType || undefined,
           sampleQuantity,
           assessmentYear,
@@ -349,9 +430,22 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
           payload,
           files: selectedFiles,
           commands: saveCommands,
+          submitAfterSave,
+          onDraftSaved: (saved) => {
+            latestSavedProduct = saved;
+            setProduct(saved);
+            setFiles([]);
+            setVideoFiles([]);
+            setBaselineValues(value);
+            baselineRef.current = {
+              values: value,
+              registrantId,
+              reason,
+            };
+          },
         });
         setProduct(result.product);
-        if (result.kind === 'upload-failed') {
+        if (result.kind === DRAFT_SAVE_RESULT_KIND.UPLOAD_FAILED) {
           setReviewRequired(result.requiresReview);
           setUploadFailureId(result.product.id);
           setFiles(result.remainingFiles.filter((file) => !isVideoFileName(file.name)));
@@ -361,7 +455,6 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
           return;
         }
 
-        toast.success(product ? 'Đã cập nhật hồ sơ sản phẩm.' : 'Đã tạo hồ sơ sản phẩm mới.');
         setReviewRequired(false);
         setFiles([]);
         setVideoFiles([]);
@@ -371,9 +464,68 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
           registrantId,
           reason,
         };
+
+        const unitSaveResult = await quickSaveRegistrationUnitAfterDraft({
+          enabled: mode === PRODUCT_WORKSPACE_MODE.OWNER && saveUnitToSettings && !selectedUnitId,
+          values: value,
+          createUnit: (unitPayload) => myRegistrationUnitsApi.create(unitPayload),
+        });
+
+        const isSubmittedResult = result.kind === DRAFT_SAVE_RESULT_KIND.SUBMITTED;
+        const wasReturned = product?.status === PRODUCT_STATUS.RETURNED;
+
+        if (unitSaveResult.kind === QUICK_SAVE_UNIT_OUTCOME.SAVED) {
+          setSelectedUnitId(unitSaveResult.nextSelectedUnitId);
+          setSaveUnitToSettings(false);
+          await queryClient.invalidateQueries({
+            queryKey: queryKeys.myRegistrationUnits.all,
+          });
+          toast.success(
+            isSubmittedResult
+              ? wasReturned
+                ? 'Đã nộp lại hồ sơ sản phẩm và lưu đơn vị vào Cấu hình chung.'
+                : 'Đã lưu, nộp hồ sơ sản phẩm và lưu đơn vị vào Cấu hình chung.'
+              : product
+                ? 'Đã cập nhật hồ sơ sản phẩm và lưu đơn vị vào Cấu hình chung.'
+                : 'Đã tạo hồ sơ sản phẩm mới và lưu đơn vị vào Cấu hình chung.',
+          );
+        } else if (unitSaveResult.kind !== QUICK_SAVE_UNIT_OUTCOME.SKIPPED) {
+          setSaveUnitToSettings(unitSaveResult.nextSaveUnitToSettings);
+          setUnitSaveNotice(unitSaveResult.message);
+          if (unitSaveResult.kind === QUICK_SAVE_UNIT_OUTCOME.UNKNOWN) {
+            void queryClient.invalidateQueries({
+              queryKey: queryKeys.myRegistrationUnits.all,
+            });
+          }
+          if (isSubmittedResult) {
+            toast.warning(
+              unitSaveResult.message.replace(
+                /^Đã lưu hồ sơ sản phẩm nháp/,
+                wasReturned ? 'Đã nộp lại hồ sơ sản phẩm' : 'Đã nộp hồ sơ sản phẩm',
+              ),
+            );
+          } else {
+            setError(unitSaveResult.message);
+            toast.error(unitSaveResult.message);
+            return;
+          }
+        } else {
+          toast.success(
+            isSubmittedResult
+              ? mode === PRODUCT_WORKSPACE_MODE.ADMIN
+                ? 'Đã lưu và nộp hồ sơ thay người đăng ký.'
+                : wasReturned
+                  ? 'Đã lưu và nộp lại hồ sơ sản phẩm.'
+                  : 'Đã lưu và nộp hồ sơ sản phẩm.'
+              : product
+                ? 'Đã cập nhật hồ sơ sản phẩm.'
+                : 'Đã tạo hồ sơ sản phẩm mới.',
+          );
+        }
+
         savedNavigation.current = true;
         try {
-          if (mode === 'owner') {
+          if (mode === PRODUCT_WORKSPACE_MODE.OWNER) {
             await navigate({ to: '/my/products/$id', params: { id: result.product.id } });
           } else {
             await navigate({
@@ -387,7 +539,9 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
         }
       } catch (cause) {
         const unknownCreate =
-          createStarted.current && !product && !(cause instanceof ApiError && cause.status < 500);
+          createStarted.current &&
+          !latestSavedProduct &&
+          !(cause instanceof ApiError && cause.status < 500);
         setCreateOutcomeUnknown(unknownCreate);
         const errMsg = unknownCreate
           ? `${messageOf(cause)} Chưa rõ hồ sơ đã được tạo chưa; kiểm tra danh sách trước khi tạo lại.`
@@ -398,14 +552,14 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
     },
   });
 
-  const currentValues = useStore(form.store, (state) => state.values);
+  const currentValues = useSelector(form.store, (state) => state.values);
   const staticWardsInProvince = useWardsByProvince(currentValues.provinceName);
   const dirty =
     loaded &&
     (!areEditorValuesEqual(currentValues, baselineValues) ||
       files.length > 0 ||
       videoFiles.length > 0 ||
-      (mode === 'admin' &&
+      (mode === PRODUCT_WORKSPACE_MODE.ADMIN &&
         (registrantId !== baselineRef.current.registrantId ||
           reason !== baselineRef.current.reason)));
 
@@ -439,6 +593,9 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
       return;
     }
     initializedKeyRef.current = sourceKey;
+    setSelectedUnitId('');
+    setSaveUnitToSettings(false);
+    setUnitSaveNotice('');
 
     if (current) {
       const nextValues = toEditorValues(current, {
@@ -482,6 +639,34 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
     queryProduct,
   ]);
 
+  const previewItems = useMemo<ImagePreviewItem[]>(() => {
+    const list: ImagePreviewItem[] = [];
+    if (product) {
+      for (const att of product.attachments) {
+        if (att.type === ATTACHMENT_TYPE.IMAGE && !isVideoFileName(att.fileName)) {
+          list.push({
+            kind: 'private',
+            id: att.id,
+            name: att.fileName,
+            mode,
+            productId: product.id,
+          });
+        }
+      }
+    }
+    files.forEach((f, idx) => {
+      if (f.type.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(f.name)) {
+        list.push({
+          kind: 'file',
+          id: `local-file-${idx}-${f.name}-${f.size}`,
+          name: f.name,
+          file: f,
+        });
+      }
+    });
+    return list;
+  }, [files, mode, product]);
+
   if (productId && !loaded && !error) {
     return (
       <PageContainer className='admin-draft-editor' aria-busy='true'>
@@ -492,12 +677,12 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
   if (productId && loaded && !product) {
     return (
       <PageContainer className='admin-draft-editor'>
-        <h1>Không tìm thấy bản nháp</h1>
+        <h1>Không tìm thấy hồ sơ</h1>
         <AlertError
-          title='Không tìm thấy bản nháp'
+          title='Không tìm thấy hồ sơ'
           errors={[error || 'Hồ sơ không tồn tại hoặc bạn không có quyền truy cập.']}
         />
-        {mode === 'owner' ? (
+        {mode === PRODUCT_WORKSPACE_MODE.OWNER ? (
           <Button asChild variant='secondary' className='mt-3'>
             <Link to='/my/products'>Quay lại danh sách</Link>
           </Button>
@@ -511,12 +696,16 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
       </PageContainer>
     );
   }
-  if (product && product.status !== 'DRAFT') {
+  if (
+    product &&
+    product.status !== PRODUCT_STATUS.DRAFT &&
+    product.status !== PRODUCT_STATUS.RETURNED
+  ) {
     return (
       <PageContainer className='admin-draft-editor'>
         <h1>Hồ sơ đã nộp</h1>
-        <p>Hồ sơ không còn ở trạng thái bản nháp nên không thể sửa.</p>
-        {mode === 'owner' ? (
+        <p>Hồ sơ không còn ở trạng thái bản nháp hoặc bị trả lại nên không thể sửa.</p>
+        {mode === PRODUCT_WORKSPACE_MODE.OWNER ? (
           <Button asChild variant='secondary' className='mt-3'>
             <Link to='/my/products/$id' params={{ id: product.id }}>
               Quay lại hồ sơ
@@ -534,18 +723,12 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
   }
 
   const localityOptions: LocalityRecord[] = localityQuery.data?.data ?? [];
-  const localityTotalPages = localityQuery.data?.meta?.totalPages ?? 0;
   const registrantTotalPages = registrantLookup.data?.meta?.totalPages ?? 0;
   const localityIdsByName = new Map(
     localityOptions.map((loc) => [loc.name.trim().toLowerCase(), loc]),
   );
-  const currentLocalityUnavailable = Boolean(
-    product?.localityId &&
-    localityResolve.data &&
-    !localityResolve.data.data.some(({ id }) => id === product.localityId),
-  );
   const activeRegistrantSummary =
-    mode === 'owner'
+    mode === PRODUCT_WORKSPACE_MODE.OWNER
       ? `${session?.user.fullName ?? 'Người đăng ký'}${session?.user.email ? ` (${session.user.email})` : ''}`
       : product
         ? `${adminProductQuery.data?.data.registrant.fullName ?? ''} (${adminProductQuery.data?.data.registrant.email ?? ''})`
@@ -554,7 +737,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
           : 'Chưa chọn người đăng ký';
 
   const backLink =
-    mode === 'admin' ? (
+    mode === PRODUCT_WORKSPACE_MODE.ADMIN ? (
       <Link
         className='text-link text-sm'
         to={product ? '/admin/registrations/$id' : '/admin/registrations'}
@@ -576,7 +759,28 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
   const selectedLocalityObj =
     localityOptions.find(({ id }) => id === currentValues.localityId) ??
     (product?.localityId === currentValues.localityId ? product?.locality : null);
+  const selectedLocalityDisplay = selectedLocalityObj
+    ? `${selectedLocalityObj.name} · ${selectedLocalityObj.provinceName}`
+    : currentValues.localityName && currentValues.provinceName
+      ? `${currentValues.localityName} · ${currentValues.provinceName}`
+      : null;
   const selectedCategoryObj = categories.find(({ id }) => id === currentValues.categoryId);
+  const liveFieldErrors = hasAttemptedSubmit
+    ? getProductDraftFieldErrors(
+        {
+          ...currentValues,
+          categoryUnavailable:
+            activeSubmitIntent === 'submit' && Boolean(selectedCategoryObj?.unavailable),
+        },
+        { intent: activeSubmitIntent },
+      )
+    : {};
+  const unsavedPrefilledFields = product
+    ? getUnsavedPrefilledDraftFields(product.formData, currentValues, product.localityId)
+    : [];
+  const hasCompleteLocality =
+    Boolean(currentValues.provinceName.trim()) &&
+    Boolean(currentValues.localityId || currentValues.localityName.trim());
   const savedAttachments = product?.attachments ?? [];
   const savedVideoCount = savedAttachments.filter((att) => isVideoFileName(att.fileName)).length;
   const savedFileCount = savedAttachments.length - savedVideoCount;
@@ -585,20 +789,34 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
   const totalRegularFilesCount = savedFileCount + files.length;
   const totalVideoFilesCount = savedVideoCount + videoFiles.length;
 
+  const currentComboValue = currentValues.localityId
+    ? currentValues.localityId
+    : currentValues.localityName
+      ? `ward-name:${currentValues.localityName}`
+      : ALL;
+
   return (
     <PageContainer className='admin-draft-editor'>
       <PageHeader
         backLink={backLink}
         title={
-          mode === 'admin'
+          mode === PRODUCT_WORKSPACE_MODE.ADMIN
             ? productId
               ? 'Sửa phiếu đăng ký'
               : 'Nhập phiếu đăng ký'
             : productId
-              ? 'Sửa hồ sơ nháp'
+              ? product?.status === PRODUCT_STATUS.RETURNED
+                ? 'Chỉnh sửa hồ sơ bị trả lại'
+                : 'Sửa hồ sơ nháp'
               : 'Tạo hồ sơ sản phẩm'
         }
-        badge={<Badge variant='secondary'>Bản nháp</Badge>}
+        badge={
+          <Badge
+            variant={product?.status === PRODUCT_STATUS.RETURNED ? 'destructive' : 'secondary'}
+          >
+            {product?.status === PRODUCT_STATUS.RETURNED ? 'Bị trả lại' : 'Bản nháp'}
+          </Badge>
+        }
         description={
           <>
             Người đăng ký: <strong>{activeRegistrantSummary}</strong> · Đính kèm tối đa{' '}
@@ -608,7 +826,17 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
         }
       />
 
-      {mode === 'admin' && (
+      {product?.status === PRODUCT_STATUS.RETURNED && product.returnReason && (
+        <div
+          role='alert'
+          className='border-destructive/40 bg-destructive/10 mb-4 rounded-lg border p-4 text-sm'
+        >
+          <p className='text-destructive font-semibold'>Lý do trả lại từ Chủ trì / Quản trị:</p>
+          <p className='mt-1'>{product.returnReason}</p>
+        </div>
+      )}
+
+      {mode === PRODUCT_WORKSPACE_MODE.ADMIN && (
         <FilterPanel className='draft-admin-context-card'>
           <div className='draft-step-header'>
             <div>
@@ -765,9 +993,15 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
         <div className='draft-editor-main'>
           <form
             id='product-draft-form'
+            noValidate
             className='admin-form filter-card draft-form-card'
             onSubmit={(event) => {
               event.preventDefault();
+              const submitter = (event.nativeEvent as SubmitEvent)
+                .submitter as HTMLButtonElement | null;
+              const nextIntent = submitter?.dataset.submitIntent === 'submit' ? 'submit' : 'draft';
+              submitIntentRef.current = nextIntent;
+              setActiveSubmitIntent(nextIntent);
               void form.handleSubmit();
             }}
           >
@@ -778,70 +1012,225 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                   <div>
                     <h2 id='draft-section-unit'>Đơn vị đăng ký</h2>
                     <p className='draft-step-subtitle'>
-                      Khai báo địa bàn hành chính, đơn vị sản xuất và thông tin liên hệ.
+                      Khai báo địa bàn hành chính (Tỉnh/Thành phố, Xã/Phường), đơn vị sản xuất và
+                      thông tin liên hệ.
                     </p>
                   </div>
                   <span className='draft-step-counter'>Phần 1 / 3</span>
                 </div>
 
-                <div className='admin-step-grid draft-fields-grid draft-unit-fields-grid'>
+                <div
+                  className={
+                    mode === PRODUCT_WORKSPACE_MODE.OWNER
+                      ? 'draft-unit-section-grid draft-unit-section-grid--owner'
+                      : 'draft-unit-section-grid draft-unit-section-grid--admin'
+                  }
+                >
+                  {mode === PRODUCT_WORKSPACE_MODE.OWNER && (
+                    <div className='draft-lookup-box draft-unit-col draft-unit-col--saved'>
+                      <div className='draft-lookup-header'>
+                        <div className='draft-lookup-title'>
+                          <Building2 className='size-4' aria-hidden='true' />
+                          <span>Đơn vị đăng ký trong Cấu hình chung</span>
+                        </div>
+                        <Link to='/my/settings' className='text-link text-xs'>
+                          Quản lý đơn vị đã lưu →
+                        </Link>
+                      </div>
+
+                      <div className='grid gap-3'>
+                        <div data-slot='form-field' className='flex min-w-0 flex-col gap-1.5'>
+                          <div className='flex flex-wrap items-center justify-between gap-2'>
+                            <Label htmlFor='editor-registration-unit-select'>
+                              Chọn đơn vị đã lưu hoặc nhập trực tiếp
+                            </Label>
+                            {!selectedUnitId && (
+                              <div className='flex items-center gap-2'>
+                                <Checkbox
+                                  id='editor-save-unit-to-settings'
+                                  checked={saveUnitToSettings}
+                                  onCheckedChange={(checked) => {
+                                    setSaveUnitToSettings(checked === true);
+                                    setUnitSaveNotice('');
+                                  }}
+                                />
+                                <Label
+                                  htmlFor='editor-save-unit-to-settings'
+                                  className='cursor-pointer text-sm font-medium'
+                                >
+                                  Lưu đơn vị
+                                </Label>
+                              </div>
+                            )}
+                          </div>
+                          <Combobox
+                            value={selectedUnitId || ALL}
+                            disabled={registrationUnitsQuery.isLoading}
+                            onValueChange={(value) => {
+                              if (value === ALL || !value) {
+                                setSelectedUnitId('');
+                                setSaveUnitToSettings(false);
+                                setUnitSaveNotice('');
+                                return;
+                              }
+                              const unit = registrationUnitsQuery.data?.find(
+                                (item) => item.id === value,
+                              );
+                              if (!unit) return;
+                              if (
+                                hasEnteredUnitDataToConfirm(currentValues, unit, defaultPhone) &&
+                                !window.confirm(
+                                  'Thay thế thông tin đơn vị đã nhập bằng thông tin của đơn vị đã chọn?',
+                                )
+                              ) {
+                                return;
+                              }
+                              const nextValues = applyRegistrationUnitToEditorValues(
+                                currentValues,
+                                unit,
+                              );
+                              setSelectedUnitId(unit.id);
+                              setSaveUnitToSettings(false);
+                              setUnitSaveNotice('');
+                              setSelectedProvince(nextValues.provinceName);
+                              form.setFieldValue('entityName', nextValues.entityName);
+                              form.setFieldValue(
+                                'representativeName',
+                                nextValues.representativeName,
+                              );
+                              form.setFieldValue(
+                                'representativeTitle',
+                                nextValues.representativeTitle,
+                              );
+                              form.setFieldValue('phone', nextValues.phone);
+                              form.setFieldValue('contactAddress', nextValues.contactAddress);
+                              form.setFieldValue('provinceName', nextValues.provinceName);
+                              form.setFieldValue('localityName', nextValues.localityName);
+                              form.setFieldValue('localityCode', nextValues.localityCode);
+                              form.setFieldValue('localityId', nextValues.localityId);
+                            }}
+                          >
+                            <ComboboxAnchor>
+                              <ComboboxInput
+                                id='editor-registration-unit-select'
+                                placeholder={
+                                  registrationUnitsQuery.isLoading
+                                    ? 'Đang tải danh sách đơn vị đã lưu…'
+                                    : 'Nhập thông tin đơn vị trực tiếp (nhập tay)'
+                                }
+                              />
+                              <ComboboxTrigger />
+                            </ComboboxAnchor>
+                            <ComboboxContent>
+                              <ComboboxEmpty>Không tìm thấy đơn vị đăng ký phù hợp.</ComboboxEmpty>
+                              <ComboboxItem value={ALL}>
+                                Nhập thông tin đơn vị trực tiếp (nhập tay)
+                              </ComboboxItem>
+                              {(registrationUnitsQuery.data ?? []).map((unit) => (
+                                <ComboboxItem key={unit.id} value={unit.id}>
+                                  {unit.entityName} · {unit.localityName}, {unit.provinceName}
+                                </ComboboxItem>
+                              ))}
+                            </ComboboxContent>
+                          </Combobox>
+                        </div>
+
+                        {registrationUnitsQuery.error && (
+                          <div className='flex items-start gap-2'>
+                            <div className='min-w-0 flex-1'>
+                              <AlertError
+                                title='Không thể tải danh sách đơn vị đã lưu'
+                                errors={[messageOf(registrationUnitsQuery.error)]}
+                              />
+                            </div>
+                            <Button
+                              type='button'
+                              variant='secondary'
+                              size='icon-sm'
+                              title='Thử tải lại danh sách đơn vị'
+                              aria-label='Thử tải lại danh sách đơn vị'
+                              disabled={registrationUnitsQuery.isFetching}
+                              onClick={() => void registrationUnitsQuery.refetch()}
+                            >
+                              <RefreshCw
+                                className={
+                                  registrationUnitsQuery.isFetching
+                                    ? 'size-4 animate-spin'
+                                    : 'size-4'
+                                }
+                                aria-hidden='true'
+                              />
+                            </Button>
+                          </div>
+                        )}
+
+                        {!registrationUnitsQuery.isLoading &&
+                          !registrationUnitsQuery.error &&
+                          (registrationUnitsQuery.data?.length ?? 0) === 0 && (
+                            <p className='draft-lookup-hint' role='status'>
+                              Chưa có đơn vị nào trong Cấu hình chung. Bạn có thể nhập trực tiếp
+                              thông tin đơn vị bên dưới hoặc thêm trước tại{' '}
+                              <Link to='/my/settings' className='text-link'>
+                                Cấu hình chung
+                              </Link>
+                              .
+                            </p>
+                          )}
+
+                        {unitSaveNotice && (
+                          <div className='space-y-2'>
+                            <AlertError
+                              title='Hồ sơ nháp đã được lưu nhưng chưa lưu được đơn vị'
+                              errors={[unitSaveNotice]}
+                            />
+                            <p className='text-xs'>
+                              <Link to='/my/settings' className='text-link'>
+                                Mở Cấu hình chung để kiểm tra danh sách đơn vị →
+                              </Link>
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   <form.Field name='localityId'>
                     {(field) => (
-                      <div className='draft-lookup-box admin-step-span-2'>
+                      <div className='draft-lookup-box draft-unit-col draft-unit-col--locality'>
                         <div className='draft-lookup-header'>
                           <div className='draft-lookup-title'>
                             <MapPin className='size-4' aria-hidden='true' />
                             <span>Địa bàn hành chính &amp; năm đăng ký</span>
-                          </div>
-                          <div className='draft-lookup-pager'>
-                            <Button
-                              variant='secondary'
-                              size='sm'
-                              type='button'
-                              disabled={localityPage <= 1 || localityQuery.isPending}
-                              onClick={() => setLocalityPage((page) => Math.max(1, page - 1))}
-                            >
-                              Trước
-                            </Button>
-                            <span className='draft-lookup-page-label'>
-                              {localityTotalPages > 0
-                                ? `Trang ${localityPage}/${localityTotalPages}`
-                                : 'Chưa có địa bàn'}
-                            </span>
-                            <Button
-                              variant='secondary'
-                              size='sm'
-                              type='button'
-                              disabled={
-                                localityQuery.isPending ||
-                                localityTotalPages === 0 ||
-                                localityPage >= localityTotalPages
-                              }
-                              onClick={() => setLocalityPage((page) => page + 1)}
-                            >
-                              Sau
-                            </Button>
                           </div>
                         </div>
 
                         <div className='draft-lookup-grid draft-lookup-grid--locality'>
                           <form.Field name='provinceName'>
                             {(provinceField) => (
-                              <FormField label='Tỉnh/thành phố' htmlFor='product-draft-1'>
+                              <FormField
+                                label='Tỉnh/thành phố'
+                                htmlFor='product-draft-1'
+                                required
+                                error={liveFieldErrors.provinceName}
+                              >
                                 <Combobox
                                   value={provinceField.state.value || ALL}
                                   onValueChange={(value) => {
                                     const nextProvince = value === ALL ? '' : value;
                                     provinceField.handleChange(nextProvince);
                                     setSelectedProvince(nextProvince);
-                                    setLocalityPage(1);
                                     const currentLoc =
                                       localityOptions.find(({ id }) => id === field.state.value) ??
                                       (product?.localityId === field.state.value
                                         ? product?.locality
                                         : null);
-                                    if (!nextProvince || currentLoc?.provinceName !== nextProvince) {
+                                    if (
+                                      !nextProvince ||
+                                      currentLoc?.provinceName !== nextProvince
+                                    ) {
                                       field.handleChange('');
+                                      form.setFieldValue('localityName', '');
+                                      form.setFieldValue('localityCode', '');
                                     }
                                   }}
                                 >
@@ -858,8 +1247,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                                     <ComboboxItem value={ALL}>Chọn tỉnh/thành phố</ComboboxItem>
                                     {provinceField.state.value &&
                                       !ADMINISTRATIVE_PROVINCES.some(
-                                        (item) =>
-                                          item.name_with_type === provinceField.state.value,
+                                        (item) => item.name_with_type === provinceField.state.value,
                                       ) && (
                                         <ComboboxItem value={provinceField.state.value}>
                                           {provinceField.state.value}
@@ -880,15 +1268,41 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                           </form.Field>
 
                           <FormField
-                            label='Chọn địa bàn hành chính (xã/phường)'
+                            label='Chọn địa bàn'
                             htmlFor='editor-locality-select'
+                            required
+                            error={liveFieldErrors.localityId}
                           >
                             <Combobox
-                              value={field.state.value || ALL}
+                              value={currentComboValue}
                               disabled={!currentValues.provinceName}
-                              onValueChange={(value) =>
-                                field.handleChange(value === ALL ? '' : value)
-                              }
+                              onValueChange={(value) => {
+                                if (value === ALL || !value) {
+                                  field.handleChange('');
+                                  form.setFieldValue('localityName', '');
+                                  form.setFieldValue('localityCode', '');
+                                  return;
+                                }
+                                if (value.startsWith('ward-name:')) {
+                                  const wardName = value.slice('ward-name:'.length);
+                                  const matchedWard = staticWardsInProvince.find(
+                                    (w) => w.name_with_type === wardName || w.name === wardName,
+                                  );
+                                  field.handleChange('');
+                                  form.setFieldValue('localityName', wardName);
+                                  form.setFieldValue(
+                                    'localityCode',
+                                    matchedWard ? `XP${matchedWard.code}` : '',
+                                  );
+                                  return;
+                                }
+                                const existingLoc =
+                                  localityOptions.find((l) => l.id === value) ??
+                                  (product?.localityId === value ? product?.locality : null);
+                                field.handleChange(value);
+                                form.setFieldValue('localityName', existingLoc?.name ?? '');
+                                form.setFieldValue('localityCode', existingLoc?.code ?? '');
+                              }}
                             >
                               <ComboboxAnchor>
                                 <ComboboxInput
@@ -911,23 +1325,31 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                                 <ComboboxItem value={ALL}>Chưa chọn địa bàn</ComboboxItem>
                                 {product?.localityId &&
                                   !localityOptions.some(({ id }) => id === product.localityId) && (
-                                    <ComboboxItem
-                                      value={product.localityId}
-                                      disabled={currentLocalityUnavailable}
-                                    >
+                                    <ComboboxItem value={product.localityId}>
                                       {product.locality
                                         ? `${product.locality.name} · ${product.locality.provinceName}`
                                         : product.localityId}
-                                      {currentLocalityUnavailable ? ' · Đã ngừng hiệu lực' : ''}
                                     </ComboboxItem>
                                   )}
                                 {localityOptions.map((locality) => (
                                   <ComboboxItem key={locality.id} value={locality.id}>
-                                    {locality.eventName && locality.eventName !== locality.name
-                                      ? `${locality.eventName} · ${locality.name} · ${locality.provinceName}`
-                                      : `${locality.name} · ${locality.provinceName}`}
+                                    {`${locality.name} · ${locality.provinceName}`}
                                   </ComboboxItem>
                                 ))}
+                                {!currentValues.localityId &&
+                                  currentValues.localityName &&
+                                  !staticWardsInProvince.some(
+                                    (ward) =>
+                                      ward.name_with_type === currentValues.localityName &&
+                                      !localityIdsByName.has(
+                                        ward.name_with_type.trim().toLowerCase(),
+                                      ) &&
+                                      !localityIdsByName.has(ward.name.trim().toLowerCase()),
+                                  ) && (
+                                    <ComboboxItem value={`ward-name:${currentValues.localityName}`}>
+                                      {currentValues.localityName} · {currentValues.provinceName}
+                                    </ComboboxItem>
+                                  )}
                                 {staticWardsInProvince
                                   .filter(
                                     (ward) =>
@@ -938,10 +1360,9 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                                   .map((ward) => (
                                     <ComboboxItem
                                       key={`ward-${ward.code}`}
-                                      value={`ward-${ward.code}`}
-                                      disabled
+                                      value={`ward-name:${ward.name_with_type}`}
                                     >
-                                      {ward.name_with_type} (chưa mở đăng ký trên hệ thống)
+                                      {ward.name_with_type} · {currentValues.provinceName}
                                     </ComboboxItem>
                                   ))}
                               </ComboboxContent>
@@ -950,7 +1371,12 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
 
                           <form.Field name='assessmentYear'>
                             {(yearField) => (
-                              <FormField label='Năm đăng ký' htmlFor='product-draft-2'>
+                              <FormField
+                                label='Năm đăng ký'
+                                htmlFor='product-draft-2'
+                                required
+                                error={liveFieldErrors.assessmentYear}
+                              >
                                 <Input
                                   id='product-draft-2'
                                   type='number'
@@ -972,61 +1398,69 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                             errors={[messageOf(localityQuery.error)]}
                           />
                         )}
-                        {currentLocalityUnavailable && (
-                          <p role='status' className='draft-lookup-hint is-warning'>
-                            Địa bàn đã ngừng hoạt động hoặc hết hiệu lực. Bản nháp vẫn giữ lựa chọn;
-                            hãy chọn địa bàn đang hiệu lực trước khi nộp.
-                          </p>
-                        )}
-                        {!field.state.value && (
-                          <p className='draft-lookup-hint'>
-                            Có thể lưu nháp khi chưa chọn địa bàn; cần chọn địa bàn hiệu lực trước
-                            khi nộp hồ sơ.
-                          </p>
-                        )}
                       </div>
                     )}
                   </form.Field>
 
-                  {unitTextFields.map((config) => (
-                    <form.Field key={config.name} name={config.name}>
-                      {(field) => (
-                        <FormField label={config.label} htmlFor={`product-draft-${config.name}`}>
-                          <Input
-                            id={`product-draft-${config.name}`}
-                            type={config.type}
-                            autoComplete={config.autoComplete}
-                            value={field.state.value}
-                            readOnly={config.disabled}
-                            disabled={config.disabled}
-                            onBlur={field.handleBlur}
-                            onChange={(event) => field.handleChange(event.target.value)}
-                            placeholder={config.placeholder}
-                            maxLength={config.maxLength}
-                          />
-                        </FormField>
-                      )}
-                    </form.Field>
-                  ))}
+                  <div className='draft-unit-col draft-unit-col--details'>
+                    <div className='draft-lookup-header draft-unit-details-header'>
+                      <div className='draft-lookup-title'>
+                        <Building2 className='size-4' aria-hidden='true' />
+                        <span>Đơn vị sản xuất &amp; thông tin liên hệ</span>
+                      </div>
+                    </div>
 
-                  <form.Field name='contactAddress'>
-                    {(field) => (
-                      <FormField
-                        label='Địa chỉ liên hệ'
-                        htmlFor='product-draft-3'
-                        className='draft-address-field'
-                      >
-                        <Input
-                          id='product-draft-3'
-                          value={field.state.value}
-                          onBlur={field.handleBlur}
-                          onChange={(event) => field.handleChange(event.target.value)}
-                          placeholder='Số nhà, đường, xã/phường, tỉnh/thành phố…'
-                          maxLength={1000}
-                        />
-                      </FormField>
-                    )}
-                  </form.Field>
+                    <div className='admin-step-grid draft-fields-grid draft-unit-fields-grid'>
+                      {unitTextFields.map((config) => (
+                        <form.Field key={config.name} name={config.name}>
+                          {(field) => (
+                            <FormField
+                              label={config.label}
+                              htmlFor={`product-draft-${config.name}`}
+                              required={config.required}
+                              error={
+                                config.name !== 'email' ? liveFieldErrors[config.name] : undefined
+                              }
+                            >
+                              <Input
+                                id={`product-draft-${config.name}`}
+                                type={config.type}
+                                autoComplete={config.autoComplete}
+                                value={field.state.value}
+                                readOnly={config.disabled}
+                                disabled={config.disabled}
+                                onBlur={field.handleBlur}
+                                onChange={(event) => field.handleChange(event.target.value)}
+                                placeholder={config.placeholder}
+                                maxLength={config.maxLength}
+                              />
+                            </FormField>
+                          )}
+                        </form.Field>
+                      ))}
+
+                      <form.Field name='contactAddress'>
+                        {(field) => (
+                          <FormField
+                            label='Địa chỉ liên hệ'
+                            htmlFor='product-draft-3'
+                            required
+                            error={liveFieldErrors.contactAddress}
+                            className='draft-address-field'
+                          >
+                            <Input
+                              id='product-draft-3'
+                              value={field.state.value}
+                              onBlur={field.handleBlur}
+                              onChange={(event) => field.handleChange(event.target.value)}
+                              placeholder='Số nhà, đường, xã/phường, tỉnh/thành phố…'
+                              maxLength={1000}
+                            />
+                          </FormField>
+                        )}
+                      </form.Field>
+                    </div>
+                  </div>
                 </div>
               </section>
 
@@ -1045,7 +1479,12 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                 <div className='admin-step-grid draft-fields-grid draft-product-fields-grid'>
                   <form.Field name='name'>
                     {(field) => (
-                      <FormField label='Tên sản phẩm' htmlFor='product-draft-4' required>
+                      <FormField
+                        label='Tên sản phẩm'
+                        htmlFor='product-draft-4'
+                        required
+                        error={liveFieldErrors.name}
+                      >
                         <Input
                           id='product-draft-4'
                           value={field.state.value}
@@ -1060,7 +1499,12 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
 
                   <form.Field name='categoryId'>
                     {(field) => (
-                      <FormField label='Danh mục sản phẩm' htmlFor='product-draft-5' required>
+                      <FormField
+                        label='Danh mục sản phẩm'
+                        htmlFor='product-draft-5'
+                        required
+                        error={liveFieldErrors.categoryId}
+                      >
                         <Combobox
                           value={field.state.value || ALL}
                           onValueChange={(value) => field.handleChange(value === ALL ? '' : value)}
@@ -1102,7 +1546,12 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
 
                   <form.Field name='registrationType'>
                     {(field) => (
-                      <FormField label='Lần đăng ký đánh giá' htmlFor='product-draft-7'>
+                      <FormField
+                        label='Lần đăng ký đánh giá'
+                        htmlFor='product-draft-7'
+                        required
+                        error={liveFieldErrors.registrationType}
+                      >
                         <Combobox
                           value={field.state.value || ALL}
                           onValueChange={(value) =>
@@ -1124,11 +1573,40 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                           <ComboboxContent>
                             <ComboboxEmpty>Không tìm thấy.</ComboboxEmpty>
                             <ComboboxItem value={ALL}>Chọn lần đăng ký</ComboboxItem>
-                            <ComboboxItem value='FIRST'>Lần đầu</ComboboxItem>
-                            <ComboboxItem value='UPGRADE'>Nâng hạng</ComboboxItem>
-                            <ComboboxItem value='REASSESSMENT'>Đánh giá lại</ComboboxItem>
+                            <ComboboxItem value={PRODUCT_REGISTRATION_TYPE.FIRST}>
+                              Lần đầu
+                            </ComboboxItem>
+                            <ComboboxItem value={PRODUCT_REGISTRATION_TYPE.UPGRADE}>
+                              Nâng hạng
+                            </ComboboxItem>
+                            <ComboboxItem value={PRODUCT_REGISTRATION_TYPE.REASSESSMENT}>
+                              Đánh giá lại
+                            </ComboboxItem>
                           </ComboboxContent>
                         </Combobox>
+                      </FormField>
+                    )}
+                  </form.Field>
+
+                  <form.Field name='sampleQuantity'>
+                    {(field) => (
+                      <FormField
+                        label='Số lượng mẫu sản phẩm gửi kèm'
+                        htmlFor='product-draft-sample-qty'
+                        required
+                        error={liveFieldErrors.sampleQuantity}
+                      >
+                        <Input
+                          id='product-draft-sample-qty'
+                          type='number'
+                          min={1}
+                          max={100000}
+                          step={1}
+                          value={field.state.value}
+                          onBlur={field.handleBlur}
+                          onChange={(event) => field.handleChange(event.target.value)}
+                          placeholder='VD: 2'
+                        />
                       </FormField>
                     )}
                   </form.Field>
@@ -1239,22 +1717,39 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                             </FileUploadDropzone>
 
                             <FileUploadList className='mt-2'>
-                              {files.map((file, index) => (
-                                <FileUploadItem
-                                  key={`${index}:${file.name}:${file.size}`}
-                                  value={file}
-                                  className='draft-file-item'
-                                >
-                                  <FileUploadItemPreview />
-                                  <FileUploadItemMetadata />
-                                  <FileUploadItemDelete asChild>
-                                    <Button type='button' variant='secondary' size='sm'>
-                                      <Trash2 className='size-3.5' aria-hidden='true' />
-                                      <span>Xóa</span>
-                                    </Button>
-                                  </FileUploadItemDelete>
-                                </FileUploadItem>
-                              ))}
+                              {files.map((file, index) => {
+                                const filePreviewId = `local-file-${index}-${file.name}-${file.size}`;
+                                const previewIdx = previewItems.findIndex(
+                                  (item) => item.id === filePreviewId,
+                                );
+                                return (
+                                  <FileUploadItem
+                                    key={`${index}:${file.name}:${file.size}`}
+                                    value={file}
+                                    className='draft-file-item'
+                                  >
+                                    {previewIdx >= 0 ? (
+                                      <button
+                                        type='button'
+                                        className='cursor-zoom-in rounded border-0 bg-transparent p-0'
+                                        onClick={() => setPreviewImageIndex(previewIdx)}
+                                        aria-label={`Xem trước ảnh ${file.name}`}
+                                      >
+                                        <FileUploadItemPreview />
+                                      </button>
+                                    ) : (
+                                      <FileUploadItemPreview />
+                                    )}
+                                    <FileUploadItemMetadata />
+                                    <FileUploadItemDelete asChild>
+                                      <Button type='button' variant='secondary' size='sm'>
+                                        <Trash2 className='size-3.5' aria-hidden='true' />
+                                        <span>Xóa</span>
+                                      </Button>
+                                    </FileUploadItemDelete>
+                                  </FileUploadItem>
+                                );
+                              })}
                             </FileUploadList>
 
                             {files.length > 1 && (
@@ -1386,10 +1881,14 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                               *
                             </span>
                           </Label>
-                          <p>
-                            Cần tích chọn cam kết này trước khi lưu bản nháp và nộp hồ sơ chính
-                            thức.
-                          </p>
+                          {liveFieldErrors.declarationAccepted && (
+                            <p
+                              role='alert'
+                              className='field-error text-destructive mt-1 text-xs leading-relaxed font-medium'
+                            >
+                              {liveFieldErrors.declarationAccepted}
+                            </p>
+                          )}
                         </div>
                       </div>
                     )}
@@ -1398,33 +1897,62 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
               </section>
             </div>
 
-            {error && <AlertError title='Không thể lưu bản nháp' errors={[error]} />}
+            {(validationErrors.length > 0 || error) && (
+              <AlertError
+                title={
+                  validationErrors.length > 0
+                    ? activeSubmitIntent === 'submit'
+                      ? 'Chưa đủ thông tin để nộp hồ sơ'
+                      : 'Chưa đủ thông tin để lưu bản nháp'
+                    : 'Không thể lưu bản nháp'
+                }
+                className='mt-4'
+                errors={validationErrors.length > 0 ? validationErrors : [error]}
+              />
+            )}
           </form>
 
           {product && (
             <PageSection aria-label='Tệp đã lưu' className='p-5'>
               <div className='flex flex-wrap items-center justify-between gap-2'>
-                <p className='text-sm font-semibold'>Hồ sơ đã lưu: {product.id}</p>
+                <p className='text-sm font-semibold'>Tệp đính kèm đã tải lên hồ sơ</p>
                 <Badge variant='secondary'>{product.attachments.length} tệp đính kèm</Badge>
               </div>
               <ul className='draft-saved-attachments mt-3'>
-                {product.attachments.map((file) => (
-                  <li key={file.id} className='draft-saved-attachment-item'>
-                    <span className='attachment-ext-tag'>
-                      {isVideoFileName(file.fileName)
-                        ? 'VIDEO'
-                        : file.type === 'IMAGE'
-                          ? 'ẢNH'
-                          : 'TÀI LIỆU'}
-                    </span>
-                    <AttachmentLink
-                      mode={mode}
-                      productId={product.id}
-                      attachmentId={file.id}
-                      name={file.fileName}
-                    />
-                  </li>
-                ))}
+                {product.attachments.map((file) => {
+                  const previewIdx =
+                    file.type === ATTACHMENT_TYPE.IMAGE && !isVideoFileName(file.fileName)
+                      ? previewItems.findIndex((item) => item.id === file.id)
+                      : -1;
+                  return (
+                    <li key={file.id} className='draft-saved-attachment-item'>
+                      <span className='attachment-ext-tag'>
+                        {isVideoFileName(file.fileName)
+                          ? 'VIDEO'
+                          : file.type === ATTACHMENT_TYPE.IMAGE
+                            ? 'ẢNH'
+                            : 'TÀI LIỆU'}
+                      </span>
+                      {previewIdx >= 0 ? (
+                        <Button
+                          type='button'
+                          variant='link'
+                          className='attachment-link-btn text-link h-auto min-h-0 justify-start p-0 text-left font-semibold break-all whitespace-normal'
+                          onClick={() => setPreviewImageIndex(previewIdx)}
+                        >
+                          {file.fileName}
+                        </Button>
+                      ) : (
+                        <AttachmentLink
+                          mode={mode}
+                          productId={product.id}
+                          attachmentId={file.id}
+                          name={file.fileName}
+                        />
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </PageSection>
           )}
@@ -1436,9 +1964,19 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
               <h3>Tóm tắt phiếu đăng ký</h3>
             </div>
             <p className='draft-summary-note'>
-              Bạn có thể lưu bản nháp sau khi nhập <strong>Tên sản phẩm</strong>, chọn{' '}
-              <strong>Danh mục sản phẩm</strong> và <strong>xác nhận cam kết</strong>.
+              Hoàn thành đầy đủ các mục đánh dấu <strong>*</strong> và ít nhất{' '}
+              <strong>Số điện thoại hoặc Email</strong> trước khi lưu bản nháp hoặc nộp hồ sơ.
             </p>
+            {unsavedPrefilledFields.length > 0 && (
+              <div
+                role='status'
+                className='rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-900 dark:text-amber-200'
+              >
+                <strong>Dữ liệu tự điền chưa được lưu:</strong> {unsavedPrefilledFields.join(', ')}.
+                Bấm <strong>Lưu bản nháp</strong> hoặc <strong>Lưu hồ sơ</strong> để lưu vào hệ
+                thống.
+              </div>
+            )}
 
             <ul className='draft-checklist'>
               <li className={currentValues.name.trim() ? 'is-done' : undefined}>
@@ -1457,8 +1995,14 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                   <span>{currentValues.name.trim() || 'Chưa nhập tên sản phẩm'}</span>
                 </div>
               </li>
-              <li className={currentValues.categoryId ? 'is-done' : undefined}>
-                {currentValues.categoryId ? (
+              <li
+                className={
+                  currentValues.categoryId && !selectedCategoryObj?.unavailable
+                    ? 'is-done'
+                    : undefined
+                }
+              >
+                {currentValues.categoryId && !selectedCategoryObj?.unavailable ? (
                   <CheckCircle2 className='size-4' aria-hidden='true' />
                 ) : (
                   <CircleDashed className='size-4' aria-hidden='true' />
@@ -1470,21 +2014,34 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                       *
                     </span>
                   </strong>
-                  <span>{selectedCategoryObj?.name ?? 'Chưa chọn danh mục'}</span>
+                  <span>
+                    {selectedCategoryObj
+                      ? selectedCategoryObj.unavailable
+                        ? `${selectedCategoryObj.name} (ngừng sử dụng — cần đổi khi nộp)`
+                        : selectedCategoryObj.name
+                      : 'Chưa chọn danh mục'}
+                  </span>
                 </div>
               </li>
-              <li className={currentValues.localityId ? 'is-done' : undefined}>
-                {currentValues.localityId ? (
+              <li className={hasCompleteLocality ? 'is-done' : undefined}>
+                {hasCompleteLocality ? (
                   <CheckCircle2 className='size-4' aria-hidden='true' />
                 ) : (
                   <CircleDashed className='size-4' aria-hidden='true' />
                 )}
                 <div>
-                  <strong>Địa bàn hành chính</strong>
+                  <strong>
+                    Địa bàn hành chính{' '}
+                    <span className='label-required-mark' aria-hidden='true'>
+                      *
+                    </span>
+                  </strong>
                   <span>
-                    {selectedLocalityObj
-                      ? `${selectedLocalityObj.name} · ${selectedLocalityObj.provinceName}`
-                      : 'Chưa chọn xã/phường'}
+                    {hasCompleteLocality
+                      ? selectedLocalityDisplay
+                      : !currentValues.provinceName.trim()
+                        ? 'Chưa chọn Tỉnh/Thành phố và Xã/Phường'
+                        : 'Chưa chọn Xã/Phường'}
                   </span>
                 </div>
               </li>
@@ -1525,7 +2082,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
               </div>
               <div>
                 <dt>Năm đánh giá</dt>
-                <dd>{currentValues.assessmentYear || currentYear}</dd>
+                <dd>{currentValues.assessmentYear.trim() || 'Chưa nhập'}</dd>
               </div>
               <div>
                 <dt>Tệp ảnh / PDF</dt>
@@ -1542,27 +2099,55 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
             </dl>
 
             <form.Subscribe selector={(state) => state.isSubmitting}>
-              {(busy) => (
-                <div className='draft-summary-actions'>
-                  <Button
-                    type='submit'
-                    form='product-draft-form'
-                    variant='primary'
-                    className='w-full'
-                    loading={busy}
-                    disabled={
-                      busy ||
-                      !canStartProductDraftSave({
-                        reviewRequired,
-                        createOutcomeUnknown,
-                        declarationAccepted: currentValues.declarationAccepted,
-                      })
-                    }
-                  >
-                    {busy ? 'Đang lưu…' : 'Lưu bản nháp'}
-                  </Button>
-                </div>
-              )}
+              {(busy) => {
+                const canStart = canStartProductDraftSave({
+                  reviewRequired,
+                  createOutcomeUnknown,
+                });
+                const isReturned = product?.status === PRODUCT_STATUS.RETURNED;
+                return (
+                  <div className='draft-summary-actions'>
+                    <Button
+                      type='submit'
+                      form='product-draft-form'
+                      data-submit-intent='submit'
+                      variant='primary'
+                      className='w-full'
+                      loading={busy && activeSubmitIntent === 'submit'}
+                      disabled={busy || !canStart}
+                      onClick={() => {
+                        submitIntentRef.current = 'submit';
+                        setActiveSubmitIntent('submit');
+                      }}
+                    >
+                      {busy && activeSubmitIntent === 'submit'
+                        ? 'Đang lưu và nộp…'
+                        : isReturned
+                          ? 'Lưu và nộp lại'
+                          : 'Lưu hồ sơ'}
+                    </Button>
+                    <Button
+                      type='submit'
+                      form='product-draft-form'
+                      data-submit-intent='draft'
+                      variant='secondary'
+                      className='w-full'
+                      loading={busy && activeSubmitIntent === 'draft'}
+                      disabled={busy || !canStart}
+                      onClick={() => {
+                        submitIntentRef.current = 'draft';
+                        setActiveSubmitIntent('draft');
+                      }}
+                    >
+                      {busy && activeSubmitIntent === 'draft'
+                        ? 'Đang lưu…'
+                        : isReturned
+                          ? 'Lưu thay đổi'
+                          : 'Lưu bản nháp'}
+                    </Button>
+                  </div>
+                );
+              }}
             </form.Subscribe>
           </div>
         </aside>
@@ -1572,7 +2157,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
           {reviewRequired
             ? 'Hãy kiểm tra tệp đã nhận trước khi chọn lại.'
             : 'Có thể thử lại các tệp còn lại hoặc kiểm tra hồ sơ.'}{' '}
-          {mode === 'owner' ? (
+          {mode === PRODUCT_WORKSPACE_MODE.OWNER ? (
             <Link className='text-link' to='/my/products/$id' params={{ id: uploadFailureId }}>
               Mở hồ sơ và danh sách tệp
             </Link>
@@ -1590,7 +2175,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
       )}
       {createOutcomeUnknown && (
         <p className='form-note'>
-          {mode === 'owner' ? (
+          {mode === PRODUCT_WORKSPACE_MODE.OWNER ? (
             <Link className='text-link' to='/my/products'>
               Mở danh sách nháp trước khi tạo lại
             </Link>
@@ -1601,6 +2186,12 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
           )}
         </p>
       )}
+      <ImagePreviewDialog
+        items={previewItems}
+        activeIndex={previewImageIndex}
+        onIndexChange={setPreviewImageIndex}
+        contextLabel={currentValues.name.trim() || product?.name || 'Hồ sơ sản phẩm'}
+      />
     </PageContainer>
   );
 }

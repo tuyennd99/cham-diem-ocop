@@ -1,0 +1,228 @@
+import { useEffect, useMemo, useState } from 'react';
+import Lightbox, { type SlideImage } from 'yet-another-react-lightbox';
+import Captions from 'yet-another-react-lightbox/plugins/captions';
+import Counter from 'yet-another-react-lightbox/plugins/counter';
+import Download from 'yet-another-react-lightbox/plugins/download';
+import Fullscreen from 'yet-another-react-lightbox/plugins/fullscreen';
+import Thumbnails from 'yet-another-react-lightbox/plugins/thumbnails';
+import Zoom from 'yet-another-react-lightbox/plugins/zoom';
+import 'yet-another-react-lightbox/styles.css';
+import 'yet-another-react-lightbox/plugins/captions.css';
+import 'yet-another-react-lightbox/plugins/counter.css';
+import 'yet-another-react-lightbox/plugins/thumbnails.css';
+import {
+  getCachedAttachmentObjectUrl,
+  loadAttachmentWithCache,
+  prefetchProductAttachments,
+  type ProductAttachmentMode,
+} from '@/pages/registrant/AttachmentLink';
+
+export type ImagePreviewItem =
+  | {
+      kind: 'private';
+      id: string;
+      name: string;
+      mode: ProductAttachmentMode;
+      productId: string;
+    }
+  | {
+      kind: 'url';
+      id: string;
+      name: string;
+      url: string;
+      onOpenOriginal?: () => void;
+    }
+  | {
+      kind: 'file';
+      id: string;
+      name: string;
+      file: File;
+    };
+
+export interface ImagePreviewDialogProps {
+  items: ImagePreviewItem[];
+  activeIndex: number | null;
+  onIndexChange: (nextIndex: number | null) => void;
+  contextLabel?: string;
+}
+
+const TRANSPARENT_PLACEHOLDER =
+  'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
+const fileObjectUrlCache = new WeakMap<File, string>();
+
+function getOrCreateFileObjectUrl(file: File): string {
+  const existing = fileObjectUrlCache.get(file);
+  if (existing) return existing;
+  const created = URL.createObjectURL(file);
+  fileObjectUrlCache.set(file, created);
+  return created;
+}
+
+export function ImagePreviewDialog({
+  items,
+  activeIndex,
+  onIndexChange,
+  contextLabel,
+}: ImagePreviewDialogProps) {
+  const isOpen = activeIndex !== null && activeIndex >= 0 && activeIndex < items.length;
+  const [resolvedUrls, setResolvedUrls] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    for (const item of items) {
+      if (item.kind === 'private') {
+        const cached = getCachedAttachmentObjectUrl(item.productId, item.id);
+        if (cached) initial[item.id] = cached;
+      } else if (item.kind === 'url') {
+        initial[item.id] = item.url;
+      } else if (item.kind === 'file') {
+        initial[item.id] = getOrCreateFileObjectUrl(item.file);
+      }
+    }
+    return initial;
+  });
+
+  // Proactively prefetch and cache all private attachments in the current collection
+  // so opening the lightbox or switching between images is instantaneous.
+  useEffect(() => {
+    let active = true;
+    const privateByProduct = new Map<
+      string,
+      { mode: ProductAttachmentMode; productId: string; ids: string[] }
+    >();
+
+    for (const item of items) {
+      if (item.kind === 'private') {
+        const cached = getCachedAttachmentObjectUrl(item.productId, item.id);
+        if (cached) {
+          setResolvedUrls((prev) =>
+            prev[item.id] === cached ? prev : { ...prev, [item.id]: cached },
+          );
+        } else {
+          void loadAttachmentWithCache(item.mode, item.productId, item.id)
+            .then((entry) => {
+              if (!active) return;
+              setResolvedUrls((prev) =>
+                prev[item.id] === entry.objectUrl ? prev : { ...prev, [item.id]: entry.objectUrl },
+              );
+            })
+            .catch(() => {
+              // ignore individual load error
+            });
+        }
+        const groupKey = `${item.mode}:${item.productId}`;
+        const group = privateByProduct.get(groupKey) ?? {
+          mode: item.mode,
+          productId: item.productId,
+          ids: [],
+        };
+        group.ids.push(item.id);
+        privateByProduct.set(groupKey, group);
+      } else if (item.kind === 'url') {
+        setResolvedUrls((prev) =>
+          prev[item.id] === item.url ? prev : { ...prev, [item.id]: item.url },
+        );
+      } else if (item.kind === 'file') {
+        const fileUrl = getOrCreateFileObjectUrl(item.file);
+        setResolvedUrls((prev) =>
+          prev[item.id] === fileUrl ? prev : { ...prev, [item.id]: fileUrl },
+        );
+      }
+    }
+
+    for (const group of privateByProduct.values()) {
+      prefetchProductAttachments(group.mode, group.productId, group.ids);
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [items]);
+
+  const slides = useMemo<SlideImage[]>(
+    () =>
+      items.map((item, idx) => {
+        const src =
+          resolvedUrls[item.id] ??
+          (item.kind === 'private'
+            ? (getCachedAttachmentObjectUrl(item.productId, item.id) ?? TRANSPARENT_PLACEHOLDER)
+            : item.kind === 'url'
+              ? item.url
+              : getOrCreateFileObjectUrl(item.file));
+
+        return {
+          src,
+          alt: item.name,
+          title: item.name,
+          description: contextLabel
+            ? `Ảnh ${idx + 1} / ${items.length} · ${contextLabel}`
+            : `Ảnh ${idx + 1} / ${items.length}`,
+          download:
+            src !== TRANSPARENT_PLACEHOLDER
+              ? {
+                  url: src,
+                  filename: item.name,
+                }
+              : false,
+        };
+      }),
+    [contextLabel, items, resolvedUrls],
+  );
+
+  if (!items.length) return null;
+
+  const plugins =
+    items.length > 1
+      ? [Captions, Counter, Download, Fullscreen, Thumbnails, Zoom]
+      : [Captions, Download, Fullscreen, Zoom];
+
+  return (
+    <Lightbox
+      open={isOpen}
+      close={() => onIndexChange(null)}
+      index={activeIndex ?? 0}
+      slides={slides}
+      plugins={plugins}
+      carousel={{
+        finite: true,
+        preload: Math.min(items.length, 5),
+      }}
+      controller={{
+        closeOnBackdropClick: true,
+      }}
+      zoom={{
+        maxZoomPixelRatio: 4,
+        scrollToZoom: true,
+      }}
+      thumbnails={{
+        position: 'bottom',
+        width: 84,
+        height: 60,
+        border: 1,
+        borderRadius: 6,
+        padding: 2,
+        gap: 10,
+      }}
+      on={{
+        view: ({ index }) => {
+          if (activeIndex !== null && index !== activeIndex) {
+            onIndexChange(index);
+          }
+        },
+      }}
+      labels={{
+        Previous: 'Ảnh trước',
+        Next: 'Ảnh tiếp theo',
+        Close: 'Đóng (Esc)',
+        'Zoom in': 'Phóng to',
+        'Zoom out': 'Thu nhỏ',
+        'Enter Fullscreen': 'Toàn màn hình',
+        'Exit Fullscreen': 'Thoát toàn màn hình',
+        Download: 'Tải ảnh xuống',
+        'Show thumbnails': 'Hiện dải ảnh thu nhỏ',
+        'Hide thumbnails': 'Ẩn dải ảnh thu nhỏ',
+        'Show captions': 'Hiện thông tin tệp',
+        'Hide captions': 'Ẩn thông tin tệp',
+      }}
+    />
+  );
+}

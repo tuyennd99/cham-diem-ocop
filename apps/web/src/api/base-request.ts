@@ -10,10 +10,31 @@ const publicAuthUrls = new Set<string>(
   Object.values(API.auth).filter((url) => url !== API.auth.me && url !== API.auth.changePassword),
 );
 
+function resolveServerApiBase(): string {
+  if (/^https?:\/\//i.test(API_BASE)) {
+    return API_BASE;
+  }
+  const rawOrigin =
+    (typeof process !== 'undefined'
+      ? process.env.API_INTERNAL_URL || process.env.VITE_API_PROXY || process.env.VITE_API_URL
+      : undefined) || 'http://localhost:3030';
+  const normalizedOrigin = rawOrigin.replace(/\/+$/, '');
+  if (normalizedOrigin.endsWith('/api')) {
+    return normalizedOrigin;
+  }
+  const suffix = API_BASE.startsWith('/') ? API_BASE : `/${API_BASE}`;
+  return `${normalizedOrigin}${suffix}`;
+}
+
 baseRequest.interceptors.request.use((config) => {
-  const token = getSession()?.accessToken;
-  if (publicAuthUrls.has(config.url ?? '')) config.headers.delete('Authorization');
-  else if (token) config.headers.set('Authorization', `Bearer ${token}`);
+  if (typeof window === 'undefined') {
+    config.baseURL = resolveServerApiBase();
+    config.headers.delete('Authorization');
+  } else {
+    const token = getSession()?.accessToken;
+    if (publicAuthUrls.has(config.url ?? '')) config.headers.delete('Authorization');
+    else if (token) config.headers.set('Authorization', `Bearer ${token}`);
+  }
   if (config.data instanceof FormData) config.headers.setContentType(false);
   return config;
 });
@@ -48,13 +69,14 @@ baseRequest.interceptors.response.use(
     const wrongPassword =
       error.config?.url === API.auth.changePassword && message === 'Current password is incorrect';
     if (
+      typeof window !== 'undefined' &&
       status === HTTP_STATUS.UNAUTHORIZED &&
       session &&
       sentAuthorization === `Bearer ${session.accessToken}` &&
       !wrongPassword
     ) {
       setSession(null);
-      window.location.replace('/login');
+      window.location?.replace?.('/login');
     }
     return Promise.reject(new ApiError(message, status));
   },

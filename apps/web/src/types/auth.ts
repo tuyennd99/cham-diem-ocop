@@ -8,10 +8,19 @@ export interface SessionUser {
   fullName: string;
   phone: string | null;
   role: Role;
+  roles?: Role[];
   verified: boolean;
   staffPermissions: StaffPermission[];
   organizationUnitId: string | null;
   organizationUnit: OrganizationUnitSummary | null;
+}
+
+export interface SeedAccount {
+  email: string;
+  fullName: string;
+  role: Role;
+  roles: Role[];
+  staffPermissions: StaffPermission[];
 }
 
 export type User = SessionUser;

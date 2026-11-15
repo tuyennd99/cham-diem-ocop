@@ -3,6 +3,7 @@ import AppSpin from '@/components/app-spin';
 import { AppLayout } from '../layouts/AppLayout';
 
 export const Route = createFileRoute('/_app')({
+  ssr: false,
   pendingComponent: AppSpin,
   beforeLoad: ({ context }) => {
     if (!context.getSession()) throw redirect({ to: '/login' });

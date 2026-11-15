@@ -1,19 +1,17 @@
 import { Transform, Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { StaffPermission } from '@prisma/client';
+import { Role, StaffPermission } from '@prisma/client';
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   ArrayUnique,
   IsArray,
   IsBoolean,
   IsEnum,
   IsEmail,
-  IsInt,
   IsOptional,
   IsString,
-  Max,
   MaxLength,
-  Min,
   MinLength,
   ValidateIf,
   ValidateNested,
@@ -25,15 +23,25 @@ const normalizedEmail = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim().toLowerCase() : value;
 
 export class UpdateStaffAccessDto {
-  @ApiProperty({ enum: StaffPermission, isArray: true, uniqueItems: true, maxItems: 3 })
+  @ApiProperty({ enum: StaffPermission, isArray: true, uniqueItems: true, minItems: 1, maxItems: 3 })
+  @ValidateIf((obj: UpdateStaffAccessDto) => !Array.isArray(obj.roles) || obj.staffPermissions !== undefined)
   @IsArray()
+  @ArrayMinSize(1)
   @ArrayMaxSize(3)
   @ArrayUnique()
   @IsEnum(StaffPermission, { each: true })
   staffPermissions!: StaffPermission[];
 
+  @ApiPropertyOptional({ enum: Role, isArray: true, uniqueItems: true, maxItems: 3 })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(3)
+  @ArrayUnique()
+  @IsEnum(Role, { each: true })
+  roles?: Role[];
+
   @ApiProperty({ nullable: true, maxLength: 100 })
-  @ValidateIf((_object, value) => value !== null)
+  @ValidateIf((_object, value) => value === undefined || value !== null)
   @IsString()
   @MinLength(1)
   @MaxLength(100)

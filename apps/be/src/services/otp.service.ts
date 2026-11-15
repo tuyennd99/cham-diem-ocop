@@ -1,7 +1,13 @@
 import { GoneException, HttpException, HttpStatus, Injectable, UnauthorizedException } from '@nestjs/common';
 import { OtpPurpose, PendingAuthKind } from '@prisma/client';
 import { createHash, createHmac, randomBytes, randomInt, randomUUID } from 'node:crypto';
-import { OTP_TTL_MS } from '../constants/auth';
+import {
+  MAIL_OTP_PURPOSE,
+  OTP_TTL_MS,
+  OTP_VERIFY_STATUS,
+  REGISTRATION_VERIFICATION_MODE,
+  type MailOtpPurpose,
+} from '../constants/auth';
 import { env } from '../config/env';
 import { AuthRepository } from '../repositories/auth.repository';
 
@@ -37,32 +43,45 @@ export class OtpService {
     const tokenHash = this.hashToken(registrationToken);
     const pending = await this.repository.findPendingRegistration(tokenHash, [PendingAuthKind.GOOGLE_LINK]);
     if (!pending) throw new UnauthorizedException('Invalid or expired verification code');
-    const result = await this.repository.consumeGoogleLink(tokenHash, this.hash(pending.id, 'GOOGLE_LINK', code));
-    if (result.status === 'locked') throw new GoneException('Invalid or expired registration; restart Google sign-in');
-    if (result.status === 'invalid') throw new UnauthorizedException('Invalid or expired verification code');
+    const result = await this.repository.consumeGoogleLink(tokenHash, this.hash(pending.id, MAIL_OTP_PURPOSE.GOOGLE_LINK, code));
+    if (result.status === OTP_VERIFY_STATUS.LOCKED) throw new GoneException('Invalid or expired registration; restart Google sign-in');
+    if (result.status === OTP_VERIFY_STATUS.INVALID) throw new UnauthorizedException('Invalid or expired verification code');
     return result;
   }
 
   async registrationStatus(registrationToken: string) {
     const result = await this.repository.pendingRegistrationStatus(this.hashToken(registrationToken));
-    if (result.status === 'locked') throw new GoneException('Invalid or expired registration; restart verification');
-    if (result.status !== 'ok') throw new UnauthorizedException('Invalid or expired registration');
+    if (result.status === OTP_VERIFY_STATUS.LOCKED) throw new GoneException('Invalid or expired registration; restart verification');
+    if (result.status !== OTP_VERIFY_STATUS.OK) throw new UnauthorizedException('Invalid or expired registration');
     const pending = result.pending;
-    return { mode: pending.kind === PendingAuthKind.GOOGLE_LINK ? 'google-link' as const : 'register' as const, email: pending.email, expiresAt: pending.expiresAt,
-      otpExpiresAt: pending.otpExpiresAt, resendAvailableAt: pending.resendAvailableAt };
+    return {
+      mode:
+        pending.kind === PendingAuthKind.GOOGLE_LINK
+          ? REGISTRATION_VERIFICATION_MODE.GOOGLE_LINK
+          : REGISTRATION_VERIFICATION_MODE.REGISTER,
+      email: pending.email,
+      expiresAt: pending.expiresAt,
+      otpExpiresAt: pending.otpExpiresAt,
+      resendAvailableAt: pending.resendAvailableAt,
+    };
   }
 
   async verifyRegistration(registrationToken: string, code: string) {
     const tokenHash = this.hashToken(registrationToken);
     const pending = await this.repository.findPendingRegistration(tokenHash);
     const valid = pending && await this.repository.consumePendingRegistration(tokenHash, this.hash(pending.id, OtpPurpose.REGISTER, code));
-    if (valid === 'locked') throw new GoneException('Invalid or expired registration; register again');
+    if (valid === OTP_VERIFY_STATUS.LOCKED) throw new GoneException('Invalid or expired registration; register again');
     if (!valid) throw new UnauthorizedException('Invalid or expired verification code');
   }
 
-  async resendRegistration(registrationToken: string, purpose: 'REGISTER' | 'GOOGLE_LINK' = 'REGISTER') {
+  async resendRegistration(
+    registrationToken: string,
+    purpose:
+      | typeof MAIL_OTP_PURPOSE.REGISTER
+      | typeof MAIL_OTP_PURPOSE.GOOGLE_LINK = MAIL_OTP_PURPOSE.REGISTER,
+  ) {
     const tokenHash = this.hashToken(registrationToken);
-    const kinds = purpose === 'GOOGLE_LINK' ? [PendingAuthKind.GOOGLE_LINK] : undefined;
+    const kinds = purpose === MAIL_OTP_PURPOSE.GOOGLE_LINK ? [PendingAuthKind.GOOGLE_LINK] : undefined;
     const pending = await this.repository.findPendingRegistration(tokenHash, kinds);
     if (!pending) throw new UnauthorizedException('Invalid or expired registration');
     let code: string;
@@ -72,9 +91,9 @@ export class OtpService {
       otpHash = this.hash(pending.id, purpose, code);
     } while (otpHash === pending.otpHash);
     const result = await this.repository.replacePendingRegistrationOtp(tokenHash, otpHash, kinds);
-    if (result.status === 'locked') throw new GoneException('Invalid or expired registration; restart verification');
-    if (result.status === 'cooldown') throw new HttpException('Please wait before requesting another code', HttpStatus.TOO_MANY_REQUESTS);
-    if (result.status !== 'ok') throw new UnauthorizedException('Invalid or expired registration');
+    if (result.status === OTP_VERIFY_STATUS.LOCKED) throw new GoneException('Invalid or expired registration; restart verification');
+    if (result.status === OTP_VERIFY_STATUS.COOLDOWN) throw new HttpException('Please wait before requesting another code', HttpStatus.TOO_MANY_REQUESTS);
+    if (result.status !== OTP_VERIFY_STATUS.OK) throw new UnauthorizedException('Invalid or expired registration');
     return { pending: result.pending, code };
   }
 
@@ -102,7 +121,7 @@ export class OtpService {
     if (!valid) throw new UnauthorizedException('Invalid or expired verification code');
   }
 
-  private hash(email: string, purpose: OtpPurpose | 'GOOGLE_LINK', code: string) {
+  private hash(email: string, purpose: OtpPurpose | MailOtpPurpose, code: string) {
     return createHmac('sha256', env(process.env).jwtSecret)
       .update(`${email}:${purpose}:${code}`)
       .digest('hex');

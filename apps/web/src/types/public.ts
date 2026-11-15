@@ -1,4 +1,4 @@
-import type { Product } from '@ocop/shared';
+import type { Product, ProductPublicationState } from '@ocop/shared';
 import type { Attachment, Category } from './product';
 
 export interface PublicProductParams {
@@ -6,14 +6,20 @@ export interface PublicProductParams {
   limit: number;
   categoryId?: string;
   q?: string;
+  approvedOnly?: boolean;
 }
 
 export type FeaturedProduct = Pick<
   Product,
   | 'id'
+  | 'code'
+  | 'codeNumber'
   | 'name'
   | 'description'
   | 'status'
+  | 'approvedAt'
+  | 'publicationState'
+  | 'publishedAt'
   | 'finalScore'
   | 'starRating'
   | 'category'
@@ -24,7 +30,10 @@ export type PublicProduct = Omit<
   Product,
   'status' | 'description' | 'finalScore' | 'starRating' | 'createdAt' | 'category' | 'attachments'
 > & {
-  status: 'SUBMITTED' | 'SCORING' | 'COMPLETED';
+  status: 'SUBMITTED' | 'APPROVED' | 'SCORING' | 'COMPLETED';
+  approvedAt?: string | null;
+  publicationState?: ProductPublicationState;
+  publishedAt?: string | null;
   description: string | null;
   finalScore: number | null;
   starRating: number | null;

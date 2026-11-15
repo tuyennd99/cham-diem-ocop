@@ -1,5 +1,5 @@
 import type { AdminUserQuery, OrganizationUnitQuery } from '@ocop/shared';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
 import { adminUsersApi } from '../api/admin-users';
@@ -13,6 +13,7 @@ export function useAdminUsers(query: AdminUserQuery) {
   return useQuery({
     queryKey: queryKeys.adminUsers.users.list(query),
     queryFn: () => adminUsersApi.list(query),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -28,6 +29,7 @@ export function useOrganizationUnits(query: OrganizationUnitQuery) {
   return useQuery({
     queryKey: queryKeys.adminUsers.units.list(query),
     queryFn: () => adminUsersApi.units(query),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -38,6 +40,7 @@ export function useRegistrantOwners(
   return useQuery({
     queryKey: queryKeys.adminUsers.owners(query),
     queryFn: () => adminUsersApi.listRegistrantOwners(query),
+    placeholderData: keepPreviousData,
     enabled,
   });
 }

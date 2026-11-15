@@ -1,33 +1,36 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Criterion, ScoreOption } from '@ocop/shared';
+import { PageContainer, PageHeader } from '@/layouts/PageLayout';
+import { ATTACHMENT_TYPE, EVALUATION_STATUS, type Criterion, type ScoreOption } from '@ocop/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useBlocker } from '@tanstack/react-router';
-import { Check, ArrowLeft } from 'lucide-react';
 import { isEqual, keyBy, mapValues, maxBy, partition, sumBy } from 'lodash';
+import { ArrowLeft, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import AlertError from '@/components/alert-error';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { ImagePreviewDialog } from '@/components/image-preview-dialog';
 import PageSpin from '@/components/page-spin';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
-import { PageContainer, PageHeader } from '@/layouts/PageLayout';
 import { judgeApi } from '../../api';
 import { queryKeys } from '../../constants/query-key';
 import { errorText, messageOf } from '../../lib/api-error';
 import { openAttachment } from '../../lib/attachments';
+import { displayProductCode } from '../../lib/print-format';
 import { partitionFormEntries } from '../../lib/utils';
 import { useEvaluation } from '../../queries/judge';
 import type { EvaluationData } from '../../types/judge';
-import { PrivateAttachmentThumbnail } from '../registrant/AttachmentLink';
+import { loadAttachmentWithCache, PrivateAttachmentThumbnail } from '../registrant/AttachmentLink';
 
 type SubCriterion = Criterion['subCriteria'][number];
 
 async function openJudgeAttachment(productId: string, attachmentId: string, fileName: string) {
   try {
-    await openAttachment(await judgeApi.attachment(productId, attachmentId), fileName);
+    const { blob } = await loadAttachmentWithCache('judge', productId, attachmentId);
+    await openAttachment(blob, fileName);
   } catch (cause) {
     toast.error(messageOf(cause));
   }
@@ -59,6 +62,7 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
+  const [previewImageIndex, setPreviewImageIndex] = useState<number | null>(null);
   const seededProductIdRef = useRef('');
 
   useEffect(() => {
@@ -77,7 +81,9 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
     }
   }, [remoteData]);
 
-  const isLocked = data?.evaluation.status === 'SUBMITTED';
+  const isLocked =
+    data?.evaluation.status === EVALUATION_STATUS.SUBMITTED ||
+    data?.evaluation.status === EVALUATION_STATUS.EXCLUDED;
   const isDirty =
     Boolean(data) &&
     !isLocked &&
@@ -206,7 +212,8 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
     );
   if (!data) return null;
 
-  const locked = data.evaluation.status === 'SUBMITTED';
+  const isExcluded = data.evaluation.status === EVALUATION_STATUS.EXCLUDED;
+  const locked = data.evaluation.status === EVALUATION_STATUS.SUBMITTED || isExcluded;
   const sections = [
     { key: 'A', label: 'A. Sản phẩm và sức mạnh cộng đồng' },
     { key: 'B', label: 'B. Khả năng tiếp thị' },
@@ -215,7 +222,7 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
   ];
   const [entityEntries, productEntries] = partitionFormEntries(data.product.formData);
   const [imageAttachments, documentAttachments] = partition(data.product.attachments, {
-    type: 'IMAGE',
+    type: ATTACHMENT_TYPE.IMAGE,
   });
   const renderFormSection = (title: string, rows: typeof entityEntries) => (
     <details className='judge-details'>
@@ -245,14 +252,21 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
         badge={
           <Badge
             variant='outline'
-            className={locked ? 'status-badge status-completed' : 'status-badge status-scoring'}
+            className={
+              isExcluded
+                ? 'status-badge status-draft'
+                : locked
+                  ? 'status-badge status-completed'
+                  : 'status-badge status-scoring'
+            }
           >
-            {locked ? 'Đã nộp · chỉ đọc' : 'Phiếu nháp'}
+            {isExcluded ? 'Đã gỡ khỏi hồ sơ · chỉ đọc' : locked ? 'Đã nộp · chỉ đọc' : 'Phiếu nháp'}
           </Badge>
         }
         description={
           <>
-            {data.product.category.name} · Mã hồ sơ <code>{data.product.id}</code>
+            {data.product.category.name} · Mã hồ sơ{' '}
+            <code title={data.product.id}>{displayProductCode(data.product)}</code>
             {locked ? (
               <>
                 {' · '}
@@ -271,7 +285,13 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
           </Button>
         }
       />
-      {locked && <p className='form-note'>Phiếu đã nộp và không thể chỉnh sửa.</p>}
+      {locked && (
+        <p className='form-note'>
+          {isExcluded
+            ? 'Bạn đã được gỡ khỏi phân công của hồ sơ này. Phiếu chấm được lưu lịch sử ở chế độ chỉ đọc.'
+            : 'Phiếu đã nộp và không thể chỉnh sửa.'}
+        </p>
+      )}
       <div className='judge-workspace'>
         <aside className='judge-criteria-nav' aria-label='Điều hướng tiêu chí'>
           <div className='criteria-progress'>
@@ -323,7 +343,7 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
                           {score}/{criterion.maxScore} điểm
                         </span>
                         <span className='inline-flex items-center gap-1'>
-                          {done && <Check className='size-3.5 text-accent' aria-hidden='true' />}
+                          {done && <Check className='text-accent size-3.5' aria-hidden='true' />}
                           <span>{done ? 'Đã chấm' : 'Chưa chấm'}</span>
                         </span>
                       </span>
@@ -466,13 +486,13 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
           <h2>Minh chứng hồ sơ</h2>
           {imageAttachments.length ? (
             <div className='evidence-gallery'>
-              {imageAttachments.map((file) => (
+              {imageAttachments.map((file, idx) => (
                 <button
                   type='button'
-                  className='evidence-thumb'
+                  className='evidence-thumb cursor-zoom-in'
                   key={file.id}
-                  onClick={() => void openJudgeAttachment(productId, file.id, file.fileName)}
-                  aria-label={`Mở ảnh ${file.fileName}`}
+                  onClick={() => setPreviewImageIndex(idx)}
+                  aria-label={`Xem phóng to ảnh ${file.fileName}`}
                 >
                   <span className='evidence-thumb-frame'>
                     <PrivateAttachmentThumbnail
@@ -517,6 +537,18 @@ export function JudgeEvaluationPage({ productId }: { productId: string }) {
           </div>
         </aside>
       </div>
+      <ImagePreviewDialog
+        items={imageAttachments.map((file) => ({
+          kind: 'private',
+          id: file.id,
+          name: file.fileName,
+          mode: 'judge',
+          productId,
+        }))}
+        activeIndex={previewImageIndex}
+        onIndexChange={setPreviewImageIndex}
+        contextLabel={`Hồ sơ: ${data.product.name}`}
+      />
       <ConfirmDialog
         open={submitConfirmOpen}
         onOpenChange={(open) => {

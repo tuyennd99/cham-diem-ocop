@@ -281,7 +281,14 @@ describe('H6 reporting and analytics dashboard engine', () => {
       coveredCategoryIdsAtNow: new Set(),
       now,
       historyAvailableFrom: historyFrom,
-      productsByStatus: { DRAFT: 1, SUBMITTED: 0, SCORING: 1, COMPLETED: 2 },
+      productsByStatus: {
+        DRAFT: 1,
+        SUBMITTED: 0,
+        RETURNED: 0,
+        APPROVED: 0,
+        SCORING: 1,
+        COMPLETED: 2,
+      },
       judges: [],
       needsAttention: [],
     });

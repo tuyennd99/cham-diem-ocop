@@ -1,18 +1,26 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import type {
-  BlankCriteriaPrintData,
-  EvaluationPrintData,
-  ProductResultsPrintData,
-  RegistrationPrintData,
+import {
+  ATTACHMENT_TYPE,
+  EVALUATION_STATUS,
+  PRODUCT_STATUS,
+  type BlankCriteriaPrintData,
+  type EvaluationPrintData,
+  type ProductResultsPrintData,
+  type RegistrationPrintData,
 } from '@ocop/shared';
 import { Link } from '@tanstack/react-router';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { PRODUCT_WORKSPACE_MODE } from '../../constants/consts';
 import type { AdminProductSearch } from '../../lib/admin-search';
-import { formatExactScore, formatStarRatingLabel } from '../../lib/print-format';
+import {
+  displayProductCode,
+  formatExactScore,
+  formatStarRatingLabel,
+} from '../../lib/print-format';
 import { formatFormValue } from '../../lib/utils';
 import { PrivateAttachmentThumbnail } from '../../pages/registrant/AttachmentLink';
 
@@ -210,7 +218,9 @@ export function EvaluationPrintSheet({ data }: { data: EvaluationPrintData }) {
           <div>
             <dt>Sản phẩm:</dt>
             <dd>
-              <strong>{data.product.name}</strong> (Mã hồ sơ: <code>{data.product.id}</code>)
+              <strong>{data.product.name}</strong> (
+              {data.product.codeFromCurrentProduct ? 'Mã hồ sơ hiện tại: ' : 'Mã hồ sơ: '}
+              <code>{displayProductCode(data.product)}</code>)
             </dd>
           </div>
           <div>
@@ -366,7 +376,7 @@ export function EvaluationPrintSheet({ data }: { data: EvaluationPrintData }) {
 
 export function ProductResultsPrintSheet({ data }: { data: ProductResultsPrintData }) {
   const { product, criteriaSet, evaluations, criteriaSummary } = data;
-  const isCompleted = product.status === 'COMPLETED';
+  const isCompleted = product.status === PRODUCT_STATUS.COMPLETED;
   return (
     <article className='ocop-print-sheet' aria-label='Bảng tổng hợp kết quả đánh giá OCOP'>
       <header className='print-sheet-header'>
@@ -385,7 +395,9 @@ export function ProductResultsPrintSheet({ data }: { data: ProductResultsPrintDa
           <div>
             <dt>Tên sản phẩm:</dt>
             <dd>
-              <strong>{product.name}</strong> (Mã hồ sơ: <code>{product.id}</code>)
+              <strong>{product.name}</strong> (
+              {product.codeFromCurrentProduct ? 'Mã hồ sơ hiện tại: ' : 'Mã hồ sơ: '}
+              <code>{displayProductCode(product)}</code>)
             </dd>
           </div>
           <div>
@@ -485,7 +497,9 @@ export function ProductResultsPrintSheet({ data }: { data: ProductResultsPrintDa
                       ? `Phân công một phần (Tối đa ${ev.scopeMaxScore} điểm)`
                       : `Toàn bộ tiêu chí (Tối đa ${ev.scopeMaxScore} điểm)`}
                   </td>
-                  <td>{ev.status === 'SUBMITTED' ? 'Đã nộp' : 'BẢN NHÁP — CHƯA NỘP'}</td>
+                  <td>
+                    {ev.status === EVALUATION_STATUS.SUBMITTED ? 'Đã nộp' : 'BẢN NHÁP — CHƯA NỘP'}
+                  </td>
                   <td>{formatViDateTime(ev.submittedAt)}</td>
                   <td className='print-num'>
                     {ev.total !== null
@@ -573,9 +587,9 @@ export function RegistrationPrintSheet({
   attachmentMode,
 }: {
   data: RegistrationPrintData;
-  attachmentMode: 'admin' | 'owner';
+  attachmentMode: typeof PRODUCT_WORKSPACE_MODE.ADMIN | typeof PRODUCT_WORKSPACE_MODE.OWNER;
 }) {
-  const imageAttachments = data.attachments.filter((att) => att.type === 'IMAGE');
+  const imageAttachments = data.attachments.filter((att) => att.type === ATTACHMENT_TYPE.IMAGE);
   const [selectedImageIds, setSelectedImageIds] = useState<string[]>(() =>
     imageAttachments.slice(0, 2).map((att) => att.id),
   );
@@ -658,7 +672,8 @@ export function RegistrationPrintSheet({
               Mã hồ sơ / Ngày nộp
             </th>
             <td>
-              <code>{data.product.id}</code> ·{' '}
+              <code>{displayProductCode(data.product)}</code>
+              {data.product.codeFromCurrentProduct ? ' (Mã hồ sơ hiện tại)' : ''} ·{' '}
               {data.isDraft
                 ? 'BẢN NHÁP (Chưa nộp)'
                 : `Đã nộp ngày ${formatViDateTime(data.product.submittedAt)}`}
@@ -744,8 +759,12 @@ export function RegistrationPrintSheet({
             data.attachments.map((att, index) => (
               <tr key={att.id}>
                 <td className='print-num'>{index + 1}</td>
-                <td>{att.type === 'IMAGE' ? `Ảnh sản phẩm ${index + 1}` : att.fileName}</td>
-                <td>{att.type === 'IMAGE' ? 'Ảnh sản phẩm' : 'Tài liệu minh chứng'}</td>
+                <td>
+                  {att.type === ATTACHMENT_TYPE.IMAGE ? `Ảnh sản phẩm ${index + 1}` : att.fileName}
+                </td>
+                <td>
+                  {att.type === ATTACHMENT_TYPE.IMAGE ? 'Ảnh sản phẩm' : 'Tài liệu minh chứng'}
+                </td>
                 <td>{formatViDateTime(att.createdAt)}</td>
               </tr>
             ))

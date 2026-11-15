@@ -35,6 +35,8 @@ enum PendingAuthKind {
 enum ProductStatus {
   DRAFT
   SUBMITTED
+  RETURNED
+  APPROVED
   SCORING
   COMPLETED
 }
@@ -47,31 +49,48 @@ enum AttachmentType {
 enum EvaluationStatus {
   IN_PROGRESS
   SUBMITTED
+  EXCLUDED
+}
+
+enum ProductPublicationState {
+  UNPUBLISHED
+  PUBLISHED
+  UPDATING
 }
 
 model User {
-  id                 String               @id @default(cuid())
-  email              String               @unique @db.VarChar(320)
-  password           String?              @db.VarChar(255)
-  googleSub          String?              @unique @db.VarChar(255)
-  fullName           String               @db.VarChar(255)
-  phone              String?              @db.VarChar(30)
-  role               Role                 @default(REGISTRANT)
-  staffPermissions   StaffPermission[]    @default([])
-  organizationUnitId String?
-  organizationUnit   OrganizationUnit?    @relation(fields: [organizationUnitId], references: [id], onDelete: Restrict)
-  createdProducts    Product[]            @relation("ProductCreator")
-  statusEvents       ProductStatusEvent[] @relation("StatusEventActor")
-  verified           Boolean              @default(false)
-  isActive           Boolean              @default(true)
-  tokenVersion       Int                  @default(0)
-  createdAt          DateTime             @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime             @updatedAt @db.Timestamptz(3)
-  products           Product[]            @relation("ProductRegistrant")
-  assignments        JudgeAssignment[]
-  evaluations        Evaluation[]
-  otpCodes           OtpCode[]
-  auditLogs          AuditLog[]           @relation("AuditActor")
+  id                     String                    @id @default(cuid())
+  email                  String                    @unique @db.VarChar(320)
+  password               String?                   @db.VarChar(255)
+  googleSub              String?                   @unique @db.VarChar(255)
+  fullName               String                    @db.VarChar(255)
+  phone                  String?                   @db.VarChar(30)
+  role                   Role                      @default(REGISTRANT)
+  roles                  Role[]                    @default([REGISTRANT])
+  staffPermissions       StaffPermission[]         @default([])
+  organizationUnitId     String?
+  organizationUnit       OrganizationUnit?         @relation(fields: [organizationUnitId], references: [id], onDelete: Restrict)
+  createdProducts        Product[]                 @relation("ProductCreator")
+  approvedProducts       Product[]                 @relation("ProductApprover")
+  returnedProducts       Product[]                 @relation("ProductReturner")
+  publishedProducts      Product[]                 @relation("ProductPublisher")
+  statusEvents           ProductStatusEvent[]      @relation("StatusEventActor")
+  productAssignments     ProductJudgeAssignment[]  @relation("ProductJudge")
+  assignedProducts       ProductJudgeAssignment[]  @relation("ProductAssignmentActor")
+  removedAssignments     ProductJudgeAssignment[]  @relation("ProductAssignmentRemover")
+  evaluationHistoryActed EvaluationHistoryEvent[]  @relation("EvaluationHistoryActor")
+  resultHistoryActed     ProductResultHistory[]    @relation("ProductResultHistoryActor")
+  verified               Boolean                   @default(false)
+  isActive               Boolean                   @default(true)
+  tokenVersion           Int                       @default(0)
+  createdAt              DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime                  @updatedAt @db.Timestamptz(3)
+  products               Product[]                 @relation("ProductRegistrant")
+  registrationUnits      RegistrationUnit[]        @relation("UserRegistrationUnits")
+  assignments            JudgeAssignment[]
+  evaluations            Evaluation[]
+  otpCodes               OtpCode[]
+  auditLogs              AuditLog[]                @relation("AuditActor")
 
   @@index([role])
   @@map("users")
@@ -128,57 +147,88 @@ model PendingAuth {
   otpHash           String?         @db.VarChar(64)
   attempts          Int             @default(0)
   expiresAt         DateTime        @db.Timestamptz(3)
-  otpExpiresAt      DateTime?        @db.Timestamptz(3)
-  resendAvailableAt DateTime?        @db.Timestamptz(3)
+  otpExpiresAt      DateTime?       @db.Timestamptz(3)
+  resendAvailableAt DateTime?       @db.Timestamptz(3)
   createdAt         DateTime        @default(now()) @db.Timestamptz(3)
 
   @@index([expiresAt])
   @@map("pending_auth")
 }
 
-model OrganizationUnit {
-  id          String   @id @default(cuid())
-  code        String   @unique @db.VarChar(50)
-  name        String   @db.VarChar(255)
-  description String?
-  order       Int      @default(0)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
-  users       User[]
+model ManagingAgency {
+  id                 String                      @id @default(cuid())
+  code               String                      @unique @db.VarChar(50)
+  name               String                      @unique @db.VarChar(255)
+  order              Int                         @default(0)
+  isActive           Boolean                     @default(true)
+  createdAt          DateTime                    @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime                    @updatedAt @db.Timestamptz(3)
+  organizationUnits  OrganizationUnit[]
+  categoryLinks      ProductCategoryAgency[]
+  productAssignments ProductJudgeAssignment[]
 
+  @@map("managing_agencies")
+}
+
+model ProductCategoryAgency {
+  categoryId String
+  agencyId   String
+  createdAt  DateTime        @default(now()) @db.Timestamptz(3)
+  category   ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  agency     ManagingAgency  @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+
+  @@id([categoryId, agencyId])
+  @@index([agencyId])
+  @@map("product_category_agencies")
+}
+
+model OrganizationUnit {
+  id               String          @id @default(cuid())
+  code             String          @unique @db.VarChar(50)
+  name             String          @db.VarChar(255)
+  description      String?
+  order            Int             @default(0)
+  isActive         Boolean         @default(true)
+  managingAgencyId String?
+  managingAgency   ManagingAgency? @relation(fields: [managingAgencyId], references: [id], onDelete: SetNull)
+  createdAt        DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime        @updatedAt @db.Timestamptz(3)
+  users            User[]
+
+  @@index([managingAgencyId])
   @@map("organization_units")
 }
 
 model Locality {
-  id               String       @id @default(cuid())
-  code             String       @unique @db.VarChar(50)
-  eventName        String       @default("") @db.VarChar(255)
-  name             String       @db.VarChar(255)
-  provinceName     String       @db.VarChar(255)
-  effectiveFrom    DateTime?    @db.Timestamptz(3)
-  effectiveTo      DateTime?    @db.Timestamptz(3)
-  registrationFrom DateTime?    @db.Timestamptz(3)
-  registrationTo   DateTime?    @db.Timestamptz(3)
-  isActive         Boolean      @default(true)
-  createdAt        DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt        DateTime     @updatedAt @db.Timestamptz(3)
+  id               String    @id @default(cuid())
+  code             String    @unique @db.VarChar(50)
+  eventName        String    @default("") @db.VarChar(255)
+  name             String    @db.VarChar(255)
+  provinceName     String    @db.VarChar(255)
+  effectiveFrom    DateTime? @db.Timestamptz(3)
+  effectiveTo      DateTime? @db.Timestamptz(3)
+  registrationFrom DateTime? @db.Timestamptz(3)
+  registrationTo   DateTime? @db.Timestamptz(3)
+  isActive         Boolean   @default(true)
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @db.Timestamptz(3)
   products         Product[]
 
   @@map("localities")
 }
 
 model ProductCategory {
-  id                     String            @id @default(cuid())
-  isActive               Boolean           @default(true)
-  order                  Int               @default(0)
-  name                   String            @unique @db.VarChar(255)
-  description            String?
-  createdAt              DateTime          @default(now()) @db.Timestamptz(3)
-  updatedAt              DateTime          @updatedAt @db.Timestamptz(3)
-  criteriaSet            CriteriaSet?
-  products               Product[]
-  assignments            JudgeAssignment[]
+  id          String                  @id @default(cuid())
+  isActive    Boolean                 @default(true)
+  order       Int                     @default(0)
+  name        String                  @unique @db.VarChar(255)
+  description String?
+  createdAt   DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime                @updatedAt @db.Timestamptz(3)
+  criteriaSet CriteriaSet?
+  products    Product[]
+  assignments JudgeAssignment[]
+  agencyLinks ProductCategoryAgency[]
 
   @@map("product_categories")
 }
@@ -264,36 +314,97 @@ model ScoreOption {
 }
 
 model Product {
-  id                   String               @id @default(cuid())
-  createdById          String?
-  createdBy            User?                @relation("ProductCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  localityId           String?
-  locality             Locality?            @relation(fields: [localityId], references: [id], onDelete: Restrict)
-  localityCodeAtSubmit String?              @db.VarChar(50)
-  localityNameAtSubmit String?              @db.VarChar(255)
-  provinceNameAtSubmit String?              @db.VarChar(255)
-  completedAt          DateTime?            @db.Timestamptz(3)
-  statusEvents         ProductStatusEvent[]
-  registrantId         String
-  categoryId           String
-  name                 String               @db.VarChar(255)
-  description          String?
-  formData             Json
-  registrationSnapshot Json?
-  status               ProductStatus        @default(DRAFT)
-  finalScore           Float?
-  starRating           Int?
-  submittedAt          DateTime?            @db.Timestamptz(3)
-  createdAt            DateTime             @default(now()) @db.Timestamptz(3)
-  updatedAt            DateTime             @updatedAt @db.Timestamptz(3)
-  registrant           User                 @relation("ProductRegistrant", fields: [registrantId], references: [id], onDelete: Restrict)
-  category             ProductCategory      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  attachments          Attachment[]
-  evaluations          Evaluation[]
+  id                       String                   @id @default(cuid())
+  codeNumber               Int                      @unique @default(autoincrement())
+  createdById              String?
+  createdBy                User?                    @relation("ProductCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  localityId               String?
+  locality                 Locality?                @relation(fields: [localityId], references: [id], onDelete: Restrict)
+  localityCodeAtSubmit     String?                  @db.VarChar(50)
+  localityNameAtSubmit     String?                  @db.VarChar(255)
+  provinceNameAtSubmit     String?                  @db.VarChar(255)
+  completedAt              DateTime?                @db.Timestamptz(3)
+  approvedAt               DateTime?                @db.Timestamptz(3)
+  approvedById             String?
+  approvedBy               User?                    @relation("ProductApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  returnedAt               DateTime?                @db.Timestamptz(3)
+  returnedById             String?
+  returnedBy               User?                    @relation("ProductReturner", fields: [returnedById], references: [id], onDelete: SetNull)
+  returnReason             String?                  @db.VarChar(1000)
+  requiredAgencySnapshot   Json?
+  publicationState         ProductPublicationState  @default(UNPUBLISHED)
+  publishedFinalScore      Float?
+  publishedStarRating      Int?
+  publishedAt              DateTime?                @db.Timestamptz(3)
+  publishedById            String?
+  publishedBy              User?                    @relation("ProductPublisher", fields: [publishedById], references: [id], onDelete: SetNull)
+  statusEvents             ProductStatusEvent[]
+  judgeAssignments         ProductJudgeAssignment[]
+  resultHistory            ProductResultHistory[]
+  registrantId             String
+  categoryId               String
+  name                     String                   @db.VarChar(255)
+  description              String?
+  formData                 Json
+  registrationSnapshot     Json?
+  status                   ProductStatus            @default(DRAFT)
+  finalScore               Float?
+  starRating               Int?
+  submittedAt              DateTime?                @db.Timestamptz(3)
+  createdAt                DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime                 @updatedAt @db.Timestamptz(3)
+  registrant               User                     @relation("ProductRegistrant", fields: [registrantId], references: [id], onDelete: Restrict)
+  category                 ProductCategory          @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  attachments              Attachment[]
+  evaluations              Evaluation[]
 
   @@index([status, categoryId, createdAt])
   @@index([registrantId, createdAt])
   @@map("products")
+}
+
+model ProductJudgeAssignment {
+  id                  String          @id @default(cuid())
+  productId           String
+  judgeId             String
+  managingAgencyId    String?
+  organizationUnitId  String?
+  isManual            Boolean         @default(false)
+  mustSubmitToComplete Boolean        @default(false)
+  isActive            Boolean         @default(true)
+  assignedAt          DateTime        @default(now()) @db.Timestamptz(3)
+  assignedById        String?
+  removedAt           DateTime?       @db.Timestamptz(3)
+  removedById         String?
+  removeReason        String?         @db.VarChar(255)
+  product             Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  judge               User            @relation("ProductJudge", fields: [judgeId], references: [id], onDelete: Restrict)
+  managingAgency      ManagingAgency? @relation(fields: [managingAgencyId], references: [id], onDelete: SetNull)
+  assignedBy          User?           @relation("ProductAssignmentActor", fields: [assignedById], references: [id], onDelete: SetNull)
+  removedBy           User?           @relation("ProductAssignmentRemover", fields: [removedById], references: [id], onDelete: SetNull)
+
+  @@unique([productId, judgeId])
+  @@index([productId, isActive])
+  @@index([judgeId, isActive])
+  @@map("product_judge_assignments")
+}
+
+model ProductResultHistory {
+  id          String   @id @default(cuid())
+  productId   String
+  action      String   @db.VarChar(50)
+  finalScore  Float?
+  starRating  Int?
+  isCurrent   Boolean  @default(false)
+  actorId     String?
+  reason      String?  @db.VarChar(255)
+  snapshot    Json?
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  actor       User?    @relation("ProductResultHistoryActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([productId, createdAt])
+  @@map("product_result_history")
 }
 
 model ProductStatusEvent {
@@ -340,22 +451,48 @@ model JudgeAssignment {
 }
 
 model Evaluation {
-  id                 String           @id @default(cuid())
+  id                 String                   @id @default(cuid())
   judgeId            String
   productId          String
-  status             EvaluationStatus @default(IN_PROGRESS)
-  submittedAt        DateTime?        @db.Timestamptz(3)
+  status             EvaluationStatus         @default(IN_PROGRESS)
+  previousStatus     EvaluationStatus?
+  submittedAt        DateTime?                @db.Timestamptz(3)
   submissionSnapshot Json?
   total              Int?
-  createdAt          DateTime         @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime         @updatedAt @db.Timestamptz(3)
-  judge              User             @relation(fields: [judgeId], references: [id], onDelete: Restrict)
-  product            Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  reopenedAt         DateTime?                @db.Timestamptz(3)
+  reopenedById       String?
+  reopenReason       String?                  @db.VarChar(255)
+  excludedAt         DateTime?                @db.Timestamptz(3)
+  excludedById       String?
+  excludeReason      String?                  @db.VarChar(255)
+  createdAt          DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime                 @updatedAt @db.Timestamptz(3)
+  judge              User                     @relation(fields: [judgeId], references: [id], onDelete: Restrict)
+  product            Product                  @relation(fields: [productId], references: [id], onDelete: Cascade)
   scores             Score[]
+  historyEvents      EvaluationHistoryEvent[]
 
   @@unique([judgeId, productId])
   @@index([productId, status])
   @@map("evaluations")
+}
+
+model EvaluationHistoryEvent {
+  id             String            @id @default(cuid())
+  evaluationId   String
+  action         String            @db.VarChar(50)
+  fromStatus     EvaluationStatus?
+  toStatus       EvaluationStatus
+  actorId        String?
+  reason         String?           @db.VarChar(255)
+  previousTotal  Int?
+  snapshot       Json?
+  createdAt      DateTime          @default(now()) @db.Timestamptz(3)
+  evaluation     Evaluation        @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  actor          User?             @relation("EvaluationHistoryActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([evaluationId, createdAt])
+  @@map("evaluation_history_events")
 }
 
 model Score {
@@ -370,4 +507,23 @@ model Score {
   @@id([evaluationId, subCriterionId])
   @@index([subCriterionId])
   @@map("scores")
+}
+
+model RegistrationUnit {
+  id                  String   @id @default(cuid())
+  registrantId        String
+  entityName          String   @db.VarChar(255)
+  representativeName  String   @db.VarChar(255)
+  representativeTitle String   @db.VarChar(255)
+  contactAddress      String   @db.VarChar(1000)
+  provinceName        String   @db.VarChar(100)
+  localityName        String   @db.VarChar(255)
+  localityCode        String?  @db.VarChar(50)
+  phone               String?  @db.VarChar(30)
+  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime @updatedAt @db.Timestamptz(3)
+  registrant          User     @relation("UserRegistrationUnits", fields: [registrantId], references: [id], onDelete: Cascade)
+
+  @@index([registrantId, updatedAt])
+  @@map("registration_units")
 }

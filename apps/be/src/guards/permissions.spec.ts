@@ -31,7 +31,7 @@ describe('database staff permissions', () => {
     }
   });
 
-  it('allows combined permissions while preserving REGISTRANT-only routes', () => {
+  it('allows combined permissions and allows ADMIN or multi-role REGISTRANT+VIEWER on REGISTRANT routes while blocking JUDGE', () => {
     for (const staffPermissions of [['MANAGE', 'SCORE'], ['VIEW', 'SCORE']]) {
       const user = { role: Role.ADMIN, staffPermissions };
       expect(new RoleGuard(reflector('VIEW')).canActivate(context(user) as never)).toBe(true);
@@ -39,13 +39,17 @@ describe('database staff permissions', () => {
     }
     const registrantOnly = { getAllAndOverride: (key: string) => key === 'roles' ? [Role.REGISTRANT] : undefined } as unknown as Reflector;
     expect(() => new RoleGuard(registrantOnly).canActivate(context({ role: Role.ADMIN, staffPermissions: ['MANAGE', 'SCORE'] }) as never)).toThrow(ForbiddenException);
+    expect(new RoleGuard(registrantOnly).canActivate(context({ role: Role.ADMIN, roles: [Role.REGISTRANT, Role.ADMIN], staffPermissions: ['MANAGE'] }) as never)).toBe(true);
+    expect(new RoleGuard(registrantOnly).canActivate(context({ role: Role.VIEWER, roles: [Role.REGISTRANT, Role.VIEWER], staffPermissions: ['VIEW'] }) as never)).toBe(true);
+    expect(() => new RoleGuard(registrantOnly).canActivate(context({ role: Role.VIEWER, roles: [Role.VIEWER], staffPermissions: ['VIEW'] }) as never)).toThrow(ForbiddenException);
+    expect(() => new RoleGuard(registrantOnly).canActivate(context({ role: Role.JUDGE, roles: [Role.JUDGE], staffPermissions: ['SCORE'] }) as never)).toThrow(ForbiddenException);
     expect(new RoleGuard(registrantOnly).canActivate(context({ role: Role.REGISTRANT, staffPermissions: [] }) as never)).toBe(true);
   });
 
   it('replaces token permissions and unit with current DB values', async () => {
     const token = { sub: 'u', role: Role.ADMIN, email: 'old', tokenVersion: 3, staffPermissions: ['MANAGE'], organizationUnitId: 'old' };
     const repository = { findUserById: jest.fn().mockResolvedValue({
-      role: Role.JUDGE, email: 'current', verified: true, isActive: true, tokenVersion: 3,
+      role: Role.JUDGE, roles: [Role.JUDGE], email: 'current', verified: true, isActive: true, tokenVersion: 3,
       staffPermissions: ['SCORE'], organizationUnitId: 'unit', organizationUnit: { id: 'unit', code: 'U', name: 'Unit' },
     }) };
     await new AccountGuard(repository as unknown as AuthRepository).canActivate(context(token) as never);

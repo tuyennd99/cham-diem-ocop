@@ -9,14 +9,18 @@ export const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'button-primary bg-accent text-white hover:bg-accent-hover',
-        primary: 'button-primary bg-accent text-white hover:bg-accent-hover',
+        default:
+          'button-primary border border-transparent bg-accent text-white hover:bg-accent-hover',
+        primary:
+          'button-primary border border-transparent bg-accent text-white hover:bg-accent-hover',
         secondary:
           'button-secondary border border-border bg-surface text-fg hover:border-accent hover:bg-accent-soft',
-        destructive: 'bg-destructive text-white hover:opacity-90',
+        destructive: 'border border-transparent bg-destructive text-white hover:opacity-90',
+        'destructive-outline':
+          'button-destructive-outline border border-destructive/35 bg-surface text-destructive hover:border-destructive hover:bg-destructive/10',
         outline: 'border border-border bg-surface text-fg hover:border-accent hover:bg-accent-soft',
-        ghost: 'hover:bg-accent-soft text-fg',
-        link: 'text-accent underline-offset-4 hover:underline',
+        ghost: 'border border-transparent hover:bg-accent-soft text-fg',
+        link: 'border border-transparent text-accent underline-offset-4 hover:underline',
       },
       size: {
         default: 'min-h-11 px-4 py-2',

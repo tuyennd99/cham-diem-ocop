@@ -1,9 +1,15 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
+import { ImagePreviewDialog } from '@/components/image-preview-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { publicAttachmentUrl } from '../../constants/api';
-import { PUBLIC_PRODUCT_STATUS_TONE } from '../../constants/product-status';
+import { HTTP_STATUS } from '../../constants/http-status';
+import {
+  PRODUCT_PUBLICATION_STATE,
+  PRODUCT_STATUS,
+  PUBLIC_PRODUCT_STATUS_TONE,
+} from '../../constants/product-status';
 import { ApiError } from '../../lib/api-error';
 import { formatExactScore, formatStarRatingLabel } from '../../lib/print-format';
 import { usePublicProduct } from '../../queries/common';
@@ -12,7 +18,11 @@ import type { PublicProduct } from '../../types/public';
 const PUBLIC_DETAIL_STATUS_COPY = {
   SUBMITTED: {
     label: 'Đã tiếp nhận',
-    description: 'Hồ sơ đã được tiếp nhận và đang chờ đánh giá.',
+    description: 'Hồ sơ đã được tiếp nhận và đang chờ xét duyệt.',
+  },
+  APPROVED: {
+    label: 'Đã duyệt',
+    description: 'Hồ sơ đã được duyệt và phân công hội đồng đánh giá.',
   },
   SCORING: {
     label: 'Đang đánh giá',
@@ -20,9 +30,25 @@ const PUBLIC_DETAIL_STATUS_COPY = {
   },
   COMPLETED: {
     label: 'Đã hoàn tất đánh giá',
-    description: 'Kết quả đánh giá của hồ sơ được hiển thị bên dưới.',
+    description: 'Kết quả đánh giá của hồ sơ được hiển thị bên dưới sau khi công bố.',
   },
 } as const;
+
+export function PublicProductNotFound() {
+  return (
+    <main className='route-main public-product-page' id='content'>
+      <div className='route-container container'>
+        <div className='public-product-error'>
+          <h1>Không tìm thấy sản phẩm công khai</h1>
+          <p>Sản phẩm này không tồn tại hoặc chưa được công khai.</p>
+          <Link className='text-link' to='/products'>
+            Quay lại danh sách sản phẩm
+          </Link>
+        </div>
+      </div>
+    </main>
+  );
+}
 
 export function PublicProductDetailPage({ id }: { id: string }) {
   const {
@@ -33,22 +59,10 @@ export function PublicProductDetailPage({ id }: { id: string }) {
     refetch,
   } = usePublicProduct<PublicProduct>(id);
   const [failedAttachmentIds, setFailedAttachmentIds] = useState<Set<string>>(() => new Set());
-  const isNotFound = loadError instanceof ApiError && loadError.status === 404;
+  const [previewImageIndex, setPreviewImageIndex] = useState<number | null>(null);
+  const isNotFound = loadError instanceof ApiError && loadError.status === HTTP_STATUS.NOT_FOUND;
 
-  if (isNotFound)
-    return (
-      <main className='route-main public-product-page' id='content'>
-        <div className='route-container container'>
-          <div className='public-product-error'>
-            <h1>Không tìm thấy sản phẩm công khai</h1>
-            <p>Sản phẩm này không tồn tại hoặc chưa được công khai.</p>
-            <Link className='text-link' to='/products'>
-              Quay lại danh sách sản phẩm
-            </Link>
-          </div>
-        </div>
-      </main>
-    );
+  if (isNotFound) return <PublicProductNotFound />;
 
   if (!product && isPending)
     return (
@@ -98,7 +112,7 @@ export function PublicProductDetailPage({ id }: { id: string }) {
   const statusCopy = PUBLIC_DETAIL_STATUS_COPY[product.status];
   const hasImages = product.attachments.length > 0;
   const hasDescription = Boolean(product.description?.trim());
-  const hasDetails = hasDescription || product.status === 'COMPLETED';
+  const hasDetails = hasDescription || product.status === PRODUCT_STATUS.COMPLETED;
   const layoutClass = !hasImages
     ? ' public-product-layout--no-image'
     : !hasDetails
@@ -158,17 +172,24 @@ export function PublicProductDetailPage({ id }: { id: string }) {
                       Không tải được hình ảnh này.
                     </div>
                   ) : (
-                    <img
-                      src={publicAttachmentUrl(product.id, product.attachments[0].id)}
-                      alt={product.name + ' — ảnh 1'}
-                      loading='eager'
-                      decoding='async'
-                      onError={() =>
-                        setFailedAttachmentIds((current) =>
-                          new Set(current).add(product.attachments[0].id),
-                        )
-                      }
-                    />
+                    <button
+                      type='button'
+                      className='block size-full cursor-zoom-in border-0 bg-transparent p-0'
+                      onClick={() => setPreviewImageIndex(0)}
+                      aria-label={`Xem phóng to ${product.name} — ảnh 1`}
+                    >
+                      <img
+                        src={publicAttachmentUrl(product.id, product.attachments[0].id)}
+                        alt={product.name + ' — ảnh 1'}
+                        loading='eager'
+                        decoding='async'
+                        onError={() =>
+                          setFailedAttachmentIds((current) =>
+                            new Set(current).add(product.attachments[0].id),
+                          )
+                        }
+                      />
+                    </button>
                   )}
                 </figure>
               </section>
@@ -185,28 +206,39 @@ export function PublicProductDetailPage({ id }: { id: string }) {
                 </section>
               )}
 
-              {product.status === 'COMPLETED' && (
+              {product.status === PRODUCT_STATUS.COMPLETED && (
                 <section
                   className='public-product-result'
                   aria-labelledby='public-product-result-title'
                 >
                   <h2 id='public-product-result-title'>Kết quả đánh giá</h2>
-                  <div className='public-product-result-values'>
-                    <p className='public-product-score'>
-                      {product.finalScore !== null
-                        ? formatExactScore(product.finalScore) + ' / 100 điểm'
-                        : 'Chưa có điểm tổng để hiển thị.'}
+                  {product.publicationState === PRODUCT_PUBLICATION_STATE.PUBLISHED &&
+                  product.finalScore !== null ? (
+                    <>
+                      <div className='public-product-result-values'>
+                        <p className='public-product-score'>
+                          {formatExactScore(product.finalScore) + ' / 100 điểm'}
+                        </p>
+                        <p className='public-product-stars'>
+                          {product.starRating !== null
+                            ? formatStarRatingLabel(product.starRating)
+                            : 'Chưa có kết quả xếp sao.'}
+                        </p>
+                      </div>
+                      <p className='public-product-result-note'>
+                        Kết quả được tính từ phiếu chấm trong hệ thống, không thay thế quyết định
+                        công nhận OCOP.
+                      </p>
+                    </>
+                  ) : product.publicationState === PRODUCT_PUBLICATION_STATE.UPDATING ? (
+                    <p className='public-product-result-note'>
+                      Kết quả đang được cập nhật sau khi có phiếu chấm bổ sung và chờ công bố lại.
                     </p>
-                    <p className='public-product-stars'>
-                      {product.starRating !== null
-                        ? formatStarRatingLabel(product.starRating)
-                        : 'Chưa có kết quả xếp sao.'}
+                  ) : (
+                    <p className='public-product-result-note'>
+                      Hồ sơ đã hoàn tất chấm điểm và đang chờ công bố kết quả chính thức.
                     </p>
-                  </div>
-                  <p className='public-product-result-note'>
-                    Kết quả được tính từ phiếu chấm trong hệ thống, không thay thế quyết định công
-                    nhận OCOP.
-                  </p>
+                  )}
                 </section>
               )}
             </div>
@@ -242,21 +274,40 @@ export function PublicProductDetailPage({ id }: { id: string }) {
                         Không tải được hình ảnh này.
                       </div>
                     ) : (
-                      <img
-                        src={publicAttachmentUrl(product.id, attachment.id)}
-                        alt={product.name + ' — ảnh ' + (index + 2)}
-                        loading='lazy'
-                        decoding='async'
-                        onError={() =>
-                          setFailedAttachmentIds((current) => new Set(current).add(attachment.id))
-                        }
-                      />
+                      <button
+                        type='button'
+                        className='block size-full cursor-zoom-in border-0 bg-transparent p-0'
+                        onClick={() => setPreviewImageIndex(index + 1)}
+                        aria-label={`Xem phóng to ${product.name} — ảnh ${index + 2}`}
+                      >
+                        <img
+                          src={publicAttachmentUrl(product.id, attachment.id)}
+                          alt={product.name + ' — ảnh ' + (index + 2)}
+                          loading='lazy'
+                          decoding='async'
+                          onError={() =>
+                            setFailedAttachmentIds((current) => new Set(current).add(attachment.id))
+                          }
+                        />
+                      </button>
                     )}
                   </figure>
                 ))}
               </div>
             </section>
           )}
+
+          <ImagePreviewDialog
+            items={product.attachments.map((att, idx) => ({
+              kind: 'url',
+              id: att.id,
+              name: `${product.name} — Ảnh ${idx + 1}`,
+              url: publicAttachmentUrl(product.id, att.id),
+            }))}
+            activeIndex={previewImageIndex}
+            onIndexChange={setPreviewImageIndex}
+            contextLabel={product.name}
+          />
         </article>
       </div>
     </main>

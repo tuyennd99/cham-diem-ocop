@@ -1,4 +1,4 @@
-import { useStore } from 'zustand';
+import { useSyncExternalStore } from 'react';
 import { createStore } from 'zustand/vanilla';
 import { SESSION_STORAGE_KEY } from '../constants/auth';
 import { normalizeSession, parseStoredSession, serializeSession } from '../lib/session-contract';
@@ -29,13 +29,21 @@ export function getSession(): Session | null {
 
 export function setSession(next: Session | null): void {
   const normalized = next ? normalizeSession(next) : null;
-  if (normalized) window.localStorage.setItem(SESSION_STORAGE_KEY, serializeSession(normalized));
-  else window.localStorage.removeItem(SESSION_STORAGE_KEY);
+  if (typeof window !== 'undefined' && window.localStorage) {
+    if (normalized) window.localStorage.setItem(SESSION_STORAGE_KEY, serializeSession(normalized));
+    else window.localStorage.removeItem(SESSION_STORAGE_KEY);
+  }
   sessionStore.setState({ session: normalized });
 }
 
+const getServerSessionSnapshot = (): Session | null => null;
+
 export function useSession(): Session | null {
-  return useStore(sessionStore, (state) => state.session);
+  return useSyncExternalStore(
+    sessionStore.subscribe,
+    () => sessionStore.getState().session,
+    getServerSessionSnapshot,
+  );
 }
 
 // Keep tabs in sync: login/logout in another tab updates this one.

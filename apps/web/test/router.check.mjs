@@ -9,7 +9,7 @@ const server = await createServer({
   envDir: false,
   appType: 'custom',
   resolve: { alias: { '@': fileURLToPath(new URL('../src', import.meta.url)) } },
-  ssr: { noExternal: ['lodash'], optimizeDeps: { include: ['lodash'] } },
+  ssr: { noExternal: ['lodash'], optimizeDeps: { include: ['react', 'react-dom', 'lodash'] } },
   server: { middlewareMode: true, watch: null, hmr: false },
 });
 
@@ -31,7 +31,7 @@ try {
     '/admin/users', '/admin/judges', '/admin/products', '/admin/products/$id',
     '/admin/registrations', '/admin/registrations/new',
     '/admin/registrations/$id', '/admin/registrations/$id/edit',
-    '/judge', '/judge/products/$id', '/my/products', '/my/products/new',
+    '/judge', '/judge/products/$id', '/my/products', '/my/products/new', '/my/settings',
     '/my/products/$id', '/my/products/$id/edit', '/print/criteria-sets/$id',
     '/print/evaluations/$id', '/print/judge/products/$id',
     '/print/products/$id/registration', '/print/products/$id/results',
@@ -72,6 +72,11 @@ try {
   assert.throws(() => checkGuards('/account/password', null), redirectsTo('/login'));
   assert.doesNotThrow(() => checkGuards('/account/password', owner));
   assert.doesNotThrow(() => checkGuards('/my/products/product-1/edit', owner));
+  assert.doesNotThrow(() => checkGuards('/my/settings', owner));
+  assert.throws(() => checkGuards('/my/settings', null), redirectsTo('/login'));
+  assert.throws(() => checkGuards('/my/settings', manager), redirectsTo('/403'));
+  assert.throws(() => checkGuards('/my/settings', viewer), redirectsTo('/403'));
+  assert.throws(() => checkGuards('/my/settings', judge), redirectsTo('/403'));
   assert.throws(() => checkGuards('/my/products/product-1/edit', manager), redirectsTo('/403'));
   assert.doesNotThrow(() => checkGuards('/admin/registrations/product-1/edit', manager));
   assert.throws(() => checkGuards('/admin/registrations/product-1/edit', viewer), redirectsTo('/403'));

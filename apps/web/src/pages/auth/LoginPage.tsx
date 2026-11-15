@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useForm } from '@tanstack/react-form';
+import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import AlertError from '@/components/alert-error';
 import { FormField } from '@/components/form-field';
@@ -9,37 +10,46 @@ import { SimpleCombobox } from '@/components/simple-combobox';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { authApi } from '../../api';
+import { AUTH_FRAME_MODE, GOOGLE_AUTH_INTENT } from '../../constants/auth';
 import { messageOf } from '../../lib/api-error';
 import { homeFor, setSession } from '../../lib/auth';
+import type { SeedAccount } from '../../types/auth';
 import { AuthFrame } from './AuthFrame';
 
-// shortcut: hardcoded seed accounts for local testing, remove before production
-const SEED_ACCOUNTS = [
-  { value: 'admin@ocop.test', label: 'Quản trị hệ thống (MANAGE + VIEW) — admin@ocop.test' },
-  {
-    value: 'admin.score@ocop.test',
-    label: 'Quản trị kiêm Giám khảo (MANAGE + VIEW + SCORE) — admin.score@ocop.test',
-  },
-  { value: 'viewer@ocop.test', label: 'Cán bộ Tra cứu & Báo cáo (VIEW) — viewer@ocop.test' },
-  {
-    value: 'viewer.score@ocop.test',
-    label: 'Giám khảo kiêm Xem toàn hệ thống (VIEW + SCORE) — viewer.score@ocop.test',
-  },
-  { value: 'judge@ocop.test', label: 'Giám khảo Hội đồng (SCORE) — judge@ocop.test' },
-  { value: 'registrant@ocop.test', label: 'Chủ thể OCOP Mẫu (REGISTRANT) — registrant@ocop.test' },
-  {
-    value: 'htx.uminh@ocop.test',
-    label: 'Hợp tác xã Mật ong rừng U Minh Hạ (REGISTRANT) — htx.uminh@ocop.test',
-  },
-  {
-    value: 'htx.rachgoc@ocop.test',
-    label: 'Hợp tác xã Thủy sản Sinh thái Rạch Gốc (REGISTRANT) — htx.rachgoc@ocop.test',
-  },
-];
+const ROLE_SHORT_LABEL: Record<string, string> = {
+  ADMIN: 'Quản trị',
+  VIEWER: 'Chủ trì',
+  JUDGE: 'Giám khảo',
+  REGISTRANT: 'Người dùng',
+};
+
+function formatSeedAccountLabel(account: SeedAccount): string {
+  if (account.fullName.includes('(')) {
+    return `${account.fullName} — ${account.email}`;
+  }
+  const roleNames = (account.roles?.length ? account.roles : [account.role])
+    .map((role) => ROLE_SHORT_LABEL[role] ?? role)
+    .join(' + ');
+  return `${account.fullName} (${roleNames}) — ${account.email}`;
+}
 
 export function LoginPage() {
   const navigate = useNavigate();
   const [error, setError] = useState('');
+  const seedAccountsQuery = useQuery({
+    queryKey: ['auth', 'seed-accounts'],
+    queryFn: async () => (await authApi.seedAccounts()).data,
+    staleTime: 60_000,
+    retry: false,
+  });
+  const seedAccountOptions = useMemo(
+    () =>
+      (seedAccountsQuery.data ?? []).map((account) => ({
+        value: account.email,
+        label: formatSeedAccountLabel(account),
+      })),
+    [seedAccountsQuery.data],
+  );
 
   const form = useForm({
     defaultValues: { email: '', password: 'OcopTest@2026!' },
@@ -109,10 +119,10 @@ export function LoginPage() {
       eyebrow='TÀI KHOẢN OCOP'
       title='Đăng nhập'
       intro='Dùng email đã xác thực để tiếp tục làm việc với hồ sơ sản phẩm hoặc hội đồng chấm điểm.'
-      mode='login'
+      mode={AUTH_FRAME_MODE.LOGIN}
       aside={loginAside}
     >
-      <GoogleSignIn intent='login' />
+      <GoogleSignIn intent={GOOGLE_AUTH_INTENT.LOGIN} />
       <form
         className='account-form'
         onSubmit={(event) => {
@@ -120,22 +130,24 @@ export function LoginPage() {
           void form.handleSubmit();
         }}
       >
-        <form.Subscribe selector={(state) => state.values.email}>
-          {(email) => (
-            <FormField label='Tài khoản test (Seed)' htmlFor='login-seed-account'>
-              <SimpleCombobox
-                id='login-seed-account'
-                options={SEED_ACCOUNTS}
-                value={SEED_ACCOUNTS.some((item) => item.value === email) ? email : ''}
-                onChange={(nextEmail) => {
-                  form.setFieldValue('email', nextEmail);
-                  form.setFieldValue('password', 'OcopTest@2026!');
-                }}
-                placeholder='Chọn nhanh tài khoản seed...'
-              />
-            </FormField>
-          )}
-        </form.Subscribe>
+        {seedAccountOptions.length > 0 && (
+          <form.Subscribe selector={(state) => state.values.email}>
+            {(email) => (
+              <FormField label='Tài khoản test (Seed)' htmlFor='login-seed-account'>
+                <SimpleCombobox
+                  id='login-seed-account'
+                  options={seedAccountOptions}
+                  value={seedAccountOptions.some((item) => item.value === email) ? email : ''}
+                  onChange={(nextEmail) => {
+                    form.setFieldValue('email', nextEmail);
+                    form.setFieldValue('password', 'OcopTest@2026!');
+                  }}
+                  placeholder='Chọn nhanh tài khoản seed...'
+                />
+              </FormField>
+            )}
+          </form.Subscribe>
+        )}
         <form.Field name='email'>
           {(field) => (
             <FormField label='Email' htmlFor={`login-${field.name}`}>

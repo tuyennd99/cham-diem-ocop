@@ -16,80 +16,98 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
-import type { ProductRegistrationType } from '@ocop/shared';
 import { productRegistrationTypes } from '../constants/products';
 
-const trimOptional = ({ value }: { value: unknown }) =>
-  typeof value === 'string' ? value.trim() || undefined : value;
+const trimRequired = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim() : value;
+
+const parseQueryBoolean = ({ value }: { value: unknown }) =>
+  value === 'true' ? true : value === 'false' ? false : value;
 
 export class ProductApplicationDto {
   @ApiPropertyOptional({ maxLength: 255, nullable: true })
-  @IsOptional()
-  @Transform(trimOptional)
+  @ValidateIf((_object, value) => value !== undefined)
+  @Transform(trimRequired)
   @IsString()
   @MinLength(1)
   @MaxLength(255)
   entityName?: string;
 
   @ApiPropertyOptional({ maxLength: 255, nullable: true })
-  @IsOptional()
-  @Transform(trimOptional)
+  @ValidateIf((_object, value) => value !== undefined)
+  @Transform(trimRequired)
   @IsString()
   @MinLength(1)
   @MaxLength(255)
   representativeName?: string;
 
   @ApiPropertyOptional({ maxLength: 255, nullable: true })
-  @IsOptional()
-  @Transform(trimOptional)
+  @ValidateIf((_object, value) => value !== undefined)
+  @Transform(trimRequired)
   @IsString()
   @MinLength(1)
   @MaxLength(255)
   representativeTitle?: string;
 
   @ApiPropertyOptional({ maxLength: 1000, nullable: true })
-  @IsOptional()
-  @Transform(trimOptional)
+  @ValidateIf((_object, value) => value !== undefined)
+  @Transform(trimRequired)
   @IsString()
   @MinLength(1)
   @MaxLength(1000)
   contactAddress?: string;
 
   @ApiPropertyOptional({ maxLength: 100, nullable: true })
-  @IsOptional()
-  @Transform(trimOptional)
+  @ValidateIf((_object, value) => value !== undefined)
+  @Transform(trimRequired)
   @IsString()
   @MinLength(1)
   @MaxLength(100)
   provinceName?: string;
 
+  @ApiPropertyOptional({ maxLength: 255, nullable: true })
+  @ValidateIf((_object, value) => value !== undefined && value !== null && value !== '')
+  @Transform(trimRequired)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(255)
+  localityName?: string;
+
+  @ApiPropertyOptional({ maxLength: 50, nullable: true })
+  @ValidateIf((_object, value) => value !== undefined && value !== null && value !== '')
+  @Transform(trimRequired)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(50)
+  localityCode?: string;
+
   @ApiPropertyOptional({ maxLength: 30, nullable: true })
-  @IsOptional()
-  @Transform(trimOptional)
+  @ValidateIf((_object, value) => value !== undefined && value !== null && value !== '')
+  @Transform(trimRequired)
   @IsString()
   @MaxLength(30)
   phone?: string;
 
   @ApiPropertyOptional({ format: 'email', maxLength: 320, nullable: true })
-  @IsOptional()
+  @ValidateIf((_object, value) => value !== undefined && value !== null && value !== '')
   @Transform(({ value }) =>
-    typeof value === 'string' ? value.trim().toLowerCase() || undefined : value,
+    typeof value === 'string' ? value.trim().toLowerCase() : value,
   )
   @IsEmail()
   @MaxLength(320)
   email?: string;
 
   @ApiPropertyOptional({ enum: productRegistrationTypes, nullable: true })
-  @IsOptional()
-  @Transform(trimOptional)
+  @ValidateIf((_object, value) => value !== undefined)
+  @Transform(trimRequired)
   @IsIn(productRegistrationTypes)
   registrationType?: (typeof productRegistrationTypes)[number];
 
-  @ApiPropertyOptional({ minimum: 0, maximum: 100000, nullable: true })
+  @ApiPropertyOptional({ minimum: 1, maximum: 100000, nullable: true })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  @Min(0)
+  @Min(1)
   @Max(100000)
   sampleQuantity?: number;
 
@@ -109,12 +127,16 @@ export class ProductApplicationDto {
 
 export class ProductWriteDto {
   @ApiProperty({ maxLength: 100 })
+  @Transform(trimRequired)
   @IsString()
+  @MinLength(1)
   @MaxLength(100)
   categoryId!: string;
 
   @ApiProperty({ maxLength: 255 })
+  @Transform(trimRequired)
   @IsString()
+  @MinLength(1)
   @MaxLength(255)
   name!: string;
 
@@ -142,7 +164,9 @@ export class ProductWriteDto {
 export class ProductUpdateDto {
   @ApiPropertyOptional({ maxLength: 100 })
   @ValidateIf((_object, value) => value !== undefined)
+  @Transform(trimRequired)
   @IsString()
+  @MinLength(1)
   @MaxLength(100)
   categoryId?: string;
 
@@ -155,7 +179,9 @@ export class ProductUpdateDto {
 
   @ApiPropertyOptional({ maxLength: 255 })
   @ValidateIf((_object, value) => value !== undefined)
+  @Transform(trimRequired)
   @IsString()
+  @MinLength(1)
   @MaxLength(255)
   name?: string;
 
@@ -201,4 +227,74 @@ export class PublicProductQueryDto {
   @IsString()
   @MaxLength(100)
   q?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Transform(parseQueryBoolean)
+  @IsBoolean()
+  approvedOnly?: boolean;
+}
+
+const trimNullableOptional = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim() || null : value;
+
+export class RegistrationUnitWriteDto {
+  @ApiProperty({ minLength: 1, maxLength: 255 })
+  @Transform(trimRequired)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(255)
+  entityName!: string;
+
+  @ApiProperty({ minLength: 1, maxLength: 255 })
+  @Transform(trimRequired)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(255)
+  representativeName!: string;
+
+  @ApiProperty({ minLength: 1, maxLength: 255 })
+  @Transform(trimRequired)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(255)
+  representativeTitle!: string;
+
+  @ApiProperty({ minLength: 1, maxLength: 1000 })
+  @Transform(trimRequired)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(1000)
+  contactAddress!: string;
+
+  @ApiProperty({ minLength: 1, maxLength: 100 })
+  @Transform(trimRequired)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  provinceName!: string;
+
+  @ApiProperty({ minLength: 1, maxLength: 255 })
+  @Transform(trimRequired)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(255)
+  localityName!: string;
+
+  @ApiPropertyOptional({ minLength: 1, maxLength: 50, nullable: true })
+  @IsOptional()
+  @Transform(trimNullableOptional)
+  @ValidateIf((_object, value) => value !== undefined && value !== null)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(50)
+  localityCode?: string | null;
+
+  @ApiPropertyOptional({ maxLength: 30, nullable: true })
+  @IsOptional()
+  @Transform(trimNullableOptional)
+  @ValidateIf((_object, value) => value !== undefined && value !== null)
+  @IsString()
+  @MaxLength(30)
+  phone?: string | null;
 }

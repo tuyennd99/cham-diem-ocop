@@ -1,3 +1,4 @@
+import { ProductStatus } from '@prisma/client';
 import type {
   AdminAnalyticsDashboardResponse,
   AdminProductQuery,
@@ -5,8 +6,8 @@ import type {
   AdminReportQuery,
   DashboardKpiItem,
   PeriodComparisonDelta,
+  ProductDateBasis,
   ProductRegistrationType,
-  ProductStatus,
   RegistrationReportResponse,
   RegistrationReportRow,
   ReportDataQuality,
@@ -16,6 +17,15 @@ import type {
   ResultsReportRow,
   StarBreakdown,
 } from '@ocop/shared';
+import {
+  COMPARISON_NOTE,
+  DASHBOARD_KPI_ID,
+  KPI_AVAILABILITY,
+  KPI_UNIT,
+  PRODUCT_DATE_BASIS,
+  REPORT_GROUP_BY,
+  REPORT_KIND,
+} from '../constants/products';
 import { calculateStars } from './scoring';
 
 const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
@@ -239,7 +249,7 @@ export function computeComparisonDelta(
       previous: null,
       deltaAbsolute: null,
       deltaPercent: null,
-      comparisonNote: 'INSUFFICIENT_HISTORY',
+      comparisonNote: COMPARISON_NOTE.INSUFFICIENT_HISTORY,
     };
   }
   if (previous === null || previous === 0) {
@@ -248,7 +258,7 @@ export function computeComparisonDelta(
       previous: previous ?? 0,
       deltaAbsolute: current - (previous ?? 0),
       deltaPercent: null,
-      comparisonNote: 'NO_PRIOR_DATA',
+      comparisonNote: COMPARISON_NOTE.NO_PRIOR_DATA,
     };
   }
   const deltaAbsolute = current - previous;
@@ -259,7 +269,7 @@ export function computeComparisonDelta(
     previous,
     deltaAbsolute,
     deltaPercent,
-    comparisonNote: 'OK',
+    comparisonNote: COMPARISON_NOTE.OK,
   };
 }
 
@@ -295,7 +305,7 @@ function aggregateRegistrationRows(
         product.completedAt &&
         product.completedAt.getTime() < asOfDate.getTime()
       ) {
-        resolvedStatus = 'COMPLETED';
+        resolvedStatus = ProductStatus.COMPLETED;
       } else if (asOfDate.getTime() >= now.getTime()) {
         resolvedStatus = product.status;
       } else {
@@ -303,16 +313,20 @@ function aggregateRegistrationRows(
       }
     }
 
-    if (!resolvedStatus || resolvedStatus === 'DRAFT') {
+    if (!resolvedStatus || resolvedStatus === ProductStatus.DRAFT) {
       missingDataCount++;
       continue;
     }
 
-    if (resolvedStatus === 'SUBMITTED') {
+    if (
+      resolvedStatus === ProductStatus.SUBMITTED ||
+      resolvedStatus === ProductStatus.RETURNED ||
+      resolvedStatus === ProductStatus.APPROVED
+    ) {
       waitingCount++;
-    } else if (resolvedStatus === 'SCORING') {
+    } else if (resolvedStatus === ProductStatus.SCORING) {
       scoringCount++;
-    } else if (resolvedStatus === 'COMPLETED') {
+    } else if (resolvedStatus === ProductStatus.COMPLETED) {
       completedCount++;
       if (isValidCompletedResult(product)) {
         completedValidCount++;
@@ -415,7 +429,7 @@ function aggregateResultsRows(
 function resolveGroupingBuckets(
   items: readonly ReportingProductRecord[],
   groupBy: ReportGroupBy,
-  dateField: 'submittedAt' | 'completedAt',
+  dateField: ProductDateBasis,
   period: ReturnType<typeof resolveVietnamPeriod>,
   baseQuery: AdminReportFilterQuery,
   catalogs: {
@@ -449,7 +463,7 @@ function resolveGroupingBuckets(
       : {}),
   };
 
-  if (groupBy === 'year') {
+  if (groupBy === REPORT_GROUP_BY.YEAR) {
     return [
       {
         key: String(period.year),
@@ -460,7 +474,7 @@ function resolveGroupingBuckets(
     ];
   }
 
-  if (groupBy === 'month') {
+  if (groupBy === REPORT_GROUP_BY.MONTH) {
     const months = period.month ? [period.month] : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
     return months.map((m) => {
       const mFrom = formatVnBoundaryIso(period.year, m, 1);
@@ -483,7 +497,7 @@ function resolveGroupingBuckets(
     });
   }
 
-  if (groupBy === 'category') {
+  if (groupBy === REPORT_GROUP_BY.CATEGORY) {
     return catalogs.categories
       .filter((c) => !baseQuery.categoryId || c.id === baseQuery.categoryId)
       .map((c) => ({
@@ -494,7 +508,7 @@ function resolveGroupingBuckets(
       }));
   }
 
-  // groupBy === 'locality'
+  // groupBy === REPORT_GROUP_BY.LOCALITY
   const byLoc = new Map<string, ReportingProductRecord[]>();
   const unmapped: ReportingProductRecord[] = [];
   for (const item of items) {
@@ -553,8 +567,10 @@ function computeDataQuality(
   let missingSubmittedAtCount = 0;
   let missingCompletedAtCount = 0;
   for (const p of dimensionFilteredProducts) {
-    if (p.status !== 'DRAFT' && !p.submittedAt) missingSubmittedAtCount++;
-    if (p.status === 'COMPLETED' && !p.completedAt) missingCompletedAtCount++;
+    if (p.status !== ProductStatus.DRAFT && !p.submittedAt)
+      missingSubmittedAtCount++;
+    if (p.status === ProductStatus.COMPLETED && !p.completedAt)
+      missingCompletedAtCount++;
   }
 
   let unmappedLocalityCount = 0;
@@ -571,7 +587,7 @@ function computeDataQuality(
       missingStatusHistoryCount++;
     }
     if (
-      (evStatus === 'COMPLETED' ||
+      (evStatus === ProductStatus.COMPLETED ||
         (p.completedAt && p.completedAt.getTime() < asOfDate.getTime())) &&
       !isValidCompletedResult(p)
     ) {
@@ -612,7 +628,8 @@ export function buildRegistrationReport(input: {
 }): RegistrationReportResponse {
   const now = input.now ?? new Date();
   const groupBy: ReportGroupBy =
-    input.query.groupBy ?? (input.query.month ? 'locality' : 'month');
+    input.query.groupBy ??
+    (input.query.month ? REPORT_GROUP_BY.LOCALITY : REPORT_GROUP_BY.MONTH);
   const period = resolveVietnamPeriod(
     { year: input.query.year, month: input.query.month },
     now,
@@ -629,7 +646,7 @@ export function buildRegistrationReport(input: {
 
   const currentCohort = dimensionFiltered.filter(
     (p) =>
-      p.status !== 'DRAFT' &&
+      p.status !== ProductStatus.DRAFT &&
       p.submittedAt !== null &&
       p.submittedAt.getTime() >= period.fromDate.getTime() &&
       p.submittedAt.getTime() < period.asOfDate.getTime(),
@@ -637,14 +654,14 @@ export function buildRegistrationReport(input: {
 
   const prevCohort = dimensionFiltered.filter(
     (p) =>
-      p.status !== 'DRAFT' &&
+      p.status !== ProductStatus.DRAFT &&
       p.submittedAt !== null &&
       p.submittedAt.getTime() >= period.prevFromDate.getTime() &&
       p.submittedAt.getTime() < period.prevComparisonToExclusiveDate.getTime(),
   );
 
   const baseDrill: Partial<AdminProductQuery> = {
-    dateBasis: 'submittedAt',
+    dateBasis: PRODUCT_DATE_BASIS.SUBMITTED_AT,
     from: period.from,
     toExclusive: period.toExclusive,
 
@@ -682,7 +699,7 @@ export function buildRegistrationReport(input: {
   const buckets = resolveGroupingBuckets(
     currentCohort,
     groupBy,
-    'submittedAt',
+    PRODUCT_DATE_BASIS.SUBMITTED_AT,
     period,
     input.query,
     {
@@ -722,7 +739,7 @@ export function buildRegistrationReport(input: {
   } = period;
 
   return {
-    kind: 'REGISTRATIONS',
+    kind: REPORT_KIND.REGISTRATIONS,
     period: periodMeta,
     filtersApplied: { ...input.query, year: period.year, groupBy },
     groupBy,
@@ -774,7 +791,8 @@ export function buildResultsReport(input: {
 }): ResultsReportResponse {
   const now = input.now ?? new Date();
   const groupBy: ReportGroupBy =
-    input.query.groupBy ?? (input.query.month ? 'locality' : 'month');
+    input.query.groupBy ??
+    (input.query.month ? REPORT_GROUP_BY.LOCALITY : REPORT_GROUP_BY.MONTH);
   const period = resolveVietnamPeriod(
     { year: input.query.year, month: input.query.month },
     now,
@@ -790,7 +808,7 @@ export function buildResultsReport(input: {
 
   const currentCompleted = dimensionFiltered.filter(
     (p) =>
-      p.status === 'COMPLETED' &&
+      p.status === ProductStatus.COMPLETED &&
       p.completedAt !== null &&
       p.completedAt.getTime() >= period.fromDate.getTime() &&
       p.completedAt.getTime() < period.asOfDate.getTime(),
@@ -798,15 +816,15 @@ export function buildResultsReport(input: {
 
   const prevCompleted = dimensionFiltered.filter(
     (p) =>
-      p.status === 'COMPLETED' &&
+      p.status === ProductStatus.COMPLETED &&
       p.completedAt !== null &&
       p.completedAt.getTime() >= period.prevFromDate.getTime() &&
       p.completedAt.getTime() < period.prevComparisonToExclusiveDate.getTime(),
   );
 
   const baseDrill: Partial<AdminProductQuery> = {
-    dateBasis: 'completedAt',
-    status: 'COMPLETED',
+    dateBasis: PRODUCT_DATE_BASIS.COMPLETED_AT,
+    status: ProductStatus.COMPLETED,
     from: period.from,
     toExclusive: period.toExclusive,
 
@@ -840,7 +858,7 @@ export function buildResultsReport(input: {
   const buckets = resolveGroupingBuckets(
     currentCompleted,
     groupBy,
-    'completedAt',
+    PRODUCT_DATE_BASIS.COMPLETED_AT,
     period,
     input.query,
     {
@@ -873,7 +891,7 @@ export function buildResultsReport(input: {
   } = period;
 
   return {
-    kind: 'RESULTS',
+    kind: REPORT_KIND.RESULTS,
     period: periodMeta,
     filtersApplied: { ...input.query, year: period.year, groupBy },
     groupBy,
@@ -933,7 +951,7 @@ export function buildAnalyticsDashboard(input: {
   needsAttention: Array<{
     id: string;
     name: string;
-    status: 'SUBMITTED' | 'SCORING';
+    status: 'SUBMITTED' | 'APPROVED' | 'SCORING';
     submittedAt: string | null;
     category: { id: string; name: string };
     assignedJudgeCount: number;
@@ -951,7 +969,7 @@ export function buildAnalyticsDashboard(input: {
   const isCurrentAsOf = period.asOfDate.getTime() >= now.getTime();
 
   const regReport = buildRegistrationReport({
-    query: { ...input.query, groupBy: 'category' },
+    query: { ...input.query, groupBy: REPORT_GROUP_BY.CATEGORY },
     products: input.products,
 
     categories: input.categories,
@@ -962,7 +980,7 @@ export function buildAnalyticsDashboard(input: {
   });
 
   const resReport = buildResultsReport({
-    query: { ...input.query, groupBy: 'category' },
+    query: { ...input.query, groupBy: REPORT_GROUP_BY.CATEGORY },
     products: input.products,
 
     categories: input.categories,
@@ -986,7 +1004,7 @@ export function buildAnalyticsDashboard(input: {
 
   for (const p of dimensionFiltered) {
     if (
-      p.status === 'DRAFT' ||
+      p.status === ProductStatus.DRAFT ||
       !p.submittedAt ||
       p.submittedAt.getTime() >= period.asOfDate.getTime()
     ) {
@@ -999,7 +1017,7 @@ export function buildAnalyticsDashboard(input: {
         p.completedAt &&
         p.completedAt.getTime() < period.asOfDate.getTime()
       ) {
-        resolved = 'COMPLETED';
+        resolved = ProductStatus.COMPLETED;
       } else if (isCurrentAsOf) {
         resolved = p.status;
       } else {
@@ -1010,7 +1028,12 @@ export function buildAnalyticsDashboard(input: {
       openBacklogMissingHistory = true;
       continue;
     }
-    if (resolved === 'SUBMITTED' || resolved === 'SCORING') {
+    if (
+      resolved === ProductStatus.SUBMITTED ||
+      resolved === ProductStatus.RETURNED ||
+      resolved === ProductStatus.APPROVED ||
+      resolved === ProductStatus.SCORING
+    ) {
       openBacklogItems.push(p);
     }
   }
@@ -1023,7 +1046,7 @@ export function buildAnalyticsDashboard(input: {
   let prevBacklogMissingHistory = false;
   for (const p of dimensionFiltered) {
     if (
-      p.status === 'DRAFT' ||
+      p.status === ProductStatus.DRAFT ||
       !p.submittedAt ||
       p.submittedAt.getTime() >= period.prevAsOfDate.getTime()
     ) {
@@ -1040,7 +1063,12 @@ export function buildAnalyticsDashboard(input: {
       prevBacklogMissingHistory = true;
       continue;
     }
-    if (evStatus === 'SUBMITTED' || evStatus === 'SCORING') {
+    if (
+      evStatus === ProductStatus.SUBMITTED ||
+      evStatus === ProductStatus.RETURNED ||
+      evStatus === ProductStatus.APPROVED ||
+      evStatus === ProductStatus.SCORING
+    ) {
       prevOpenBacklogAtAsOf++;
     }
   }
@@ -1057,7 +1085,7 @@ export function buildAnalyticsDashboard(input: {
     id: DashboardKpiItem['id'];
     label: string;
     basisLabel: string;
-    unit: 'COUNT' | 'PERCENT';
+    unit: DashboardKpiItem['unit'];
     current: number | null;
     previous: number | null;
     insufficientHistory?: boolean;
@@ -1078,11 +1106,11 @@ export function buildAnalyticsDashboard(input: {
       deltaAbsolute: delta.deltaAbsolute,
       deltaPercent: delta.deltaPercent,
       availability:
-        delta.comparisonNote === 'INSUFFICIENT_HISTORY'
-          ? 'INSUFFICIENT_HISTORY'
-          : delta.comparisonNote === 'NO_PRIOR_DATA'
-            ? 'NO_PRIOR_DATA'
-            : 'AVAILABLE',
+        delta.comparisonNote === COMPARISON_NOTE.INSUFFICIENT_HISTORY
+          ? KPI_AVAILABILITY.INSUFFICIENT_HISTORY
+          : delta.comparisonNote === COMPARISON_NOTE.NO_PRIOR_DATA
+            ? KPI_AVAILABILITY.NO_PRIOR_DATA
+            : KPI_AVAILABILITY.AVAILABLE,
       drillDown: args.drillDown,
     };
   }
@@ -1092,79 +1120,79 @@ export function buildAnalyticsDashboard(input: {
 
   const kpis: DashboardKpiItem[] = [
     makeKpi({
-      id: 'registeredInPeriod',
+      id: DASHBOARD_KPI_ID.REGISTERED_IN_PERIOD,
       label: 'Hồ sơ đăng ký trong kỳ',
       basisLabel: `Nộp trong kỳ (${period.label})`,
-      unit: 'COUNT',
+      unit: KPI_UNIT.COUNT,
       current: regReport.totals.registeredCount,
       previous: regReport.previousTotals.registeredCount,
       drillDown: baseRegDrill,
     }),
     makeKpi({
-      id: 'completedInPeriod',
+      id: DASHBOARD_KPI_ID.COMPLETED_IN_PERIOD,
       label: 'Hồ sơ hoàn tất trong kỳ',
       basisLabel: `Hoàn tất trong kỳ (${period.label})`,
-      unit: 'COUNT',
+      unit: KPI_UNIT.COUNT,
       current: resReport.totals.completedCount,
       previous: resReport.previousTotals.completedCount,
       drillDown: baseResDrill,
     }),
     makeKpi({
-      id: 'passedInPeriod',
+      id: DASHBOARD_KPI_ID.PASSED_IN_PERIOD,
       label: 'Đạt ngưỡng từ 3 sao theo điểm',
       basisLabel: `Hoàn tất ≥ 50 điểm (${period.label})`,
-      unit: 'COUNT',
+      unit: KPI_UNIT.COUNT,
       current: resReport.totals.passedCount,
       previous: resReport.previousTotals.passedCount,
       drillDown: baseResDrill,
     }),
     makeKpi({
-      id: 'failedInPeriod',
+      id: DASHBOARD_KPI_ID.FAILED_IN_PERIOD,
       label: 'Chưa đạt ngưỡng 3 sao',
       basisLabel: `Hoàn tất < 50 điểm (${period.label})`,
-      unit: 'COUNT',
+      unit: KPI_UNIT.COUNT,
       current: resReport.totals.failedCount,
       previous: resReport.previousTotals.failedCount,
       drillDown: baseResDrill,
     }),
     makeKpi({
-      id: 'passRateInPeriod',
+      id: DASHBOARD_KPI_ID.PASS_RATE_IN_PERIOD,
       label: 'Tỷ lệ đạt theo điểm',
       basisLabel: `Đạt / hoàn tất hợp lệ (${period.label})`,
-      unit: 'PERCENT',
+      unit: KPI_UNIT.PERCENT,
       current: resReport.totals.passRate,
       previous: resReport.previousTotals.passRate,
       insufficientHistory: resReport.totals.passRate === null,
       drillDown: baseResDrill,
     }),
     makeKpi({
-      id: 'fiveStarInPeriod',
+      id: DASHBOARD_KPI_ID.FIVE_STAR_IN_PERIOD,
       label: 'Mức điểm 5 sao',
       basisLabel: `90–100 điểm · Đề nghị xem xét 5 sao (${period.label})`,
-      unit: 'COUNT',
+      unit: KPI_UNIT.COUNT,
       current: resReport.totals.starCounts[5],
       previous: resReport.previousTotals.starCounts[5],
       drillDown: { ...baseResDrill, starRating: 5 },
     }),
     makeKpi({
-      id: 'openBacklogAtAsOf',
+      id: DASHBOARD_KPI_ID.OPEN_BACKLOG_AT_AS_OF,
       label: 'Hồ sơ còn chờ/đang chấm tại mốc chốt',
       basisLabel: `Tồn tại mốc chốt ${new Date(period.asOf).toLocaleString('vi-VN')}`,
-      unit: 'COUNT',
+      unit: KPI_UNIT.COUNT,
       current: openBacklogAtAsOf,
       previous: prevOpenBacklogAtAsOf,
       insufficientHistory: openBacklogAtAsOf === null,
-      drillDown: { status: 'SUBMITTED' },
+      drillDown: { status: ProductStatus.SUBMITTED },
     }),
     makeKpi({
-      id: 'underAssignedBacklogAtAsOf',
+      id: DASHBOARD_KPI_ID.UNDER_ASSIGNED_BACKLOG_AT_AS_OF,
       label: 'Hồ sơ chưa đủ phân công tại mốc chốt',
       basisLabel: `Tồn thiếu phủ tiêu chí tại mốc chốt ${new Date(period.asOf).toLocaleString('vi-VN')}`,
-      unit: 'COUNT',
+      unit: KPI_UNIT.COUNT,
       current: underAssignedCount,
       previous: null,
       insufficientHistory: underAssignedCount === null,
-      drillDown: { status: 'SUBMITTED' },
+      drillDown: { status: ProductStatus.SUBMITTED },
     }),
   ];
 
@@ -1182,7 +1210,7 @@ export function buildAnalyticsDashboard(input: {
         ? 0
         : dimensionFiltered.filter(
             (p) =>
-              p.status !== 'DRAFT' &&
+              p.status !== ProductStatus.DRAFT &&
               p.submittedAt !== null &&
               p.submittedAt.getTime() >= mFromMs &&
               p.submittedAt.getTime() < mToMs,
@@ -1192,7 +1220,7 @@ export function buildAnalyticsDashboard(input: {
         ? 0
         : dimensionFiltered.filter(
             (p) =>
-              p.status === 'COMPLETED' &&
+              p.status === ProductStatus.COMPLETED &&
               p.completedAt !== null &&
               p.completedAt.getTime() >= mFromMs &&
               p.completedAt.getTime() < mToMs,
@@ -1212,7 +1240,7 @@ export function buildAnalyticsDashboard(input: {
     dimensionFiltered
       .filter(
         (p) =>
-          p.status !== 'DRAFT' &&
+          p.status !== ProductStatus.DRAFT &&
           p.submittedAt !== null &&
           p.submittedAt.getTime() >= period.fromDate.getTime() &&
           p.submittedAt.getTime() < period.asOfDate.getTime(),
@@ -1223,7 +1251,7 @@ export function buildAnalyticsDashboard(input: {
     dimensionFiltered
       .filter(
         (p) =>
-          p.status === 'COMPLETED' &&
+          p.status === ProductStatus.COMPLETED &&
           p.completedAt !== null &&
           p.completedAt.getTime() >= period.fromDate.getTime() &&
           p.completedAt.getTime() < period.asOfDate.getTime(),

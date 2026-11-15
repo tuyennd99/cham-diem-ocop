@@ -9,6 +9,12 @@ import PasswordInput from '@/components/password-input';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { authApi } from '../../api';
+import {
+  AUTH_FRAME_MODE,
+  GOOGLE_AUTH_INTENT,
+  REGISTRATION_VERIFICATION_MODE,
+} from '../../constants/auth';
+import { HTTP_STATUS } from '../../constants/http-status';
 import { ApiError, messageOf } from '../../lib/api-error';
 import { validatePasswordBytes } from '../../lib/auth';
 import { normalizeEmail, optionalText } from '../../lib/utils';
@@ -33,12 +39,12 @@ export function RegisterPage() {
           phone: optionalText(value.phone),
           password: value.password,
         });
-        writePendingEmail({ ...data, mode: 'register' });
+        writePendingEmail({ ...data, mode: REGISTRATION_VERIFICATION_MODE.REGISTER });
         toast.success('Đã gửi mã OTP xác thực tới email.');
         await navigate({ to: '/verify-otp', search: {} });
       } catch (cause) {
         const msg =
-          cause instanceof ApiError && cause.status === 409
+          cause instanceof ApiError && cause.status === HTTP_STATUS.CONFLICT
             ? 'Email này đã được dùng. Vui lòng đăng nhập.'
             : messageOf(cause);
         setError(msg);
@@ -100,10 +106,10 @@ export function RegisterPage() {
       eyebrow='TÀI KHOẢN OCOP'
       title='Đăng ký tài khoản'
       intro='Tạo tài khoản người đăng ký để lập và gửi hồ sơ sản phẩm OCOP.'
-      mode='register'
+      mode={AUTH_FRAME_MODE.REGISTER}
       aside={registerAside}
     >
-      <GoogleSignIn intent='register' />
+      <GoogleSignIn intent={GOOGLE_AUTH_INTENT.REGISTER} />
       <form
         className='account-form'
         onSubmit={(event) => {

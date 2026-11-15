@@ -1,13 +1,13 @@
 import type { Role, StaffPermission } from '@ocop/shared';
 import { redirect } from '@tanstack/react-router';
 import type { RouterContext } from '../types/router-context';
-import { hasStaffPermission } from './session-contract';
+import { hasRoleAccess, hasStaffPermission } from './session-contract';
 
 export function requireRole(role: Role) {
   return ({ context }: { context: RouterContext }) => {
     const session = context.getSession();
     if (!session) throw redirect({ to: '/login' });
-    if (session.user.role !== role) {
+    if (!hasRoleAccess(session.user, role)) {
       throw redirect({ to: '/403' });
     }
   };

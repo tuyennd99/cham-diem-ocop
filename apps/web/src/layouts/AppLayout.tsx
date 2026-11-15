@@ -1,7 +1,9 @@
 import { useCallback, useState } from 'react';
 import type { ReactNode } from 'react';
+import { STAFF_PERMISSION } from '@ocop/shared';
 import { useNavigate } from '@tanstack/react-router';
 import { Tooltip } from 'radix-ui';
+import { ADMIN_SIDEBAR_COLLAPSED_STORAGE_KEY } from '../constants/auth';
 import { homeFor, setSession, useSession } from '../lib/auth';
 import { hasStaffPermission } from '../lib/session-contract';
 import { WorkspaceSidebar } from './workspace/WorkspaceSidebar';
@@ -11,23 +13,23 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('admin_sidebar_collapsed') === 'true';
+      return localStorage.getItem(ADMIN_SIDEBAR_COLLAPSED_STORAGE_KEY) === 'true';
     }
     return false;
   });
   const session = useSession();
   const role = session?.user.role;
   const permissions = session?.user.staffPermissions ?? [];
-  const canView = hasStaffPermission(session?.user, 'VIEW');
-  const canManage = hasStaffPermission(session?.user, 'MANAGE');
-  const canScore = hasStaffPermission(session?.user, 'SCORE');
+  const canView = hasStaffPermission(session?.user, STAFF_PERMISSION.VIEW);
+  const canManage = hasStaffPermission(session?.user, STAFF_PERMISSION.MANAGE);
+  const canScore = hasStaffPermission(session?.user, STAFF_PERMISSION.SCORE);
   const homePath = role ? homeFor(role, permissions) : '/';
 
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed((prev) => {
       const next = !prev;
       if (typeof window !== 'undefined') {
-        localStorage.setItem('admin_sidebar_collapsed', String(next));
+        localStorage.setItem(ADMIN_SIDEBAR_COLLAPSED_STORAGE_KEY, String(next));
       }
       return next;
     });

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { PageContainer, PageHeader, PageSection } from '@/layouts/PageLayout';
-import type { Role, StaffPermission } from '@ocop/shared';
+import { USER_ROLE, type Role, type StaffPermission } from '@ocop/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { Check, KeyRound, Pencil, RotateCcw, X } from 'lucide-react';
@@ -20,7 +20,7 @@ import { useMe } from '../../queries/common';
 
 const ROLE_LABELS: Record<Role, string> = {
   ADMIN: 'Quản trị viên (ADMIN)',
-  VIEWER: 'Cán bộ tra cứu & báo cáo (VIEWER)',
+  VIEWER: 'Chủ trì (VIEWER)',
   JUDGE: 'Giám khảo hội đồng (JUDGE)',
   REGISTRANT: 'Người đăng ký (REGISTRANT)',
 };
@@ -195,7 +195,7 @@ export function AccountPage() {
                       value={phone}
                       maxLength={30}
                       disabled={saving}
-                      placeholder='Nhập số điện thoại liên hệ'
+                      placeholder='Nhập số điện thoại'
                       onChange={(event) => setPhone(event.target.value)}
                     />
                   </FormField>
@@ -213,7 +213,7 @@ export function AccountPage() {
               <div>
                 <dt>Quyền làm việc</dt>
                 <dd>
-                  {user.role === 'REGISTRANT' ? (
+                  {user.role === USER_ROLE.REGISTRANT ? (
                     <Badge variant='secondary'>Người đăng ký hồ sơ</Badge>
                   ) : user.staffPermissions.length > 0 ? (
                     <span className='mt-1 flex flex-wrap gap-1.5'>
@@ -233,7 +233,7 @@ export function AccountPage() {
                 <dd>
                   {user.organizationUnit
                     ? `${user.organizationUnit.code} · ${user.organizationUnit.name}`
-                    : user.role === 'REGISTRANT'
+                    : user.role === USER_ROLE.REGISTRANT
                       ? 'Tài khoản người đăng ký độc lập'
                       : 'Chưa gán đơn vị'}
                 </dd>
@@ -250,12 +250,7 @@ export function AccountPage() {
 
             {isEditing ? (
               <div className='border-border mt-6 flex items-center justify-end gap-2 border-t pt-4'>
-                <Button
-                  type='button'
-                  variant='secondary'
-                  disabled={saving}
-                  onClick={cancelEditing}
-                >
+                <Button type='button' variant='secondary' disabled={saving} onClick={cancelEditing}>
                   <X className='size-4' aria-hidden='true' />
                   <span>Hủy</span>
                 </Button>

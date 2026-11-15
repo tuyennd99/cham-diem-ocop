@@ -16,6 +16,8 @@ interface FormFieldProps extends Omit<ComponentProps<'div'>, 'children'> {
   hintId?: string;
   /** Nhãn phụ như `(không bắt buộc)` hiển thị cùng hàng với `label`. */
   optional?: ReactNode;
+  /** Thông báo lỗi hiển thị bên dưới control khi trường không hợp lệ. */
+  error?: ReactNode;
   children: ReactNode;
 }
 
@@ -32,36 +34,56 @@ export function FormField({
   hint,
   hintId,
   optional,
+  error,
   className,
   children,
   ...props
 }: FormFieldProps) {
   const resolvedHintId = hintId ?? (htmlFor ? `${htmlFor}-hint` : undefined);
+  const resolvedErrorId = htmlFor ? `${htmlFor}-error` : undefined;
 
   return (
     <div
       data-slot='form-field'
-      className={cn('flex min-w-0 flex-col gap-1.5', className)}
+      className={cn('flex min-w-0 flex-col gap-1.5 self-stretch', className)}
       {...props}
     >
       {optional ? (
-        <div className='mb-auto flex flex-wrap items-baseline justify-between gap-2'>
+        <div
+          className={cn(!hint && 'mb-auto', 'flex flex-wrap items-baseline justify-between gap-2')}
+        >
           <Label htmlFor={htmlFor} required={required} className={labelClassName}>
             {label}
           </Label>
           <span className='field-optional text-muted-foreground text-xs'>{optional}</span>
         </div>
       ) : (
-        <Label htmlFor={htmlFor} required={required} className={cn('mb-auto', labelClassName)}>
+        <Label
+          htmlFor={htmlFor}
+          required={required}
+          className={cn(!hint && 'mb-auto', labelClassName)}
+        >
           {label}
         </Label>
       )}
       {hint && (
-        <p id={resolvedHintId} className='field-hint text-muted-foreground text-xs leading-relaxed'>
+        <p
+          id={resolvedHintId}
+          className='field-hint text-muted-foreground mb-auto text-xs leading-relaxed'
+        >
           {hint}
         </p>
       )}
       {children}
+      {error && (
+        <p
+          id={resolvedErrorId}
+          role='alert'
+          className='field-error text-destructive text-xs leading-relaxed font-medium'
+        >
+          {error}
+        </p>
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { useStore, type AnyFormApi } from '@tanstack/react-form';
+import { useSelector, type AnyFormApi } from '@tanstack/react-form';
 import type { ButtonProps } from '@/types/ui';
 import { messageOf } from '@/lib/api-error';
 import { cn } from '@/lib/utils';
@@ -62,8 +62,8 @@ export function FormSubmitButton({
   ...props
 }: FormSubmitButtonProps) {
   const form = useFormContext();
-  const isSubmitting = useStore(form.store, (state) => state.isSubmitting);
-  const canSubmit = useStore(form.store, (state) => state.canSubmit);
+  const isSubmitting = useSelector(form.store, (state) => state.isSubmitting);
+  const canSubmit = useSelector(form.store, (state) => state.canSubmit);
   return (
     <Button
       {...props}
@@ -86,12 +86,9 @@ export function FormActions({
   children,
 }: FormActionsProps) {
   const form = useFormContext();
-  const isSubmitting = useStore(form.store, (state) => state.isSubmitting);
+  const isSubmitting = useSelector(form.store, (state) => state.isSubmitting);
   return (
     <div className={cn('admin-actions justify-end', className)}>
-      <FormSubmitButton busyLabel={busyLabel} disabled={disabled}>
-        {submitLabel}
-      </FormSubmitButton>
       {onCancel && (
         <Button
           type='button'
@@ -102,6 +99,9 @@ export function FormActions({
           {cancelLabel}
         </Button>
       )}
+      <FormSubmitButton busyLabel={busyLabel} disabled={disabled}>
+        {submitLabel}
+      </FormSubmitButton>
       {children}
     </div>
   );

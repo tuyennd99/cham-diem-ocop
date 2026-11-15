@@ -2,8 +2,18 @@
   "moduleFileExtensions": ["js", "json", "ts"],
   "rootDir": "..",
   "testRegex": "test/.*\\.db-spec\\.ts$",
-  "transform": { "^.+\\.(t|j)s$": "ts-jest" },
-  "transformIgnorePatterns": ["node_modules/(?!.*uuid)"],
+  "transform": {
+    "^.+\\.(t|j)s$": [
+      "ts-jest",
+      {
+        "tsconfig": {
+          "module": "commonjs",
+          "resolvePackageJsonExports": false
+        }
+      }
+    ]
+  },
+  "transformIgnorePatterns": ["node_modules/(?!.*(uuid|@ocop))"],
   "moduleNameMapper": { "^(\\.{1,2}/.*)\\.js$": "$1" },
   "testEnvironment": "node",
   "testTimeout": 600000

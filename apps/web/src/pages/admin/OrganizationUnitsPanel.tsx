@@ -34,7 +34,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ALL, DEFAULT_PAGE_SIZE } from '../../constants/consts';
+import { usePaginatedList } from '../../hooks/use-paginated-list';
 import { errorText, messageOf } from '../../lib/api-error';
+import { useManagingAgencies } from '../../queries/admin-catalogs';
 import { useOrganizationUnits } from '../../queries/admin-users';
 
 export interface OrganizationUnitsPanelProps {
@@ -69,15 +71,20 @@ function UnitFormDialog({
   const initialDescription = unit?.description ?? '';
   const initialOrder = String(unit?.order ?? defaultOrder);
   const initialIsActive = unit?.isActive ?? true;
+  const initialManagingAgencyId = unit?.managingAgencyId ?? '';
 
   const [code, setCode] = useState(initialCode);
   const [name, setName] = useState(initialName);
   const [description, setDescription] = useState(initialDescription);
   const [order, setOrder] = useState(initialOrder);
   const [isActive, setIsActive] = useState(initialIsActive);
+  const [managingAgencyId, setManagingAgencyId] = useState(initialManagingAgencyId);
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+
+  const agenciesQuery = useManagingAgencies(open);
+  const agencies = agenciesQuery.data ?? [];
 
   const dirty =
     open &&
@@ -86,6 +93,7 @@ function UnitFormDialog({
       description !== initialDescription ||
       order !== initialOrder ||
       isActive !== initialIsActive ||
+      managingAgencyId !== initialManagingAgencyId ||
       reason.trim().length > 0);
 
   useBlocker({
@@ -121,6 +129,7 @@ function UnitFormDialog({
           description: description.trim() || null,
           order: Number(order),
           isActive,
+          managingAgencyId: managingAgencyId || null,
           reason,
         });
         onSaved(`Đã cập nhật đơn vị ${name}.`);
@@ -131,6 +140,7 @@ function UnitFormDialog({
           description: description.trim() || null,
           order: Number(order),
           isActive,
+          managingAgencyId: managingAgencyId || null,
           reason,
         });
         onSaved(`Đã tạo đơn vị ${name}.`);
@@ -152,8 +162,8 @@ function UnitFormDialog({
           </DialogTitle>
           <DialogDescription>
             {isEdit
-              ? `Mã đơn vị cố định: ${unit.code}. Đơn vị ngừng nhận tài khoản mới vẫn hiển thị trên các tài khoản đã gán.`
-              : 'Nhập mã và tên đơn vị công tác của cán bộ/giám khảo.'}
+              ? `Mã đơn vị cố định: ${unit.code}. Thay đổi liên kết cơ quan quản lý của đơn vị chỉ áp dụng tự động cho các hồ sơ được duyệt sau thời điểm thay đổi.`
+              : 'Nhập mã, tên đơn vị công tác của cán bộ/giám khảo và liên kết cơ quan chủ trì quản lý (nếu là đơn vị giám khảo).'}
           </DialogDescription>
         </DialogHeader>
         <form className='admin-form account-form' onSubmit={(event) => void submit(event)}>
@@ -176,6 +186,33 @@ function UnitFormDialog({
               maxLength={255}
               required
             />
+          </FormField>
+          <FormField
+            label='Cơ quan chủ trì quản lý (dành cho đơn vị giám khảo)'
+            htmlFor='unit-managing-agency'
+          >
+            <Combobox
+              value={managingAgencyId || ALL}
+              onValueChange={(value) => setManagingAgencyId(value === ALL ? '' : value)}
+              disabled={busy}
+            >
+              <ComboboxAnchor>
+                <ComboboxInput
+                  id='unit-managing-agency'
+                  placeholder='Không gắn cơ quan quản lý chuyên ngành'
+                />
+                <ComboboxTrigger aria-label='Mở danh sách cơ quan chủ trì quản lý' />
+              </ComboboxAnchor>
+              <ComboboxContent>
+                <ComboboxEmpty>Không tìm thấy cơ quan quản lý.</ComboboxEmpty>
+                <ComboboxItem value={ALL}>Không gắn cơ quan quản lý chuyên ngành</ComboboxItem>
+                {agencies.map((agency) => (
+                  <ComboboxItem key={agency.id} value={agency.id}>
+                    {agency.name} ({agency.code})
+                  </ComboboxItem>
+                ))}
+              </ComboboxContent>
+            </Combobox>
           </FormField>
           <FormField label='Mô tả (tùy chọn)' htmlFor='unit-description'>
             <Input
@@ -241,19 +278,21 @@ export function OrganizationUnitsPanel({
   onCreate,
   onUpdate,
 }: OrganizationUnitsPanelProps) {
-  const [fallbackQuery, setFallbackQuery] = useState<OrganizationUnitQuery>({
-    page: 1,
-    limit: DEFAULT_PAGE_SIZE,
+  const {
+    appliedSearch: appliedQuery,
+    applySearch: applyQuery,
+    page: requestedPage,
+    pageSize: currentLimit,
+    setPage,
+    setPageSize,
+  } = usePaginatedList<OrganizationUnitQuery>({
+    search: controlledQuery,
+    onSearchChange: onQueryChange,
+    defaultSearch: {
+      page: 1,
+      limit: DEFAULT_PAGE_SIZE,
+    },
   });
-  const appliedQuery = controlledQuery ?? fallbackQuery;
-
-  function applyQuery(next: OrganizationUnitQuery) {
-    if (onQueryChange) {
-      onQueryChange(next);
-    } else {
-      setFallbackQuery(next);
-    }
-  }
 
   const [draftQ, setDraftQ] = useState(appliedQuery.q ?? '');
   const [draftIsActive, setDraftIsActive] = useState<boolean | undefined>(appliedQuery.isActive);
@@ -280,9 +319,16 @@ export function OrganizationUnitsPanel({
   });
 
   const units = data?.data ?? [];
-  const currentPage = data?.meta?.page ?? appliedQuery.page ?? 1;
-  const currentLimit = appliedQuery.limit ?? DEFAULT_PAGE_SIZE;
+  const currentPage = data?.meta?.page ?? requestedPage;
   const loadErrorText = errorText(loadError);
+
+  useEffect(() => {
+    if (isPending || !data?.meta) return;
+    const maxPage = Math.max(1, data.meta.totalPages);
+    if (requestedPage > maxPage) {
+      setPage(maxPage);
+    }
+  }, [data?.meta, isPending, requestedPage, setPage]);
 
   const columns = useMemo<DataTableColumnDef<OrganizationUnitRecord>[]>(
     () => [
@@ -295,6 +341,20 @@ export function OrganizationUnitsPanel({
         accessorKey: 'name',
         header: 'Tên đơn vị',
         meta: { isRowHeader: true },
+      },
+      {
+        id: 'managingAgency',
+        accessorFn: (row) => row.managingAgency?.name ?? '',
+        header: 'Cơ quan chủ trì quản lý',
+        cell: ({ row }) => {
+          const agency = row.original.managingAgency;
+          if (!agency) return <span className='text-muted text-xs'>Đơn vị chung</span>;
+          return (
+            <Badge variant='outline'>
+              {agency.name} ({agency.code})
+            </Badge>
+          );
+        },
       },
       {
         accessorKey: 'description',
@@ -322,7 +382,8 @@ export function OrganizationUnitsPanel({
       {
         id: 'actions',
         header: 'Thao tác',
-        meta: { align: 'right' },
+        enableSorting: false,
+        meta: { align: 'center' },
         cell: ({ row }) => (
           <Button
             type='button'
@@ -487,11 +548,10 @@ export function OrganizationUnitsPanel({
             total={data?.meta?.total ?? units.length}
             page={currentPage}
             pageSize={currentLimit}
+            enableSorting
             getRowId={(row) => row.id}
-            onPageChange={(nextPage) => applyQuery({ ...appliedQuery, page: nextPage })}
-            onPageSizeChange={(nextLimit) =>
-              applyQuery({ ...appliedQuery, page: 1, limit: nextLimit })
-            }
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
           />
         </div>
       )}

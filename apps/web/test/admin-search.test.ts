@@ -8,6 +8,8 @@ import {
   parseAdminReportsSearch,
   parseAdminScoringSearch,
   parseAdminUsersSearch,
+  parsePublicProductsSearch,
+  normalizePublicProductsSearch,
   toAdminProductApiQuery,
 } from '../src/lib/admin-search';
 
@@ -142,4 +144,22 @@ it('accepts flat categories and drops legacy hierarchy across all search flows',
   assert.equal(catalog.tab, undefined);
   assert.equal(Object.hasOwn(catalog, 'groupId'), false);
   assert.equal(parseAdminReportsSearch({ groupBy: 'group' }).groupBy, 'month');
+});
+
+it('parses and normalizes public catalog search for clean page 1 URLs and sequential pagination', () => {
+  assert.deepEqual(parsePublicProductsSearch({}), {});
+  assert.deepEqual(parsePublicProductsSearch({ page: '2', limit: '20', q: ' Trà ', categoryId: 'cat-1' }), {
+    page: 2,
+    limit: 20,
+    q: 'Trà',
+    categoryId: 'cat-1',
+  });
+  assert.deepEqual(normalizePublicProductsSearch({ page: 1, limit: 10 }), {});
+  assert.deepEqual(normalizePublicProductsSearch({ page: 2, limit: 10 }), { page: 2 });
+  assert.deepEqual(normalizePublicProductsSearch({ page: 1, limit: 10, q: 'Trà' }), { q: 'Trà' });
+  assert.deepEqual(normalizePublicProductsSearch({ page: 3, limit: 20, categoryId: 'cat-1' }), {
+    page: 3,
+    limit: 20,
+    categoryId: 'cat-1',
+  });
 });

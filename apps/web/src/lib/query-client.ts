@@ -3,17 +3,21 @@ import { isClientError } from '../constants/http-status';
 import { sessionStore } from '../stores/session-store';
 import { ApiError } from './api-error';
 
-export const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 30_000,
-      refetchOnWindowFocus: false,
-      // 4xx will not fix itself on retry; only retry network/5xx once.
-      retry: (failureCount, error) =>
-        !(error instanceof ApiError && isClientError(error.status)) && failureCount < 1,
+export function createQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 30_000,
+        refetchOnWindowFocus: false,
+        // 4xx will not fix itself on retry; only retry network/5xx once.
+        retry: (failureCount, error) =>
+          !(error instanceof ApiError && isClientError(error.status)) && failureCount < 1,
+      },
     },
-  },
-});
+  });
+}
+
+export const queryClient = createQueryClient();
 
 function sessionScope(session: ReturnType<typeof sessionStore.getState>['session']) {
   if (!session) return '';

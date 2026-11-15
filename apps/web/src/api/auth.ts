@@ -16,6 +16,7 @@ import type {
   RegistrationStatus,
   RegistrationTokenInput,
   ResetPasswordInput,
+  SeedAccount,
   SessionUser,
   UpdateProfileInput,
   VerifyOtpInput,
@@ -23,6 +24,7 @@ import type {
 import { requestJson } from './base-request';
 
 export const authApi = {
+  seedAccounts: () => requestJson<SeedAccount[]>({ url: API.auth.seedAccounts }),
   login: (data: LoginInput) =>
     requestJson<LoginResponse>({ url: API.auth.login, method: 'POST', data }),
   register: (data: RegisterInput) =>

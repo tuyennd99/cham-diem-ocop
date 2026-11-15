@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useRef } from 'react';
 import { addDays, addMonths, addYears, getDate, getMonth, getYear } from 'date-fns';
-import InputError from '@/components/input-error';
 import { cn } from '@/lib/utils';
+import InputError from '@/components/input-error';
 import { parseDateInputParts, type DateInputParts } from './date-input-validation';
 
 interface DateInputProps {
@@ -80,68 +80,69 @@ const DateInput: React.FC<DateInputProps> = ({
     if (parsed && !nextError) setDate(dateParts(parsed));
   };
 
-  const handleKeyDown = (field: keyof DateInputParts) => (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.metaKey || e.ctrlKey || e.altKey) {
-      return;
-    }
+  const handleKeyDown =
+    (field: keyof DateInputParts) => (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) {
+        return;
+      }
 
-    if (
-      !/^[0-9]$/.test(e.key) &&
-      ![
-        'ArrowUp',
-        'ArrowDown',
-        'ArrowLeft',
-        'ArrowRight',
-        'Delete',
-        'Tab',
-        'Backspace',
-        'Enter',
-        'Home',
-        'End',
-        'Shift',
-      ].includes(e.key)
-    ) {
-      e.preventDefault();
-      return;
-    }
-
-    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-      e.preventDefault();
-      const current = parseDateInputParts(date);
-      if (!current) return;
-      const direction = e.key === 'ArrowUp' ? 1 : -1;
-      const next =
-        field === 'day'
-          ? addDays(current, direction)
-          : field === 'month'
-            ? addMonths(current, direction)
-            : addYears(current, direction);
-      if (getYear(next) >= 1000 && getYear(next) <= 9999) updateDate(dateParts(next));
-      return;
-    }
-
-    if (e.key === 'ArrowRight') {
       if (
-        e.currentTarget.selectionStart === e.currentTarget.value.length ||
-        (e.currentTarget.selectionStart === 0 &&
-          e.currentTarget.selectionEnd === e.currentTarget.value.length)
+        !/^[0-9]$/.test(e.key) &&
+        ![
+          'ArrowUp',
+          'ArrowDown',
+          'ArrowLeft',
+          'ArrowRight',
+          'Delete',
+          'Tab',
+          'Backspace',
+          'Enter',
+          'Home',
+          'End',
+          'Shift',
+        ].includes(e.key)
       ) {
         e.preventDefault();
-        if (field === 'day') monthRef.current?.focus();
-        if (field === 'month') yearRef.current?.focus();
+        return;
       }
-    } else if (e.key === 'ArrowLeft') {
-      if (
-        e.currentTarget.selectionStart === 0 ||
-        (e.currentTarget.selectionStart === 0 &&
-          e.currentTarget.selectionEnd === e.currentTarget.value.length)
-      ) {
+
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
-        if (field === 'month') dayRef.current?.focus();
-        if (field === 'year') monthRef.current?.focus();
+        const current = parseDateInputParts(date);
+        if (!current) return;
+        const direction = e.key === 'ArrowUp' ? 1 : -1;
+        const next =
+          field === 'day'
+            ? addDays(current, direction)
+            : field === 'month'
+              ? addMonths(current, direction)
+              : addYears(current, direction);
+        if (getYear(next) >= 1000 && getYear(next) <= 9999) updateDate(dateParts(next));
+        return;
       }
-    }
-  };
+
+      if (e.key === 'ArrowRight') {
+        if (
+          e.currentTarget.selectionStart === e.currentTarget.value.length ||
+          (e.currentTarget.selectionStart === 0 &&
+            e.currentTarget.selectionEnd === e.currentTarget.value.length)
+        ) {
+          e.preventDefault();
+          if (field === 'day') monthRef.current?.focus();
+          if (field === 'month') yearRef.current?.focus();
+        }
+      } else if (e.key === 'ArrowLeft') {
+        if (
+          e.currentTarget.selectionStart === 0 ||
+          (e.currentTarget.selectionStart === 0 &&
+            e.currentTarget.selectionEnd === e.currentTarget.value.length)
+        ) {
+          e.preventDefault();
+          if (field === 'month') dayRef.current?.focus();
+          if (field === 'year') monthRef.current?.focus();
+        }
+      }
+    };
 
   return (
     <div role='group' aria-label={label} className='flex min-w-0 flex-col gap-1'>
@@ -167,7 +168,9 @@ const DateInput: React.FC<DateInputProps> = ({
           className='text-fg w-6 border-none bg-transparent p-0 text-center outline-none'
           placeholder='DD'
         />
-        <span aria-hidden='true' className='text-muted-foreground/50 select-none'>/</span>
+        <span aria-hidden='true' className='text-muted-foreground/50 select-none'>
+          /
+        </span>
         <input
           type='text'
           inputMode='numeric'
@@ -184,7 +187,9 @@ const DateInput: React.FC<DateInputProps> = ({
           className='text-fg w-6 border-none bg-transparent p-0 text-center outline-none'
           placeholder='MM'
         />
-        <span aria-hidden='true' className='text-muted-foreground/50 select-none'>/</span>
+        <span aria-hidden='true' className='text-muted-foreground/50 select-none'>
+          /
+        </span>
         <input
           type='text'
           inputMode='numeric'
