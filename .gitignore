@@ -18,6 +18,7 @@ storage/
 **/.postgres-test/
 .superpowers/sdd/
 .file-versions/
+.scratch/
 open-design-diagnostics-*/
 **/open-design-diagnostics-*.zip
 *.tsbuildinfo
