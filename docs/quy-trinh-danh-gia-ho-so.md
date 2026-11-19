@@ -18,49 +18,47 @@ Tên vai trò theo [thuật ngữ của dự án](../GLOSSARY.md#vai-trò). Tên
 ```mermaid
 ---
 config:
-  sequence:
-    mirrorActors: false
-    actorMargin: 36
-    height: 46
-    messageMargin: 20
-    noteMargin: 8
+  flowchart:
+    nodeSpacing: 24
+    rankSpacing: 50
 ---
-sequenceDiagram
+flowchart TB
     accTitle: Quy trình nộp, xét duyệt, chấm và công bố hồ sơ OCOP
     accDescr: Người dùng nộp hồ sơ để Chủ trì hoặc Quản trị xét. Hồ sơ bị trả quay về Người dùng để sửa và nộp lại. Hồ sơ được duyệt chuyển cho Giám khảo. Khi đủ phiếu, hệ thống tính kết quả và chờ công bố.
 
-    participant U as Người dùng
-    participant C as Chủ trì / Quản trị
-    participant H as Hệ thống
-    participant G as Giám khảo
+    subgraph owner["Người dùng"]
+        draft["Soạn và nộp hồ sơ<br/>DRAFT"]
+        revise["Sửa và nộp lại<br/>RETURNED"]
+        view["Xem kết quả đã công bố"]
+    end
 
-    Note over U: Soạn hồ sơ · DRAFT
-    loop Nộp đến khi được duyệt
-        U->>H: Nộp hồ sơ hợp lệ
-        H-->>C: Chờ duyệt · SUBMITTED
-        alt Trả hồ sơ
-            C->>H: Trả kèm lý do · RETURNED
-            H-->>U: Xem lý do, sửa cùng hồ sơ
-        else Duyệt hồ sơ
-            C->>H: Duyệt · APPROVED
-        end
+    subgraph chair["Chủ trì / Quản trị"]
+        review{"Xét hồ sơ<br/>SUBMITTED"}
+        addJudge["Bổ sung giám khảo"]
+        publish["Công bố kết quả"]
     end
-    Note over H: Tự phân công giám khảo
-    opt Chưa có giám khảo
-        C->>H: Bổ sung giám khảo ở tab Tiến độ
+
+    subgraph system["Hệ thống"]
+        assigned["Tự phân công giám khảo<br/>APPROVED"]
+        enough{"Đủ phiếu?"}
+        done["Tính điểm và mức sao<br/>COMPLETED"]
+        published["Hiển thị kết quả<br/>COMPLETED · PUBLISHED"]
     end
-    H-->>G: Hồ sơ được phân công
-    G->>H: Lưu phiếu đầu tiên · SCORING
-    loop Đến khi đủ phiếu
-        G->>H: Nộp phiếu chấm
-        alt Còn thiếu phiếu bắt buộc
-            Note over H: Giữ SCORING
-        else Đủ điều kiện
-            H-->>C: Điểm và mức sao · COMPLETED
-        end
+
+    subgraph judge["Giám khảo"]
+        save["Lưu phiếu đầu tiên<br/>Hồ sơ sang SCORING"]
+        handIn["Nộp phiếu chấm"]
     end
-    C->>H: Công bố kết quả · PUBLISHED
-    H-->>U: Xem điểm và mức sao đã công bố
+
+    draft -->|Nộp hợp lệ| review
+    review -->|Trả kèm lý do| revise
+    revise -->|Nộp lại hợp lệ| review
+    review -->|Duyệt| assigned
+    assigned -->|Có giám khảo| save
+    assigned -->|Chưa có giám khảo| addJudge --> save
+    save --> handIn --> enough
+    enough -->|Chờ phiếu bắt buộc| handIn
+    enough -->|Đủ| done --> publish --> published --> view
 ```
 
 ## Đọc theo trạng thái hồ sơ
