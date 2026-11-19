@@ -15,6 +15,10 @@ Tên vai trò theo [thuật ngữ của dự án](../GLOSSARY.md#vai-trò). Tên
 
 ## Sơ đồ phân làn
 
+Xem [bản hộp và mũi tên](#bản-hộp-và-mũi-tên) để lần theo các nhánh quyết định, hoặc [bản rút gọn](#bản-rút-gọn-theo-lượt-xử-lý) để xem thứ tự xử lý giữa các vai trò.
+
+### Bản hộp và mũi tên
+
 ```mermaid
 ---
 config:
@@ -59,6 +63,56 @@ flowchart TB
     save --> handIn --> enough
     enough -->|Chờ phiếu bắt buộc| handIn
     enough -->|Đủ| done --> publish --> published --> view
+```
+
+### Bản rút gọn theo lượt xử lý
+
+```mermaid
+---
+config:
+  sequence:
+    mirrorActors: false
+    actorMargin: 36
+    height: 46
+    messageMargin: 20
+    noteMargin: 8
+---
+sequenceDiagram
+    accTitle: Quy trình nộp, xét duyệt, chấm và công bố hồ sơ OCOP
+    accDescr: Người dùng nộp hồ sơ để Chủ trì hoặc Quản trị xét. Hồ sơ bị trả quay về Người dùng để sửa và nộp lại. Hồ sơ được duyệt chuyển cho Giám khảo. Khi đủ phiếu, hệ thống tính kết quả và chờ công bố.
+
+    participant U as Người dùng
+    participant C as Chủ trì / Quản trị
+    participant H as Hệ thống
+    participant G as Giám khảo
+
+    Note over U: Soạn hồ sơ · DRAFT
+    loop Nộp đến khi được duyệt
+        U->>H: Nộp hồ sơ hợp lệ
+        H-->>C: Chờ duyệt · SUBMITTED
+        alt Trả hồ sơ
+            C->>H: Trả kèm lý do · RETURNED
+            H-->>U: Xem lý do, sửa cùng hồ sơ
+        else Duyệt hồ sơ
+            C->>H: Duyệt · APPROVED
+        end
+    end
+    Note over H: Tự phân công giám khảo
+    opt Chưa có giám khảo
+        C->>H: Bổ sung giám khảo ở tab Tiến độ
+    end
+    H-->>G: Hồ sơ được phân công
+    G->>H: Lưu phiếu đầu tiên · SCORING
+    loop Đến khi đủ phiếu
+        G->>H: Nộp phiếu chấm
+        alt Còn thiếu phiếu bắt buộc
+            Note over H: Giữ SCORING
+        else Đủ điều kiện
+            H-->>C: Điểm và mức sao · COMPLETED
+        end
+    end
+    C->>H: Công bố kết quả · PUBLISHED
+    H-->>U: Xem điểm và mức sao đã công bố
 ```
 
 ## Đọc theo trạng thái hồ sơ
