@@ -1,0 +1,1587 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quy trình đánh giá hồ sơ OCOP — Sơ đồ tương tác</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <script>
+    // Khi mở file trực tiếp trên trình duyệt ngoài Antigravity, host không bơm sẵn biến CSS.
+    // Đoạn script này tự động kiểm tra và nạp bảng màu chuẩn (hỗ trợ cả Sáng/Tối) nếu thiếu.
+    const STANDALONE_THEMES = {
+      light: {
+        '--background': '#f8fafc',
+        '--content': '#ffffff',
+        '--card': '#ffffff',
+        '--sidebar': '#f1f5f9',
+        '--card-border': '#e2e8f0',
+        '--border': '#cbd5e1',
+        '--foreground': '#0f172a',
+        '--muted-foreground': '#475569',
+        '--placeholder': '#94a3b8',
+        '--code-foreground': '#0f172a',
+        '--primary': '#2563eb',
+        '--primary-foreground': '#ffffff',
+        '--secondary': '#f1f5f9',
+        '--secondary-foreground': '#0f172a',
+        '--accent': '#eff6ff',
+        '--link': '#2563eb',
+        '--success': '#16a34a',
+        '--warning': '#d97706',
+        '--error': '#dc2626'
+      },
+      dark: {
+        '--background': '#0f172a',
+        '--content': '#1e293b',
+        '--card': '#1e293b',
+        '--sidebar': '#0f172a',
+        '--card-border': '#334155',
+        '--border': '#475569',
+        '--foreground': '#f8fafc',
+        '--muted-foreground': '#94a3b8',
+        '--placeholder': '#64748b',
+        '--code-foreground': '#e2e8f0',
+        '--primary': '#3b82f6',
+        '--primary-foreground': '#ffffff',
+        '--secondary': '#334155',
+        '--secondary-foreground': '#f8fafc',
+        '--accent': '#1e3a8a',
+        '--link': '#60a5fa',
+        '--success': '#22c55e',
+        '--warning': '#f59e0b',
+        '--error': '#ef4444'
+      }
+    };
+
+    let isStandaloneBrowser = false;
+    let standaloneThemeMode = 'light';
+
+    function applyStandaloneTheme(mode) {
+      standaloneThemeMode = mode;
+      const tokens = STANDALONE_THEMES[mode] || STANDALONE_THEMES.light;
+      const root = document.documentElement;
+      Object.entries(tokens).forEach(([k, v]) => {
+        root.style.setProperty(k, v);
+      });
+      const btn = document.getElementById('standaloneThemeBtn');
+      if (btn) {
+        btn.textContent = mode === 'light' ? '🌙 Giao diện Tối' : '☀️ Giao diện Sáng';
+      }
+    }
+
+    function toggleStandaloneTheme() {
+      applyStandaloneTheme(standaloneThemeMode === 'light' ? 'dark' : 'light');
+      requestAnimationFrame(drawEdges);
+    }
+
+    function ensureThemeTokens() {
+      const existingPrimary = getComputedStyle(document.documentElement)
+        .getPropertyValue('--primary')
+        .trim();
+      if (!existingPrimary) {
+        isStandaloneBrowser = true;
+        applyStandaloneTheme('light');
+      }
+      if (isStandaloneBrowser) {
+        const btn = document.getElementById('standaloneThemeBtn');
+        if (btn) btn.classList.remove('hidden');
+      }
+    }
+    ensureThemeTokens();
+  </script>
+  <style>
+    .swimlane-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(124px, 1fr));
+      column-gap: 14px;
+      row-gap: 36px;
+      position: relative;
+    }
+    .node-card {
+      transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.2s ease, border-color 0.15s ease;
+    }
+    .node-card:hover {
+      transform: translateY(-1px);
+    }
+    .node-active {
+      box-shadow: 0 0 0 2px var(--primary, #2563eb), 0 6px 16px -4px rgba(37, 99, 235, 0.25);
+    }
+    .edge-path {
+      transition: stroke 0.2s ease, stroke-width 0.2s ease, opacity 0.2s ease;
+    }
+    @keyframes dashFlow {
+      to {
+        stroke-dashoffset: -20;
+      }
+    }
+    .edge-animated {
+      stroke-dasharray: 6 4;
+      animation: dashFlow 0.9s linear infinite;
+    }
+  </style>
+</head>
+<body class="bg-[var(--background)] text-[var(--foreground)] antialiased m-0 p-3 md:p-4 select-none">
+  <div class="max-w-[1440px] mx-auto space-y-3">
+
+    <!-- Header & Controls -->
+    <header class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5 space-y-2.5 shadow-sm">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="px-2 py-0.5 text-xs font-semibold rounded-md bg-[var(--primary)] text-[var(--primary-foreground)]">
+              OCOP Workflow
+            </span>
+            <h1 class="text-sm md:text-base font-bold text-[var(--foreground)]">
+              Quy trình đánh giá hồ sơ OCOP (Sơ đồ phân làn tương tác)
+            </h1>
+          </div>
+          <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
+            Nộp hồ sơ → Chủ trì/Quản trị duyệt hoặc trả kèm lý do → Tự phân công &amp; Giám khảo chấm → Tính điểm &amp; Công bố kết quả.
+          </p>
+        </div>
+
+        <!-- Right Header Actions: Reopen Branch Toggle + Standalone Theme Toggle -->
+        <div class="flex items-center gap-2 self-start sm:self-center shrink-0 flex-wrap">
+          <button
+            id="toggleReopenBtn"
+            type="button"
+            onclick="toggleReopenBranch()"
+            class="px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:border-[var(--primary)] text-xs font-medium flex items-center gap-1.5 transition"
+          >
+            <span id="reopenCheckIcon" class="w-3.5 h-3.5 rounded border border-[var(--border)] inline-flex items-center justify-center text-[10px]"></span>
+            <span>Nhánh Mở lại (<code class="font-mono text-[11px]">UPDATING</code>)</span>
+          </button>
+
+          <button
+            id="standaloneThemeBtn"
+            type="button"
+            onclick="toggleStandaloneTheme()"
+            class="hidden px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:border-[var(--primary)] text-xs font-medium transition"
+          >
+            🌙 Giao diện Tối
+          </button>
+        </div>
+      </div>
+
+      <!-- Control Bar: Role Filter & Scenario Walkthrough -->
+      <div class="grid grid-cols-1 xl:grid-cols-12 gap-2.5 pt-2 border-t border-[var(--card-border)]">
+        <!-- Role Filter -->
+        <div class="xl:col-span-5 flex flex-col gap-1">
+          <div class="text-xs font-semibold text-[var(--muted-foreground)] flex items-center justify-between">
+            <span>1. Lọc theo vai trò (Ai làm gì):</span>
+            <span class="font-mono text-[11px]">4 làn</span>
+          </div>
+          <div id="roleFilterGroup" class="flex flex-wrap gap-1"></div>
+        </div>
+
+        <!-- Scenario Runner -->
+        <div class="xl:col-span-7 flex flex-col gap-1">
+          <div class="text-xs font-semibold text-[var(--muted-foreground)] flex items-center justify-between flex-wrap gap-1">
+            <span>2. Mô phỏng từng bước theo kịch bản:</span>
+            <span id="scenarioProgressText" class="font-mono text-[11px] text-[var(--primary)]">Chế độ tự do: Bấm vào bước bất kỳ</span>
+          </div>
+          <div class="flex flex-wrap items-center gap-1">
+            <div id="scenarioButtons" class="flex flex-wrap gap-1"></div>
+            <div class="flex items-center gap-1 ml-auto">
+              <button
+                id="prevStepBtn"
+                type="button"
+                onclick="stepScenario(-1)"
+                class="px-2 py-1 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:border-[var(--primary)] disabled:opacity-40 disabled:pointer-events-none text-xs font-medium"
+              >
+                ◀ Trước
+              </button>
+              <button
+                id="nextStepBtn"
+                type="button"
+                onclick="stepScenario(1)"
+                class="px-2 py-1 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 disabled:opacity-40 disabled:pointer-events-none text-xs font-medium"
+              >
+                Tiếp ▶
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Role Summary Banner -->
+      <div class="rounded-lg px-2.5 py-1.5 bg-[var(--background)] border border-[var(--card-border)] text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+        <div id="roleSummaryText" class="text-[var(--foreground)]"></div>
+      </div>
+    </header>
+
+    <!-- Compact Active Step Bar (Visible on narrower side-panes < 1024px) -->
+    <div id="compactStepBar" class="lg:hidden bg-[var(--card)] border border-[var(--primary)] rounded-xl p-3 space-y-2 shadow-sm"></div>
+
+    <!-- Main Workspace: Swimlane Diagram (Left) + Inspector Panel (Right) -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-3.5 items-start">
+
+      <!-- Left: 4-Lane Swimlane Diagram -->
+      <section class="lg:col-span-8 bg-[var(--card)] border border-[var(--border)] rounded-xl p-2.5 md:p-3.5 overflow-x-auto shadow-sm">
+        <div class="min-w-[540px]">
+          <!-- Swimlane Column Headers -->
+          <div class="grid grid-cols-4 gap-3.5 mb-3">
+            <div id="lane-header-owner" onclick="setRoleFilter('owner')" class="cursor-pointer rounded-lg p-2 border border-[var(--border)] bg-[var(--background)] hover:border-[var(--primary)] transition">
+              <div class="flex items-center justify-between gap-1 flex-wrap">
+                <span class="text-xs font-bold">Người dùng</span>
+                <span class="text-[10px] font-mono px-1 py-0.5 rounded bg-[var(--card)] border border-[var(--card-border)] text-[var(--muted-foreground)]">REGISTRANT</span>
+              </div>
+              <p class="text-[11px] text-[var(--muted-foreground)] mt-0.5 leading-tight">Soạn, nộp, sửa hồ sơ trả &amp; xem kết quả</p>
+            </div>
+
+            <div id="lane-header-chair" onclick="setRoleFilter('chair')" class="cursor-pointer rounded-lg p-2 border border-[var(--border)] bg-[var(--background)] hover:border-[var(--primary)] transition">
+              <div class="flex items-center justify-between gap-1 flex-wrap">
+                <span class="text-xs font-bold">Chủ trì / Quản trị</span>
+                <span class="text-[10px] font-mono px-1 py-0.5 rounded bg-[var(--card)] border border-[var(--card-border)] text-[var(--muted-foreground)]">VIEW/MANAGE</span>
+              </div>
+              <p class="text-[11px] text-[var(--muted-foreground)] mt-0.5 leading-tight">Duyệt/trả hồ sơ, thêm GK, công bố</p>
+            </div>
+
+            <div id="lane-header-system" onclick="setRoleFilter('system')" class="cursor-pointer rounded-lg p-2 border border-[var(--border)] bg-[var(--background)] hover:border-[var(--primary)] transition">
+              <div class="flex items-center justify-between gap-1 flex-wrap">
+                <span class="text-xs font-bold">Hệ thống</span>
+                <span class="text-[10px] font-mono px-1 py-0.5 rounded bg-[var(--card)] border border-[var(--card-border)] text-[var(--muted-foreground)]">AUTO</span>
+              </div>
+              <p class="text-[11px] text-[var(--muted-foreground)] mt-0.5 leading-tight">Kiểm tra, tự phân công, tính điểm &amp; sao</p>
+            </div>
+
+            <div id="lane-header-judge" onclick="setRoleFilter('judge')" class="cursor-pointer rounded-lg p-2 border border-[var(--border)] bg-[var(--background)] hover:border-[var(--primary)] transition">
+              <div class="flex items-center justify-between gap-1 flex-wrap">
+                <span class="text-xs font-bold">Giám khảo</span>
+                <span class="text-[10px] font-mono px-1 py-0.5 rounded bg-[var(--card)] border border-[var(--card-border)] text-[var(--muted-foreground)]">SCORE</span>
+              </div>
+              <p class="text-[11px] text-[var(--muted-foreground)] mt-0.5 leading-tight">Lưu nháp phiếu &amp; nộp phiếu chấm</p>
+            </div>
+          </div>
+
+          <!-- Swimlane Canvas with SVG Overlay -->
+          <div id="canvasContainer" class="relative rounded-xl border border-[var(--card-border)] bg-[var(--background)] px-3 pt-5 pb-9">
+            <!-- Background vertical lane columns -->
+            <div class="pointer-events-none absolute inset-3 grid grid-cols-4 gap-3.5">
+              <div class="rounded-lg border border-dashed border-[var(--card-border)] opacity-55"></div>
+              <div class="rounded-lg border border-dashed border-[var(--card-border)] opacity-55"></div>
+              <div class="rounded-lg border border-dashed border-[var(--card-border)] opacity-55"></div>
+              <div class="rounded-lg border border-dashed border-[var(--card-border)] opacity-55"></div>
+            </div>
+
+            <!-- SVG Connector Layer -->
+            <svg id="edgeSvg" class="pointer-events-none absolute inset-0 w-full h-full overflow-visible z-30"></svg>
+
+            <!-- 7-Row x 4-Col Swimlane Grid -->
+            <div id="nodesGrid" class="swimlane-grid z-20">
+              <!-- Populated dynamically by JS -->
+            </div>
+          </div>
+
+          <!-- Legend -->
+          <div class="flex flex-wrap items-center justify-between gap-2 mt-2.5 pt-2 border-t border-[var(--card-border)] text-xs text-[var(--muted-foreground)]">
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="inline-flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rounded-full bg-[var(--primary)] inline-block"></span>
+                Bước đang chọn &amp; nhánh chuyển tiếp
+              </span>
+              <span class="inline-flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rotate-45 border border-[var(--primary)] inline-block"></span>
+                Điểm xét quyết định (Rẽ nhánh)
+              </span>
+            </div>
+            <span>Tài liệu gốc: <code class="font-mono">docs/quy-trinh-danh-gia-ho-so.md</code></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right: Step Detail Inspector -->
+      <aside id="fullInspectorPanel" class="lg:col-span-4 bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5 space-y-3.5 lg:sticky lg:top-4 shadow-sm">
+        <div id="inspectorContent">
+          <!-- Populated dynamically by JS -->
+        </div>
+      </aside>
+    </div>
+
+    <!-- Bottom Reference Tabs: Status Guide & Code/Test Mapping -->
+    <section class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5 space-y-3 shadow-sm">
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--card-border)] pb-2">
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <button
+            id="tabBtnStatus"
+            type="button"
+            onclick="switchBottomTab('status')"
+            class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[var(--primary)] text-[var(--primary-foreground)] transition"
+          >
+            Đọc theo trạng thái hồ sơ (6 trạng thái)
+          </button>
+          <button
+            id="tabBtnCode"
+            type="button"
+            onclick="switchBottomTab('code')"
+            class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[var(--background)] text-[var(--foreground)] border border-[var(--border)] transition"
+          >
+            Code &amp; Test đối chiếu (4 nhóm luồng)
+          </button>
+        </div>
+        <span class="text-xs text-[var(--muted-foreground)]">
+          Bấm vào từng mục bên dưới để chọn nhanh bước tương ứng trên sơ đồ
+        </span>
+      </div>
+
+      <div id="bottomTabContent"></div>
+    </section>
+
+  </div>
+
+  <script>
+    const ROLES = {
+      all: {
+        id: 'all',
+        label: 'Tất cả (4 làn)',
+        badge: 'ALL',
+        summary: 'Toàn bộ quy trình phối hợp giữa 4 vai trò: Người dùng → Chủ trì / Quản trị → Hệ thống → Giám khảo.'
+      },
+      owner: {
+        id: 'owner',
+        label: 'Người dùng',
+        badge: 'REGISTRANT',
+        summary: 'Người dùng: Soạn hồ sơ của mình, nộp, sửa ngay trên cùng hồ sơ theo lý do trả nếu có và xem kết quả sau công bố.'
+      },
+      chair: {
+        id: 'chair',
+        label: 'Chủ trì / Quản trị',
+        badge: 'VIEW / MANAGE',
+        summary: 'Chủ trì / Quản trị: Xét hồ sơ chờ duyệt (Duyệt hoặc Trả kèm lý do), theo dõi và điều chỉnh phân công giám khảo, công bố kết quả.'
+      },
+      system: {
+        id: 'system',
+        label: 'Hệ thống',
+        badge: 'AUTO',
+        summary: 'Hệ thống: Kiểm tra điều kiện nộp, tự phân công khi duyệt, cập nhật trạng thái hồ sơ và tính điểm, mức sao từ các phiếu hợp lệ.'
+      },
+      judge: {
+        id: 'judge',
+        label: 'Giám khảo',
+        badge: 'SCORE',
+        summary: 'Giám khảo: Chấm hồ sơ được phân công, lưu nháp (đưa hồ sơ sang SCORING) và nộp phiếu khi đã chấm đủ phần được giao.'
+      }
+    };
+
+    const STATUS_LABELS = {
+      DRAFT: {
+        code: 'DRAFT',
+        registrant: 'Bản nháp',
+        admin: 'Bản nháp',
+        publicLabel: 'Ẩn trên trang công khai'
+      },
+      SUBMITTED: {
+        code: 'SUBMITTED',
+        registrant: 'Chờ duyệt',
+        admin: 'Chờ duyệt',
+        publicLabel: 'Đã tiếp nhận'
+      },
+      RETURNED: {
+        code: 'RETURNED',
+        registrant: 'Bị trả lại',
+        admin: 'Đã trả lại',
+        publicLabel: 'Ẩn trên trang công khai'
+      },
+      APPROVED: {
+        code: 'APPROVED',
+        registrant: 'Đã duyệt',
+        admin: 'Đã duyệt',
+        publicLabel: 'Đã duyệt'
+      },
+      SCORING: {
+        code: 'SCORING',
+        registrant: 'Đang đánh giá',
+        admin: 'Đang chấm',
+        publicLabel: 'Đang đánh giá'
+      },
+      COMPLETED: {
+        code: 'COMPLETED',
+        registrant: 'Đã hoàn tất (ẩn điểm tới khi PUBLISHED)',
+        admin: 'Hoàn tất',
+        publicLabel: 'Đã xếp hạng (ẩn điểm tới khi PUBLISHED)'
+      },
+      'COMPLETED · PUBLISHED': {
+        code: 'COMPLETED · PUBLISHED',
+        registrant: 'Đã hoàn tất (Hiện điểm & sao)',
+        admin: 'Hoàn tất · Đã công bố',
+        publicLabel: 'Đã xếp hạng (Hiện điểm & sao)'
+      },
+      'SCORING · UPDATING': {
+        code: 'SCORING · UPDATING',
+        registrant: 'Đang đánh giá (Tạm ẩn điểm cũ)',
+        admin: 'Đang chấm · Đang cập nhật',
+        publicLabel: 'Đang đánh giá (Tạm ẩn điểm)'
+      }
+    };
+
+    const NODES = {
+      draft: {
+        id: 'draft',
+        row: 1,
+        col: 1,
+        role: 'owner',
+        title: 'Soạn và nộp hồ sơ',
+        status: 'DRAFT',
+        isDecision: false,
+        shortHint: 'Mẫu số 01 & minh chứng',
+        description: 'Người dùng hoàn thiện Mẫu số 01 (Đơn vị đăng ký, Thông tin sản phẩm, Tệp minh chứng) và nhấn nộp hồ sơ.',
+        rules: [
+          'Hệ thống kiểm tra dữ liệu bắt buộc, phân loại sản phẩm và địa bàn hành chính đang hiệu lực.',
+          'Nếu hồ sơ chưa hợp lệ (thiếu thông tin bắt buộc), hệ thống giữ nguyên trạng thái DRAFT để Người dùng sửa tiếp.',
+          'Nộp hợp lệ chuyển trạng thái sang SUBMITTED (Chờ duyệt).'
+        ],
+        codeRefs: [
+          { label: 'Kiểm tra và lưu khi nộp', path: 'apps/be/src/repositories/products.repository.ts#L592' },
+          { label: 'Test: Thiếu dữ liệu thì giữ bản nháp', path: 'apps/be/test/admin-products.db-spec.ts#L812' }
+        ]
+      },
+      review: {
+        id: 'review',
+        row: 2,
+        col: 2,
+        role: 'chair',
+        title: 'Xét hồ sơ',
+        status: 'SUBMITTED',
+        isDecision: true,
+        shortHint: 'Duyệt hoặc Trả kèm lý do',
+        description: 'Chủ trì (VIEW) hoặc Quản trị (MANAGE) kiểm tra hồ sơ chờ duyệt và quyết định Duyệt hoặc Trả hồ sơ.',
+        rules: [
+          'Chọn Duyệt hồ sơ: chuyển sang APPROVED và kích hoạt hệ thống tự phân công giám khảo.',
+          'Chọn Trả hồ sơ: bắt buộc nhập lý do trả. Hồ sơ chuyển sang RETURNED để Người dùng sửa.',
+          'Có thể duyệt nhanh bằng nút icon trên bảng danh sách Phiếu đăng ký hoặc duyệt trong chi tiết hồ sơ.'
+        ],
+        codeRefs: [
+          { label: 'Duyệt hồ sơ và chọn giám khảo', path: 'apps/be/src/repositories/admin.repository.ts#L1078' },
+          { label: 'Bắt buộc lý do trả hồ sơ', path: 'apps/be/src/services/admin.service.ts#L388' },
+          { label: 'Chuyển sang RETURNED', path: 'apps/be/src/repositories/admin.repository.ts#L1247' }
+        ]
+      },
+      revise: {
+        id: 'revise',
+        row: 2,
+        col: 1,
+        role: 'owner',
+        title: 'Sửa và nộp lại',
+        status: 'RETURNED',
+        isDecision: false,
+        shortHint: 'Sửa ngay trên cùng hồ sơ',
+        description: 'Người dùng đọc lý do trả hồ sơ, chỉnh sửa bổ sung thông tin/minh chứng ngay trên cùng hồ sơ rồi nộp lại.',
+        rules: [
+          'Sửa trực tiếp trên cùng hồ sơ bị trả (không cần tạo hồ sơ mới).',
+          'Nộp lại hợp lệ đưa hồ sơ về lại SUBMITTED và xóa lý do trả cũ (returnReason = null).'
+        ],
+        codeRefs: [
+          { label: 'Kiểm tra và lưu khi nộp lại', path: 'apps/be/src/repositories/products.repository.ts#L592' },
+          { label: 'Test: Nộp lại cùng hồ sơ sau khi bị trả', path: 'apps/be/test/workflow-issues-6-to-13.db-spec.ts#L390' }
+        ]
+      },
+      assigned: {
+        id: 'assigned',
+        row: 3,
+        col: 3,
+        role: 'system',
+        title: 'Tự phân công giám khảo',
+        status: 'APPROVED',
+        isDecision: false,
+        shortHint: 'Theo cơ quan quản lý phân loại',
+        description: 'Khi duyệt sang APPROVED, Hệ thống tự động gán các giám khảo đủ điều kiện thuộc các cơ quan quản lý của phân loại sản phẩm.',
+        rules: [
+          'Lấy danh sách cơ quan chủ trì quản lý của phân loại sản phẩm và tìm giám khảo đang hoạt động (có quyền SCORE) thuộc các cơ quan đó.',
+          'Giám khảo tự động phân công có mustSubmitToComplete = false (không mặc định thuộc diện bắt buộc phải chờ hết từng người).',
+          'Nếu chưa có người có thể chấm, Chủ trì/Quản trị bổ sung tại tab Tiến độ.'
+        ],
+        codeRefs: [
+          { label: 'Duyệt hồ sơ và chọn giám khảo', path: 'apps/be/src/repositories/admin.repository.ts#L1078' },
+          { label: 'Test: Tự phân công theo cơ quan quản lý', path: 'apps/be/test/workflow-issues-6-to-13.db-spec.ts#L456' }
+        ]
+      },
+      addJudge: {
+        id: 'addJudge',
+        row: 3,
+        col: 2,
+        role: 'chair',
+        title: 'Bổ sung giám khảo',
+        status: 'APPROVED',
+        isDecision: false,
+        shortHint: 'Thêm ở tab Tiến độ',
+        description: 'Khi chưa có giám khảo tự động hoặc cần thêm người chấm, Chủ trì/Quản trị bổ sung giám khảo ở tab Tiến độ.',
+        rules: [
+          'Thao tác trong trang Chi tiết hồ sơ (AdminProductDetailPage) → tab Tiến độ.',
+          'Giám khảo được đánh dấu phải nộp (mustSubmitToComplete = true) sẽ bắt buộc phải nộp phiếu trước khi hệ thống tự hoàn tất.'
+        ],
+        codeRefs: [
+          { label: 'Bổ sung giám khảo trong tab Tiến độ', path: 'apps/web/src/pages/admin/AdminProductDetailPage.tsx#L708' },
+          { label: 'Test: Chờ phiếu của giám khảo bổ sung', path: 'apps/be/test/workflow-issues-6-to-13.db-spec.ts#L629' }
+        ]
+      },
+      save: {
+        id: 'save',
+        row: 4,
+        col: 4,
+        role: 'judge',
+        title: 'Lưu phiếu đầu tiên',
+        status: 'SCORING',
+        isDecision: false,
+        shortHint: 'Hồ sơ chuyển sang SCORING',
+        description: 'Giám khảo bắt đầu chấm và lưu nháp phiếu chấm đầu tiên, kích hoạt hồ sơ chuyển từ APPROVED sang SCORING.',
+        rules: [
+          'Chỉ cần 1 Giám khảo lưu nháp phiếu đầu tiên (IN_PROGRESS), trạng thái hồ sơ chuyển sang SCORING.',
+          'Giám khảo có thể lưu nháp nhiều lần cho tới khi chấm đủ phần tiêu chí được giao.'
+        ],
+        codeRefs: [
+          { label: 'Lưu phiếu đầu tiên chuyển sang SCORING', path: 'apps/be/src/repositories/evaluations.repository.ts#L442' },
+          { label: 'Test: Lưu nháp đưa hồ sơ sang đang chấm', path: 'apps/be/test/e2e-honey-flow.db-spec.ts#L539' }
+        ]
+      },
+      handIn: {
+        id: 'handIn',
+        row: 5,
+        col: 4,
+        role: 'judge',
+        title: 'Nộp phiếu chấm',
+        status: 'SCORING',
+        isDecision: false,
+        shortHint: 'Hoàn tất 100% tiêu chí giao',
+        description: 'Giám khảo chấm đủ các tiêu chí được giao và nhấn Nộp phiếu chấm.',
+        rules: [
+          'Hệ thống kiểm tra không còn tiêu chí con nào bị bỏ trống trong phạm vi được giao.',
+          'Phiếu chấm chuyển sang SUBMITTED và kích hoạt bước kiểm tra Đủ phiếu của Hệ thống.'
+        ],
+        codeRefs: [
+          { label: 'Kiểm tra và nộp phiếu chấm', path: 'apps/be/src/repositories/evaluations.repository.ts#L470' }
+        ]
+      },
+      enough: {
+        id: 'enough',
+        row: 5,
+        col: 3,
+        role: 'system',
+        title: 'Đủ phiếu?',
+        status: 'SCORING',
+        isDecision: true,
+        shortHint: '≥1 phiếu & đủ phiếu bắt buộc',
+        description: 'Hệ thống kiểm tra đã có ít nhất 1 phiếu hợp lệ và đủ toàn bộ phiếu của các giám khảo thuộc diện phải nộp hay chưa.',
+        rules: [
+          'Cần ít nhất 1 phiếu hợp lệ (totals.length >= 1) VÀ mọi giám khảo có mustSubmitToComplete = true đều đã nộp phiếu.',
+          'Giám khảo tự động phân công không mặc định thuộc diện phải chờ.',
+          'Nếu chưa đủ: giữ trạng thái SCORING chờ nộp tiếp. Nếu đã đủ: tự động tính điểm và chuyển sang COMPLETED.'
+        ],
+        codeRefs: [
+          { label: 'Điều kiện tự hoàn tất', path: 'apps/be/src/utils/evaluation-result.ts#L149' },
+          { label: 'Tính kết quả theo phân loại (hồ sơ cũ)', path: 'apps/be/src/utils/evaluation-result.ts#L237' },
+          { label: 'Test: Hoàn tất sau phiếu tự động đầu tiên', path: 'apps/be/test/workflow-issues-6-to-13.db-spec.ts#L513' }
+        ]
+      },
+      done: {
+        id: 'done',
+        row: 6,
+        col: 3,
+        role: 'system',
+        title: 'Tính điểm và mức sao',
+        status: 'COMPLETED',
+        isDecision: false,
+        shortHint: 'Hồ sơ sang COMPLETED',
+        description: 'Hệ thống tự động tính điểm trung bình các tiêu chí (finalScore), xác định mức sao (starRating) và chuyển hồ sơ sang COMPLETED.',
+        rules: [
+          'Điểm và mức sao đã được tính cho Chủ trì/Quản trị xem, nhưng chưa hiển thị cho Người dùng và trang công khai cho đến khi được Công bố.'
+        ],
+        codeRefs: [
+          { label: 'Tính điểm và chuyển COMPLETED', path: 'apps/be/src/utils/evaluation-result.ts#L158' }
+        ]
+      },
+      publish: {
+        id: 'publish',
+        row: 6,
+        col: 2,
+        role: 'chair',
+        title: 'Công bố kết quả',
+        status: 'COMPLETED',
+        isDecision: false,
+        shortHint: 'Chủ trì/Quản trị công bố',
+        description: 'Chủ trì hoặc Quản trị kiểm tra điểm và mức sao ở trạng thái COMPLETED, rồi chọn Công bố kết quả.',
+        rules: [
+          'Hồ sơ giữ nguyên trạng thái COMPLETED và trạng thái công bố (publicationState) chuyển sang PUBLISHED.',
+          'Ghi nhận bản ghi lịch sử công bố vào ProductResultHistory.'
+        ],
+        codeRefs: [
+          { label: 'Quyền thao tác công bố', path: 'apps/be/src/controllers/admin-products.controller.ts#L166' },
+          { label: 'Điều kiện và trạng thái công bố', path: 'apps/be/src/repositories/admin.repository.ts#L1400' }
+        ]
+      },
+      published: {
+        id: 'published',
+        row: 7,
+        col: 3,
+        role: 'system',
+        title: 'Hiển thị kết quả',
+        status: 'COMPLETED · PUBLISHED',
+        isDecision: false,
+        shortHint: 'Mở khóa điểm công bố',
+        description: 'Khi trạng thái đạt COMPLETED · PUBLISHED, hệ thống cho phép trả điểm số và mức sao ra API của Người dùng và trang công khai.',
+        rules: [
+          'Hàm sanitizePublicProductResult chỉ trả về finalScore và starRating khi publicationState === PUBLISHED.',
+          'Nếu mở lại hồ sơ để chấm bổ sung, trạng thái công bố chuyển sang UPDATING và tạm ẩn điểm.'
+        ],
+        codeRefs: [
+          { label: 'Hiển thị kết quả sau công bố', path: 'apps/be/src/repositories/products.repository.ts#L106' },
+          { label: 'Test: Ẩn điểm trước công bố và hiện sau công bố', path: 'apps/be/test/workflow-issues-6-to-13.db-spec.ts#L545' }
+        ]
+      },
+      view: {
+        id: 'view',
+        row: 7,
+        col: 1,
+        role: 'owner',
+        title: 'Xem kết quả đã công bố',
+        status: 'COMPLETED · PUBLISHED',
+        isDecision: false,
+        shortHint: 'Người dùng xem điểm & sao',
+        description: 'Người dùng và trang công khai nhận được điểm số và mức sao chính thức sau khi đã công bố.',
+        rules: [
+          'Mức sao hệ thống tính từ điểm chấm phục vụ hội đồng đánh giá, phân biệt với quyết định công nhận chính thức.'
+        ],
+        codeRefs: [
+          { label: 'Hiển thị kết quả công bố', path: 'apps/be/src/repositories/products.repository.ts#L106' }
+        ]
+      },
+      reopen: {
+        id: 'reopen',
+        row: 7,
+        col: 2,
+        role: 'chair',
+        title: 'Mở lại chấm bổ sung',
+        status: 'SCORING · UPDATING',
+        isDecision: false,
+        isOptionalReopen: true,
+        shortHint: 'Quay về SCORING · Ẩn điểm',
+        description: 'Nếu mở lại một hồ sơ đã công bố để chấm bổ sung, hồ sơ quay về SCORING và trạng thái công bố chuyển sang UPDATING.',
+        rules: [
+          'Người dùng tạm thời chưa thấy điểm và mức sao trong thời gian UPDATING.',
+          'Khi hồ sơ hoàn tất chấm lại (COMPLETED), Chủ trì/Quản trị thực hiện Công bố lại (REPUBLISHED).'
+        ],
+        codeRefs: [
+          { label: 'Mở lại hồ sơ (reopenProduct)', path: 'apps/be/src/repositories/admin.repository.ts#L1492' },
+          { label: 'Test: Ẩn kết quả khi cập nhật và công bố lại', path: 'apps/be/test/workflow-issues-6-to-13.db-spec.ts#L670' }
+        ]
+      }
+    };
+
+    const EDGES = [
+      { id: 'e1', from: 'draft', to: 'review', label: 'Nộp hợp lệ', fromPort: 'right', toPort: 'top' },
+      { id: 'e2', from: 'review', to: 'revise', label: 'Trả kèm lý do', fromPort: 'bottom', toPort: 'bottom', isLoop: true },
+      { id: 'e3', from: 'revise', to: 'review', label: 'Nộp lại hợp lệ', fromPort: 'top', toPort: 'top', isLoop: true },
+      { id: 'e4', from: 'review', to: 'assigned', label: 'Duyệt', fromPort: 'right', toPort: 'top' },
+      { id: 'e5', from: 'assigned', to: 'save', label: 'Có giám khảo', fromPort: 'right', toPort: 'top' },
+      { id: 'e6', from: 'assigned', to: 'addJudge', label: 'Chưa có GK', fromPort: 'top', toPort: 'top' },
+      { id: 'e7', from: 'addJudge', to: 'save', label: 'Đã bổ sung GK', fromPort: 'bottom', toPort: 'left' },
+      { id: 'e8', from: 'save', to: 'handIn', label: 'Chấm đủ tiêu chí', fromPort: 'bottom', toPort: 'top' },
+      { id: 'e9', from: 'handIn', to: 'enough', label: 'Nộp phiếu', fromPort: 'bottom', toPort: 'bottom' },
+      { id: 'e10', from: 'enough', to: 'handIn', label: 'Chờ phiếu bắt buộc', fromPort: 'top', toPort: 'top', isLoop: true },
+      { id: 'e11', from: 'enough', to: 'done', label: 'Đủ phiếu', fromPort: 'bottom', toPort: 'top' },
+      { id: 'e12', from: 'done', to: 'publish', label: 'Chờ công bố', fromPort: 'top', toPort: 'top' },
+      { id: 'e13', from: 'publish', to: 'published', label: 'Công bố', fromPort: 'bottom', toPort: 'top' },
+      { id: 'e14', from: 'published', to: 'view', label: 'Hiển thị công khai', fromPort: 'bottom', toPort: 'bottom' },
+      { id: 'e15', from: 'published', to: 'reopen', label: 'Mở lại', fromPort: 'top', toPort: 'top', isReopenEdge: true },
+      { id: 'e16', from: 'reopen', to: 'save', label: 'Chấm lại (UPDATING)', fromPort: 'top', toPort: 'left', isReopenEdge: true, isLoop: true }
+    ];
+
+    const SCENARIOS = {
+      happy: {
+        id: 'happy',
+        name: '1. Luồng chuẩn (Nộp → Duyệt → Chấm → Công bố)',
+        steps: [
+          { nodeId: 'draft', note: 'Bước 1/10: Người dùng điền Mẫu số 01 và nộp hồ sơ hợp lệ.' },
+          { nodeId: 'review', note: 'Bước 2/10: Chủ trì hoặc Quản trị mở hồ sơ ở trạng thái SUBMITTED và nhấn Duyệt.' },
+          { nodeId: 'assigned', note: 'Bước 3/10: Hồ sơ sang APPROVED, Hệ thống tự phân công giám khảo theo cơ quan quản lý.' },
+          { nodeId: 'save', note: 'Bước 4/10: Giám khảo mở hồ sơ và lưu phiếu chấm đầu tiên → Hồ sơ chuyển sang SCORING.' },
+          { nodeId: 'handIn', note: 'Bước 5/10: Giám khảo chấm đủ 100% tiêu chí được giao và nhấn Nộp phiếu chấm.' },
+          { nodeId: 'enough', note: 'Bước 6/10: Hệ thống kiểm tra đã có ≥ 1 phiếu hợp lệ và đủ phiếu bắt buộc.' },
+          { nodeId: 'done', note: 'Bước 7/10: Hệ thống tính điểm trung bình, xếp mức sao và chuyển hồ sơ sang COMPLETED.' },
+          { nodeId: 'publish', note: 'Bước 8/10: Chủ trì/Quản trị kiểm tra kết quả và bấm Công bố kết quả.' },
+          { nodeId: 'published', note: 'Bước 9/10: Hệ thống chuyển trạng thái công bố sang PUBLISHED.' },
+          { nodeId: 'view', note: 'Bước 10/10: Người dùng và trang công khai xem được điểm và mức sao đã công bố.' }
+        ]
+      },
+      returned: {
+        id: 'returned',
+        name: '2. Trả hồ sơ & Nộp lại',
+        steps: [
+          { nodeId: 'draft', note: 'Bước 1/5: Người dùng soạn hồ sơ DRAFT và gửi nộp lần đầu.' },
+          { nodeId: 'review', note: 'Bước 2/5: Chủ trì/Quản trị phát hiện thiếu minh chứng nên chọn Trả hồ sơ kèm lý do.' },
+          { nodeId: 'revise', note: 'Bước 3/5: Hồ sơ sang RETURNED. Người dùng đọc lý do, sửa ngay trên cùng hồ sơ và nộp lại.' },
+          { nodeId: 'review', note: 'Bước 4/5: Hồ sơ quay lại SUBMITTED và xóa lý do trả cũ. Chủ trì xét lại và nhấn Duyệt.' },
+          { nodeId: 'assigned', note: 'Bước 5/5: Hồ sơ chuyển sang APPROVED và đi tiếp luồng phân công chấm điểm.' }
+        ]
+      },
+      reopen: {
+        id: 'reopen',
+        name: '3. Bổ sung GK & Mở lại (UPDATING)',
+        requiresReopenBranch: true,
+        steps: [
+          { nodeId: 'review', note: 'Bước 1/9: Chủ trì duyệt hồ sơ SUBMITTED sang APPROVED.' },
+          { nodeId: 'assigned', note: 'Bước 2/9: Hệ thống quét tự phân công nhưng phân loại này chưa có giám khảo.' },
+          { nodeId: 'addJudge', note: 'Bước 3/9: Chủ trì/Quản trị vào tab Tiến độ bổ sung giám khảo.' },
+          { nodeId: 'save', note: 'Bước 4/9: Giám khảo bổ sung bắt đầu chấm, đưa hồ sơ sang SCORING.' },
+          { nodeId: 'handIn', note: 'Bước 5/9: Giám khảo nộp phiếu, hệ thống kiểm tra đủ phiếu bắt buộc và tính điểm COMPLETED.' },
+          { nodeId: 'publish', note: 'Bước 6/9: Chủ trì công bố kết quả lần 1 (PUBLISHED).' },
+          { nodeId: 'reopen', note: 'Bước 7/9: Cần chấm bổ sung nên Chủ trì Mở lại hồ sơ → Quay về SCORING · UPDATING (tạm ẩn điểm).' },
+          { nodeId: 'handIn', note: 'Bước 8/9: Giám khảo bổ sung hoàn tất nộp phiếu chấm mới → Hồ sơ COMPLETED trở lại.' },
+          { nodeId: 'publish', note: 'Bước 9/9: Chủ trì Công bố lại kết quả (REPUBLISHED) để hiển thị điểm mới cho Người dùng.' }
+        ]
+      }
+    };
+
+    const STATUS_TABLE_DATA = [
+      {
+        badge: 'DRAFT',
+        name: 'Bản nháp',
+        nodeId: 'draft',
+        detail: 'Người dùng hoàn thiện Mẫu số 01 và nộp. Hệ thống kiểm tra dữ liệu bắt buộc, phân loại và địa bàn. Nếu hồ sơ chưa hợp lệ, Người dùng sửa tại trạng thái hiện tại. Nộp thành công chuyển sang SUBMITTED.'
+      },
+      {
+        badge: 'SUBMITTED',
+        name: 'Chờ duyệt',
+        nodeId: 'review',
+        detail: 'Chủ trì/Quản trị chọn Duyệt hồ sơ hoặc Trả hồ sơ kèm lý do. Duyệt chuyển sang APPROVED. Trả chuyển sang RETURNED.'
+      },
+      {
+        badge: 'RETURNED',
+        name: 'Bị trả lại',
+        nodeId: 'revise',
+        detail: 'Người dùng đọc lý do, sửa cùng hồ sơ rồi nộp lại. Nộp hợp lệ đưa hồ sơ về SUBMITTED và xóa lý do trả cũ.'
+      },
+      {
+        badge: 'APPROVED',
+        name: 'Đã duyệt',
+        nodeId: 'assigned',
+        detail: 'Hệ thống tự phân công giám khảo đủ điều kiện thuộc các cơ quan quản lý của phân loại sản phẩm. Nếu chưa có người có thể chấm, Chủ trì/Quản trị bổ sung ở tab Tiến độ. Hồ sơ chuyển sang SCORING khi Giám khảo lưu phiếu chấm đầu tiên.'
+      },
+      {
+        badge: 'SCORING',
+        name: 'Đang chấm',
+        nodeId: 'enough',
+        detail: 'Giám khảo chấm đủ phần được giao và nộp phiếu. Với phân công theo hồ sơ, hệ thống cần ít nhất một phiếu hợp lệ và đủ phiếu của các giám khảo đang được đánh dấu phải nộp. Giám khảo được phân công tự động không mặc định thuộc diện phải chờ. Khi đủ điều kiện, hệ thống tính điểm, mức sao và chuyển hồ sơ sang COMPLETED.'
+      },
+      {
+        badge: 'COMPLETED',
+        name: 'Hoàn tất & Công bố',
+        nodeId: 'publish',
+        detail: 'Chủ trì/Quản trị kiểm tra điểm và mức sao, rồi chọn Công bố kết quả. Hồ sơ giữ COMPLETED và trạng thái công bố chuyển sang PUBLISHED. Từ đó Người dùng và trang công khai mới nhận điểm và mức sao đã công bố.'
+      }
+    ];
+
+    const CODE_MAPPING_DATA = [
+      {
+        flow: 'Nộp, trả và nộp lại',
+        nodeId: 'review',
+        codes: [
+          { title: 'Kiểm tra và lưu khi nộp', file: 'apps/be/src/repositories/products.repository.ts#L592' },
+          { title: 'Bắt buộc lý do trả', file: 'apps/be/src/services/admin.service.ts#L388' },
+          { title: 'Chuyển sang RETURNED', file: 'apps/be/src/repositories/admin.repository.ts#L1247' }
+        ],
+        tests: [
+          { title: 'Thiếu dữ liệu thì giữ bản nháp', file: 'apps/be/test/admin-products.db-spec.ts#L812' },
+          { title: 'Nộp lại cùng hồ sơ sau khi bị trả', file: 'apps/be/test/workflow-issues-6-to-13.db-spec.ts#L390' }
+        ]
+      },
+      {
+        flow: 'Duyệt và phân công',
+        nodeId: 'assigned',
+        codes: [
+          { title: 'Duyệt hồ sơ và chọn giám khảo', file: 'apps/be/src/repositories/admin.repository.ts#L1078' },
+          { title: 'Bổ sung giám khảo trong tab Tiến độ', file: 'apps/web/src/pages/admin/AdminProductDetailPage.tsx#L708' }
+        ],
+        tests: [
+          { title: 'Tự phân công theo cơ quan quản lý, kể cả khi một cơ quan thiếu giám khảo', file: 'apps/be/test/workflow-issues-6-to-13.db-spec.ts#L456' }
+        ]
+      },
+      {
+        flow: 'Chấm và hoàn tất',
+        nodeId: 'enough',
+        codes: [
+          { title: 'Lưu phiếu đầu tiên', file: 'apps/be/src/repositories/evaluations.repository.ts#L442' },
+          { title: 'Kiểm tra và nộp phiếu', file: 'apps/be/src/repositories/evaluations.repository.ts#L470' },
+          { title: 'Điều kiện tự hoàn tất', file: 'apps/be/src/utils/evaluation-result.ts#L149' }
+        ],
+        tests: [
+          { title: 'Lưu nháp đưa hồ sơ sang đang chấm', file: 'apps/be/test/e2e-honey-flow.db-spec.ts#L539' },
+          { title: 'Hoàn tất sau phiếu tự động đầu tiên', file: 'apps/be/test/workflow-issues-6-to-13.db-spec.ts#L513' },
+          { title: 'Chờ phiếu của giám khảo bổ sung', file: 'apps/be/test/workflow-issues-6-to-13.db-spec.ts#L629' }
+        ]
+      },
+      {
+        flow: 'Công bố và công bố lại',
+        nodeId: 'publish',
+        codes: [
+          { title: 'Quyền thao tác', file: 'apps/be/src/controllers/admin-products.controller.ts#L166' },
+          { title: 'Điều kiện và trạng thái công bố', file: 'apps/be/src/repositories/admin.repository.ts#L1400' }
+        ],
+        tests: [
+          { title: 'Ẩn điểm trước công bố và hiện điểm sau công bố', file: 'apps/be/test/workflow-issues-6-to-13.db-spec.ts#L545' },
+          { title: 'Ẩn kết quả khi cập nhật và công bố lại', file: 'apps/be/test/workflow-issues-6-to-13.db-spec.ts#L670' }
+        ]
+      }
+    ];
+
+    let state = {
+      selectedNodeId: 'review',
+      roleFilter: 'all',
+      activeScenarioId: null,
+      scenarioStepIndex: 0,
+      showReopenBranch: false,
+      bottomTab: 'status'
+    };
+
+    function getStatusBadgeStyle(status) {
+      if (status.includes('RETURNED')) {
+        return 'border-[var(--error)] text-[var(--error)]';
+      }
+      if (status.includes('PUBLISHED') || status === 'COMPLETED') {
+        return 'border-[var(--success)] text-[var(--success)]';
+      }
+      if (status.includes('SCORING') || status === 'SUBMITTED') {
+        return 'border-[var(--warning)] text-[var(--warning)]';
+      }
+      if (status === 'APPROVED') {
+        return 'border-[var(--primary)] text-[var(--primary)]';
+      }
+      return 'border-[var(--border)] text-[var(--muted-foreground)]';
+    }
+
+    function renderRoleFilters() {
+      const container = document.getElementById('roleFilterGroup');
+      container.innerHTML = Object.values(ROLES).map((r) => {
+        const active = state.roleFilter === r.id;
+        return `
+          <button
+            type="button"
+            onclick="setRoleFilter('${r.id}')"
+            class="px-2 py-1 rounded-lg text-xs font-medium border transition ${
+              active
+                ? 'bg-[var(--primary)] text-[var(--primary-foreground)] border-[var(--primary)]'
+                : 'bg-[var(--background)] text-[var(--foreground)] border-[var(--border)] hover:border-[var(--primary)]'
+            }"
+          >
+            ${r.label}
+          </button>
+        `;
+      }).join('');
+
+      const currentRole = ROLES[state.roleFilter];
+      document.getElementById('roleSummaryText').innerHTML = `
+        <span class="font-semibold text-[var(--primary)]">[${currentRole.badge}]</span>
+        <span class="ml-1">${currentRole.summary}</span>
+      `;
+
+      ['owner', 'chair', 'system', 'judge'].forEach((roleId) => {
+        const el = document.getElementById(`lane-header-${roleId}`);
+        if (!el) return;
+        if (state.roleFilter === roleId) {
+          el.classList.add('border-[var(--primary)]');
+        } else {
+          el.classList.remove('border-[var(--primary)]');
+        }
+      });
+    }
+
+    function renderScenarioButtons() {
+      const container = document.getElementById('scenarioButtons');
+      container.innerHTML = Object.values(SCENARIOS).map((sc) => {
+        const active = state.activeScenarioId === sc.id;
+        return `
+          <button
+            type="button"
+            onclick="startScenario('${sc.id}')"
+            class="px-2 py-1 rounded-lg text-xs font-medium border transition ${
+              active
+                ? 'bg-[var(--primary)] text-[var(--primary-foreground)] border-[var(--primary)]'
+                : 'bg-[var(--background)] text-[var(--foreground)] border-[var(--border)] hover:border-[var(--primary)]'
+            }"
+          >
+            ${sc.name}
+          </button>
+        `;
+      }).join('');
+
+      const progressEl = document.getElementById('scenarioProgressText');
+      const prevBtn = document.getElementById('prevStepBtn');
+      const nextBtn = document.getElementById('nextStepBtn');
+
+      if (!state.activeScenarioId) {
+        progressEl.textContent = 'Chế độ tự do: Bấm vào bước bất kỳ hoặc chọn kịch bản';
+        prevBtn.disabled = true;
+        nextBtn.disabled = true;
+      } else {
+        const sc = SCENARIOS[state.activeScenarioId];
+        const step = sc.steps[state.scenarioStepIndex];
+        progressEl.textContent = step.note;
+        prevBtn.disabled = state.scenarioStepIndex <= 0;
+        nextBtn.disabled = state.scenarioStepIndex >= sc.steps.length - 1;
+      }
+    }
+
+    function renderReopenToggle() {
+      const icon = document.getElementById('reopenCheckIcon');
+      const btn = document.getElementById('toggleReopenBtn');
+      if (state.showReopenBranch) {
+        icon.textContent = '✓';
+        icon.className = 'w-3.5 h-3.5 rounded bg-[var(--primary)] text-[var(--primary-foreground)] inline-flex items-center justify-center text-[10px] font-bold';
+        btn.classList.add('border-[var(--primary)]');
+      } else {
+        icon.textContent = '';
+        icon.className = 'w-3.5 h-3.5 rounded border border-[var(--border)] inline-flex items-center justify-center text-[10px]';
+        btn.classList.remove('border-[var(--primary)]');
+      }
+    }
+
+    function renderCompactStepBar() {
+      const node = NODES[state.selectedNodeId];
+      const bar = document.getElementById('compactStepBar');
+      if (!node || !bar) return;
+
+      const roleInfo = ROLES[node.role];
+      const outgoingEdges = EDGES.filter(
+        (e) => e.from === node.id && (!e.isReopenEdge || state.showReopenBranch)
+      );
+
+      bar.innerHTML = `
+        <div class="flex items-center justify-between gap-2 flex-wrap">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded border bg-[var(--background)] ${getStatusBadgeStyle(node.status)}">
+              ${node.status}
+            </span>
+            <span class="text-xs font-bold text-[var(--foreground)]">${node.title}</span>
+            <span class="text-[11px] text-[var(--muted-foreground)]">(${roleInfo.label})</span>
+          </div>
+          <a href="#fullInspectorPanel" class="text-[11px] text-[var(--primary)] font-medium hover:underline">
+            Chi tiết &amp; Code ↓
+          </a>
+        </div>
+        <p class="text-xs text-[var(--muted-foreground)] leading-snug">
+          ${node.description}
+        </p>
+        ${
+          outgoingEdges.length
+            ? `<div class="flex flex-wrap items-center gap-1.5 pt-1 border-t border-[var(--card-border)]">
+                <span class="text-[11px] font-semibold text-[var(--foreground)]">Đi tiếp:</span>
+                ${outgoingEdges.map((e) => {
+                  const target = NODES[e.to];
+                  return `
+                    <button
+                      type="button"
+                      onclick="selectNode('${target.id}')"
+                      class="px-2 py-1 rounded-md border border-[var(--border)] bg-[var(--background)] hover:border-[var(--primary)] text-xs font-medium transition"
+                    >
+                      <span class="text-[var(--primary)] font-semibold">${e.label}</span> → ${target.title}
+                    </button>
+                  `;
+                }).join('')}
+              </div>`
+            : ''
+        }
+      `;
+    }
+
+    function renderNodesGrid() {
+      const grid = document.getElementById('nodesGrid');
+      const totalRows = 7;
+      const totalCols = 4;
+      const cellMap = {};
+
+      Object.values(NODES).forEach((node) => {
+        if (node.isOptionalReopen && !state.showReopenBranch) return;
+        cellMap[`${node.row}-${node.col}`] = node;
+      });
+
+      let html = '';
+      for (let r = 1; r <= totalRows; r++) {
+        for (let c = 1; c <= totalCols; c++) {
+          const node = cellMap[`${r}-${c}`];
+          if (!node) {
+            html += `<div class="min-h-[72px] flex items-center justify-center"></div>`;
+            continue;
+          }
+
+          const isSelected = state.selectedNodeId === node.id;
+          const isRoleDimmed = state.roleFilter !== 'all' && state.roleFilter !== node.role;
+          const badgeClass = getStatusBadgeStyle(node.status);
+
+          html += `
+            <div class="min-h-[78px] flex items-center justify-center">
+              <button
+                id="node-${node.id}"
+                type="button"
+                onclick="selectNode('${node.id}')"
+                class="node-card w-full text-left rounded-xl p-2.5 border bg-[var(--card)] cursor-pointer relative ${
+                  isSelected
+                    ? 'node-active border-[var(--primary)]'
+                    : 'border-[var(--border)] hover:border-[var(--primary)]'
+                } ${isRoleDimmed ? 'opacity-35' : 'opacity-100'}"
+              >
+                <div class="flex items-center justify-between gap-1 mb-1 flex-wrap">
+                  <span class="font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded border bg-[var(--background)] ${badgeClass}">
+                    ${node.status}
+                  </span>
+                  ${
+                    node.isDecision
+                      ? `<span class="text-[10px] font-semibold px-1 py-0.5 rounded bg-[var(--background)] border border-[var(--primary)] text-[var(--primary)]">Rẽ nhánh</span>`
+                      : ''
+                  }
+                </div>
+                <div class="text-xs font-bold text-[var(--foreground)] leading-snug">
+                  ${node.title}
+                </div>
+                <div class="text-[11px] text-[var(--muted-foreground)] mt-0.5 leading-tight">
+                  ${node.shortHint}
+                </div>
+              </button>
+            </div>
+          `;
+        }
+      }
+
+      grid.innerHTML = html;
+      requestAnimationFrame(drawEdges);
+    }
+
+    function getPortCoords(rect, containerRect, port) {
+      const xLeft = rect.left - containerRect.left;
+      const xRight = rect.right - containerRect.left;
+      const xMid = xLeft + rect.width / 2;
+      const yTop = rect.top - containerRect.top;
+      const yBottom = rect.bottom - containerRect.top;
+      const yMid = yTop + rect.height / 2;
+
+      switch (port) {
+        case 'top':
+          return { x: xMid, y: yTop };
+        case 'bottom':
+          return { x: xMid, y: yBottom };
+        case 'left':
+          return { x: xLeft, y: yMid };
+        case 'right':
+          return { x: xRight, y: yMid };
+        default:
+          return { x: xMid, y: yMid };
+      }
+    }
+
+    function buildCurvePath(p1, p2, fromPort, toPort, edgeId) {
+      // Các đường vòng ngang giữa 2 cột kề nhau: đi vòng vào khoảng trống row-gap (36px) hoặc ô trống
+      // để nhãn (label pill) không bao giờ đè lên chữ bên trong card.
+      if (edgeId === 'e2') {
+        // review (bottom) -> revise (bottom): vòng xuống hành lang dưới hàng 2
+        const midY = Math.max(p1.y, p2.y) + 18;
+        return {
+          d: `M ${p1.x} ${p1.y} C ${p1.x} ${midY}, ${p2.x} ${midY}, ${p2.x} ${p2.y}`,
+          labelX: (p1.x + p2.x) / 2,
+          labelY: midY - 2
+        };
+      }
+
+      if (edgeId === 'e3') {
+        // revise (top) -> review (top): vòng lên hành lang trên hàng 2
+        const midY = Math.min(p1.y, p2.y) - 18;
+        return {
+          d: `M ${p1.x} ${p1.y} C ${p1.x} ${midY}, ${p2.x} ${midY}, ${p2.x} ${p2.y}`,
+          labelX: (p1.x + p2.x) / 2,
+          labelY: midY + 2
+        };
+      }
+
+      if (edgeId === 'e6') {
+        // assigned (top) -> addJudge (top): vòng lên hành lang trên hàng 3
+        const midY = Math.min(p1.y, p2.y) - 18;
+        return {
+          d: `M ${p1.x} ${p1.y} C ${p1.x} ${midY}, ${p2.x} ${midY}, ${p2.x} ${p2.y}`,
+          labelX: (p1.x + p2.x) / 2,
+          labelY: midY + 2
+        };
+      }
+
+      if (edgeId === 'e9') {
+        // handIn (bottom) -> enough (bottom): vòng xuống hành lang dưới hàng 5
+        const midY = Math.max(p1.y, p2.y) + 18;
+        return {
+          d: `M ${p1.x} ${p1.y} C ${p1.x} ${midY}, ${p2.x} ${midY}, ${p2.x} ${p2.y}`,
+          labelX: (p1.x + p2.x) / 2,
+          labelY: midY - 2
+        };
+      }
+
+      if (edgeId === 'e10') {
+        // enough (top) -> handIn (top): vòng lên hành lang trên hàng 5
+        const midY = Math.min(p1.y, p2.y) - 18;
+        return {
+          d: `M ${p1.x} ${p1.y} C ${p1.x} ${midY}, ${p2.x} ${midY}, ${p2.x} ${p2.y}`,
+          labelX: (p1.x + p2.x) / 2,
+          labelY: midY + 2
+        };
+      }
+
+      if (edgeId === 'e12') {
+        // done (top) -> publish (top): vòng lên hành lang trên hàng 6
+        const midY = Math.min(p1.y, p2.y) - 18;
+        return {
+          d: `M ${p1.x} ${p1.y} C ${p1.x} ${midY}, ${p2.x} ${midY}, ${p2.x} ${p2.y}`,
+          labelX: (p1.x + p2.x) / 2,
+          labelY: midY + 2
+        };
+      }
+
+      if (edgeId === 'e14') {
+        // published (bottom) -> view (bottom): vòng xuống dưới hàng 7
+        const midY = Math.max(p1.y, p2.y) + 22;
+        return {
+          d: `M ${p1.x} ${p1.y} C ${p1.x} ${midY}, ${p2.x} ${midY}, ${p2.x} ${p2.y}`,
+          labelX: (p1.x + p2.x) / 2,
+          labelY: midY - 3
+        };
+      }
+
+      if (edgeId === 'e15') {
+        // published (top) -> reopen (top): vòng lên trên hàng 7
+        const midY = Math.min(p1.y, p2.y) - 18;
+        return {
+          d: `M ${p1.x} ${p1.y} C ${p1.x} ${midY}, ${p2.x} ${midY}, ${p2.x} ${p2.y}`,
+          labelX: (p1.x + p2.x) / 2,
+          labelY: midY + 2
+        };
+      }
+
+      const dx = Math.abs(p2.x - p1.x);
+      const dy = Math.abs(p2.y - p1.y);
+      const offset = Math.max(20, Math.min(56, Math.max(dx, dy) * 0.42));
+
+      const c1 = { x: p1.x, y: p1.y };
+      const c2 = { x: p2.x, y: p2.y };
+
+      if (fromPort === 'bottom') c1.y += offset;
+      if (fromPort === 'top') c1.y -= offset;
+      if (fromPort === 'left') c1.x -= offset;
+      if (fromPort === 'right') c1.x += offset;
+
+      if (toPort === 'bottom') c2.y += offset;
+      if (toPort === 'top') c2.y -= offset;
+      if (toPort === 'left') c2.x -= offset;
+      if (toPort === 'right') c2.x += offset;
+
+      const t = 0.5;
+      const mt = 1 - t;
+      const labelX =
+        mt * mt * mt * p1.x +
+        3 * mt * mt * t * c1.x +
+        3 * mt * t * t * c2.x +
+        t * t * t * p2.x;
+      const labelY =
+        mt * mt * mt * p1.y +
+        3 * mt * mt * t * c1.y +
+        3 * mt * t * t * c2.y +
+        t * t * t * p2.y;
+
+      return {
+        d: `M ${p1.x} ${p1.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${p2.x} ${p2.y}`,
+        labelX,
+        labelY
+      };
+    }
+
+    function drawEdges() {
+      const svg = document.getElementById('edgeSvg');
+      const container = document.getElementById('canvasContainer');
+      if (!svg || !container) return;
+
+      const rootStyle = getComputedStyle(document.documentElement);
+      const colorPrimary = rootStyle.getPropertyValue('--primary').trim() || '#2563eb';
+      const colorMuted = rootStyle.getPropertyValue('--muted-foreground').trim() || '#64748b';
+      const colorCard = rootStyle.getPropertyValue('--card').trim() || '#ffffff';
+      const colorCardBorder = rootStyle.getPropertyValue('--card-border').trim() || '#cbd5e1';
+      const colorForeground = rootStyle.getPropertyValue('--foreground').trim() || '#0f172a';
+
+      const containerRect = container.getBoundingClientRect();
+      let pathsHtml = `
+        <defs>
+          <marker id="arrow-muted" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1.5 L 8.5 5 L 0 8.5 z" fill="${colorMuted}" />
+          </marker>
+          <marker id="arrow-active" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+            <path d="M 0 1.5 L 8.5 5 L 0 8.5 z" fill="${colorPrimary}" />
+          </marker>
+        </defs>
+      `;
+
+      let labelsHtml = '';
+
+      EDGES.forEach((edge) => {
+        if (edge.isReopenEdge && !state.showReopenBranch) return;
+        const fromEl = document.getElementById(`node-${edge.from}`);
+        const toEl = document.getElementById(`node-${edge.to}`);
+        if (!fromEl || !toEl) return;
+
+        const r1 = fromEl.getBoundingClientRect();
+        const r2 = toEl.getBoundingClientRect();
+
+        const p1 = getPortCoords(r1, containerRect, edge.fromPort);
+        const p2 = getPortCoords(r2, containerRect, edge.toPort);
+
+        const curve = buildCurvePath(p1, p2, edge.fromPort, edge.toPort, edge.id);
+        const isConnected =
+          state.selectedNodeId === edge.from || state.selectedNodeId === edge.to;
+        const isOutgoing = state.selectedNodeId === edge.from;
+
+        const strokeColor = isConnected ? colorPrimary : colorMuted;
+        const strokeWidth = isConnected ? 2.2 : 1.35;
+        const opacity = isConnected ? 0.98 : 0.48;
+        const marker = isConnected ? 'url(#arrow-active)' : 'url(#arrow-muted)';
+        const animClass = isOutgoing ? 'edge-animated' : '';
+
+        pathsHtml += `
+          <path
+            d="${curve.d}"
+            fill="none"
+            stroke="${strokeColor}"
+            stroke-width="${strokeWidth}"
+            opacity="${opacity}"
+            marker-end="${marker}"
+            class="edge-path ${animClass}"
+          />
+        `;
+
+        if (edge.label) {
+          const pillWidth = Math.max(54, edge.label.length * 5.8 + 14);
+          const pillHeight = 18;
+          const borderColor = isConnected ? colorPrimary : colorCardBorder;
+          const textColor = isConnected ? colorPrimary : colorForeground;
+          const labelOpacity = isConnected ? 1 : 0.92;
+
+          labelsHtml += `
+            <g transform="translate(${curve.labelX}, ${curve.labelY})" opacity="${labelOpacity}">
+              <rect
+                x="${-pillWidth / 2}"
+                y="${-pillHeight / 2}"
+                width="${pillWidth}"
+                height="${pillHeight}"
+                rx="5"
+                fill="${colorCard}"
+                stroke="${borderColor}"
+                stroke-width="${isConnected ? 1.5 : 1}"
+              />
+              <text
+                x="0"
+                y="3.5"
+                text-anchor="middle"
+                fill="${textColor}"
+                font-size="9.5"
+                font-weight="${isConnected ? '700' : '500'}"
+              >${edge.label}</text>
+            </g>
+          `;
+        }
+      });
+
+      svg.innerHTML = pathsHtml + labelsHtml;
+    }
+
+    function renderInspector() {
+      const node = NODES[state.selectedNodeId];
+      if (!node) return;
+
+      const roleInfo = ROLES[node.role];
+      const statusInfo = STATUS_LABELS[node.status] || {
+        code: node.status,
+        registrant: node.status,
+        admin: node.status,
+        publicLabel: node.status
+      };
+
+      const outgoingEdges = EDGES.filter(
+        (e) => e.from === node.id && (!e.isReopenEdge || state.showReopenBranch)
+      );
+      const incomingEdges = EDGES.filter(
+        (e) => e.to === node.id && (!e.isReopenEdge || state.showReopenBranch)
+      );
+
+      const nextButtonsHtml = outgoingEdges.length
+        ? outgoingEdges.map((e) => {
+            const target = NODES[e.to];
+            return `
+              <button
+                type="button"
+                onclick="selectNode('${target.id}')"
+                class="w-full text-left p-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:border-[var(--primary)] transition flex items-center justify-between gap-2 group"
+              >
+                <div>
+                  <div class="text-[11px] font-semibold text-[var(--primary)]">
+                    Nếu: ${e.label}
+                  </div>
+                  <div class="text-xs font-bold text-[var(--foreground)]">
+                    → ${target.title} <span class="font-mono text-[11px] font-normal text-[var(--muted-foreground)]">(${target.status})</span>
+                  </div>
+                </div>
+                <span class="text-xs text-[var(--muted-foreground)] group-hover:text-[var(--primary)]">▶</span>
+              </button>
+            `;
+          }).join('')
+        : `<div class="text-xs text-[var(--muted-foreground)] italic">Đây là bước cuối của luồng hiển thị kết quả.</div>`;
+
+      const prevButtonsHtml = incomingEdges.length
+        ? `<div class="flex flex-wrap gap-1.5 mt-1">
+            ${incomingEdges.map((e) => {
+              const source = NODES[e.from];
+              return `
+                <button
+                  type="button"
+                  onclick="selectNode('${source.id}')"
+                  class="px-2 py-1 rounded border border-[var(--card-border)] bg-[var(--background)] hover:border-[var(--primary)] text-[11px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition"
+                >
+                  ← ${source.title} (${e.label})
+                </button>
+              `;
+            }).join('')}
+          </div>`
+        : '';
+
+      const container = document.getElementById('inspectorContent');
+      container.innerHTML = `
+        <div class="space-y-3">
+          <!-- Step Header -->
+          <div class="border-b border-[var(--card-border)] pb-2.5">
+            <div class="flex items-center justify-between gap-2 flex-wrap">
+              <span class="text-xs font-semibold px-2 py-0.5 rounded bg-[var(--background)] border border-[var(--border)]">
+                Làn: ${roleInfo.label} (<code class="font-mono text-[11px]">${roleInfo.badge}</code>)
+              </span>
+              <span class="font-mono text-xs font-bold px-2 py-0.5 rounded border bg-[var(--background)] ${getStatusBadgeStyle(node.status)}">
+                ${node.status}
+              </span>
+            </div>
+            <h2 class="text-base font-bold text-[var(--foreground)] mt-2">
+              ${node.title}
+            </h2>
+            <p class="text-xs text-[var(--muted-foreground)] mt-1 leading-relaxed">
+              ${node.description}
+            </p>
+          </div>
+
+          <!-- UI Status Labels Comparison -->
+          <div class="rounded-lg p-2.5 bg-[var(--background)] border border-[var(--card-border)] space-y-1.5">
+            <div class="text-[11px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
+              Nhãn trạng thái hiển thị trên giao diện
+            </div>
+            <div class="grid grid-cols-3 gap-1.5 text-xs">
+              <div class="p-1.5 rounded bg-[var(--card)] border border-[var(--card-border)]">
+                <div class="text-[10px] text-[var(--muted-foreground)]">Người dùng</div>
+                <div class="font-semibold text-[11px] mt-0.5">${statusInfo.registrant}</div>
+              </div>
+              <div class="p-1.5 rounded bg-[var(--card)] border border-[var(--card-border)]">
+                <div class="text-[10px] text-[var(--muted-foreground)]">Chủ trì / Quản trị</div>
+                <div class="font-semibold text-[11px] mt-0.5">${statusInfo.admin}</div>
+              </div>
+              <div class="p-1.5 rounded bg-[var(--card)] border border-[var(--card-border)]">
+                <div class="text-[10px] text-[var(--muted-foreground)]">Trang công khai</div>
+                <div class="font-semibold text-[11px] mt-0.5">${statusInfo.publicLabel}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Business Rules -->
+          <div class="space-y-1.5">
+            <div class="text-xs font-bold text-[var(--foreground)]">
+              Quy tắc xử lý tại bước này:
+            </div>
+            <ul class="space-y-1.5 text-xs text-[var(--foreground)]">
+              ${node.rules.map((rule) => `
+                <li class="flex items-start gap-2 leading-relaxed">
+                  <span class="text-[var(--primary)] font-bold mt-0.5">•</span>
+                  <span>${rule}</span>
+                </li>
+              `).join('')}
+            </ul>
+          </div>
+
+          <!-- Interactive Next Steps -->
+          <div class="space-y-1.5 pt-2 border-t border-[var(--card-border)]">
+            <div class="text-xs font-bold text-[var(--foreground)]">
+              Bước tiếp theo làm gì? (Bấm để chuyển bước)
+            </div>
+            <div class="space-y-1.5">
+              ${nextButtonsHtml}
+            </div>
+            ${
+              prevButtonsHtml
+                ? `<div class="pt-1.5">
+                    <div class="text-[11px] text-[var(--muted-foreground)]">Bước dẫn tới đây:</div>
+                    ${prevButtonsHtml}
+                  </div>`
+                : ''
+            }
+          </div>
+
+          <!-- Code & Test References -->
+          <div class="space-y-1.5 pt-2 border-t border-[var(--card-border)]">
+            <div class="text-xs font-bold text-[var(--foreground)]">
+              Đối chiếu Code &amp; Test trong dự án:
+            </div>
+            <div class="space-y-1">
+              ${node.codeRefs.map((ref) => `
+                <div class="p-2 rounded-lg bg-[var(--background)] border border-[var(--card-border)] text-xs">
+                  <div class="font-medium text-[var(--foreground)]">${ref.label}</div>
+                  <div class="font-mono text-[11px] text-[var(--primary)] break-all mt-0.5 select-all">${ref.path}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderBottomTab() {
+      const statusBtn = document.getElementById('tabBtnStatus');
+      const codeBtn = document.getElementById('tabBtnCode');
+      const container = document.getElementById('bottomTabContent');
+
+      if (state.bottomTab === 'status') {
+        statusBtn.className = 'px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[var(--primary)] text-[var(--primary-foreground)] transition';
+        codeBtn.className = 'px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[var(--background)] text-[var(--foreground)] border border-[var(--border)] transition';
+
+        container.innerHTML = `
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+            ${STATUS_TABLE_DATA.map((row) => {
+              const isSelected = state.selectedNodeId === row.nodeId;
+              return `
+                <div
+                  onclick="selectNode('${row.nodeId}')"
+                  class="cursor-pointer rounded-lg p-3 border transition ${
+                    isSelected
+                      ? 'border-[var(--primary)] bg-[var(--background)]'
+                      : 'border-[var(--card-border)] bg-[var(--background)] hover:border-[var(--primary)]'
+                  }"
+                >
+                  <div class="flex items-center justify-between gap-2 mb-1.5">
+                    <span class="text-xs font-bold text-[var(--foreground)]">${row.name}</span>
+                    <span class="font-mono text-[11px] font-semibold px-1.5 py-0.5 rounded border bg-[var(--card)] ${getStatusBadgeStyle(row.badge)}">
+                      ${row.badge}
+                    </span>
+                  </div>
+                  <p class="text-xs text-[var(--muted-foreground)] leading-relaxed">
+                    ${row.detail}
+                  </p>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `;
+      } else {
+        codeBtn.className = 'px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[var(--primary)] text-[var(--primary-foreground)] transition';
+        statusBtn.className = 'px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[var(--background)] text-[var(--foreground)] border border-[var(--border)] transition';
+
+        container.innerHTML = `
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+            ${CODE_MAPPING_DATA.map((item) => `
+              <div
+                onclick="selectNode('${item.nodeId}')"
+                class="cursor-pointer rounded-lg p-3 border border-[var(--card-border)] bg-[var(--background)] hover:border-[var(--primary)] transition space-y-2"
+              >
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-[var(--foreground)]">${item.flow}</span>
+                  <span class="text-[11px] text-[var(--primary)] font-medium">Xem trên sơ đồ →</span>
+                </div>
+                <div class="space-y-1">
+                  <div class="text-[11px] font-semibold text-[var(--muted-foreground)]">Code thực thi:</div>
+                  ${item.codes.map((c) => `
+                    <div class="text-xs">
+                      <span class="font-medium">${c.title}:</span>
+                      <code class="font-mono text-[11px] text-[var(--primary)] ml-1 select-all">${c.file}</code>
+                    </div>
+                  `).join('')}
+                </div>
+                <div class="space-y-1 pt-1 border-t border-[var(--card-border)]">
+                  <div class="text-[11px] font-semibold text-[var(--muted-foreground)]">Test kiểm chứng:</div>
+                  ${item.tests.map((t) => `
+                    <div class="text-xs">
+                      <span class="font-medium">${t.title}:</span>
+                      <code class="font-mono text-[11px] text-[var(--muted-foreground)] ml-1 select-all">${t.file}</code>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+    }
+
+    function selectNode(nodeId) {
+      if (NODES[nodeId]?.isOptionalReopen && !state.showReopenBranch) {
+        state.showReopenBranch = true;
+      }
+      state.selectedNodeId = nodeId;
+      renderAll();
+    }
+
+    function setRoleFilter(roleId) {
+      state.roleFilter = state.roleFilter === roleId && roleId !== 'all' ? 'all' : roleId;
+      renderAll();
+    }
+
+    function startScenario(scenarioId) {
+      if (state.activeScenarioId === scenarioId) {
+        state.activeScenarioId = null;
+        renderAll();
+        return;
+      }
+      const sc = SCENARIOS[scenarioId];
+      if (!sc) return;
+      if (sc.requiresReopenBranch) {
+        state.showReopenBranch = true;
+      }
+      state.activeScenarioId = scenarioId;
+      state.scenarioStepIndex = 0;
+      state.roleFilter = 'all';
+      state.selectedNodeId = sc.steps[0].nodeId;
+      renderAll();
+    }
+
+    function stepScenario(delta) {
+      if (!state.activeScenarioId) return;
+      const sc = SCENARIOS[state.activeScenarioId];
+      const nextIdx = state.scenarioStepIndex + delta;
+      if (nextIdx < 0 || nextIdx >= sc.steps.length) return;
+      state.scenarioStepIndex = nextIdx;
+      state.selectedNodeId = sc.steps[nextIdx].nodeId;
+      renderAll();
+    }
+
+    function toggleReopenBranch() {
+      state.showReopenBranch = !state.showReopenBranch;
+      if (!state.showReopenBranch && state.selectedNodeId === 'reopen') {
+        state.selectedNodeId = 'published';
+      }
+      renderAll();
+    }
+
+    function switchBottomTab(tab) {
+      state.bottomTab = tab;
+      renderBottomTab();
+    }
+
+    function renderAll() {
+      ensureThemeTokens();
+      renderRoleFilters();
+      renderScenarioButtons();
+      renderReopenToggle();
+      renderCompactStepBar();
+      renderNodesGrid();
+      renderInspector();
+      renderBottomTab();
+    }
+
+    window.addEventListener('resize', () => requestAnimationFrame(drawEdges));
+    window.addEventListener('themechange', () => requestAnimationFrame(drawEdges));
+    window.addEventListener('DOMContentLoaded', () => {
+      ensureThemeTokens();
+      renderAll();
+      setTimeout(drawEdges, 80);
+    });
+  </script>
+</body>
+</html>
