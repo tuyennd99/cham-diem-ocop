@@ -15,7 +15,7 @@ Tên vai trò theo [thuật ngữ của dự án](../GLOSSARY.md#vai-trò). Tên
 
 ## Sơ đồ phân làn
 
-Xem [bản tương tác trên trình duyệt](quy-trinh-danh-gia-ho-so.html), [bản hộp và mũi tên](#bản-hộp-và-mũi-tên) để lần theo các nhánh quyết định, hoặc [bản rút gọn](#bản-rút-gọn-theo-lượt-xử-lý) để xem thứ tự xử lý giữa các vai trò.
+Xem [bản tương tác trên trình duyệt](../apps/web/public/quy-trinh-danh-gia-ho-so.html), [bản hộp và mũi tên](#bản-hộp-và-mũi-tên) để lần theo các nhánh quyết định, hoặc [bản rút gọn](#bản-rút-gọn-theo-lượt-xử-lý) để xem thứ tự xử lý giữa các vai trò.
 
 ### Bản hộp và mũi tên
 

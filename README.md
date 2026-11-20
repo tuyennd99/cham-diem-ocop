@@ -2,7 +2,7 @@
 
 The workspace contains the NestJS API (`apps/be`), the existing React/Vite web app (`apps/web`), and shared TypeScript contracts (`packages/shared`). It uses pnpm workspaces and Node.js 24.
 
-For the workflow from submission through review, scoring, and publication, see [Quy trình đánh giá hồ sơ OCOP](docs/quy-trinh-danh-gia-ho-so.md) ([interactive diagram](docs/quy-trinh-danh-gia-ho-so.html)).
+For the workflow from submission through review, scoring, and publication, see [Quy trình đánh giá hồ sơ OCOP](docs/quy-trinh-danh-gia-ho-so.md) ([interactive diagram](apps/web/public/quy-trinh-danh-gia-ho-so.html)).
 
 ## Run locally
 
