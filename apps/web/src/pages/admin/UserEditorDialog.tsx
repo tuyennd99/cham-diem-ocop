@@ -124,7 +124,10 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
   const [passwordNotice, setPasswordNotice] = useState('');
 
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [activeSection, setActiveSection] = useState<
+    'profile' | 'access' | 'status' | 'password' | 'create' | null
+  >(null);
+  const busy = activeSection !== null;
   const bypassBlockerRef = useRef(false);
 
   useEffect(() => {
@@ -174,10 +177,13 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
     enableBeforeUnload: () => !bypassBlockerRef.current && getSession() !== null && dirty,
   });
 
-  async function perform(action: () => Promise<unknown>): Promise<boolean> {
+  async function perform(
+    section: NonNullable<typeof activeSection>,
+    action: () => Promise<unknown>,
+  ): Promise<boolean> {
     if (busy) return false;
     setError('');
-    setBusy(true);
+    setActiveSection(section);
     try {
       await action();
       if (getSession() === null) {
@@ -188,7 +194,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
       setError(messageOf(cause));
       return false;
     } finally {
-      setBusy(false);
+      setActiveSection(null);
     }
   }
 
@@ -261,7 +267,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
         onSubmit={(event) => {
           event.preventDefault();
           setProfileNotice('');
-          void perform(async () => {
+          void perform('profile', async () => {
             await props.onUpdateProfile(user.id, {
               fullName,
               phone: phone || null,
@@ -281,6 +287,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
           <Input
             id='user-editor-2'
             value={fullName}
+            disabled={busy}
             onChange={(event) => setFullName(event.target.value)}
             maxLength={255}
             required
@@ -290,6 +297,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
           <Input
             id='user-editor-3'
             value={phone}
+            disabled={busy}
             onChange={(event) => setPhone(event.target.value)}
             maxLength={30}
           />
@@ -298,6 +306,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
           <Input
             id='user-editor-4'
             value={profileReason}
+            disabled={busy}
             onChange={(event) => setProfileReason(event.target.value)}
             maxLength={255}
             required
@@ -309,8 +318,13 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
           </p>
         )}
         <div className='admin-actions'>
-          <Button type='submit' variant='secondary' loading={busy} disabled={busy}>
-            {busy ? 'Đang lưu…' : 'Lưu hồ sơ'}
+          <Button
+            type='submit'
+            variant='secondary'
+            loading={activeSection === 'profile'}
+            disabled={busy}
+          >
+            {activeSection === 'profile' ? 'Đang lưu…' : 'Lưu hồ sơ'}
           </Button>
         </div>
       </form>
@@ -350,7 +364,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
             ) {
               return;
             }
-            void perform(async () => {
+            void perform('access', async () => {
               await props.onUpdateAccess(user.id, payload);
               setAccessBaseline({
                 permissions: payload.staffPermissions,
@@ -365,8 +379,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
           <h3>Vai trò, quyền và đơn vị</h3>
           <p className='text-muted text-xs'>
             Một tài khoản có thể có nhiều vai trò, trừ Người dùng (Người đăng ký) và Giám khảo không
-            được chung một tài khoản. Quyền Quản trị (MANAGE) tự bao hàm Chủ trì (VIEW), không tự
-            bao hàm Giám khảo (SCORE).
+            được chung một tài khoản. Quyền Quản trị tự bao hàm Chủ trì, không tự bao hàm Giám khảo.
           </p>
           <div role='group' aria-label='Quyền nội bộ' className='grid gap-2'>
             {STAFF_PERMISSIONS_LIST.map((permission) => (
@@ -383,7 +396,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
                   onCheckedChange={(checked) => togglePermission(permission, checked === true)}
                 />
                 <Label htmlFor={`user-editor-permission-${permission}`} className='cursor-pointer'>
-                  {STAFF_PERMISSION_LABELS[permission]} ({permission})
+                  {STAFF_PERMISSION_LABELS[permission]}
                   {permission === STAFF_PERMISSION.VIEW &&
                   permissions.includes(STAFF_PERMISSION.MANAGE)
                     ? ' — được bao hàm bởi Quản trị'
@@ -401,7 +414,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
                 onCheckedChange={(checked) => setHasRegistrantRole(checked === true)}
               />
               <Label htmlFor='user-editor-role-registrant' className='cursor-pointer'>
-                Người dùng / Người đăng ký (REGISTRANT)
+                Người dùng / Người đăng ký
                 {permissions.includes(STAFF_PERMISSION.SCORE)
                   ? ' — không được gán chung với Giám khảo'
                   : ''}
@@ -440,6 +453,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
             <Input
               id='user-editor-6'
               value={accessReason}
+              disabled={busy}
               onChange={(event) => setAccessReason(event.target.value)}
               maxLength={255}
               required
@@ -451,8 +465,13 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
             </p>
           )}
           <div className='admin-actions'>
-            <Button type='submit' variant='secondary' loading={busy} disabled={busy}>
-              {busy ? 'Đang lưu…' : 'Lưu quyền và đơn vị'}
+            <Button
+              type='submit'
+              variant='secondary'
+              loading={activeSection === 'access'}
+              disabled={busy}
+            >
+              {activeSection === 'access' ? 'Đang lưu…' : 'Lưu quyền và đơn vị'}
             </Button>
           </div>
         </form>
@@ -464,7 +483,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
           event.preventDefault();
           setStatusNotice('');
           if (!statusIsActive && !window.confirm(`Khóa tài khoản ${user.email}?`)) return;
-          void perform(async () => {
+          void perform('status', async () => {
             const ok = await props.onUpdateStatus(user.id, {
               isActive: statusIsActive,
               reason: statusReason,
@@ -493,6 +512,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
           <Input
             id='user-editor-8'
             value={statusReason}
+            disabled={busy}
             onChange={(event) => setStatusReason(event.target.value)}
             maxLength={255}
             required
@@ -504,8 +524,13 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
           </p>
         )}
         <div className='admin-actions'>
-          <Button type='submit' variant='secondary' loading={busy} disabled={busy}>
-            {busy ? 'Đang lưu…' : 'Lưu trạng thái'}
+          <Button
+            type='submit'
+            variant='secondary'
+            loading={activeSection === 'status'}
+            disabled={busy}
+          >
+            {activeSection === 'status' ? 'Đang lưu…' : 'Lưu trạng thái'}
           </Button>
         </div>
       </form>
@@ -516,7 +541,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
           event.preventDefault();
           setPasswordNotice('');
           if (!window.confirm(`Đặt lại mật khẩu cho ${user.email}?`)) return;
-          void perform(async () => {
+          void perform('password', async () => {
             validatePasswordBytes(password);
             await props.onResetPassword(user.id, { password, reason: passwordReason });
             setPassword('');
@@ -533,6 +558,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
           <PasswordInput
             id='user-editor-9'
             value={password}
+            disabled={busy}
             onChange={(event) => setPassword(event.target.value)}
             minLength={isStaff ? 12 : 8}
             maxLength={72}
@@ -544,6 +570,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
           <Input
             id='user-editor-10'
             value={passwordReason}
+            disabled={busy}
             onChange={(event) => setPasswordReason(event.target.value)}
             maxLength={255}
             required
@@ -555,8 +582,13 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
           </p>
         )}
         <div className='admin-actions'>
-          <Button type='submit' variant='secondary' loading={busy} disabled={busy}>
-            {busy ? 'Đang lưu…' : 'Đặt lại mật khẩu'}
+          <Button
+            type='submit'
+            variant='secondary'
+            loading={activeSection === 'password'}
+            disabled={busy}
+          >
+            {activeSection === 'password' ? 'Đang lưu…' : 'Đặt lại mật khẩu'}
           </Button>
         </div>
       </form>
@@ -572,7 +604,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
         className='admin-form account-form'
         onSubmit={(event) => {
           event.preventDefault();
-          void perform(async () => {
+          void perform('create', async () => {
             if (!createForm.staffPermissions.length) throw new Error('Chọn ít nhất một quyền.');
             if (
               createForm.hasRegistrantRole &&
@@ -617,6 +649,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
             id='user-editor-11'
             type='email'
             value={createForm.email}
+            disabled={busy}
             onChange={(event) => setCreateForm({ ...createForm, email: event.target.value })}
             maxLength={320}
             autoComplete='off'
@@ -627,6 +660,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
           <Input
             id='user-editor-12'
             value={createForm.fullName}
+            disabled={busy}
             onChange={(event) => setCreateForm({ ...createForm, fullName: event.target.value })}
             maxLength={255}
             required
@@ -637,6 +671,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
             id='user-editor-13'
             type='tel'
             value={createForm.phone}
+            disabled={busy}
             onChange={(event) => setCreateForm({ ...createForm, phone: event.target.value })}
             maxLength={30}
           />
@@ -645,6 +680,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
           <PasswordInput
             id='user-editor-14'
             value={createForm.password}
+            disabled={busy}
             onChange={(event) => setCreateForm({ ...createForm, password: event.target.value })}
             minLength={12}
             maxLength={72}
@@ -655,6 +691,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
         <FormField label='Đơn vị công tác' htmlFor='user-editor-15'>
           <Combobox
             value={createForm.organizationUnitId}
+            disabled={busy}
             onValueChange={(value) => setCreateForm({ ...createForm, organizationUnitId: value })}
           >
             <ComboboxAnchor>
@@ -702,7 +739,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
                 }
               />
               <Label htmlFor={`user-create-permission-${permission}`} className='cursor-pointer'>
-                {STAFF_PERMISSION_LABELS[permission]} ({permission})
+                {STAFF_PERMISSION_LABELS[permission]}
                 {permission === STAFF_PERMISSION.VIEW &&
                 createForm.staffPermissions.includes(STAFF_PERMISSION.MANAGE)
                   ? ' — được bao hàm bởi Quản trị'
@@ -725,7 +762,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
               }
             />
             <Label htmlFor='user-create-role-registrant' className='cursor-pointer'>
-              Người dùng / Người đăng ký (REGISTRANT)
+              Người dùng / Người đăng ký
               {createForm.staffPermissions.includes(STAFF_PERMISSION.SCORE)
                 ? ' — không được gán chung với Giám khảo'
                 : ''}
@@ -736,6 +773,7 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
           <Input
             id='user-editor-16'
             value={createForm.reason}
+            disabled={busy}
             onChange={(event) => setCreateForm({ ...createForm, reason: event.target.value })}
             maxLength={255}
             required
@@ -748,15 +786,25 @@ export function UserEditorDialog(props: UserEditorDialogProps) {
               errors={['Cần có đơn vị đang hoạt động trước khi tạo tài khoản nội bộ.']}
             />
             {props.onManageUnits && (
-              <Button type='button' variant='secondary' size='sm' onClick={handleManageUnitsClick}>
+              <Button
+                type='button'
+                variant='secondary'
+                size='sm'
+                disabled={busy}
+                onClick={handleManageUnitsClick}
+              >
                 Quản lý đơn vị
               </Button>
             )}
           </div>
         )}
         <div className='admin-actions'>
-          <Button type='submit' loading={busy} disabled={busy || noActiveUnit}>
-            {busy ? 'Đang tạo…' : 'Tạo tài khoản'}
+          <Button
+            type='submit'
+            loading={activeSection === 'create'}
+            disabled={busy || noActiveUnit}
+          >
+            {activeSection === 'create' ? 'Đang tạo…' : 'Tạo tài khoản'}
           </Button>
           <Button
             type='button'

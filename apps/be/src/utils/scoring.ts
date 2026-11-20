@@ -27,16 +27,23 @@ export function calculateFinalScore(
     }
     for (const points of Object.values(evaluation.criterionTotals)) {
       if (!Number.isFinite(points) || points < 0) {
-        throw new RangeError('Criterion totals must be finite and non-negative');
+        throw new RangeError(
+          'Criterion totals must be finite and non-negative',
+        );
       }
     }
   }
 
   const fullCoverage = evaluations.every((evaluation) =>
-    criterionIds.every((criterionId) => criterionId in evaluation.criterionTotals),
+    criterionIds.every(
+      (criterionId) => criterionId in evaluation.criterionTotals,
+    ),
   );
   if (fullCoverage) {
-    return evaluations.reduce((sum, evaluation) => sum + evaluation.total, 0) / evaluations.length;
+    return (
+      evaluations.reduce((sum, evaluation) => sum + evaluation.total, 0) /
+      evaluations.length
+    );
   }
 
   let finalScore = 0;
@@ -45,7 +52,8 @@ export function calculateFinalScore(
       .map((evaluation) => evaluation.criterionTotals[criterionId])
       .filter((points): points is number => points !== undefined);
     if (totals.length === 0) return null;
-    finalScore += totals.reduce((sum, points) => sum + points, 0) / totals.length;
+    finalScore +=
+      totals.reduce((sum, points) => sum + points, 0) / totals.length;
   }
 
   return finalScore;

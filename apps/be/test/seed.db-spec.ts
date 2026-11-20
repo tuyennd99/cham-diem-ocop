@@ -277,10 +277,10 @@ describe('seed scoring history guard', () => {
   it('preflights late used bundles before any earlier bundle upsert', async () => {
     await withTestApp(async ({ prisma }) => {
       const first = officialCategories[0];
-      const lastSet = officialSets().at(-1);
+      const lastSet = officialSets().at(-1)!;
       const last = officialCategories.find(
         ({ criteriaSetKey }) => criteriaSetKey === lastSet.categoryKey,
-      );
+      )!;
       const evaluation = await createEvaluation(prisma, last.id);
       const before = await scoringSnapshot(prisma, [first.id, last.id]);
       const sandbox = seedSandbox((sets) => {
@@ -288,7 +288,7 @@ describe('seed scoring history guard', () => {
         early.name = `${early.name} edited`;
         const used = sets.find(
           ({ categoryKey }) => categoryKey === last.criteriaSetKey,
-        );
+        )!;
         used.criteria[0].subCriteria[0].options[0].points += 1;
       });
       try {
@@ -317,7 +317,7 @@ describe('seed scoring history guard', () => {
         const sandbox = seedSandbox((sets) => {
           const set = sets.find(
             ({ categoryKey }) => categoryKey === category.criteriaSetKey,
-          );
+          )!;
           const options = set.criteria[0].subCriteria[0].options;
           if (mutation === 'points') options[0].points += 1;
           else if (mutation === 'option order') options.reverse();

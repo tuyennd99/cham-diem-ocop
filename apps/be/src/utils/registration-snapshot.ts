@@ -1,10 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import type {
-  Locality,
-  Product,
-  ProductCategory,
-  User,
-} from '@prisma/client';
+import type { Locality, Product, ProductCategory, User } from '@prisma/client';
 import {
   formatProductCode,
   type ProductApplicationForm,
@@ -207,4 +202,55 @@ export function buildRegistrationSnapshot(input: {
     },
     formData: validateProductApplicationForm(input.product.formData),
   };
+}
+
+export function extractSafeApplicationForm(
+  value: unknown,
+): Partial<ProductApplicationForm> {
+  const source = record(value);
+  if (!source) return {};
+  const result: Record<string, string | number | boolean> = {};
+  for (const field of [
+    'entityName',
+    'representativeName',
+    'representativeTitle',
+    'contactAddress',
+    'provinceName',
+    'localityName',
+    'localityCode',
+    'phone',
+    'email',
+  ]) {
+    if (typeof source[field] === 'string') {
+      result[field] = source[field];
+    }
+  }
+  if (
+    typeof source.registrationType === 'string' &&
+    (productRegistrationTypes as readonly string[]).includes(
+      source.registrationType,
+    )
+  ) {
+    result.registrationType = source.registrationType;
+  }
+  if (
+    typeof source.sampleQuantity === 'number' &&
+    Number.isInteger(source.sampleQuantity) &&
+    source.sampleQuantity >= 0 &&
+    source.sampleQuantity <= 100000
+  ) {
+    result.sampleQuantity = source.sampleQuantity;
+  }
+  if (
+    typeof source.assessmentYear === 'number' &&
+    Number.isInteger(source.assessmentYear) &&
+    source.assessmentYear >= 2020 &&
+    source.assessmentYear <= 2100
+  ) {
+    result.assessmentYear = source.assessmentYear;
+  }
+  if (typeof source.declarationAccepted === 'boolean') {
+    result.declarationAccepted = source.declarationAccepted;
+  }
+  return result;
 }

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   ConflictException,
   ForbiddenException,
@@ -12,34 +13,173 @@ import {
   Role,
   StaffPermission,
 } from '@prisma/client';
+import type { JudgeQueueSortBy, SortDirection } from '@ocop/shared';
 import {
   EVALUATION_HISTORY_ACTION,
+  JUDGE_QUEUE_SORT_BY,
   PRODUCT_RESULT_HISTORY_ACTION,
+  SORT_DIRECTION,
 } from '../constants/products';
+import { type OrderByBuilder, resolveOrderBy } from '../prisma/order-by';
 import { PrismaService } from '../prisma/prisma.service';
-import { EvaluationScoreDto } from '../dtos/evaluations.dto';
+import { computePaginationSkip } from '../dtos/common.dto';
+import {
+  EvaluationScoreDto,
+  type JudgeQueueQueryDto,
+} from '../dtos/evaluations.dto';
 import { databaseObject } from '../prisma/sql';
 import {
   lockEvaluationCategory,
   recomputeProductResult,
 } from '../utils/evaluation-result';
 import { buildEvaluationPrintData } from '../utils/print-data';
-import { formatProductCode, withProductCode } from '../utils/product-code';
+import {
+  findProductIdsMatchingCodeQuery,
+  formatProductCode,
+  withProductCode,
+} from '../utils/product-code';
 import { recordProductStatusEvent } from '../utils/product-status';
+
+function escapeSqlLike(value: string): string {
+  return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
+function computeEvaluationVersionToken(
+  status: EvaluationStatus,
+  scores: Array<{
+    subCriterionId: string;
+    optionId: string;
+    note?: string | null;
+  }>,
+  assignedCriterionIds: string[],
+): string {
+  const payload = {
+    status,
+    assignedCriterionIds: [...assignedCriterionIds].sort(),
+    scores: [...scores]
+      .sort((a, b) => a.subCriterionId.localeCompare(b.subCriterionId))
+      .map((score) => [
+        score.subCriterionId,
+        score.optionId,
+        score.note?.trim() ?? '',
+      ]),
+  };
+  return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+}
+
+type JudgeQueueSqlSortBy =
+  | typeof JUDGE_QUEUE_SORT_BY.EVAL_STATUS
+  | typeof JUDGE_QUEUE_SORT_BY.TOTAL_SCORE;
+
+const JUDGE_QUEUE_SQL_ORDER_BY: Record<
+  JudgeQueueSqlSortBy,
+  Record<SortDirection, Prisma.Sql>
+> = {
+  [JUDGE_QUEUE_SORT_BY.EVAL_STATUS]: {
+    [SORT_DIRECTION.ASC]: Prisma.sql`CASE COALESCE(e."status"::text, 'IN_PROGRESS') WHEN 'IN_PROGRESS' THEN 0 WHEN 'SUBMITTED' THEN 1 ELSE 2 END ASC, p."updatedAt" DESC, p."id" DESC`,
+    [SORT_DIRECTION.DESC]: Prisma.sql`CASE COALESCE(e."status"::text, 'IN_PROGRESS') WHEN 'IN_PROGRESS' THEN 0 WHEN 'SUBMITTED' THEN 1 ELSE 2 END DESC, p."updatedAt" DESC, p."id" DESC`,
+  },
+  [JUDGE_QUEUE_SORT_BY.TOTAL_SCORE]: {
+    [SORT_DIRECTION.ASC]: Prisma.sql`COALESCE(e."total", -1) ASC, p."updatedAt" DESC, p."id" DESC`,
+    [SORT_DIRECTION.DESC]: Prisma.sql`COALESCE(e."total", -1) DESC, p."updatedAt" DESC, p."id" DESC`,
+  },
+};
+
+const JUDGE_QUEUE_PRISMA_ORDER_BY: Record<
+  Exclude<JudgeQueueSortBy, JudgeQueueSqlSortBy>,
+  OrderByBuilder<Prisma.ProductOrderByWithRelationInput>
+> = {
+  [JUDGE_QUEUE_SORT_BY.NAME]: (dir = SORT_DIRECTION.ASC) => [
+    { name: dir },
+    { updatedAt: SORT_DIRECTION.DESC },
+    { id: SORT_DIRECTION.DESC },
+  ],
+  [JUDGE_QUEUE_SORT_BY.CATEGORY]: (dir = SORT_DIRECTION.ASC) => [
+    { category: { name: dir } },
+    { updatedAt: SORT_DIRECTION.DESC },
+    { id: SORT_DIRECTION.DESC },
+  ],
+  [JUDGE_QUEUE_SORT_BY.STATUS]: (dir = SORT_DIRECTION.ASC) => [
+    { status: dir },
+    { updatedAt: SORT_DIRECTION.DESC },
+    { id: SORT_DIRECTION.DESC },
+  ],
+  [JUDGE_QUEUE_SORT_BY.ATTACHMENTS]: (dir = SORT_DIRECTION.ASC) => [
+    { attachments: { _count: dir } },
+    { updatedAt: SORT_DIRECTION.DESC },
+    { id: SORT_DIRECTION.DESC },
+  ],
+  [JUDGE_QUEUE_SORT_BY.UPDATED_AT]: (dir = SORT_DIRECTION.DESC) => [
+    { updatedAt: dir },
+    { id: SORT_DIRECTION.DESC },
+  ],
+};
+
+function resolveAllowedSortDirection(
+  requested: SortDirection | undefined,
+  fallback: SortDirection,
+): SortDirection {
+  if (requested === SORT_DIRECTION.ASC || requested === SORT_DIRECTION.DESC) {
+    return requested;
+  }
+  return fallback;
+}
 
 @Injectable()
 export class EvaluationsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listQueue(judgeId: string) {
-    return this.prisma.product.findMany({
-      where: {
-        OR: [
-          {
-            judgeAssignments: {
+  async listQueue(judgeId: string, query?: JudgeQueueQueryDto) {
+    const page = query?.page ?? 1;
+    const limit = query?.limit ?? 20;
+    const skip = computePaginationSkip(page, limit);
+
+    const baseWhere: Prisma.ProductWhereInput = {
+      OR: [
+        {
+          judgeAssignments: {
+            some: {
+              judgeId,
+              isActive: true,
+              judge: {
+                is: {
+                  role: { not: Role.REGISTRANT },
+                  staffPermissions: { has: StaffPermission.SCORE },
+                  isActive: true,
+                  verified: true,
+                },
+              },
+            },
+          },
+          status: {
+            in: [
+              ProductStatus.APPROVED,
+              ProductStatus.SCORING,
+              ProductStatus.COMPLETED,
+            ],
+          },
+        },
+        {
+          evaluations: {
+            some: {
+              judgeId,
+              status: EvaluationStatus.EXCLUDED,
+            },
+          },
+          status: {
+            in: [
+              ProductStatus.APPROVED,
+              ProductStatus.SCORING,
+              ProductStatus.COMPLETED,
+            ],
+          },
+        },
+        {
+          judgeAssignments: { none: {} },
+          category: {
+            assignments: {
               some: {
                 judgeId,
-                isActive: true,
                 judge: {
                   is: {
                     role: { not: Role.REGISTRANT },
@@ -50,77 +190,283 @@ export class EvaluationsRepository {
                 },
               },
             },
+          },
+          status: {
+            in: [
+              ProductStatus.SUBMITTED,
+              ProductStatus.APPROVED,
+              ProductStatus.SCORING,
+            ],
+          },
+        },
+      ],
+    };
+
+    const searchConditions: Prisma.ProductWhereInput[] = [baseWhere];
+    if (query?.categoryId) {
+      searchConditions.push({ categoryId: query.categoryId });
+    }
+    let codeProductIds: string[] = [];
+    if (query?.q) {
+      codeProductIds = await findProductIdsMatchingCodeQuery(
+        this.prisma,
+        query.q,
+      );
+      searchConditions.push({
+        OR: [
+          { name: { contains: query.q, mode: 'insensitive' } },
+          { id: { contains: query.q, mode: 'insensitive' } },
+          { description: { contains: query.q, mode: 'insensitive' } },
+          ...(codeProductIds.length ? [{ id: { in: codeProductIds } }] : []),
+        ],
+      });
+    }
+    const scopedWhere: Prisma.ProductWhereInput =
+      searchConditions.length === 1 ? baseWhere : { AND: searchConditions };
+
+    const statusConditions: Prisma.ProductWhereInput[] = [scopedWhere];
+    if (query?.evaluationStatus === EvaluationStatus.SUBMITTED) {
+      statusConditions.push({
+        evaluations: {
+          some: { judgeId, status: EvaluationStatus.SUBMITTED },
+        },
+      });
+    } else if (query?.evaluationStatus === EvaluationStatus.EXCLUDED) {
+      statusConditions.push({
+        evaluations: {
+          some: { judgeId, status: EvaluationStatus.EXCLUDED },
+        },
+      });
+    } else if (query?.evaluationStatus === EvaluationStatus.IN_PROGRESS) {
+      statusConditions.push({
+        evaluations: {
+          none: {
+            judgeId,
             status: {
-              in: [
-                ProductStatus.APPROVED,
-                ProductStatus.SCORING,
-                ProductStatus.COMPLETED,
-              ],
+              in: [EvaluationStatus.SUBMITTED, EvaluationStatus.EXCLUDED],
             },
           },
-          {
-            evaluations: {
-              some: {
-                judgeId,
-                status: EvaluationStatus.EXCLUDED,
-              },
-            },
-            status: {
-              in: [
-                ProductStatus.APPROVED,
-                ProductStatus.SCORING,
-                ProductStatus.COMPLETED,
-              ],
-            },
-          },
-          {
-            judgeAssignments: { none: {} },
-            category: {
-              assignments: {
-                some: {
-                  judgeId,
-                  judge: {
-                    is: {
-                      role: { not: Role.REGISTRANT },
-                      staffPermissions: { has: StaffPermission.SCORE },
-                      isActive: true,
-                      verified: true,
-                    },
-                  },
+        },
+      });
+    }
+    const filteredWhere: Prisma.ProductWhereInput =
+      statusConditions.length === 1 ? scopedWhere : { AND: statusConditions };
+
+    const queueSelect = {
+      id: true,
+      codeNumber: true,
+      name: true,
+      description: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+      category: { select: { id: true, name: true } },
+      attachments: {
+        where: { type: AttachmentType.IMAGE },
+        orderBy: { createdAt: 'asc' as const },
+        take: 1,
+        select: { id: true, fileName: true },
+      },
+      _count: {
+        select: { attachments: true },
+      },
+      evaluations: {
+        where: { judgeId },
+        select: { status: true, total: true },
+      },
+    } satisfies Prisma.ProductSelect;
+
+    const sortBy = query?.sortBy ?? JUDGE_QUEUE_SORT_BY.UPDATED_AT;
+    const dir = resolveAllowedSortDirection(
+      query?.sortDirection,
+      sortBy === JUDGE_QUEUE_SORT_BY.UPDATED_AT
+        ? SORT_DIRECTION.DESC
+        : SORT_DIRECTION.ASC,
+    );
+
+    const mapRow = (
+      row: Prisma.ProductGetPayload<{ select: typeof queueSelect }>,
+    ) => {
+      const { _count, ...rest } = row;
+      return withProductCode({
+        ...rest,
+        attachmentCount: _count.attachments,
+      });
+    };
+
+    return this.prisma.$transaction(
+      async (tx) => {
+        const scopedTotal = await tx.product.count({ where: scopedWhere });
+        const submittedCount = await tx.product.count({
+          where: {
+            AND: [
+              scopedWhere,
+              {
+                evaluations: {
+                  some: { judgeId, status: EvaluationStatus.SUBMITTED },
                 },
               },
-            },
-            status: {
-              in: [
-                ProductStatus.SUBMITTED,
-                ProductStatus.APPROVED,
-                ProductStatus.SCORING,
-              ],
-            },
+            ],
           },
-        ],
+        });
+        const excludedCount = await tx.product.count({
+          where: {
+            AND: [
+              scopedWhere,
+              {
+                evaluations: {
+                  some: { judgeId, status: EvaluationStatus.EXCLUDED },
+                },
+              },
+            ],
+          },
+        });
+        const counts = {
+          total: scopedTotal,
+          open: Math.max(0, scopedTotal - submittedCount - excludedCount),
+          submitted: submittedCount,
+          excluded: excludedCount,
+        };
+        const total =
+          query?.evaluationStatus === EvaluationStatus.SUBMITTED
+            ? counts.submitted
+            : query?.evaluationStatus === EvaluationStatus.EXCLUDED
+              ? counts.excluded
+              : query?.evaluationStatus === EvaluationStatus.IN_PROGRESS
+                ? counts.open
+                : counts.total;
+
+        if (
+          sortBy === JUDGE_QUEUE_SORT_BY.EVAL_STATUS ||
+          sortBy === JUDGE_QUEUE_SORT_BY.TOTAL_SCORE
+        ) {
+          const whereParts: Prisma.Sql[] = [
+            Prisma.sql`(
+              (
+                p."status" IN (${ProductStatus.APPROVED}::${databaseObject('ProductStatus')}, ${ProductStatus.SCORING}::${databaseObject('ProductStatus')}, ${ProductStatus.COMPLETED}::${databaseObject('ProductStatus')})
+                AND EXISTS (
+                  SELECT 1 FROM ${databaseObject('product_judge_assignments')} pja
+                  JOIN ${databaseObject('users')} ju ON ju."id" = pja."judgeId"
+                  WHERE pja."productId" = p."id"
+                    AND pja."judgeId" = ${judgeId}
+                    AND pja."isActive" = true
+                    AND ju."role" <> ${Role.REGISTRANT}::${databaseObject('Role')}
+                    AND ${StaffPermission.SCORE}::${databaseObject('StaffPermission')} = ANY(ju."staffPermissions")
+                    AND ju."isActive" = true
+                    AND ju."verified" = true
+                )
+              )
+              OR (
+                p."status" IN (${ProductStatus.APPROVED}::${databaseObject('ProductStatus')}, ${ProductStatus.SCORING}::${databaseObject('ProductStatus')}, ${ProductStatus.COMPLETED}::${databaseObject('ProductStatus')})
+                AND EXISTS (
+                  SELECT 1 FROM ${databaseObject('evaluations')} ev
+                  WHERE ev."productId" = p."id"
+                    AND ev."judgeId" = ${judgeId}
+                    AND ev."status" = ${EvaluationStatus.EXCLUDED}::${databaseObject('EvaluationStatus')}
+                )
+              )
+              OR (
+                p."status" IN (${ProductStatus.SUBMITTED}::${databaseObject('ProductStatus')}, ${ProductStatus.APPROVED}::${databaseObject('ProductStatus')}, ${ProductStatus.SCORING}::${databaseObject('ProductStatus')})
+                AND NOT EXISTS (
+                  SELECT 1 FROM ${databaseObject('product_judge_assignments')} pja2
+                  WHERE pja2."productId" = p."id"
+                )
+                AND EXISTS (
+                  SELECT 1 FROM ${databaseObject('judge_assignments')} ja
+                  JOIN ${databaseObject('users')} ju ON ju."id" = ja."judgeId"
+                  WHERE ja."categoryId" = p."categoryId"
+                    AND ja."judgeId" = ${judgeId}
+                    AND ju."role" <> ${Role.REGISTRANT}::${databaseObject('Role')}
+                    AND ${StaffPermission.SCORE}::${databaseObject('StaffPermission')} = ANY(ju."staffPermissions")
+                    AND ju."isActive" = true
+                    AND ju."verified" = true
+                )
+              )
+            )`,
+          ];
+          if (query?.categoryId) {
+            whereParts.push(Prisma.sql`p."categoryId" = ${query.categoryId}`);
+          }
+          if (query?.q) {
+            const like = `%${escapeSqlLike(query.q)}%`;
+            whereParts.push(
+              codeProductIds.length > 0
+                ? Prisma.sql`(p."name" ILIKE ${like} ESCAPE '\\' OR p."id" ILIKE ${like} ESCAPE '\\' OR p."description" ILIKE ${like} ESCAPE '\\' OR p."id" IN (${Prisma.join(codeProductIds)}))`
+                : Prisma.sql`(p."name" ILIKE ${like} ESCAPE '\\' OR p."id" ILIKE ${like} ESCAPE '\\' OR p."description" ILIKE ${like} ESCAPE '\\')`,
+            );
+          }
+          if (query?.evaluationStatus === EvaluationStatus.SUBMITTED) {
+            whereParts.push(
+              Prisma.sql`e."status" = ${EvaluationStatus.SUBMITTED}::${databaseObject('EvaluationStatus')}`,
+            );
+          } else if (query?.evaluationStatus === EvaluationStatus.EXCLUDED) {
+            whereParts.push(
+              Prisma.sql`e."status" = ${EvaluationStatus.EXCLUDED}::${databaseObject('EvaluationStatus')}`,
+            );
+          } else if (query?.evaluationStatus === EvaluationStatus.IN_PROGRESS) {
+            whereParts.push(
+              Prisma.sql`(e."status" IS NULL OR e."status" NOT IN (${EvaluationStatus.SUBMITTED}::${databaseObject('EvaluationStatus')}, ${EvaluationStatus.EXCLUDED}::${databaseObject('EvaluationStatus')}))`,
+            );
+          }
+
+          const orderSql = JUDGE_QUEUE_SQL_ORDER_BY[sortBy][dir];
+
+          const sortedIdRows = await tx.$queryRaw<Array<{ id: string }>>(
+            Prisma.sql`
+              SELECT p."id"
+              FROM ${databaseObject('products')} p
+              LEFT JOIN ${databaseObject('evaluations')} e
+                ON e."productId" = p."id" AND e."judgeId" = ${judgeId}
+              WHERE ${Prisma.join(whereParts, ' AND ')}
+              ORDER BY ${orderSql}
+              LIMIT ${limit} OFFSET ${skip}
+            `,
+          );
+          const orderedIds = sortedIdRows.map((row) => row.id);
+
+          if (!orderedIds.length) {
+            return { data: [], total, counts };
+          }
+          const pageRows = await tx.product.findMany({
+            where: { id: { in: orderedIds } },
+            select: queueSelect,
+          });
+          const byId = new Map(pageRows.map((r) => [r.id, r]));
+          const data = orderedIds
+            .map((id) => byId.get(id))
+            .filter(
+              (
+                item,
+              ): item is Prisma.ProductGetPayload<{
+                select: typeof queueSelect;
+              }> => Boolean(item),
+            )
+            .map(mapRow);
+          return { data, total, counts };
+        }
+
+        const orderBy = resolveOrderBy(
+          sortBy,
+          dir,
+          JUDGE_QUEUE_PRISMA_ORDER_BY,
+          JUDGE_QUEUE_PRISMA_ORDER_BY[JUDGE_QUEUE_SORT_BY.UPDATED_AT],
+        );
+
+        const rows = await tx.product.findMany({
+          where: filteredWhere,
+          select: queueSelect,
+          orderBy,
+          skip,
+          take: limit,
+        });
+        return {
+          data: rows.map(mapRow),
+          total,
+          counts,
+        };
       },
-      select: {
-        id: true,
-        codeNumber: true,
-        name: true,
-        description: true,
-        status: true,
-        createdAt: true,
-        category: { select: { id: true, name: true } },
-        attachments: {
-          where: { type: AttachmentType.IMAGE },
-          orderBy: { createdAt: 'asc' },
-          take: 1,
-          select: { id: true, fileName: true },
-        },
-        evaluations: {
-          where: { judgeId },
-          select: { status: true, total: true },
-        },
-      },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    }).then((rows) => rows.map(withProductCode));
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
   }
 
   async getEvaluation(judgeId: string, productId: string) {
@@ -149,6 +495,15 @@ export class EvaluationsRepository {
     ) {
       throw new NotFoundException('Evaluation not found');
     }
+    const assignedCriterionIds = this.allowedCriteria(
+      assignment.criterionIds,
+      criteria,
+    );
+    const versionToken = computeEvaluationVersionToken(
+      evaluation?.status ?? EvaluationStatus.IN_PROGRESS,
+      evaluation?.scores ?? [],
+      assignedCriterionIds,
+    );
     return {
       product: withProductCode({
         id: context.product.id,
@@ -169,12 +524,14 @@ export class EvaluationsRepository {
             status: evaluation.status,
             total: evaluation.total,
             scores: evaluation.scores,
+            versionToken,
           }
         : {
             id: null,
             status: EvaluationStatus.IN_PROGRESS,
             total: null,
             scores: [],
+            versionToken,
           },
     };
   }
@@ -273,35 +630,49 @@ export class EvaluationsRepository {
   ) {
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
-      select: { categoryId: true, status: true },
-    });
-    if (!product) return null;
-
-    const hasPerProduct = await this.prisma.productJudgeAssignment.findUnique({
-      where: {
-        productId_judgeId: { productId, judgeId },
-      },
       select: {
-        isActive: true,
-        judge: {
+        categoryId: true,
+        status: true,
+        judgeAssignments: {
+          where: { judgeId },
           select: {
-            role: true,
-            staffPermissions: true,
             isActive: true,
-            verified: true,
+            judge: {
+              select: {
+                role: true,
+                staffPermissions: true,
+                isActive: true,
+                verified: true,
+              },
+            },
           },
+        },
+        _count: { select: { judgeAssignments: true } },
+        evaluations: {
+          where: { judgeId },
+          select: { status: true },
+        },
+        attachments: {
+          where: { id: attachmentId },
+          select: { fileName: true, filePath: true, type: true },
         },
       },
     });
-    const hasExcludedEval = await this.prisma.evaluation.findUnique({
-      where: { judgeId_productId: { judgeId, productId } },
-      select: { status: true },
-    });
-    const totalPerProductCount = await this.prisma.productJudgeAssignment.count(
-      { where: { productId } },
+    if (!product) return null;
+
+    const perProduct = product.judgeAssignments[0];
+    const existingEval = product.evaluations[0];
+    const totalPerProductCount = product._count.judgeAssignments;
+    const perProductJudgeValid = Boolean(
+      perProduct?.isActive &&
+      perProduct.judge.role !== Role.REGISTRANT &&
+      perProduct.judge.staffPermissions.includes(StaffPermission.SCORE) &&
+      perProduct.judge.isActive &&
+      perProduct.judge.verified,
     );
+    const hasExcludedEval = existingEval?.status === EvaluationStatus.EXCLUDED;
     const hasLegacyAssignment =
-      totalPerProductCount === 0
+      totalPerProductCount === 0 && !perProductJudgeValid && !hasExcludedEval
         ? await this.prisma.judgeAssignment.findUnique({
             where: {
               judgeId_categoryId: { judgeId, categoryId: product.categoryId },
@@ -314,109 +685,171 @@ export class EvaluationsRepository {
                 },
               },
             },
+            select: { judgeId: true },
           })
         : null;
 
-    const judgeValid =
-      (hasPerProduct?.isActive &&
-        hasPerProduct.judge.role !== Role.REGISTRANT &&
-        hasPerProduct.judge.staffPermissions.includes(StaffPermission.SCORE) &&
-        hasPerProduct.judge.isActive &&
-        hasPerProduct.judge.verified) ||
-      hasExcludedEval?.status === EvaluationStatus.EXCLUDED ||
-      Boolean(hasLegacyAssignment);
-
-    if (!judgeValid) {
+    if (!perProductJudgeValid && !hasExcludedEval && !hasLegacyAssignment) {
       throw new ForbiddenException('Product is outside the judge assignment');
     }
 
-    return this.prisma.attachment.findFirst({
-      where: {
-        id: attachmentId,
-        productId,
-        product: {
-          status: {
-            in: [
-              ...(totalPerProductCount === 0
-                ? [ProductStatus.SUBMITTED]
-                : []),
-              ProductStatus.APPROVED,
-              ProductStatus.SCORING,
-              ProductStatus.COMPLETED,
-            ],
-          },
-        },
-      },
-      select: { fileName: true, filePath: true, type: true },
+    const canAccessLegacyCompleted =
+      existingEval?.status === EvaluationStatus.SUBMITTED ||
+      existingEval?.status === EvaluationStatus.EXCLUDED;
+    const statusAllowed =
+      (totalPerProductCount === 0 &&
+        product.status === ProductStatus.SUBMITTED) ||
+      product.status === ProductStatus.APPROVED ||
+      product.status === ProductStatus.SCORING ||
+      ((totalPerProductCount > 0 || canAccessLegacyCompleted) &&
+        product.status === ProductStatus.COMPLETED);
+
+    if (!statusAllowed) return null;
+    return product.attachments[0] ?? null;
+  }
+
+  private async lockAndLoadAssignedEvaluationContext(
+    tx: Prisma.TransactionClient,
+    judgeId: string,
+    productId: string,
+    categoryChangedMessage: string,
+  ) {
+    const initial = await tx.product.findUnique({
+      where: { id: productId },
+      select: { categoryId: true },
     });
+    if (!initial) throw new NotFoundException('Product not found');
+    // Always lock category before product row to avoid deadlocks with assignment changes.
+    await lockEvaluationCategory(tx, initial.categoryId);
+    await tx.$queryRaw(
+      Prisma.sql`SELECT "id" FROM ${databaseObject('products')} WHERE "id" = ${productId} FOR UPDATE`,
+    );
+    const context = await this.getAssignedProduct(
+      tx,
+      judgeId,
+      productId,
+      false,
+      { omitAttachments: true },
+    );
+    if (context.product.categoryId !== initial.categoryId) {
+      throw new ConflictException(categoryChangedMessage);
+    }
+    const criteria = context.product.category.criteriaSet?.criteria ?? [];
+    const assignedCriteria = this.allowedCriteria(
+      context.assignment.criterionIds,
+      criteria,
+    );
+    if (!assignedCriteria.length) {
+      throw new ConflictException(
+        'No scoring criteria are configured for this product',
+      );
+    }
+    return { context, criteria, assignedCriteria };
+  }
+
+  private assertEditableEvaluationVersion(
+    existing: {
+      status: EvaluationStatus;
+      scores: Array<{
+        subCriterionId: string;
+        optionId: string;
+        note?: string | null;
+      }>;
+    } | null,
+    expectedVersionToken: string | undefined,
+    assignedCriteria: string[],
+    messages: { submitted: string; versionMismatch: string },
+  ) {
+    if (existing?.status === EvaluationStatus.SUBMITTED) {
+      throw new ConflictException(messages.submitted);
+    }
+    if (existing?.status === EvaluationStatus.EXCLUDED) {
+      throw new ConflictException('Excluded evaluations are read-only');
+    }
+    if (expectedVersionToken === undefined) return;
+    const currentVersionToken = computeEvaluationVersionToken(
+      existing?.status ?? EvaluationStatus.IN_PROGRESS,
+      existing?.scores ?? [],
+      assignedCriteria,
+    );
+    if (expectedVersionToken !== currentVersionToken) {
+      throw new ConflictException(messages.versionMismatch);
+    }
+  }
+
+  private assertDraftScoresInScope(
+    scores: EvaluationScoreDto[],
+    criteria: Array<{
+      id: string;
+      subCriteria: Array<{ id: string; options: Array<{ id: string }> }>;
+    }>,
+    allowedIds: string[],
+  ) {
+    const allowedCriterionSet = new Set(allowedIds);
+    const optionIdsBySubcriterion = new Map<string, Set<string>>();
+    for (const criterion of criteria) {
+      if (!allowedCriterionSet.has(criterion.id)) continue;
+      for (const sub of criterion.subCriteria) {
+        optionIdsBySubcriterion.set(
+          sub.id,
+          new Set(sub.options.map((option) => option.id)),
+        );
+      }
+    }
+    const seenSubIds = new Set<string>();
+    const hasInvalidScore = scores.some((score) => {
+      if (seenSubIds.has(score.subCriterionId)) return true;
+      seenSubIds.add(score.subCriterionId);
+      return !optionIdsBySubcriterion
+        .get(score.subCriterionId)
+        ?.has(score.optionId);
+    });
+    if (hasInvalidScore) {
+      throw new ForbiddenException(
+        'Scores must use options in assigned criteria',
+      );
+    }
   }
 
   async saveDraft(
     judgeId: string,
     productId: string,
     scores: EvaluationScoreDto[],
+    expectedVersionToken?: string,
   ) {
     return this.prisma.$transaction(
       async (tx) => {
-        const initial = await tx.product.findUnique({
-          where: { id: productId },
-          select: { categoryId: true },
-        });
-        if (!initial) throw new NotFoundException('Product not found');
-        await lockEvaluationCategory(tx, initial.categoryId);
-        await tx.$queryRaw(
-          Prisma.sql`SELECT "id" FROM ${databaseObject('products')} WHERE "id" = ${productId} FOR UPDATE`,
-        );
-        const context = await this.getAssignedProduct(tx, judgeId, productId);
-        if (context.product.categoryId !== initial.categoryId) {
-          throw new ConflictException(
-            'Product category changed while saving evaluation',
-          );
-        }
-        const criteria = context.product.category.criteriaSet?.criteria ?? [];
-        const allowedIds = this.allowedCriteria(
-          context.assignment.criterionIds,
+        const {
+          context,
           criteria,
+          assignedCriteria: allowedIds,
+        } = await this.lockAndLoadAssignedEvaluationContext(
+          tx,
+          judgeId,
+          productId,
+          'Product category changed while saving evaluation',
         );
-        if (!allowedIds.length)
-          throw new ConflictException(
-            'No scoring criteria are configured for this product',
-          );
         const existing = await tx.evaluation.findUnique({
           where: { judgeId_productId: { judgeId, productId } },
-          select: { id: true, status: true },
+          select: {
+            id: true,
+            status: true,
+            scores: {
+              select: { subCriterionId: true, optionId: true, note: true },
+            },
+          },
         });
-        if (existing?.status === EvaluationStatus.SUBMITTED) {
-          throw new ConflictException('Submitted evaluations are immutable');
-        }
-        if (existing?.status === EvaluationStatus.EXCLUDED) {
-          throw new ConflictException('Excluded evaluations are read-only');
-        }
-
-        const subIds = scores.map((score) => score.subCriterionId);
-        const validSubcriteria = await tx.subCriterion.findMany({
-          where: { id: { in: subIds }, criterionId: { in: allowedIds } },
-          include: { options: { select: { id: true } } },
-        });
-        const optionIdsBySubcriterion = new Map(
-          validSubcriteria.map((subcriterion) => [
-            subcriterion.id,
-            new Set(subcriterion.options.map((option) => option.id)),
-          ]),
+        this.assertEditableEvaluationVersion(
+          existing,
+          expectedVersionToken,
+          allowedIds,
+          {
+            submitted: 'Submitted evaluations are immutable',
+            versionMismatch:
+              'Phiếu chấm đã thay đổi ở phiên khác. Vui lòng tải lại dữ liệu mới nhất trước khi lưu.',
+          },
         );
-        if (
-          validSubcriteria.length !== scores.length ||
-          scores.some(
-            (score) =>
-              !optionIdsBySubcriterion
-                .get(score.subCriterionId)
-                ?.has(score.optionId),
-          )
-        ) {
-          throw new ForbiddenException(
-            'Scores must use options in assigned criteria',
-          );
-        }
+        this.assertDraftScoresInScope(scores, criteria, allowedIds);
 
         const evaluation = await tx.evaluation.upsert({
           where: { judgeId_productId: { judgeId, productId } },
@@ -461,38 +894,30 @@ export class EvaluationsRepository {
           id: evaluation.id,
           status: EvaluationStatus.IN_PROGRESS,
           scores,
+          versionToken: computeEvaluationVersionToken(
+            EvaluationStatus.IN_PROGRESS,
+            scores,
+            allowedIds,
+          ),
         };
       },
       { timeout: 15000, maxWait: 10000 },
     );
   }
 
-  async submit(judgeId: string, productId: string) {
+  async submit(
+    judgeId: string,
+    productId: string,
+    expectedVersionToken?: string,
+  ) {
     return this.prisma.$transaction(
       async (tx) => {
-        const initial = await tx.product.findUnique({
-          where: { id: productId },
-          select: { categoryId: true },
-        });
-        if (!initial) throw new NotFoundException('Product not found');
-        await lockEvaluationCategory(tx, initial.categoryId);
-        await tx.$queryRaw(
-          Prisma.sql`SELECT "id" FROM ${databaseObject('products')} WHERE "id" = ${productId} FOR UPDATE`,
-        );
-        const context = await this.getAssignedProduct(tx, judgeId, productId);
-        if (context.product.categoryId !== initial.categoryId) {
-          throw new ConflictException(
+        const { context, criteria, assignedCriteria } =
+          await this.lockAndLoadAssignedEvaluationContext(
+            tx,
+            judgeId,
+            productId,
             'Product category changed while submitting evaluation',
-          );
-        }
-        const criteria = context.product.category.criteriaSet?.criteria ?? [];
-        const assignedCriteria = this.allowedCriteria(
-          context.assignment.criterionIds,
-          criteria,
-        );
-        if (!assignedCriteria.length)
-          throw new ConflictException(
-            'No scoring criteria are configured for this product',
           );
         const expected = criteria
           .filter((criterion) => assignedCriteria.includes(criterion.id))
@@ -512,25 +937,33 @@ export class EvaluationsRepository {
             },
           },
         });
-        if (evaluation?.status === EvaluationStatus.SUBMITTED) {
-          throw new ConflictException('Evaluation was already submitted');
+        this.assertEditableEvaluationVersion(
+          evaluation,
+          expectedVersionToken,
+          assignedCriteria,
+          {
+            submitted: 'Evaluation was already submitted',
+            versionMismatch:
+              'Phiếu chấm đã thay đổi ở phiên khác. Vui lòng tải lại dữ liệu mới nhất trước khi nộp.',
+          },
+        );
+        const evaluationScores = evaluation?.scores ?? [];
+        if (!evaluationScores.length) {
+          throw new ConflictException(
+            'Score at least one assigned subcriterion before submitting',
+          );
         }
-        if (evaluation?.status === EvaluationStatus.EXCLUDED) {
-          throw new ConflictException('Excluded evaluations are read-only');
-        }
+        const expectedSet = new Set(expected);
         if (
-          !evaluation ||
-          evaluation.scores.length !== expected.length ||
-          expected.some(
-            (id) =>
-              !evaluation.scores.some((score) => score.subCriterionId === id),
+          evaluationScores.some(
+            (score) => !expectedSet.has(score.subCriterionId),
           )
         ) {
           throw new ConflictException(
-            'Score every assigned subcriterion before submitting',
+            'Submitted evaluation does not match its assigned criteria',
           );
         }
-        const total = evaluation.scores.reduce(
+        const total = evaluationScores.reduce(
           (sum, score) => sum + score.option.points,
           0,
         );
@@ -541,7 +974,7 @@ export class EvaluationsRepository {
             'No scoring criteria are configured for this product',
           );
         const scoreBySubCriterion = new Map(
-          evaluation.scores.map((score) => [score.subCriterionId, score]),
+          evaluationScores.map((score) => [score.subCriterionId, score]),
         );
         const submissionSnapshot = {
           version: 2,
@@ -575,9 +1008,12 @@ export class EvaluationsRepository {
             organizationUnit: context.assignment.judge.organizationUnit,
           },
           assignedCriterionIds: assignedCriteria,
-          scores: expected.map((subCriterionId) => {
-            const score = scoreBySubCriterion.get(subCriterionId)!;
-            return {
+          scores: expected
+            .map((subCriterionId) => scoreBySubCriterion.get(subCriterionId))
+            .filter((score): score is NonNullable<typeof score> =>
+              Boolean(score),
+            )
+            .map((score) => ({
               criterion: score.subCriterion.criterion,
               subCriterion: {
                 id: score.subCriterion.id,
@@ -586,34 +1022,43 @@ export class EvaluationsRepository {
               },
               option: score.option,
               note: score.note,
-            };
-          }),
+            })),
           total,
         } as Prisma.InputJsonValue;
-        const submitted = await tx.evaluation.update({
-          where: { id: evaluation.id },
-          data: {
-            status: EvaluationStatus.SUBMITTED,
-            total,
-            submittedAt,
-            submissionSnapshot,
-          },
-          select: { id: true, total: true, status: true },
-        });
+        const submitted = evaluation
+          ? await tx.evaluation.update({
+              where: { id: evaluation.id },
+              data: {
+                status: EvaluationStatus.SUBMITTED,
+                total,
+                submittedAt,
+                submissionSnapshot,
+              },
+              select: { id: true, total: true, status: true },
+            })
+          : await tx.evaluation.create({
+              data: {
+                judgeId,
+                productId,
+                status: EvaluationStatus.SUBMITTED,
+                total,
+                submittedAt,
+                submissionSnapshot,
+              },
+              select: { id: true, total: true, status: true },
+            });
 
-        if (typeof tx.evaluationHistoryEvent?.create === 'function') {
-          await tx.evaluationHistoryEvent.create({
-            data: {
-              evaluationId: evaluation.id,
-              action: EVALUATION_HISTORY_ACTION.SUBMITTED,
-              fromStatus: EvaluationStatus.IN_PROGRESS,
-              toStatus: EvaluationStatus.SUBMITTED,
-              actorId: judgeId,
-              previousTotal: evaluation.total,
-              snapshot: submissionSnapshot,
-            },
-          });
-        }
+        await tx.evaluationHistoryEvent.create({
+          data: {
+            evaluationId: submitted.id,
+            action: EVALUATION_HISTORY_ACTION.SUBMITTED,
+            fromStatus: EvaluationStatus.IN_PROGRESS,
+            toStatus: EvaluationStatus.SUBMITTED,
+            actorId: judgeId,
+            previousTotal: evaluation?.total ?? 0,
+            snapshot: submissionSnapshot,
+          },
+        });
 
         await recomputeProductResult(
           tx,
@@ -621,7 +1066,14 @@ export class EvaluationsRepository {
           judgeId,
           PRODUCT_RESULT_HISTORY_ACTION.EVALUATION_SUBMITTED,
         );
-        return submitted;
+        return {
+          ...submitted,
+          versionToken: computeEvaluationVersionToken(
+            EvaluationStatus.SUBMITTED,
+            evaluationScores,
+            assignedCriteria,
+          ),
+        };
       },
       { timeout: 15000, maxWait: 10000 },
     );
@@ -632,6 +1084,7 @@ export class EvaluationsRepository {
     judgeId: string,
     productId: string,
     allowReadCompletedOrExcluded = false,
+    options?: { omitAttachments?: boolean },
   ) {
     const product = await db.product.findUnique({
       where: { id: productId },
@@ -653,34 +1106,37 @@ export class EvaluationsRepository {
             },
           },
         },
-        attachments: { select: { id: true, type: true, fileName: true } },
+        ...(options?.omitAttachments
+          ? {}
+          : {
+              attachments: {
+                select: { id: true, type: true, fileName: true },
+              },
+            }),
       },
     });
     if (!product) throw new NotFoundException('Product not found');
 
-    const perProductAssignment =
-      typeof db.productJudgeAssignment?.findUnique === 'function'
-        ? await db.productJudgeAssignment.findUnique({
-            where: {
-              productId_judgeId: { productId, judgeId },
+    const perProductAssignment = await db.productJudgeAssignment.findUnique({
+      where: {
+        productId_judgeId: { productId, judgeId },
+      },
+      include: {
+        judge: {
+          select: {
+            id: true,
+            fullName: true,
+            role: true,
+            staffPermissions: true,
+            isActive: true,
+            verified: true,
+            organizationUnit: {
+              select: { id: true, code: true, name: true },
             },
-            include: {
-              judge: {
-                select: {
-                  id: true,
-                  fullName: true,
-                  role: true,
-                  staffPermissions: true,
-                  isActive: true,
-                  verified: true,
-                  organizationUnit: {
-                    select: { id: true, code: true, name: true },
-                  },
-                },
-              },
-            },
-          })
-        : null;
+          },
+        },
+      },
+    });
 
     if (perProductAssignment) {
       const judgeOk =
@@ -730,12 +1186,9 @@ export class EvaluationsRepository {
       };
     }
 
-    const totalPerProductCount =
-      typeof db.productJudgeAssignment?.count === 'function'
-        ? await db.productJudgeAssignment.count({
-            where: { productId },
-          })
-        : 0;
+    const totalPerProductCount = await db.productJudgeAssignment.count({
+      where: { productId },
+    });
     if (totalPerProductCount > 0) {
       throw new ForbiddenException('Product is outside the judge assignment');
     }

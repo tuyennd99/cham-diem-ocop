@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { times } from 'lodash';
 import { FormField } from '@/components/form-field';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -169,7 +168,7 @@ export function HomePage() {
 
           {loading && (
             <div className='featured-grid' aria-busy='true' aria-label='Đang tải sản phẩm'>
-              {times(6, (index) => (
+              {Array.from({ length: 6 }, (_, index) => (
                 <div className='featured-card skeleton-card' key={index}>
                   <div className='skeleton-media' />
                   <div className='featured-card-body'>

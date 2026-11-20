@@ -174,7 +174,7 @@ try {
     assert.ok(approvedHtml.includes('Trà cổ thụ tự nhiên trên đỉnh Suối Giàng.'));
     assert.match(
       approvedHtml,
-      /<a[^>]+href="\/products"[^>]*>← Danh sách sản phẩm<\/a>/,
+      /<a\b[^>]*\shref="\/products"[^>]*><svg\b[^>]*\blucide-arrow-left\b[^>]*>.*?<\/svg><span>Danh sách sản phẩm<\/span><\/a>/s,
       'Product detail SSR HTML must contain crawlable back link to /products',
     );
 

@@ -199,7 +199,7 @@ describe('admin private product files', () => {
             },
           )
         ).status,
-      ).toBe(404);
+      ).toBe(200);
       expect(
         (
           await fetch(

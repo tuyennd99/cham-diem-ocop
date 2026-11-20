@@ -1,6 +1,8 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
+import { StaffPermission } from '@prisma/client';
 import { ApiBearerAuth, ApiExtraModels, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../decorators/current-user.decorator';
+import { PermissionsAny } from '../decorators/permissions.decorator';
 import {
   AdminCriteriaSetsQueryDto,
   AdminEvaluationsQueryDto,
@@ -10,6 +12,11 @@ import type { AuthenticatedPrincipal } from '../types/auth';
 
 @ApiTags('Admin scoring & print')
 @ApiBearerAuth()
+@PermissionsAny(
+  StaffPermission.MANAGE,
+  StaffPermission.VIEW,
+  StaffPermission.SCORE,
+)
 @ApiExtraModels(AdminCriteriaSetsQueryDto, AdminEvaluationsQueryDto)
 @Controller('admin')
 export class AdminScoringController {

@@ -9,35 +9,20 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  ExternalLink,
-  FileText,
-  Image as ImageIcon,
-  Maximize2,
   RotateCcw,
-  Trash2,
-  UserPlus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import AlertError from '@/components/alert-error';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { FormField } from '@/components/form-field';
-import { ImagePreviewDialog } from '@/components/image-preview-dialog';
 import PageSpin from '@/components/page-spin';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  Combobox,
-  ComboboxAnchor,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxTrigger,
-} from '@/components/ui/combobox';
-import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -49,7 +34,6 @@ import type { AddProductJudgeAssignmentResponse } from '../../api/admin-products
 import {
   ADMIN_MODAL_ACTION,
   ADMIN_PRODUCT_DETAIL_TAB,
-  ALL,
   ATTACHMENT_TYPE,
   EVALUATION_STATUS,
   PRODUCT_PUBLICATION_STATE,
@@ -57,19 +41,15 @@ import {
   PRODUCT_WORKSPACE_MODE,
   STAFF_PERMISSION,
 } from '../../constants/consts';
-import {
-  ADMIN_DASHBOARD_STATUS_LABEL,
-  PRODUCT_STATUS_TONE,
-  REGISTRANT_PRODUCT_STATUS_LABEL,
-} from '../../constants/product-status';
+import { PRODUCT_STATUS_TONE } from '../../constants/product-status';
 import { queryKeys } from '../../constants/query-key';
+import { formatDateTime } from '../../lib/admin-date';
 import {
   toAdminProductApiQuery,
   type AdminProductDetailTab,
   type AdminProductSearch,
 } from '../../lib/admin-search';
 import { errorText, messageOf } from '../../lib/api-error';
-import { MAX_PRODUCT_ATTACHMENTS } from '../../lib/attachments';
 import { useSession } from '../../lib/auth';
 import {
   displayProductCode,
@@ -80,11 +60,6 @@ import { getSavedProductSubmitIssues } from '../../lib/save-product-draft';
 import { hasStaffPermission } from '../../lib/session-contract';
 import { formatFormEntries } from '../../lib/utils';
 import {
-  AttachmentLink,
-  openProductAttachmentByMode,
-  PrivateAttachmentThumbnail,
-} from '../../pages/registrant/AttachmentLink';
-import {
   useAdminProductDetail,
   useAdminProductMutations,
   useProductEligibleJudges,
@@ -93,6 +68,11 @@ import {
 import { useMyProduct } from '../../queries/registrant';
 import type { RegistrantProduct } from '../../types/registrant';
 import { AdminProductResultsPage } from './AdminProductResultsPage';
+import { ProductFilesTab } from './product-detail/ProductFilesTab';
+import { ProductInformationTab } from './product-detail/ProductInformationTab';
+import { ProductProgressTab } from './product-detail/ProductProgressTab';
+import { ProductRegistrationTab } from './product-detail/ProductRegistrationTab';
+import { formatStatusLabel, type EligibleManualJudge } from './product-detail/shared';
 
 interface AdminProductDetailPageProps {
   productId: string;
@@ -109,35 +89,107 @@ const VALID_TABS: readonly AdminProductDetailTab[] = [
   ADMIN_PRODUCT_DETAIL_TAB.RESULTS,
 ];
 
-function formatStatusLabel(
-  status: ProductStatus | string | null | undefined,
-  isOwner = false,
-): string {
-  if (!status) return 'Mới tạo';
-  if (isOwner) {
-    return REGISTRANT_PRODUCT_STATUS_LABEL[status as ProductStatus] ?? status;
+type AdminModalAction = (typeof ADMIN_MODAL_ACTION)[keyof typeof ADMIN_MODAL_ACTION];
+type AdminModalKind = AdminModalAction | null;
+
+interface AdminModalDialogConfig {
+  title: string;
+  description: string;
+  reasonLabel: string;
+  requireReason: boolean;
+  useTextarea?: boolean;
+  variant?: 'primary' | 'destructive';
+  confirmLabel: string;
+  pendingLabel: string;
+  successText?: string;
+  returnToList?: boolean;
+}
+
+const ADMIN_MODAL_DIALOG_CONFIG: Record<AdminModalAction, AdminModalDialogConfig> = {
+  [ADMIN_MODAL_ACTION.SUBMIT]: {
+    title: 'Nộp hồ sơ thay người đăng ký',
+    description: 'Sau khi nộp, hồ sơ được chốt thông tin đăng ký để chuyển sang bước xét duyệt.',
+    reasonLabel: 'Lý do thao tác',
+    requireReason: true,
+    confirmLabel: 'Nộp hồ sơ thay người đăng ký',
+    pendingLabel: 'Đang nộp…',
+    successText: 'Đã nộp hồ sơ thay người đăng ký.',
+  },
+  [ADMIN_MODAL_ACTION.DELETE]: {
+    title: 'Xóa bản nháp hồ sơ',
+    description: 'Bản nháp sẽ bị xóa khỏi danh sách hồ sơ. Thao tác này yêu cầu ghi nhận lý do.',
+    reasonLabel: 'Lý do thao tác',
+    requireReason: true,
+    variant: 'destructive',
+    confirmLabel: 'Xác nhận xóa bản nháp',
+    pendingLabel: 'Đang xóa…',
+    returnToList: true,
+  },
+  [ADMIN_MODAL_ACTION.APPROVE]: {
+    title: 'Duyệt hồ sơ sản phẩm',
+    description:
+      'Sau khi duyệt, hệ thống tự động phân công tất cả giám khảo đang hoạt động thuộc các cơ quan quản lý của phân loại sản phẩm này.',
+    reasonLabel: 'Ghi chú (tùy chọn)',
+    requireReason: false,
+    variant: 'primary',
+    confirmLabel: 'Xác nhận duyệt hồ sơ',
+    pendingLabel: 'Đang duyệt…',
+    successText: 'Đã duyệt hồ sơ và tự động phân công giám khảo theo cơ quan quản lý.',
+  },
+  [ADMIN_MODAL_ACTION.RETURN]: {
+    title: 'Trả lại hồ sơ sản phẩm',
+    description:
+      'Hồ sơ sẽ chuyển về trạng thái Bị trả lại kèm lý do để người đăng ký chỉnh sửa và nộp lại.',
+    reasonLabel: 'Lý do trả lại hồ sơ',
+    requireReason: true,
+    useTextarea: true,
+    variant: 'destructive',
+    confirmLabel: 'Xác nhận trả lại hồ sơ',
+    pendingLabel: 'Đang trả lại…',
+    successText: 'Đã trả lại hồ sơ cho người đăng ký.',
+  },
+  [ADMIN_MODAL_ACTION.PUBLISH]: {
+    title: 'Công bố kết quả chấm điểm',
+    description:
+      'Sau khi công bố, người đăng ký và trang tra cứu công khai sẽ xem được điểm tổng hợp và mức sao của hồ sơ.',
+    reasonLabel: 'Ghi chú (tùy chọn)',
+    requireReason: false,
+    variant: 'primary',
+    confirmLabel: 'Xác nhận công bố kết quả',
+    pendingLabel: 'Đang công bố…',
+    successText: 'Đã công bố kết quả chấm điểm cho người đăng ký.',
+  },
+  [ADMIN_MODAL_ACTION.REOPEN]: {
+    title: 'Mở lại hồ sơ đã hoàn tất',
+    description:
+      'Hồ sơ sẽ chuyển từ Hoàn tất về Đang chấm để Chủ trì / Quản trị có thể bổ sung giám khảo hoặc chờ phiếu chấm mới.',
+    reasonLabel: 'Lý do mở lại hồ sơ',
+    requireReason: true,
+    confirmLabel: 'Xác nhận mở lại hồ sơ',
+    pendingLabel: 'Đang mở lại…',
+    successText: 'Đã mở lại hồ sơ để tiếp tục phân công/chấm điểm.',
+  },
+};
+
+function getOwnerPendingResultMessage(flags: {
+  isDraft: boolean;
+  isReturned: boolean;
+  isUpdatingResult: boolean;
+  isCompleted: boolean;
+  returnReason?: string | null;
+}): string {
+  if (flags.isDraft) return 'Hồ sơ chưa được nộp để đánh giá.';
+  if (flags.isReturned) {
+    return `Hồ sơ bị trả lại: ${flags.returnReason ?? 'Vui lòng chỉnh sửa và nộp lại.'}`;
   }
-  return ADMIN_DASHBOARD_STATUS_LABEL[status as ProductStatus] ?? status;
+  if (flags.isUpdatingResult) {
+    return 'Kết quả đánh giá đang được cập nhật do có phiếu chấm bổ sung và chờ Chủ trì/Quản trị công bố lại.';
+  }
+  if (flags.isCompleted) {
+    return 'Hồ sơ đã hoàn tất chấm điểm và đang chờ Chủ trì/Quản trị công bố kết quả.';
+  }
+  return 'Hồ sơ đang chờ hội đồng hoàn tất đánh giá. Kết quả sẽ hiển thị tại đây sau khi được công bố.';
 }
-
-function formatAttachmentType(
-  type?: typeof ATTACHMENT_TYPE.IMAGE | typeof ATTACHMENT_TYPE.EVIDENCE,
-): string {
-  if (type === ATTACHMENT_TYPE.IMAGE) return 'Hình ảnh sản phẩm';
-  if (type === ATTACHMENT_TYPE.EVIDENCE) return 'Tài liệu minh chứng';
-  return 'Tệp đính kèm';
-}
-
-function getFileExtension(fileName: string): string {
-  const idx = fileName.lastIndexOf('.');
-  if (idx <= 0 || idx === fileName.length - 1) return 'FILE';
-  return fileName
-    .slice(idx + 1)
-    .toUpperCase()
-    .slice(0, 6);
-}
-
-type AdminModalKind = (typeof ADMIN_MODAL_ACTION)[keyof typeof ADMIN_MODAL_ACTION] | null;
 
 export function AdminProductDetailPage({
   productId,
@@ -200,6 +252,11 @@ export function AdminProductDetailPage({
     id: string;
     fileName: string;
   } | null>(null);
+  const [assignmentModal, setAssignmentModal] = useState<
+    | { kind: 'reopen-evaluation'; evaluationId: string; judgeName: string }
+    | { kind: 'remove-assignment'; judgeId: string; judgeName: string }
+    | null
+  >(null);
   const [previewImageIndex, setPreviewImageIndex] = useState<number | null>(null);
   const [imageDimensions, setImageDimensions] = useState<
     Record<string, { width: number; height: number }>
@@ -208,6 +265,7 @@ export function AdminProductDetailPage({
   const [error, setError] = useState('');
   const [statusNote, setStatusNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const [addingJudge, setAddingJudge] = useState(false);
 
   // Manual Judge Assignment state
   const [selectedAddJudgeId, setSelectedAddJudgeId] = useState('');
@@ -221,7 +279,9 @@ export function AdminProductDetailPage({
   const savedNavigation = useRef(false);
 
   const hasDirtyReason =
-    !isOwner && (confirmAction !== null || removingAttachment !== null) && reason.trim().length > 0;
+    !isOwner &&
+    (confirmAction !== null || removingAttachment !== null || assignmentModal !== null) &&
+    reason.trim().length > 0;
 
   useBlocker({
     shouldBlockFn: () =>
@@ -242,6 +302,7 @@ export function AdminProductDetailPage({
     }
     setConfirmAction(null);
     setRemovingAttachment(null);
+    setAssignmentModal(null);
     setReason('');
     setError('');
   }
@@ -268,8 +329,6 @@ export function AdminProductDetailPage({
       if (options.returnToList) {
         savedNavigation.current = true;
         try {
-          setConfirmAction(null);
-          setReason('');
           await navigate({ to: listPath, search: listSearch });
           return;
         } finally {
@@ -279,6 +338,7 @@ export function AdminProductDetailPage({
       await refetch();
       setConfirmAction(null);
       setRemovingAttachment(null);
+      setAssignmentModal(null);
       setReason('');
       if (options.successText) setStatusNote(options.successText);
     } catch (cause) {
@@ -295,6 +355,7 @@ export function AdminProductDetailPage({
       : addJudgeReason.trim() || undefined;
     if (!targetJudgeId || busy) return;
     setBusy(true);
+    setAddingJudge(true);
     setError('');
     try {
       const res = await actions.addAssignment({
@@ -310,14 +371,15 @@ export function AdminProductDetailPage({
         });
         return;
       }
+      await refetch();
       setRestoreConfirmPrompt(null);
       setSelectedAddJudgeId('');
       setAddJudgeReason('');
-      await refetch();
     } catch (cause) {
       setError(messageOf(cause));
     } finally {
       setBusy(false);
+      setAddingJudge(false);
     }
   }
 
@@ -335,7 +397,7 @@ export function AdminProductDetailPage({
     try {
       const { data } = await myProductsApi.submit(productId);
       queryClient.setQueryData(queryKeys.myProducts.detail(productId), data);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.myProducts.list });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.myProducts.listAll });
       setConfirmAction(null);
       setStatusNote('Đã nộp hồ sơ tới hội đồng đánh giá.');
       toast.success('Đã nộp hồ sơ tới hội đồng đánh giá.');
@@ -355,10 +417,15 @@ export function AdminProductDetailPage({
     setStatusNote('');
     try {
       await myProductsApi.remove(productId);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.myProducts.all });
-      setConfirmAction(null);
+      queryClient.removeQueries({ queryKey: queryKeys.myProducts.detail(productId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.myProducts.listAll });
       toast.success('Đã xóa bản nháp sản phẩm.');
-      await navigate({ to: '/my/products' });
+      savedNavigation.current = true;
+      try {
+        await navigate({ to: '/my/products' });
+      } finally {
+        savedNavigation.current = false;
+      }
     } catch (cause) {
       const msg = messageOf(cause);
       setError(msg);
@@ -385,7 +452,7 @@ export function AdminProductDetailPage({
               }
             : current,
       );
-      void queryClient.invalidateQueries({ queryKey: queryKeys.myProducts.list });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.myProducts.listAll });
       setRemovingAttachment(null);
       setStatusNote('Đã xóa tệp đính kèm.');
       toast.success('Đã xóa tệp đính kèm.');
@@ -467,34 +534,8 @@ export function AdminProductDetailPage({
     ? adminProduct.registrant.phone
     : (session?.user.phone ?? null);
 
-  // Eligible judges for manual assignment on this product
-  const requiredAgencyIds = new Set(
-    (adminProduct?.agencyCoverage ?? []).map((item) => item.agency.id),
-  );
-  const activeAssignedJudgeIds = new Set(
-    (adminProduct?.judgeAssignments ?? []).filter((a) => a.isActive).map((a) => a.judgeId),
-  );
-  const allJudges = (judgesQuery.data ?? []) as Array<{
-    id: string;
-    fullName: string;
-    email: string;
-    isActive: boolean;
-    verified: boolean;
-    organizationUnit?: {
-      id: string;
-      code: string;
-      name: string;
-      managingAgencyId?: string | null;
-      managingAgency?: { id: string; code: string; name: string } | null;
-    } | null;
-  }>;
-  const eligibleManualJudges = allJudges.filter((j) => {
-    if (!j.isActive || !j.verified || activeAssignedJudgeIds.has(j.id)) return false;
-    if (requiredAgencyIds.size === 0) return true;
-    const jAgencyId =
-      j.organizationUnit?.managingAgencyId ?? j.organizationUnit?.managingAgency?.id ?? null;
-    return Boolean(jAgencyId && requiredAgencyIds.has(jAgencyId));
-  });
+  // Eligible judges for manual assignment on this product (filtered on the backend)
+  const eligibleManualJudges = (judgesQuery.data ?? []) as EligibleManualJudge[];
 
   return (
     <PageContainer>
@@ -518,12 +559,10 @@ export function AdminProductDetailPage({
         }
         description={
           <>
-            Mã hồ sơ: <span className='font-mono text-xs'>{displayProductCode(product)}</span> ·
-            Người đăng ký: <strong>{registrantName}</strong>
+            Mã hồ sơ: {displayProductCode(product)} · Người đăng ký:{' '}
+            <strong>{registrantName}</strong>
             {registrantEmail ? ` (${registrantEmail})` : ''} · Phân loại: {product.category.name}
-            {product.submittedAt
-              ? ` · Ngày nộp: ${new Date(product.submittedAt).toLocaleString('vi-VN')}`
-              : ''}
+            {product.submittedAt ? ` · Ngày nộp: ${formatDateTime(product.submittedAt)}` : ''}
           </>
         }
         actions={
@@ -733,9 +772,11 @@ export function AdminProductDetailPage({
         </p>
       )}
 
-      {visibleError && (isOwner || (confirmAction === null && removingAttachment === null)) && (
-        <AlertError title='Không thể thực hiện thao tác' errors={[visibleError]} />
-      )}
+      {visibleError &&
+        (isOwner ||
+          (confirmAction === null && removingAttachment === null && assignmentModal === null)) && (
+          <AlertError title='Không thể thực hiện thao tác' errors={[visibleError]} />
+        )}
 
       {isEditable && savedSubmitIssues.length > 0 && (
         <AlertError
@@ -803,204 +844,112 @@ export function AdminProductDetailPage({
         </>
       ) : (
         <>
-          <Dialog
-            open={confirmAction !== null}
-            onOpenChange={(open) => {
-              if (!open) requestCloseDialog();
-            }}
-          >
-            <DialogContent className='admin-dialog' data-admin-ui='true'>
-              <DialogHeader>
-                <DialogTitle>
-                  {confirmAction === ADMIN_MODAL_ACTION.SUBMIT
-                    ? `Nộp hồ sơ thay người đăng ký: ${product.name}`
-                    : confirmAction === ADMIN_MODAL_ACTION.DELETE
-                      ? `Xóa bản nháp: ${product.name}`
-                      : confirmAction === ADMIN_MODAL_ACTION.APPROVE
-                        ? `Duyệt hồ sơ sản phẩm: ${product.name}`
-                        : confirmAction === ADMIN_MODAL_ACTION.RETURN
-                          ? `Trả lại hồ sơ sản phẩm: ${product.name}`
-                          : confirmAction === ADMIN_MODAL_ACTION.PUBLISH
-                            ? `Công bố kết quả chấm điểm: ${product.name}`
-                            : `Mở lại hồ sơ đã hoàn tất: ${product.name}`}
-                </DialogTitle>
-                <DialogDescription>
-                  {confirmAction === ADMIN_MODAL_ACTION.SUBMIT
-                    ? 'Sau khi nộp, hồ sơ được chốt thông tin đăng ký để chuyển sang bước xét duyệt.'
-                    : confirmAction === ADMIN_MODAL_ACTION.DELETE
-                      ? 'Bản nháp sẽ bị xóa khỏi danh sách hồ sơ. Thao tác này yêu cầu ghi nhận lý do.'
-                      : confirmAction === ADMIN_MODAL_ACTION.APPROVE
-                        ? 'Sau khi duyệt, hệ thống tự động phân công tất cả giám khảo đang hoạt động thuộc các cơ quan quản lý của phân loại sản phẩm này.'
-                        : confirmAction === ADMIN_MODAL_ACTION.RETURN
-                          ? 'Hồ sơ sẽ chuyển về trạng thái Bị trả lại kèm lý do để người đăng ký chỉnh sửa và nộp lại.'
-                          : confirmAction === ADMIN_MODAL_ACTION.PUBLISH
-                            ? 'Sau khi công bố, người đăng ký và trang tra cứu công khai sẽ xem được điểm tổng hợp và mức sao của hồ sơ.'
-                            : 'Hồ sơ sẽ chuyển từ Hoàn tất về Đang chấm để Chủ trì / Quản trị có thể bổ sung giám khảo hoặc chờ phiếu chấm mới.'}
-                </DialogDescription>
-              </DialogHeader>
-              <div className='admin-form'>
-                <FormField
-                  label={
-                    confirmAction === ADMIN_MODAL_ACTION.RETURN
-                      ? 'Lý do trả lại hồ sơ'
-                      : confirmAction === ADMIN_MODAL_ACTION.REOPEN
-                        ? 'Lý do mở lại hồ sơ'
-                        : confirmAction === ADMIN_MODAL_ACTION.APPROVE ||
-                            confirmAction === ADMIN_MODAL_ACTION.PUBLISH
-                          ? 'Ghi chú (tùy chọn)'
-                          : 'Lý do thao tác'
-                  }
-                  htmlFor='admin-product-action-reason'
-                  required={
-                    confirmAction === ADMIN_MODAL_ACTION.RETURN ||
-                    confirmAction === ADMIN_MODAL_ACTION.REOPEN ||
-                    confirmAction === ADMIN_MODAL_ACTION.SUBMIT ||
-                    confirmAction === ADMIN_MODAL_ACTION.DELETE
-                  }
-                >
-                  {confirmAction === ADMIN_MODAL_ACTION.RETURN ? (
-                    <Textarea
-                      id='admin-product-action-reason'
-                      rows={3}
-                      value={reason}
-                      maxLength={1000}
-                      disabled={busy}
-                      placeholder='Nhập rõ nội dung cần người đăng ký bổ sung hoặc chỉnh sửa…'
-                      onChange={(event) => setReason(event.target.value)}
-                      required
-                    />
-                  ) : (
-                    <Input
-                      id='admin-product-action-reason'
-                      value={reason}
-                      maxLength={255}
-                      disabled={busy}
-                      placeholder='Nhập lý do hoặc ghi chú…'
-                      onChange={(event) => setReason(event.target.value)}
-                    />
-                  )}
-                </FormField>
-                {(confirmAction === ADMIN_MODAL_ACTION.SUBMIT && savedSubmitIssues.length > 0) ||
-                error ? (
-                  <AlertError
-                    title='Không thể thực hiện thao tác'
-                    errors={
-                      confirmAction === ADMIN_MODAL_ACTION.SUBMIT && savedSubmitIssues.length > 0
-                        ? savedSubmitIssues
-                        : [error]
-                    }
-                  />
-                ) : null}
-                <div className='admin-actions'>
-                  {confirmAction === ADMIN_MODAL_ACTION.SUBMIT && (
-                    <Button
-                      type='button'
-                      loading={busy}
-                      disabled={busy || !reason.trim() || savedSubmitIssues.length > 0}
-                      onClick={() =>
-                        void runAdmin((confirmedReason) => actions.submit(confirmedReason), {
-                          successText: 'Đã nộp hồ sơ thay người đăng ký.',
-                        })
-                      }
+          {(() => {
+            const activeAction = confirmAction ?? ADMIN_MODAL_ACTION.REOPEN;
+            const modalConfig = ADMIN_MODAL_DIALOG_CONFIG[activeAction];
+            const actionHandlers: Record<
+              AdminModalAction,
+              (confirmedReason: string) => Promise<unknown>
+            > = {
+              [ADMIN_MODAL_ACTION.SUBMIT]: (confirmedReason) => actions.submit(confirmedReason),
+              [ADMIN_MODAL_ACTION.DELETE]: (confirmedReason) => actions.remove(confirmedReason),
+              [ADMIN_MODAL_ACTION.APPROVE]: (confirmedReason) =>
+                actions.approve(confirmedReason || undefined),
+              [ADMIN_MODAL_ACTION.RETURN]: (confirmedReason) =>
+                actions.returnProduct(confirmedReason),
+              [ADMIN_MODAL_ACTION.PUBLISH]: (confirmedReason) =>
+                actions.publishResults(confirmedReason || undefined),
+              [ADMIN_MODAL_ACTION.REOPEN]: (confirmedReason) => actions.reopen(confirmedReason),
+            };
+            const submitBlocked =
+              confirmAction === ADMIN_MODAL_ACTION.SUBMIT && savedSubmitIssues.length > 0;
+            const confirmDisabled =
+              busy || (modalConfig.requireReason && !reason.trim()) || submitBlocked;
+
+            return (
+              <Dialog
+                open={confirmAction !== null}
+                onOpenChange={(open) => {
+                  if (!open) requestCloseDialog();
+                }}
+              >
+                <DialogContent className='admin-dialog max-w-lg' data-admin-ui='true'>
+                  <DialogHeader className='pr-6'>
+                    <DialogTitle>{modalConfig.title}</DialogTitle>
+                    <DialogDescription>{modalConfig.description}</DialogDescription>
+                  </DialogHeader>
+                  <div className='border-border bg-secondary/70 rounded-md border px-3.5 py-2.5 text-sm'>
+                    <div className='text-fg font-semibold'>{product.name}</div>
+                    <div className='text-muted mt-0.5 text-xs'>
+                      Mã hồ sơ: {displayProductCode(product)}
+                      {registrantName ? ` · ${registrantName}` : ''}
+                    </div>
+                  </div>
+                  <div className='flex flex-col gap-4'>
+                    <FormField
+                      label={modalConfig.reasonLabel}
+                      htmlFor='admin-product-action-reason'
+                      required={modalConfig.requireReason}
                     >
-                      {busy ? 'Đang nộp…' : 'Nộp hồ sơ thay người đăng ký'}
-                    </Button>
-                  )}
-                  {confirmAction === ADMIN_MODAL_ACTION.DELETE && (
-                    <Button
-                      type='button'
-                      variant='destructive'
-                      loading={busy}
-                      disabled={busy || !reason.trim()}
-                      onClick={() =>
-                        void runAdmin((confirmedReason) => actions.remove(confirmedReason), {
-                          returnToList: true,
-                        })
-                      }
-                    >
-                      {busy ? 'Đang xóa…' : 'Xác nhận xóa bản nháp'}
-                    </Button>
-                  )}
-                  {confirmAction === ADMIN_MODAL_ACTION.APPROVE && (
-                    <Button
-                      type='button'
-                      variant='primary'
-                      loading={busy}
-                      disabled={busy}
-                      onClick={() =>
-                        void runAdmin(
-                          (confirmedReason) => actions.approve(confirmedReason || undefined),
-                          {
-                            requireReason: false,
-                            successText:
-                              'Đã duyệt hồ sơ và tự động phân công giám khảo theo cơ quan quản lý.',
-                          },
-                        )
-                      }
-                    >
-                      {busy ? 'Đang duyệt…' : 'Xác nhận duyệt hồ sơ'}
-                    </Button>
-                  )}
-                  {confirmAction === ADMIN_MODAL_ACTION.RETURN && (
-                    <Button
-                      type='button'
-                      variant='destructive'
-                      loading={busy}
-                      disabled={busy || !reason.trim()}
-                      onClick={() =>
-                        void runAdmin((confirmedReason) => actions.returnProduct(confirmedReason), {
-                          successText: 'Đã trả lại hồ sơ cho người đăng ký.',
-                        })
-                      }
-                    >
-                      {busy ? 'Đang trả lại…' : 'Xác nhận trả lại hồ sơ'}
-                    </Button>
-                  )}
-                  {confirmAction === ADMIN_MODAL_ACTION.PUBLISH && (
-                    <Button
-                      type='button'
-                      variant='primary'
-                      loading={busy}
-                      disabled={busy}
-                      onClick={() =>
-                        void runAdmin(
-                          (confirmedReason) => actions.publishResults(confirmedReason || undefined),
-                          {
-                            requireReason: false,
-                            successText: 'Đã công bố kết quả chấm điểm cho người đăng ký.',
-                          },
-                        )
-                      }
-                    >
-                      {busy ? 'Đang công bố…' : 'Xác nhận công bố kết quả'}
-                    </Button>
-                  )}
-                  {confirmAction === ADMIN_MODAL_ACTION.REOPEN && (
-                    <Button
-                      type='button'
-                      loading={busy}
-                      disabled={busy || !reason.trim()}
-                      onClick={() =>
-                        void runAdmin((confirmedReason) => actions.reopen(confirmedReason), {
-                          successText: 'Đã mở lại hồ sơ để tiếp tục phân công/chấm điểm.',
-                        })
-                      }
-                    >
-                      {busy ? 'Đang mở lại…' : 'Xác nhận mở lại hồ sơ'}
-                    </Button>
-                  )}
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    disabled={busy}
-                    onClick={requestCloseDialog}
-                  >
-                    Đóng
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+                      {modalConfig.useTextarea ? (
+                        <Textarea
+                          id='admin-product-action-reason'
+                          rows={4}
+                          className='min-h-24 resize-y'
+                          value={reason}
+                          maxLength={255}
+                          disabled={busy}
+                          placeholder='Nhập rõ nội dung cần người đăng ký bổ sung hoặc chỉnh sửa…'
+                          onChange={(event) => setReason(event.target.value)}
+                          required
+                        />
+                      ) : (
+                        <Input
+                          id='admin-product-action-reason'
+                          value={reason}
+                          maxLength={255}
+                          disabled={busy}
+                          placeholder='Nhập lý do hoặc ghi chú…'
+                          onChange={(event) => setReason(event.target.value)}
+                        />
+                      )}
+                    </FormField>
+                    {submitBlocked || error ? (
+                      <AlertError
+                        title='Không thể thực hiện thao tác'
+                        errors={submitBlocked ? savedSubmitIssues : [error]}
+                      />
+                    ) : null}
+                    <DialogFooter className='pt-2'>
+                      <Button
+                        type='button'
+                        variant='outline'
+                        disabled={busy}
+                        onClick={requestCloseDialog}
+                      >
+                        Hủy
+                      </Button>
+                      <Button
+                        type='button'
+                        variant={modalConfig.variant}
+                        loading={busy}
+                        disabled={confirmDisabled}
+                        onClick={() =>
+                          void runAdmin(actionHandlers[activeAction], {
+                            requireReason: modalConfig.requireReason,
+                            successText: modalConfig.successText,
+                            returnToList: modalConfig.returnToList,
+                          })
+                        }
+                      >
+                        {busy ? modalConfig.pendingLabel : modalConfig.confirmLabel}
+                      </Button>
+                    </DialogFooter>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            );
+          })()}
 
           <Dialog
             open={restoreConfirmPrompt !== null}
@@ -1119,6 +1068,100 @@ export function AdminProductDetailPage({
               </div>
             </DialogContent>
           </Dialog>
+
+          <Dialog
+            open={assignmentModal !== null}
+            onOpenChange={(open) => {
+              if (!open) requestCloseDialog();
+            }}
+          >
+            <DialogContent className='admin-dialog' data-admin-ui='true'>
+              <DialogHeader>
+                <DialogTitle>
+                  {assignmentModal?.kind === 'reopen-evaluation'
+                    ? `Mở lại phiếu chấm: ${assignmentModal.judgeName}`
+                    : `Gỡ giám khảo khỏi hồ sơ: ${assignmentModal?.judgeName ?? ''}`}
+                </DialogTitle>
+                <DialogDescription>
+                  {assignmentModal?.kind === 'reopen-evaluation'
+                    ? 'Phiếu chấm sẽ chuyển về trạng thái đang chấm nháp để giám khảo chỉnh sửa và nộp lại.'
+                    : 'Giám khảo sẽ bị gỡ khỏi phân công của hồ sơ này và phiếu chấm (nếu có) chuyển sang lịch sử.'}
+                </DialogDescription>
+              </DialogHeader>
+              <div className='admin-form'>
+                <FormField
+                  label='Lý do thao tác (tùy chọn)'
+                  htmlFor='admin-assignment-action-reason'
+                >
+                  <Input
+                    id='admin-assignment-action-reason'
+                    value={reason}
+                    maxLength={255}
+                    disabled={busy}
+                    placeholder='Nhập lý do thao tác…'
+                    onChange={(event) => setReason(event.target.value)}
+                  />
+                </FormField>
+                {error && <AlertError title='Không thể thực hiện thao tác' errors={[error]} />}
+                <div className='admin-actions'>
+                  {assignmentModal?.kind === 'reopen-evaluation' ? (
+                    <Button
+                      type='button'
+                      loading={busy}
+                      disabled={busy}
+                      onClick={() =>
+                        void runAdmin(
+                          (confirmedReason) =>
+                            actions.reopenEvaluation(
+                              assignmentModal.evaluationId,
+                              confirmedReason || undefined,
+                            ),
+                          {
+                            requireReason: false,
+                            successText: 'Đã mở lại phiếu chấm để giám khảo chỉnh sửa.',
+                          },
+                        )
+                      }
+                    >
+                      {busy ? 'Đang mở lại…' : 'Xác nhận mở lại phiếu'}
+                    </Button>
+                  ) : (
+                    <Button
+                      type='button'
+                      variant='destructive'
+                      loading={busy}
+                      disabled={busy || !assignmentModal}
+                      onClick={() =>
+                        assignmentModal &&
+                        assignmentModal.kind === 'remove-assignment' &&
+                        void runAdmin(
+                          (confirmedReason) =>
+                            actions.removeAssignment(
+                              assignmentModal.judgeId,
+                              confirmedReason || undefined,
+                            ),
+                          {
+                            requireReason: false,
+                            successText: 'Đã gỡ giám khảo khỏi hồ sơ.',
+                          },
+                        )
+                      }
+                    >
+                      {busy ? 'Đang gỡ…' : 'Xác nhận gỡ giám khảo'}
+                    </Button>
+                  )}
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    disabled={busy}
+                    onClick={requestCloseDialog}
+                  >
+                    Đóng
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         </>
       )}
 
@@ -1132,723 +1175,82 @@ export function AdminProductDetailPage({
         </TabsList>
 
         <TabsContent value={ADMIN_PRODUCT_DETAIL_TAB.INFORMATION}>
-          <PageSection>
-            <dl className='detail-facts'>
-              <div>
-                <dt>Mã hồ sơ</dt>
-                <dd className='font-mono text-xs'>{displayProductCode(product)}</dd>
-              </div>
-              <div>
-                <dt>Người đăng ký</dt>
-                <dd>
-                  {registrantName}
-                  {registrantEmail ? ` · ${registrantEmail}` : ''} ·{' '}
-                  {registrantPhone ?? 'Chưa có điện thoại'}
-                </dd>
-              </div>
-              {adminProduct && (
-                <div>
-                  <dt>Người tạo hồ sơ</dt>
-                  <dd>{adminProduct.createdBy?.fullName ?? 'Người đăng ký tự nhập'}</dd>
-                </div>
-              )}
-              <div>
-                <dt>Danh mục sản phẩm</dt>
-                <dd>{product.category.name}</dd>
-              </div>
-              {adminProduct?.category.managingAgencies &&
-                adminProduct.category.managingAgencies.length > 0 && (
-                  <div>
-                    <dt>Cơ quan chủ trì quản lý</dt>
-                    <dd>
-                      {adminProduct.category.managingAgencies
-                        .map((a) => `${a.name} (${a.code})`)
-                        .join(' · ')}
-                    </dd>
-                  </div>
-                )}
-              <div>
-                <dt>Địa bàn hành chính</dt>
-                <dd>
-                  {product.locality
-                    ? `${product.locality.name} · ${product.locality.provinceName}`
-                    : 'Chưa gắn địa bàn'}
-                </dd>
-              </div>
-              <div>
-                <dt>Trạng thái hồ sơ</dt>
-                <dd>{formatStatusLabel(product.status, isOwner)}</dd>
-              </div>
-              <div>
-                <dt>Ngày nộp</dt>
-                <dd>
-                  {product.submittedAt
-                    ? new Date(product.submittedAt).toLocaleString('vi-VN')
-                    : 'Chưa nộp'}
-                </dd>
-              </div>
-              {adminProduct?.approvedAt && (
-                <div>
-                  <dt>Thời điểm duyệt hồ sơ</dt>
-                  <dd>
-                    {new Date(adminProduct.approvedAt).toLocaleString('vi-VN')}
-                    {adminProduct.approvedBy ? ` · bởi ${adminProduct.approvedBy.fullName}` : ''}
-                  </dd>
-                </div>
-              )}
-              <div>
-                <dt>Trạng thái công bố kết quả</dt>
-                <dd>
-                  {isPublished
-                    ? `Đã công bố${product.publishedAt ? ` (${new Date(product.publishedAt).toLocaleString('vi-VN')})` : ''}`
-                    : isUpdatingResult
-                      ? 'Đang cập nhật kết quả (chờ công bố lại)'
-                      : 'Chưa công bố'}
-                </dd>
-              </div>
-              <div>
-                <dt>Kết quả đánh giá</dt>
-                <dd>
-                  {resultReady
-                    ? `${formatExactScore(product.finalScore)} điểm · ${formatStarRatingLabel(product.starRating)}`
-                    : isOwner && isUpdatingResult
-                      ? 'Kết quả đang được cập nhật sau khi có phiếu chấm bổ sung'
-                      : isOwner && isCompleted
-                        ? 'Đã hoàn tất chấm điểm — đang chờ Chủ trì/Quản trị công bố kết quả'
-                        : 'Chưa có kết quả'}
-                </dd>
-              </div>
-            </dl>
-            {product.description && (
-              <div className='border-border mt-4 border-t pt-4'>
-                <h2 className='mb-1 text-base font-semibold'>Mô tả sản phẩm</h2>
-                <p className='text-fg text-sm'>{product.description}</p>
-              </div>
-            )}
-          </PageSection>
+          <ProductInformationTab
+            product={product}
+            adminProduct={adminProduct}
+            isOwner={isOwner}
+            registrantName={registrantName}
+            registrantEmail={registrantEmail}
+            registrantPhone={registrantPhone}
+            isPublished={isPublished}
+            isUpdatingResult={isUpdatingResult}
+            isCompleted={isCompleted}
+            resultReady={resultReady}
+          />
         </TabsContent>
 
         <TabsContent value={ADMIN_PRODUCT_DETAIL_TAB.REGISTRATION}>
-          <PageSection>
-            {product.registrationSnapshot ? (
-              <>
-                <div className='mb-4'>
-                  <h2>Thông tin lưu tại thời điểm nộp</h2>
-                  <p className='text-muted text-sm'>
-                    Thời điểm chốt hồ sơ:{' '}
-                    {new Date(product.registrationSnapshot.submittedAt).toLocaleString('vi-VN')}{' '}
-                    (chỉ đọc).
-                  </p>
-                </div>
-                <dl className='detail-facts'>
-                  {formatFormEntries(
-                    product.registrationSnapshot.formData as unknown as Record<string, unknown>,
-                  ).map((entry) => (
-                    <div key={entry.key}>
-                      <dt>{entry.label}</dt>
-                      <dd>{entry.value}</dd>
-                    </div>
-                  ))}
-                  <div>
-                    <dt>Địa bàn tại thời điểm nộp</dt>
-                    <dd>
-                      {product.registrationSnapshot.locality.name} ·{' '}
-                      {product.registrationSnapshot.locality.provinceName}
-                    </dd>
-                  </div>
-                </dl>
-              </>
-            ) : (
-              <>
-                <div className='mb-4'>
-                  <h2>
-                    {isDraft
-                      ? 'Thông tin bản nháp phiếu đăng ký hiện tại'
-                      : 'Thông tin phiếu đăng ký hiện tại'}
-                  </h2>
-                  <p className='text-muted text-sm' role='status'>
-                    {isDraft
-                      ? 'Hồ sơ đang ở trạng thái Bản nháp, chưa có bản chụp tại thời điểm nộp.'
-                      : 'Hồ sơ này chưa có bản chụp tại thời điểm nộp; đang hiển thị dữ liệu khai báo hiện lưu trên hồ sơ.'}
-                  </p>
-                </div>
-                <dl className='detail-facts'>
-                  {formEntries.map((entry) => (
-                    <div key={entry.key}>
-                      <dt>{entry.label}</dt>
-                      <dd>{entry.value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </>
-            )}
-          </PageSection>
+          <ProductRegistrationTab product={product} isDraft={isDraft} formEntries={formEntries} />
         </TabsContent>
 
         <TabsContent value={ADMIN_PRODUCT_DETAIL_TAB.FILES}>
-          <PageSection className='attachment-dossier-section'>
-            <div className='attachment-dossier-header'>
-              <div className='attachment-dossier-title-group'>
-                <h2>Tệp minh chứng và hình ảnh</h2>
-                <p className='attachment-dossier-subtitle'>
-                  Tập hợp hình ảnh nhận diện sản phẩm và tài liệu pháp lý, chứng nhận chất lượng
-                  phục vụ hội đồng đánh giá.
-                </p>
-              </div>
-              <div className='attachment-dossier-stats' aria-label='Thống kê tệp đính kèm'>
-                <span className='attachment-stat-pill is-accent'>
-                  <ImageIcon className='size-4 shrink-0' aria-hidden='true' />
-                  <span>{imageAttachments.length} hình ảnh</span>
-                </span>
-                <span className='attachment-stat-pill'>
-                  <FileText className='size-4 shrink-0' aria-hidden='true' />
-                  <span>{documentAttachments.length} tài liệu</span>
-                </span>
-                <span className='attachment-stat-pill is-mono'>
-                  <span>
-                    {product.attachments.length} / {MAX_PRODUCT_ATTACHMENTS} tệp
-                  </span>
-                </span>
-              </div>
-            </div>
-
-            {product.attachments.length ? (
-              <div className='attachment-dossier-body'>
-                {imageAttachments.length > 0 && (
-                  <section
-                    className='attachment-subsection'
-                    aria-label='Bộ sưu tập hình ảnh sản phẩm'
-                  >
-                    <div className='attachment-subsection-head'>
-                      <div className='attachment-subsection-title'>
-                        <ImageIcon className='text-accent size-4' aria-hidden='true' />
-                        <h3>Hình ảnh nhận diện &amp; bao bì sản phẩm</h3>
-                      </div>
-                      <span className='attachment-subsection-meta'>
-                        Nhấn vào khung ảnh để phóng to hoặc nhấn tên tệp để mở bản gốc
-                      </span>
-                    </div>
-
-                    <div
-                      className={
-                        imageAttachments.length === 1
-                          ? 'attachment-gallery-grid is-single'
-                          : 'attachment-gallery-grid'
-                      }
-                    >
-                      {imageAttachments.map((file, index) => {
-                        const dims = imageDimensions[file.id];
-                        const ext = getFileExtension(file.fileName);
-                        const indexBadge = `ẢNH #${String(index + 1).padStart(2, '0')}`;
-                        return (
-                          <article
-                            className={
-                              imageAttachments.length === 1
-                                ? 'attachment-image-card is-featured'
-                                : 'attachment-image-card'
-                            }
-                            key={file.id}
-                          >
-                            <button
-                              type='button'
-                              className='attachment-image-stage'
-                              onClick={() => setPreviewImageIndex(index)}
-                              aria-label={`Phóng to hình ảnh ${file.fileName}`}
-                            >
-                              <span className='attachment-stage-badge'>{indexBadge}</span>
-                              <div className='attachment-stage-canvas'>
-                                <PrivateAttachmentThumbnail
-                                  mode={attachmentMode}
-                                  productId={product.id}
-                                  attachmentId={file.id}
-                                  name={file.fileName}
-                                  onImageLoad={({ width, height }) =>
-                                    setImageDimensions((prev) =>
-                                      prev[file.id]?.width === width &&
-                                      prev[file.id]?.height === height
-                                        ? prev
-                                        : { ...prev, [file.id]: { width, height } },
-                                    )
-                                  }
-                                />
-                              </div>
-                              <span className='attachment-stage-zoom' aria-hidden='true'>
-                                <Maximize2 className='size-3.5' />
-                                <span>Phóng to</span>
-                              </span>
-                            </button>
-
-                            <div className='attachment-image-body'>
-                              <div className='attachment-image-meta-top'>
-                                <span className='attachment-ext-tag'>{ext}</span>
-                                <span className='attachment-type-label'>
-                                  {formatAttachmentType(file.type)}
-                                </span>
-                                {dims && (
-                                  <span className='attachment-dims-label'>
-                                    {dims.width} × {dims.height} px
-                                  </span>
-                                )}
-                              </div>
-
-                              <div className='attachment-image-title-wrap'>
-                                <AttachmentLink
-                                  mode={attachmentMode}
-                                  productId={product.id}
-                                  attachmentId={file.id}
-                                  name={file.fileName}
-                                  className='attachment-filename-link'
-                                />
-                              </div>
-
-                              {imageAttachments.length === 1 && (
-                                <p className='attachment-image-caption'>
-                                  Hình ảnh đại diện chính thức của hồ sơ{' '}
-                                  <strong>{product.name}</strong> dùng để đối chiếu nhãn hàng hóa,
-                                  bao bì và truy xuất nguồn gốc khi chấm điểm.
-                                </p>
-                              )}
-
-                              <div className='attachment-image-actions'>
-                                <Button
-                                  type='button'
-                                  variant='secondary'
-                                  size='sm'
-                                  onClick={() => setPreviewImageIndex(index)}
-                                >
-                                  <Maximize2 className='size-3.5' aria-hidden='true' />
-                                  <span>Xem ảnh lớn</span>
-                                </Button>
-                                {(isOwner || canManage) && isEditable && (
-                                  <Button
-                                    type='button'
-                                    variant='secondary'
-                                    size='sm'
-                                    disabled={busy}
-                                    onClick={() => {
-                                      setError('');
-                                      setRemovingAttachment({
-                                        id: file.id,
-                                        fileName: file.fileName,
-                                      });
-                                    }}
-                                  >
-                                    <Trash2 className='size-3.5' aria-hidden='true' />
-                                    <span>Xóa tệp</span>
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                          </article>
-                        );
-                      })}
-                    </div>
-                  </section>
-                )}
-
-                {documentAttachments.length > 0 && (
-                  <section
-                    className='attachment-subsection'
-                    aria-label='Danh sách tài liệu minh chứng'
-                  >
-                    <div className='attachment-subsection-head'>
-                      <div className='attachment-subsection-title'>
-                        <FileText className='text-accent size-4' aria-hidden='true' />
-                        <h3>Tài liệu minh chứng &amp; hồ sơ pháp lý</h3>
-                      </div>
-                      <span className='attachment-subsection-meta'>
-                        {documentAttachments.length} tài liệu đính kèm
-                      </span>
-                    </div>
-
-                    <ul className='attachment-doc-list'>
-                      {documentAttachments.map((file, index) => {
-                        const ext = getFileExtension(file.fileName);
-                        return (
-                          <li className='attachment-doc-row' key={file.id}>
-                            <div className='attachment-doc-emblem' aria-hidden='true'>
-                              <FileText className='size-4' />
-                              <span>{ext}</span>
-                            </div>
-                            <div className='attachment-doc-main'>
-                              <AttachmentLink
-                                mode={attachmentMode}
-                                productId={product.id}
-                                attachmentId={file.id}
-                                name={file.fileName}
-                                className='attachment-filename-link'
-                              />
-                              <p className='attachment-doc-sub'>
-                                Tài liệu #{String(index + 1).padStart(2, '0')} ·{' '}
-                                {formatAttachmentType(file.type)}
-                              </p>
-                            </div>
-                            <div className='attachment-doc-actions'>
-                              <Button
-                                type='button'
-                                variant='secondary'
-                                size='sm'
-                                onClick={() =>
-                                  void openProductAttachmentByMode(
-                                    attachmentMode,
-                                    product.id,
-                                    file.id,
-                                    file.fileName,
-                                  )
-                                }
-                              >
-                                <ExternalLink className='size-3.5' aria-hidden='true' />
-                                <span>Mở tài liệu</span>
-                              </Button>
-                              {(isOwner || canManage) && isEditable && (
-                                <Button
-                                  type='button'
-                                  variant='secondary'
-                                  size='sm'
-                                  disabled={busy}
-                                  onClick={() => {
-                                    setError('');
-                                    setRemovingAttachment({
-                                      id: file.id,
-                                      fileName: file.fileName,
-                                    });
-                                  }}
-                                >
-                                  <Trash2 className='size-3.5' aria-hidden='true' />
-                                  <span>Xóa tệp</span>
-                                </Button>
-                              )}
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </section>
-                )}
-              </div>
-            ) : (
-              <div className='attachment-empty-state'>
-                <ImageIcon className='text-muted size-8' aria-hidden='true' />
-                <h3>Hồ sơ chưa có tệp đính kèm</h3>
-                <p className='text-muted text-sm'>
-                  Chưa có hình ảnh sản phẩm hoặc tài liệu minh chứng nào được tải lên cho hồ sơ này.
-                </p>
-              </div>
-            )}
-          </PageSection>
-
-          <ImagePreviewDialog
-            items={imageAttachments.map((file) => ({
-              kind: 'private',
-              id: file.id,
-              name: file.fileName,
-              mode: attachmentMode,
-              productId: product.id,
-            }))}
-            activeIndex={previewImageIndex}
-            onIndexChange={setPreviewImageIndex}
-            contextLabel={`Hồ sơ: ${product.name}`}
+          <ProductFilesTab
+            productId={product.id}
+            productName={product.name}
+            attachments={product.attachments}
+            imageAttachments={imageAttachments}
+            documentAttachments={documentAttachments}
+            imageDimensions={imageDimensions}
+            onSetImageDimensions={setImageDimensions}
+            previewImageIndex={previewImageIndex}
+            onPreviewImageIndexChange={setPreviewImageIndex}
+            attachmentMode={attachmentMode}
+            canDelete={(isOwner || canManage) && isEditable}
+            busy={busy}
+            onRequestRemoveAttachment={(attachment) => {
+              setError('');
+              setRemovingAttachment(attachment);
+            }}
           />
         </TabsContent>
 
         <TabsContent value={ADMIN_PRODUCT_DETAIL_TAB.PROGRESS}>
-          <div className='space-y-4'>
-            {!isOwner && adminProduct && (
-              <PageSection>
-                <div className='admin-page-heading mb-3'>
-                  <div>
-                    <h2>Phân công giám khảo theo cơ quan quản lý</h2>
-                    <p className='text-muted text-sm'>
-                      Khi duyệt hồ sơ, hệ thống tự động phân công tất cả giám khảo đang hoạt động
-                      thuộc các cơ quan quản lý của phân loại sản phẩm. Mỗi giám khảo chấm toàn bộ
-                      tiêu chí trên phiếu riêng.
-                    </p>
-                  </div>
-                </div>
-
-                {adminProduct.agencyCoverage && adminProduct.agencyCoverage.length > 0 && (
-                  <div className='mb-4 grid gap-3 sm:grid-cols-2'>
-                    {adminProduct.agencyCoverage.map((cov) => (
-                      <div key={cov.agency.id} className='rounded-lg border p-3 text-sm'>
-                        <div className='flex items-center justify-between gap-2'>
-                          <strong>
-                            {cov.agency.name} ({cov.agency.code})
-                          </strong>
-                          {cov.hasMissingJudges ? (
-                            <Badge variant='destructive'>Thiếu giám khảo</Badge>
-                          ) : (
-                            <Badge variant='secondary'>
-                              <CheckCircle2 className='mr-1 size-3.5' aria-hidden='true' />
-                              {cov.activeJudgeCount} giám khảo
-                            </Badge>
-                          )}
-                        </div>
-                        <p className='text-muted mt-1 text-xs'>
-                          Đã nộp phiếu: {cov.submittedCount} / {cov.activeJudgeCount} giám khảo
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {canView && isScoringOrApproved && (
-                  <div className='mb-4 rounded-lg border p-4'>
-                    <h3 className='mb-2 text-sm font-semibold'>
-                      Bổ sung thủ công giám khảo thuộc cơ quan tương ứng
-                    </h3>
-                    <div className='admin-filters'>
-                      <FormField
-                        label='Chọn giám khảo'
-                        htmlFor='product-add-judge-select'
-                        className='admin-filter-field'
-                        data-filter-width='group'
-                      >
-                        <Combobox
-                          value={selectedAddJudgeId || ALL}
-                          onValueChange={(value) =>
-                            setSelectedAddJudgeId(value === ALL ? '' : value)
-                          }
-                        >
-                          <ComboboxAnchor>
-                            <ComboboxInput
-                              id='product-add-judge-select'
-                              placeholder='Chọn giám khảo thuộc cơ quan quản lý…'
-                            />
-                            <ComboboxTrigger />
-                          </ComboboxAnchor>
-                          <ComboboxContent>
-                            <ComboboxEmpty>
-                              Không còn giám khảo hợp lệ thuộc cơ quan quản lý này.
-                            </ComboboxEmpty>
-                            <ComboboxItem value={ALL}>Chọn giám khảo</ComboboxItem>
-                            {eligibleManualJudges.map((judge) => (
-                              <ComboboxItem key={judge.id} value={judge.id}>
-                                {judge.fullName} ({judge.email})
-                                {judge.organizationUnit ? ` · ${judge.organizationUnit.name}` : ''}
-                              </ComboboxItem>
-                            ))}
-                          </ComboboxContent>
-                        </Combobox>
-                      </FormField>
-                      <FormField
-                        label='Lý do bổ sung (tùy chọn)'
-                        htmlFor='product-add-judge-reason'
-                        className='admin-filter-field'
-                        data-filter-width='search'
-                      >
-                        <Input
-                          id='product-add-judge-reason'
-                          value={addJudgeReason}
-                          maxLength={255}
-                          placeholder='Ghi chú lý do bổ sung giám khảo…'
-                          onChange={(event) => setAddJudgeReason(event.target.value)}
-                        />
-                      </FormField>
-                      <div className='admin-actions admin-filter-actions'>
-                        <Button
-                          type='button'
-                          disabled={busy || !selectedAddJudgeId}
-                          onClick={() => void handleAddJudge(false)}
-                        >
-                          <UserPlus className='size-4' aria-hidden='true' />
-                          <span>Bổ sung giám khảo</span>
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {adminProduct.judgeAssignments && adminProduct.judgeAssignments.length > 0 ? (
-                  <div className='record-list'>
-                    {adminProduct.judgeAssignments.map((assignment) => (
-                      <div className='record-row' key={assignment.id}>
-                        <div className='record-main'>
-                          <div className='flex flex-wrap items-center gap-2'>
-                            <strong>{assignment.judge.fullName}</strong>
-                            <Badge variant={assignment.isActive ? 'secondary' : 'outline'}>
-                              {assignment.isActive ? 'Đang phân công' : 'Đã gỡ khỏi hồ sơ'}
-                            </Badge>
-                            {assignment.isManual && (
-                              <Badge variant='outline'>Bổ sung thủ công</Badge>
-                            )}
-                            {assignment.mustSubmitToComplete && assignment.isActive && (
-                              <Badge variant='outline'>Chờ nộp trước khi hoàn tất</Badge>
-                            )}
-                            {assignment.evaluation && (
-                              <Badge
-                                variant='outline'
-                                className={
-                                  assignment.evaluation.status === EVALUATION_STATUS.SUBMITTED
-                                    ? 'status-badge status-completed'
-                                    : assignment.evaluation.status === EVALUATION_STATUS.EXCLUDED
-                                      ? 'status-badge status-draft'
-                                      : 'status-badge status-scoring'
-                                }
-                              >
-                                {assignment.evaluation.status === EVALUATION_STATUS.SUBMITTED
-                                  ? `Đã nộp (${assignment.evaluation.total ?? 0} điểm)`
-                                  : assignment.evaluation.status === EVALUATION_STATUS.EXCLUDED
-                                    ? 'Phiếu bị loại (lịch sử)'
-                                    : 'Đang chấm nháp'}
-                              </Badge>
-                            )}
-                          </div>
-                          <p className='text-muted mt-1 text-xs'>
-                            {assignment.judge.email}
-                            {assignment.organizationUnitName
-                              ? ` · Đơn vị: ${assignment.organizationUnitName}`
-                              : ''}
-                            {assignment.managingAgency
-                              ? ` · Cơ quan: ${assignment.managingAgency.name}`
-                              : ''}
-                            {assignment.removeReason
-                              ? ` · Lý do gỡ: ${assignment.removeReason}`
-                              : ''}
-                          </p>
-                        </div>
-                        <div className='admin-actions'>
-                          {canView &&
-                            assignment.evaluation?.status === EVALUATION_STATUS.SUBMITTED &&
-                            assignment.isActive && (
-                              <Button
-                                type='button'
-                                variant='secondary'
-                                size='sm'
-                                disabled={busy}
-                                onClick={() => {
-                                  const r = window.prompt(
-                                    `Nhập lý do mở lại phiếu chấm của ${assignment.judge.fullName}:`,
-                                    'Mở lại phiếu nộp nhầm để giám khảo chỉnh sửa',
-                                  );
-                                  if (r !== null && assignment.evaluation) {
-                                    void actions.reopenEvaluation(
-                                      assignment.evaluation.id,
-                                      r.trim() || undefined,
-                                    );
-                                  }
-                                }}
-                              >
-                                Mở lại phiếu
-                              </Button>
-                            )}
-                          {canView && assignment.isActive && (
-                            <Button
-                              type='button'
-                              variant='destructive'
-                              size='sm'
-                              disabled={busy}
-                              onClick={() => {
-                                const r = window.prompt(
-                                  `Nhập lý do gỡ giám khảo ${assignment.judge.fullName} khỏi hồ sơ:`,
-                                  'Điều chỉnh phân công giám khảo',
-                                );
-                                if (r !== null) {
-                                  void actions.removeAssignment(
-                                    assignment.judgeId,
-                                    r.trim() || undefined,
-                                  );
-                                }
-                              }}
-                            >
-                              Gỡ giám khảo
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className='text-muted text-sm'>
-                    {isSubmitted
-                      ? 'Hồ sơ đang chờ duyệt. Sau khi duyệt, giám khảo thuộc cơ quan quản lý sẽ được tự động phân công.'
-                      : 'Chưa có giám khảo nào được phân công cho hồ sơ này.'}
-                  </p>
-                )}
-              </PageSection>
-            )}
-
-            <PageSection>
-              <h2 className='mb-3'>Lịch sử trạng thái hồ sơ</h2>
-              {adminProduct ? (
-                adminProduct.statusEvents.length > 0 ? (
-                  <ol className='record-list' style={{ paddingLeft: '20px', margin: 0 }}>
-                    {adminProduct.statusEvents.map((event) => (
-                      <li
-                        className='border-border border-b py-2 last:border-b-0'
-                        key={event.sequence}
-                      >
-                        <div>
-                          <strong>{formatStatusLabel(event.fromStatus)}</strong> →{' '}
-                          <strong>{formatStatusLabel(event.toStatus)}</strong>
-                        </div>
-                        <div className='text-muted mt-0.5 text-xs'>
-                          {new Date(event.createdAt).toLocaleString('vi-VN')}
-                          {event.actor ? ` · Người thực hiện: ${event.actor.fullName}` : ''}
-                          {event.reason ? ` · Lý do: ${event.reason}` : ''}
-                        </div>
-                      </li>
-                    ))}
-                  </ol>
-                ) : (
-                  <p className='text-muted text-sm'>Chưa có sự kiện thay đổi trạng thái nào.</p>
-                )
-              ) : (
-                <dl className='detail-facts'>
-                  <div>
-                    <dt>Trạng thái hiện tại</dt>
-                    <dd>{formatStatusLabel(product.status, true)}</dd>
-                  </div>
-                  <div>
-                    <dt>Thời điểm nộp hồ sơ</dt>
-                    <dd>
-                      {product.submittedAt
-                        ? new Date(product.submittedAt).toLocaleString('vi-VN')
-                        : 'Chưa nộp'}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Thời điểm hoàn tất đánh giá</dt>
-                    <dd>
-                      {ownerProduct?.completedAt
-                        ? new Date(ownerProduct.completedAt).toLocaleString('vi-VN')
-                        : 'Chưa hoàn tất'}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Cập nhật gần nhất</dt>
-                    <dd>
-                      {ownerProduct?.updatedAt
-                        ? new Date(ownerProduct.updatedAt).toLocaleString('vi-VN')
-                        : 'Chưa cập nhật'}
-                    </dd>
-                  </div>
-                </dl>
-              )}
-            </PageSection>
-
-            {!isOwner && adminProduct?.resultHistory && adminProduct.resultHistory.length > 0 && (
-              <PageSection>
-                <h2 className='mb-3'>Lịch sử cập nhật &amp; công bố kết quả</h2>
-                <ol className='record-list' style={{ paddingLeft: '20px', margin: 0 }}>
-                  {adminProduct.resultHistory.map((item) => (
-                    <li className='border-border border-b py-2 last:border-b-0' key={item.id}>
-                      <div>
-                        <strong>{item.action}</strong>:{' '}
-                        {item.finalScore !== null
-                          ? `${formatExactScore(item.finalScore)} điểm · ${formatStarRatingLabel(item.starRating)}`
-                          : 'Chưa chốt điểm'}
-                      </div>
-                      <div className='text-muted mt-0.5 text-xs'>
-                        {new Date(item.createdAt).toLocaleString('vi-VN')}
-                        {item.actor ? ` · bởi ${item.actor.fullName}` : ''}
-                        {item.reason ? ` · Ghi chú: ${item.reason}` : ''}
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              </PageSection>
-            )}
-          </div>
+          <ProductProgressTab
+            product={product}
+            adminProduct={adminProduct}
+            ownerProduct={ownerProduct}
+            isOwner={isOwner}
+            isSubmitted={isSubmitted}
+            canView={canView}
+            isScoringOrApproved={isScoringOrApproved}
+            busy={busy}
+            addingJudge={addingJudge}
+            restoreConfirmPromptOpen={Boolean(restoreConfirmPrompt)}
+            selectedAddJudgeId={selectedAddJudgeId}
+            onSelectedAddJudgeIdChange={setSelectedAddJudgeId}
+            addJudgeReason={addJudgeReason}
+            onAddJudgeReasonChange={setAddJudgeReason}
+            eligibleManualJudges={eligibleManualJudges}
+            onAddJudge={() => void handleAddJudge(false)}
+            onRequestReopenEvaluation={(evaluationId, judgeName) => {
+              setError('');
+              setReason('Mở lại phiếu nộp nhầm để giám khảo chỉnh sửa');
+              setAssignmentModal({
+                kind: 'reopen-evaluation',
+                evaluationId,
+                judgeName,
+              });
+            }}
+            onRequestRemoveAssignment={(judgeId, judgeName) => {
+              setError('');
+              setReason('Điều chỉnh phân công giám khảo');
+              setAssignmentModal({
+                kind: 'remove-assignment',
+                judgeId,
+                judgeName,
+              });
+            }}
+          />
         </TabsContent>
 
         <TabsContent value={ADMIN_PRODUCT_DETAIL_TAB.RESULTS}>
@@ -1877,15 +1279,13 @@ export function AdminProductDetailPage({
                 </div>
               ) : (
                 <p className='text-muted text-sm' role='status'>
-                  {isDraft
-                    ? 'Hồ sơ chưa được nộp để đánh giá.'
-                    : isReturned
-                      ? `Hồ sơ bị trả lại: ${product.returnReason ?? 'Vui lòng chỉnh sửa và nộp lại.'}`
-                      : isUpdatingResult
-                        ? 'Kết quả đánh giá đang được cập nhật do có phiếu chấm bổ sung và chờ Chủ trì/Quản trị công bố lại.'
-                        : isCompleted
-                          ? 'Hồ sơ đã hoàn tất chấm điểm và đang chờ Chủ trì/Quản trị công bố kết quả.'
-                          : 'Hồ sơ đang chờ hội đồng hoàn tất đánh giá. Kết quả sẽ hiển thị tại đây sau khi được công bố.'}
+                  {getOwnerPendingResultMessage({
+                    isDraft,
+                    isReturned,
+                    isUpdatingResult,
+                    isCompleted,
+                    returnReason: product.returnReason,
+                  })}
                 </p>
               )}
             </PageSection>

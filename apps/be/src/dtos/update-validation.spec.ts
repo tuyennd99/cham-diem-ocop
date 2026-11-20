@@ -12,10 +12,12 @@ import {
   UpdateStaffAccessDto,
 } from './admin.dto';
 import { ProductUpdateDto } from './products.dto';
+import { computePaginationSkip } from './common.dto';
 import { EvaluationScoreDto } from './evaluations.dto';
 import { AdminController } from '../controllers/admin.controller';
 import { MyProductsController } from '../controllers/my-products.controller';
 import { AdminService } from '../services/admin.service';
+import { PrintDataService } from '../services/print-data.service';
 import { ProductsService } from '../services/products.service';
 
 const adminService = { updateJudge: jest.fn(), replaceAssignments: jest.fn() };
@@ -25,6 +27,7 @@ const productsService = { update: jest.fn() };
   controllers: [AdminController, MyProductsController],
   providers: [
     { provide: AdminService, useValue: adminService },
+    { provide: PrintDataService, useValue: {} },
     { provide: ProductsService, useValue: productsService },
   ],
 })
@@ -67,7 +70,10 @@ describe('update DTO validation', () => {
   it.each([
     [ProductUpdateDto, {}],
     [UpdateJudgeDto, { reason: 'Profile update' }],
-    [ResetJudgePasswordDto, { password: 'long-password-value', reason: 'Password reset' }],
+    [
+      ResetJudgePasswordDto,
+      { password: 'long-password-value', reason: 'Password reset' },
+    ],
     [ReplaceAssignmentsDto, { assignments: [] }],
     [
       UpdateStaffAccessDto,
@@ -165,5 +171,12 @@ describe('update DTO validation', () => {
     } finally {
       await app.close();
     }
+  });
+
+  it('rejects pagination offsets exceeding PostgreSQL INT4 max', () => {
+    expect(computePaginationSkip(1, 20)).toBe(0);
+    expect(() => computePaginationSkip(1_000_000_000, 20)).toThrow(
+      BadRequestException,
+    );
   });
 });

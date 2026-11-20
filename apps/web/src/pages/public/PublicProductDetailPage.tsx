@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
+import { ArrowLeft } from 'lucide-react';
 import { ImagePreviewDialog } from '@/components/image-preview-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,8 +11,13 @@ import {
   PRODUCT_STATUS,
   PUBLIC_PRODUCT_STATUS_TONE,
 } from '../../constants/product-status';
+import { formatDate } from '../../lib/admin-date';
 import { ApiError } from '../../lib/api-error';
-import { formatExactScore, formatStarRatingLabel } from '../../lib/print-format';
+import {
+  displayProductCode,
+  formatExactScore,
+  formatStarRatingLabel,
+} from '../../lib/print-format';
 import { usePublicProduct } from '../../queries/common';
 import type { PublicProduct } from '../../types/public';
 
@@ -112,21 +118,19 @@ export function PublicProductDetailPage({ id }: { id: string }) {
   const statusCopy = PUBLIC_DETAIL_STATUS_COPY[product.status];
   const hasImages = product.attachments.length > 0;
   const hasDescription = Boolean(product.description?.trim());
-  const hasDetails = hasDescription || product.status === PRODUCT_STATUS.COMPLETED;
-  const layoutClass = !hasImages
-    ? ' public-product-layout--no-image'
-    : !hasDetails
-      ? ' public-product-layout--media-only'
-      : '';
+  const layoutClass = !hasImages ? ' public-product-layout--no-image' : '';
 
   return (
     <main className='route-main public-product-page' id='content'>
       <div className='route-container container'>
         <article className='public-product-detail' aria-labelledby='public-product-title'>
           <header className='public-product-detail-header'>
-            <Link className='public-product-back' to='/products'>
-              ← Danh sách sản phẩm
-            </Link>
+            <Button asChild variant='secondary' className='public-product-back'>
+              <Link to='/products'>
+                <ArrowLeft aria-hidden='true' size={20} strokeWidth={2} />
+                <span>Danh sách sản phẩm</span>
+              </Link>
+            </Button>
             <div className='public-product-detail-heading'>
               <Badge
                 variant='outline'
@@ -135,7 +139,6 @@ export function PublicProductDetailPage({ id }: { id: string }) {
                 {statusCopy.label}
               </Badge>
               <h1 id='public-product-title'>{product.name}</h1>
-              <p className='public-product-category'>{product.category.name}</p>
               <p className='public-product-status-copy'>{statusCopy.description}</p>
             </div>
           </header>
@@ -196,6 +199,26 @@ export function PublicProductDetailPage({ id }: { id: string }) {
             )}
 
             <div className='public-product-content'>
+              <section className='public-product-info' aria-labelledby='public-product-info-title'>
+                <h2 id='public-product-info-title'>Thông tin sản phẩm</h2>
+                <dl className='public-product-facts'>
+                  <div>
+                    <dt>Danh mục</dt>
+                    <dd>{product.category.name}</dd>
+                  </div>
+                  <div>
+                    <dt>Mã hồ sơ</dt>
+                    <dd>{displayProductCode(product)}</dd>
+                  </div>
+                  <div>
+                    <dt>Ngày tạo</dt>
+                    <dd>
+                      <time dateTime={product.createdAt}>{formatDate(product.createdAt)}</time>
+                    </dd>
+                  </div>
+                </dl>
+              </section>
+
               {hasDescription && (
                 <section
                   className='public-product-intro'

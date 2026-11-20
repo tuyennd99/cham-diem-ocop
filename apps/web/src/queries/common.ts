@@ -14,7 +14,7 @@ export function categoriesQueryOptions() {
   return queryOptions({
     queryKey: queryKeys.categories,
     queryFn: async () => (await productsApi.categories()).data,
-    staleTime: 5 * 60_000,
+    staleTime: Infinity,
   });
 }
 

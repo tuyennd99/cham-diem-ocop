@@ -1,5 +1,4 @@
 import { Transform, Type } from 'class-transformer';
-import type { TransformFnParams } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsIn,
@@ -22,27 +21,11 @@ import {
   reportGroupByValues,
 } from '../constants/products';
 
+import { trimSearch as trimString } from './common.dto';
+
 export { reportGroupByValues };
 
-const trimString = ({ value }: TransformFnParams) =>
-  typeof value === 'string' ? value.trim() || undefined : value;
-
-export class AdminDashboardQueryDto implements AdminReportFilterQuery {
-  @ApiPropertyOptional({ minimum: 1, maximum: 100000 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(100000)
-  queuePage?: number;
-
-  @ApiPropertyOptional({ maxLength: 100 })
-  @IsOptional()
-  @Transform(trimString)
-  @IsString()
-  @MaxLength(100)
-  queueSearch?: string;
-
+export class AdminReportFilterQueryDto implements AdminReportFilterQuery {
   @ApiPropertyOptional({ minimum: 2020, maximum: 2100 })
   @IsOptional()
   @Type(() => Number)
@@ -89,8 +72,40 @@ export class AdminDashboardQueryDto implements AdminReportFilterQuery {
   assessmentYear?: number;
 }
 
+export class AdminDashboardQueryDto extends AdminReportFilterQueryDto {
+  @ApiPropertyOptional({ minimum: 1, maximum: 100000 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100000)
+  queuePage?: number;
+
+  @ApiPropertyOptional({ maxLength: 100 })
+  @IsOptional()
+  @Transform(trimString)
+  @IsString()
+  @MaxLength(100)
+  queueSearch?: string;
+
+  @ApiPropertyOptional({ minimum: 1, maximum: 100000 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100000)
+  judgePage?: number;
+
+  @ApiPropertyOptional({ maxLength: 100 })
+  @IsOptional()
+  @Transform(trimString)
+  @IsString()
+  @MaxLength(100)
+  judgeSearch?: string;
+}
+
 export class AdminReportQueryDto
-  extends AdminDashboardQueryDto
+  extends AdminReportFilterQueryDto
   implements AdminReportQuery
 {
   @ApiPropertyOptional({ enum: reportGroupByValues })

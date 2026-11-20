@@ -35,6 +35,10 @@ export const AppSidebar = memo(function AppSidebar() {
   const canScore = hasStaffPermission(session?.user, STAFF_PERMISSION.SCORE);
   const homePath = role ? homeFor(role, permissions) : '/';
 
+  const workItems = canManage
+    ? mainNavItems
+    : mainNavItems.filter((item) => item.href !== '/admin/products');
+
   const evalItems = [
     ...(canView
       ? evaluationNavItems
@@ -75,7 +79,7 @@ export const AppSidebar = memo(function AppSidebar() {
         {role === USER_ROLE.REGISTRANT && (
           <NavMainCollapsible label='Người đăng ký' items={registrantNavItems} groups={[]} />
         )}
-        {canView && <NavMainCollapsible label='Làm việc' items={mainNavItems} groups={[]} />}
+        {canView && <NavMainCollapsible label='Làm việc' items={workItems} groups={[]} />}
         {evalItems.length > 0 && (
           <NavMainCollapsible label='Đánh giá' items={evalItems} groups={[]} />
         )}

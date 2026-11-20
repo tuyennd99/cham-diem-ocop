@@ -13,6 +13,7 @@ import {
   type ReportPeriodMetadata,
 } from '@ocop/shared';
 import { DASHBOARD_CATEGORY_METRIC_MODE } from '../constants/consts';
+import { formatDate } from './admin-date';
 import { formatExactScore } from './print-format';
 
 export function dashboardKpiLinkLabel(id: DashboardKpiId): string | null {
@@ -37,11 +38,16 @@ export function formatComparisonDelta(delta: PeriodComparisonDelta): string {
   if (delta.comparisonNote === COMPARISON_NOTE.INSUFFICIENT_HISTORY || delta.current === null) {
     return 'Chưa đủ dữ liệu lịch sử';
   }
-  const diff = delta.deltaAbsolute ?? 0;
-  const sign = diff > 0 ? `+${diff}` : String(diff);
   if (delta.comparisonNote === COMPARISON_NOTE.NO_PRIOR_DATA) {
+    if (delta.deltaAbsolute === null) {
+      return 'Chưa có dữ liệu kỳ trước';
+    }
+    const diff = delta.deltaAbsolute;
+    const sign = diff > 0 ? `+${diff}` : String(diff);
     return `${sign} (Mới phát sinh / Không có số kỳ trước)`;
   }
+  const diff = delta.deltaAbsolute ?? 0;
+  const sign = diff > 0 ? `+${diff}` : String(diff);
   const pct = delta.deltaPercent ?? 0;
   const pctSign = pct > 0 ? `+${pct}%` : `${pct}%`;
   return `${sign} (${pctSign} so với kỳ trước: ${delta.previous ?? 0})`;
@@ -112,14 +118,8 @@ export function formatJudgeProgress(judge: {
 export function formatNeedsAttentionSubmittedAt(
   submittedAt: string | Date | null | undefined,
 ): string {
-  if (!submittedAt) {
-    return 'Chưa ghi nhận ngày nộp';
-  }
-  const date = submittedAt instanceof Date ? submittedAt : new Date(submittedAt);
-  if (Number.isNaN(date.getTime())) {
-    return 'Chưa ghi nhận ngày nộp';
-  }
-  return `Ngày nộp: ${date.toLocaleDateString('vi-VN')}`;
+  const formatted = formatDate(submittedAt);
+  return formatted ? `Ngày nộp: ${formatted}` : 'Chưa ghi nhận ngày nộp';
 }
 
 export function sortNeedsAttentionByOldest<

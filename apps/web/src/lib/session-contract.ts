@@ -27,6 +27,26 @@ function isOrganizationUnit(value: unknown): value is OrganizationUnitSummary {
   );
 }
 
+const LEGACY_ROLE_PERMISSIONS: Partial<Record<Role, readonly StaffPermission[]>> = {
+  [USER_ROLE.ADMIN]: [STAFF_PERMISSION.MANAGE, STAFF_PERMISSION.VIEW],
+  [USER_ROLE.JUDGE]: [STAFF_PERMISSION.SCORE],
+  [USER_ROLE.VIEWER]: [STAFF_PERMISSION.VIEW],
+};
+
+function resolveStaffPermissions(role: Role, rawPermissions: unknown): StaffPermission[] {
+  if (role === USER_ROLE.REGISTRANT) return [];
+  const permissions = Array.isArray(rawPermissions)
+    ? rawPermissions.filter((permission): permission is StaffPermission =>
+        staffPermissions.includes(permission as StaffPermission),
+      )
+    : [...(LEGACY_ROLE_PERMISSIONS[role] ?? [])];
+  const effective = [...new Set(permissions)];
+  if (effective.includes(STAFF_PERMISSION.MANAGE) && !effective.includes(STAFF_PERMISSION.VIEW)) {
+    effective.push(STAFF_PERMISSION.VIEW);
+  }
+  return effective;
+}
+
 export function normalizeSession(value: unknown): Session | null {
   if (!isRecord(value) || typeof value.accessToken !== 'string' || !isRecord(value.user))
     return null;
@@ -37,23 +57,7 @@ export function normalizeSession(value: unknown): Session | null {
   const rawRoles: Role[] = Array.isArray(user.roles)
     ? user.roles.filter((r): r is Role => roles.includes(r as Role))
     : [role];
-  const permissions: StaffPermission[] = Array.isArray(user.staffPermissions)
-    ? user.staffPermissions.filter((permission): permission is StaffPermission =>
-        staffPermissions.includes(permission as StaffPermission),
-      )
-    : role === USER_ROLE.ADMIN
-      ? [STAFF_PERMISSION.MANAGE, STAFF_PERMISSION.VIEW]
-      : role === USER_ROLE.JUDGE
-        ? [STAFF_PERMISSION.SCORE]
-        : role === USER_ROLE.VIEWER
-          ? [STAFF_PERMISSION.VIEW]
-          : [];
-  const effectivePermissions = role === USER_ROLE.REGISTRANT ? [] : [...new Set(permissions)];
-  if (
-    effectivePermissions.includes(STAFF_PERMISSION.MANAGE) &&
-    !effectivePermissions.includes(STAFF_PERMISSION.VIEW)
-  )
-    effectivePermissions.push(STAFF_PERMISSION.VIEW);
+  const effectivePermissions = resolveStaffPermissions(role, user.staffPermissions);
 
   const derivedRoles = new Set<Role>(rawRoles.length ? rawRoles : [role]);
   if (effectivePermissions.includes(STAFF_PERMISSION.MANAGE)) {
@@ -95,6 +99,15 @@ export function parseStoredSession(serialized: string | null): Session | null {
 
 export function serializeSession(session: Session): string {
   return JSON.stringify(normalizeSession(session));
+}
+
+export function getSessionScope(session: Session | null): string {
+  if (!session) return '';
+  return [
+    session.user.id,
+    session.accessToken,
+    [...session.user.staffPermissions].sort().join(','),
+  ].join(':');
 }
 
 export function hasStaffPermission(

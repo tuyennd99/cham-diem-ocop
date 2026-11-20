@@ -16,7 +16,9 @@ import {
   StaffPermission,
 } from '@prisma/client';
 import { PRODUCT_MUTATION_ACTOR_KIND } from '../constants/products';
+import { computePaginationSkip } from '../dtos/common.dto';
 import {
+  MyProductsQueryDto,
   ProductUpdateDto,
   ProductWriteDto,
   RegistrationUnitWriteDto,
@@ -95,6 +97,7 @@ export class ProductsService {
             query,
             approvedOnly,
           };
+    computePaginationSkip(normalized.page, normalized.limit);
     const { data, total } = await this.repository.listPublic(normalized);
     return {
       data,
@@ -125,8 +128,35 @@ export class ProductsService {
     return this.asFile(file.filePath, file.fileName);
   }
 
-  listMine(principal: AccessTokenPayload) {
-    return this.repository.listMine(principal.sub);
+  async listMine(
+    principal: AccessTokenPayload,
+    query: MyProductsQueryDto = new MyProductsQueryDto(),
+  ) {
+    computePaginationSkip(query.page, query.limit);
+    if ((query.from === undefined) !== (query.toExclusive === undefined)) {
+      throw new BadRequestException('Invalid product filter combination');
+    }
+    if (
+      query.from &&
+      query.toExclusive &&
+      new Date(query.from).getTime() >= new Date(query.toExclusive).getTime()
+    ) {
+      throw new BadRequestException('from must be before toExclusive');
+    }
+    const { data, total, statusCounts } = await this.repository.listMine(
+      principal.sub,
+      query,
+    );
+    return {
+      data,
+      meta: {
+        page: query.page,
+        limit: query.limit,
+        total,
+        totalPages: Math.ceil(total / query.limit),
+        statusCounts,
+      },
+    };
   }
 
   async getMine(id: string, principal: AccessTokenPayload) {
@@ -325,8 +355,14 @@ export class ProductsService {
       attachmentId,
       actor,
     );
-    if (!path) await this.assertDraftAvailable(id, actor);
-    await this.safeUnlink(this.pathFor(path));
+    if (!path) return this.assertDraftAvailable(id, actor);
+    try {
+      await this.safeUnlink(this.pathFor(path));
+    } catch (error) {
+      this.logger.warn(
+        `Failed to unlink removed attachment after DB delete: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
     return { id: attachmentId };
   }
 
@@ -364,9 +400,6 @@ export class ProductsService {
     actor: ProductMutationActor,
     managerRegistrantId?: string,
   ) {
-    if (!(await this.repository.categoryExists(input.categoryId))) {
-      throw new NotFoundException('Product category not found');
-    }
     return this.repository.create(
       {
         registrantId:
@@ -403,12 +436,6 @@ export class ProductsService {
       changes.description = input.description?.trim() || null;
     if (input.formData !== undefined)
       changes.formData = input.formData as Prisma.InputJsonValue;
-    if (
-      input.categoryId &&
-      !(await this.repository.categoryExists(input.categoryId))
-    ) {
-      throw new NotFoundException('Product category not found');
-    }
     const product = await this.repository.updateDraft(id, actor, changes);
     if (!product) await this.assertDraftAvailable(id, actor);
     return product;
@@ -420,9 +447,17 @@ export class ProductsService {
     strictDraft = true,
   ) {
     const paths = await this.repository.deleteDraft(id, actor);
-    if (!paths) await this.assertDraftAvailable(id, actor, strictDraft);
+    if (!paths) return this.assertDraftAvailable(id, actor, strictDraft);
     await Promise.all(
-      paths.map((path) => this.safeUnlink(this.pathFor(path))),
+      paths.map(async (path) => {
+        try {
+          await this.safeUnlink(this.pathFor(path));
+        } catch (error) {
+          this.logger.warn(
+            `Failed to unlink draft attachment after DB delete: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }),
     );
     return { id };
   }
@@ -448,9 +483,7 @@ export class ProductsService {
       product.status !== ProductStatus.DRAFT &&
       product.status !== ProductStatus.RETURNED
     ) {
-      throw new ConflictException(
-        'Only draft products can be changed',
-      );
+      throw new ConflictException('Only draft products can be changed');
     }
     throw new ConflictException('Product could not be changed');
   }

@@ -82,6 +82,16 @@ it('formats period comparison deltas without infinite percentages when prior per
   );
   assert.equal(
     formatComparisonDelta({
+      current: 80,
+      previous: null,
+      deltaAbsolute: null,
+      deltaPercent: null,
+      comparisonNote: 'NO_PRIOR_DATA',
+    }),
+    'Chưa có dữ liệu kỳ trước',
+  );
+  assert.equal(
+    formatComparisonDelta({
       current: null,
       previous: null,
       deltaAbsolute: null,
@@ -165,10 +175,8 @@ it('distinguishes unassigned judges from assigned judges at 0%, partial, and 100
 });
 
 it('formats submittedAt date and keeps oldest-first order with missing dates at the end (#30)', () => {
-  assert.equal(
-    formatNeedsAttentionSubmittedAt('2026-10-12T02:30:00.000Z'),
-    `Ngày nộp: ${new Date('2026-10-12T02:30:00.000Z').toLocaleDateString('vi-VN')}`,
-  );
+  assert.equal(formatNeedsAttentionSubmittedAt('2026-11-04T02:30:00.000Z'), 'Ngày nộp: 04/11/2026');
+  assert.equal(formatNeedsAttentionSubmittedAt('2026-10-01T18:30:00.000Z'), 'Ngày nộp: 02/10/2026');
   assert.equal(formatNeedsAttentionSubmittedAt(null), 'Chưa ghi nhận ngày nộp');
   assert.equal(formatNeedsAttentionSubmittedAt(undefined), 'Chưa ghi nhận ngày nộp');
   assert.equal(formatNeedsAttentionSubmittedAt('not-a-date'), 'Chưa ghi nhận ngày nộp');

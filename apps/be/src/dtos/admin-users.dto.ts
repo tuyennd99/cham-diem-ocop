@@ -1,5 +1,4 @@
 import { Transform, Type } from 'class-transformer';
-import type { TransformFnParams } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   ArrayMaxSize,
@@ -9,6 +8,7 @@ import {
   IsBoolean,
   IsEmail,
   IsEnum,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -20,30 +20,42 @@ import {
 } from 'class-validator';
 import type {
   AdminUserQuery,
+  AdminUserSortBy,
   CreateAdminUserInput,
   ResetAdminUserPasswordInput,
   UpdateAdminUserProfileInput,
   UpdateAdminUserStatusInput,
   CreateOrganizationUnitInput,
   OrganizationUnitQuery,
+  OrganizationUnitSortBy,
+  SortDirection,
   UpdateOrganizationUnitInput,
 } from '@ocop/shared';
 import { Role, StaffPermission } from '@prisma/client';
 import { USER_KIND, type UserKind } from '../constants/auth';
+import {
+  adminUserSortByValues,
+  organizationUnitSortByValues,
+  sortDirectionValues,
+} from '../constants/products';
 
-const trimString = ({ value }: TransformFnParams) =>
-  typeof value === 'string' ? value.trim() : value;
-const normalizedEmail = ({ value }: TransformFnParams) =>
-  typeof value === 'string' ? value.trim().toLowerCase() : value;
-const strictBoolean = ({ value }: TransformFnParams) =>
-  value === 'true' ? true : value === 'false' ? false : value;
+import {
+  normalizedEmail,
+  parseQueryBoolean as strictBoolean,
+  trimRequired as trimString,
+} from './common.dto';
 
 export class OrganizationUnitsQueryDto implements OrganizationUnitQuery {
-  @ApiPropertyOptional({ minimum: 1, default: 1 })
+  @ApiPropertyOptional({
+    minimum: 1,
+    maximum: Number.MAX_SAFE_INTEGER,
+    default: 1,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(Number.MAX_SAFE_INTEGER)
   page = 1;
 
   @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 20 })
@@ -54,17 +66,16 @@ export class OrganizationUnitsQueryDto implements OrganizationUnitQuery {
   @Max(100)
   limit = 20;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ maxLength: 100 })
   @IsOptional()
   @Transform(trimString)
   @IsString()
+  @MaxLength(100)
   q?: string;
 
   @ApiPropertyOptional({ type: Boolean })
   @IsOptional()
-  @Transform(({ value }) =>
-    value === 'true' ? true : value === 'false' ? false : value,
-  )
+  @Transform(strictBoolean)
   @IsBoolean()
   isActive?: boolean;
 
@@ -74,6 +85,16 @@ export class OrganizationUnitsQueryDto implements OrganizationUnitQuery {
   @IsString()
   @MaxLength(100)
   managingAgencyId?: string;
+
+  @ApiPropertyOptional({ enum: organizationUnitSortByValues })
+  @IsOptional()
+  @IsIn(organizationUnitSortByValues)
+  sortBy?: OrganizationUnitSortBy;
+
+  @ApiPropertyOptional({ enum: sortDirectionValues })
+  @IsOptional()
+  @IsIn(sortDirectionValues)
+  sortDirection?: SortDirection;
 }
 
 export class CreateOrganizationUnitDto implements CreateOrganizationUnitInput {
@@ -91,10 +112,11 @@ export class CreateOrganizationUnitDto implements CreateOrganizationUnitInput {
   @MaxLength(255)
   name!: string;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ nullable: true, maxLength: 10000 })
   @IsOptional()
   @Transform(trimString)
   @IsString()
+  @MaxLength(10000)
   description?: string | null;
 
   @ApiProperty({ minimum: 0 })
@@ -132,10 +154,11 @@ export class UpdateOrganizationUnitDto implements UpdateOrganizationUnitInput {
   @MaxLength(255)
   name?: string;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ nullable: true, maxLength: 10000 })
   @IsOptional()
   @Transform(trimString)
   @IsString()
+  @MaxLength(10000)
   description?: string | null;
 
   @ApiPropertyOptional({ minimum: 0 })
@@ -167,11 +190,16 @@ export class UpdateOrganizationUnitDto implements UpdateOrganizationUnitInput {
 }
 
 export class AdminUsersQueryDto implements AdminUserQuery {
-  @ApiPropertyOptional({ minimum: 1, default: 1 })
+  @ApiPropertyOptional({
+    minimum: 1,
+    maximum: Number.MAX_SAFE_INTEGER,
+    default: 1,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(Number.MAX_SAFE_INTEGER)
   page = 1;
 
   @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 20 })
@@ -182,10 +210,11 @@ export class AdminUsersQueryDto implements AdminUserQuery {
   @Max(100)
   limit = 20;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ maxLength: 100 })
   @IsOptional()
   @Transform(trimString)
   @IsString()
+  @MaxLength(100)
   q?: string;
 
   @ApiPropertyOptional({ enum: StaffPermission })
@@ -220,6 +249,16 @@ export class AdminUsersQueryDto implements AdminUserQuery {
   @IsOptional()
   @IsEnum(USER_KIND)
   kind?: UserKind;
+
+  @ApiPropertyOptional({ enum: adminUserSortByValues })
+  @IsOptional()
+  @IsIn(adminUserSortByValues)
+  sortBy?: AdminUserSortBy;
+
+  @ApiPropertyOptional({ enum: sortDirectionValues })
+  @IsOptional()
+  @IsIn(sortDirectionValues)
+  sortDirection?: SortDirection;
 }
 
 export class CreateAdminUserDto implements CreateAdminUserInput {
@@ -255,8 +294,19 @@ export class CreateAdminUserDto implements CreateAdminUserInput {
   @MaxLength(100)
   organizationUnitId!: string;
 
-  @ApiProperty({ enum: StaffPermission, isArray: true, uniqueItems: true, minItems: 1, maxItems: 3 })
-  @ValidateIf((obj: CreateAdminUserDto) => !Array.isArray(obj.roles) || obj.roles.length === 0 || obj.staffPermissions !== undefined)
+  @ApiProperty({
+    enum: StaffPermission,
+    isArray: true,
+    uniqueItems: true,
+    minItems: 1,
+    maxItems: 3,
+  })
+  @ValidateIf(
+    (obj: CreateAdminUserDto) =>
+      !Array.isArray(obj.roles) ||
+      obj.roles.length === 0 ||
+      obj.staffPermissions !== undefined,
+  )
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(3)
@@ -264,7 +314,13 @@ export class CreateAdminUserDto implements CreateAdminUserInput {
   @IsEnum(StaffPermission, { each: true })
   staffPermissions!: StaffPermission[];
 
-  @ApiPropertyOptional({ enum: Role, isArray: true, uniqueItems: true, minItems: 1, maxItems: 3 })
+  @ApiPropertyOptional({
+    enum: Role,
+    isArray: true,
+    uniqueItems: true,
+    minItems: 1,
+    maxItems: 3,
+  })
   @IsOptional()
   @IsArray()
   @ArrayMinSize(1)

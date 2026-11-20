@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { useForm } from '@tanstack/react-form';
 import { useNavigate } from '@tanstack/react-router';
+import { useAppForm } from '@/components/form';
 import { authApi } from '../api/auth';
 import {
   GOOGLE_AUTH_INTENT,
@@ -47,8 +47,8 @@ declare global {
 
 let scriptPromise: Promise<GoogleIdentity> | undefined;
 
-export function loadGoogleIdentity(): Promise<GoogleIdentity> {
-  if (window.google?.accounts.id) return Promise.resolve(window.google.accounts.id);
+export async function loadGoogleIdentity(): Promise<GoogleIdentity> {
+  if (window.google?.accounts.id) return window.google.accounts.id;
   if (!scriptPromise) {
     scriptPromise = new Promise<GoogleIdentity>((resolve, reject) => {
       const script = document.createElement('script');
@@ -68,12 +68,14 @@ export function loadGoogleIdentity(): Promise<GoogleIdentity> {
       };
       script.onerror = failed;
       document.head.appendChild(script);
-    }).catch((cause: unknown) => {
-      scriptPromise = undefined;
-      throw cause;
     });
   }
-  return scriptPromise;
+  try {
+    return await scriptPromise;
+  } catch (cause) {
+    scriptPromise = undefined;
+    throw cause;
+  }
 }
 
 export function GoogleSignIn({ intent }: { intent: GoogleInput['intent'] }) {
@@ -111,7 +113,7 @@ function ConfiguredGoogleSignIn({
     }
   }
 
-  const profileForm = useForm({
+  const profileForm = useAppForm({
     defaultValues: { fullName: '', phone: '' },
     onSubmit: async ({ value }) => {
       if (!profile) return;
@@ -163,16 +165,15 @@ function ConfiguredGoogleSignIn({
             used = true;
             setPhase('posting');
             setError('');
-            void authApi
-              .google({
-                challengeToken: challenge.challengeToken,
-                credential: response.credential,
-                intent,
-              })
-              .then(async ({ data }) => {
+            void (async () => {
+              try {
+                const { data } = await authApi.google({
+                  challengeToken: challenge.challengeToken,
+                  credential: response.credential as string,
+                  intent,
+                });
                 if (active) await accept(data);
-              })
-              .catch((cause: unknown) => {
+              } catch (cause: unknown) {
                 if (!active) return;
                 setError(
                   cause instanceof ApiError
@@ -182,7 +183,8 @@ function ConfiguredGoogleSignIn({
                     : 'Chưa thể đăng nhập Google. Kiểm tra kết nối và thử lại.',
                 );
                 setPhase('error');
-              });
+              }
+            })();
           },
         });
         container.current.replaceChildren();
@@ -229,64 +231,73 @@ function ConfiguredGoogleSignIn({
   return (
     <section className='account-form' aria-label='Đăng nhập bằng Google'>
       {profile ? (
-        <form
-          className='account-form'
-          onSubmit={(event) => {
-            event.preventDefault();
-            void profileForm.handleSubmit();
-          }}
-        >
-          <p className='form-note'>Xác nhận tên người đăng ký hoặc đơn vị trước khi nhận mã OTP.</p>
-          <FormField label='Email Google' htmlFor='google-profile-email'>
-            <Input id='google-profile-email' type='email' value={profile.email} readOnly disabled />
-          </FormField>
-          <profileForm.Field name='fullName'>
-            {(field) => (
-              <FormField label='Tên người đăng ký hoặc đơn vị' htmlFor='google-profile-name'>
+        <profileForm.Subscribe selector={(state) => state.isSubmitting}>
+          {(busy) => (
+            <form
+              className='account-form'
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (busy) return;
+                void profileForm.handleSubmit();
+              }}
+            >
+              <p className='form-note'>
+                Xác nhận tên người đăng ký hoặc đơn vị trước khi nhận mã OTP.
+              </p>
+              <FormField label='Email Google' htmlFor='google-profile-email'>
                 <Input
-                  id='google-profile-name'
-                  autoComplete='organization'
-                  maxLength={255}
-                  required
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
+                  id='google-profile-email'
+                  type='email'
+                  value={profile.email}
+                  readOnly
+                  disabled
                 />
               </FormField>
-            )}
-          </profileForm.Field>
-          <profileForm.Field name='phone'>
-            {(field) => (
-              <FormField
-                label='Số điện thoại'
-                optional='(không bắt buộc)'
-                htmlFor='google-profile-phone'
-              >
-                <Input
-                  id='google-profile-phone'
-                  type='tel'
-                  autoComplete='tel'
-                  maxLength={30}
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                />
-              </FormField>
-            )}
-          </profileForm.Field>
-          <profileForm.Subscribe selector={(state) => state.isSubmitting}>
-            {(busy) => (
-              <>
-                <Button type='submit' loading={busy} disabled={busy}>
-                  Gửi mã xác thực email
-                </Button>
-                <Button type='button' variant='secondary' disabled={busy} onClick={restart}>
-                  Chọn lại tài khoản Google
-                </Button>
-              </>
-            )}
-          </profileForm.Subscribe>
-        </form>
+              <profileForm.Field name='fullName'>
+                {(field) => (
+                  <FormField label='Tên người đăng ký hoặc đơn vị' htmlFor='google-profile-name'>
+                    <Input
+                      id='google-profile-name'
+                      autoComplete='organization'
+                      maxLength={255}
+                      required
+                      disabled={busy}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(event) => field.handleChange(event.target.value)}
+                    />
+                  </FormField>
+                )}
+              </profileForm.Field>
+              <profileForm.Field name='phone'>
+                {(field) => (
+                  <FormField
+                    label='Số điện thoại'
+                    optional='(không bắt buộc)'
+                    htmlFor='google-profile-phone'
+                  >
+                    <Input
+                      id='google-profile-phone'
+                      type='tel'
+                      autoComplete='tel'
+                      maxLength={30}
+                      disabled={busy}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(event) => field.handleChange(event.target.value)}
+                    />
+                  </FormField>
+                )}
+              </profileForm.Field>
+              <Button type='submit' loading={busy} disabled={busy}>
+                {busy ? 'Đang gửi…' : 'Gửi mã xác thực email'}
+              </Button>
+              <Button type='button' variant='secondary' disabled={busy} onClick={restart}>
+                Chọn lại tài khoản Google
+              </Button>
+            </form>
+          )}
+        </profileForm.Subscribe>
       ) : (
         <>
           <div

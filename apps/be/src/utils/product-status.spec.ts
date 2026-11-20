@@ -2,9 +2,17 @@ import { recordProductStatusEvent } from './product-status';
 
 describe('recordProductStatusEvent', () => {
   it('does not record a no-op transition', async () => {
-    const tx = { productStatusEvent: { aggregate: jest.fn(), create: jest.fn() } };
+    const tx = {
+      productStatusEvent: { aggregate: jest.fn(), create: jest.fn() },
+    };
 
-    await recordProductStatusEvent(tx as never, 'product-1', 'SCORING', 'SCORING', 'judge-1');
+    await recordProductStatusEvent(
+      tx as never,
+      'product-1',
+      'SCORING',
+      'SCORING',
+      'judge-1',
+    );
 
     expect(tx.productStatusEvent.aggregate).not.toHaveBeenCalled();
     expect(tx.productStatusEvent.create).not.toHaveBeenCalled();
@@ -19,19 +27,34 @@ describe('recordProductStatusEvent', () => {
     };
     const createdAt = new Date('2026-10-22T00:00:00.000Z');
 
-    await recordProductStatusEvent(tx as never, 'product-1', 'SUBMITTED', 'SCORING', 'judge-1', createdAt);
+    await recordProductStatusEvent(
+      tx as never,
+      'product-1',
+      'SUBMITTED',
+      'SCORING',
+      'judge-1',
+      createdAt,
+    );
 
-    expect(tx.productStatusEvent.create).toHaveBeenCalledWith({ data: {
-      productId: 'product-1', fromStatus: 'SUBMITTED', toStatus: 'SCORING',
-      actorId: 'judge-1', createdAt, sequence: 3,
-    } });
+    expect(tx.productStatusEvent.create).toHaveBeenCalledWith({
+      data: {
+        productId: 'product-1',
+        fromStatus: 'SUBMITTED',
+        toStatus: 'SCORING',
+        actorId: 'judge-1',
+        createdAt,
+        sequence: 3,
+      },
+    });
   });
 
   it('keeps an optional manager reason on the transition event', async () => {
     const tx = {
       productStatusEvent: {
         aggregate: jest.fn().mockResolvedValue({ _max: { sequence: 0 } }),
-        create: jest.fn(),
+        create: jest.fn((_args: { data: Record<string, unknown> }) =>
+          Promise.resolve({}),
+        ),
       },
     };
 
@@ -45,8 +68,8 @@ describe('recordProductStatusEvent', () => {
       'Submit on behalf',
     );
 
-    expect(tx.productStatusEvent.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ reason: 'Submit on behalf' }),
-    });
+    expect(tx.productStatusEvent.create.mock.calls[0]?.[0]?.data).toMatchObject(
+      { reason: 'Submit on behalf' },
+    );
   });
 });

@@ -19,7 +19,20 @@ export class AuthRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   findUserByEmail(email: string) {
-    return this.prisma.user.findUnique({ where: { email }, include: { organizationUnit: { select: { id: true, code: true, name: true, managingAgencyId: true, managingAgency: { select: { id: true, code: true, name: true } } } } } });
+    return this.prisma.user.findUnique({
+      where: { email },
+      include: {
+        organizationUnit: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            managingAgencyId: true,
+            managingAgency: { select: { id: true, code: true, name: true } },
+          },
+        },
+      },
+    });
   }
 
   findSeedAccounts() {
@@ -40,12 +53,16 @@ export class AuthRepository {
     });
   }
 
-  createGoogleChallenge(data: Prisma.PendingAuthUncheckedCreateInput) {
-    return this.prisma.pendingAuth.create({ data });
+  async createGoogleChallenge(data: Prisma.PendingAuthUncheckedCreateInput) {
+    const created = await this.prisma.pendingAuth.create({ data });
+    await this.cleanupExpiredPendingAuth();
+    return created;
   }
 
   findGoogleChallenge(tokenHash: string) {
-    return this.prisma.pendingAuth.findUnique({ where: { tokenHash, kind: PendingAuthKind.GOOGLE_CHALLENGE } });
+    return this.prisma.pendingAuth.findUnique({
+      where: { tokenHash, kind: PendingAuthKind.GOOGLE_CHALLENGE },
+    });
   }
 
   async consumeGoogleChallenge(
@@ -64,12 +81,30 @@ export class AuthRepository {
       if (!challenge || challenge.expiresAt <= new Date()) {
         return { status: GOOGLE_CHALLENGE_STATUS.INVALID };
       }
-      const include = { organizationUnit: { select: { id: true, code: true, name: true, managingAgencyId: true, managingAgency: { select: { id: true, code: true, name: true } } } } };
-      const linked = await tx.user.findUnique({ where: { googleSub: identity.sub }, include });
+      const include = {
+        organizationUnit: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            managingAgencyId: true,
+            managingAgency: { select: { id: true, code: true, name: true } },
+          },
+        },
+      };
+      const linked = await tx.user.findUnique({
+        where: { googleSub: identity.sub },
+        include,
+      });
       if (linked && intent === GOOGLE_AUTH_INTENT.REGISTER) {
         return { status: GOOGLE_CHALLENGE_STATUS.USED_SUB };
       }
-      const user = linked ?? await tx.user.findUnique({ where: { email: identity.email }, include });
+      const user =
+        linked ??
+        (await tx.user.findUnique({
+          where: { email: identity.email },
+          include,
+        }));
       if (user && intent === GOOGLE_AUTH_INTENT.REGISTER) {
         return { status: GOOGLE_CHALLENGE_STATUS.EMAIL_EXISTS };
       }
@@ -83,7 +118,12 @@ export class AuthRepository {
       if (user && (linked || identity.authoritative)) {
         if (!linked) {
           const updated = await tx.user.updateMany({
-            where: { id: user.id, googleSub: null, verified: true, isActive: true },
+            where: {
+              id: user.id,
+              googleSub: null,
+              verified: true,
+              isActive: true,
+            },
             data: { googleSub: identity.sub },
           });
           if (updated.count !== 1) {
@@ -93,22 +133,52 @@ export class AuthRepository {
         await tx.pendingAuth.delete({ where: { id: challenge.id } });
         return { status: GOOGLE_CHALLENGE_STATUS.SESSION, user };
       }
-      const pending = await tx.pendingAuth.create({ data: {
-        ...nextPending,
-        kind: user ? PendingAuthKind.GOOGLE_LINK : PendingAuthKind.GOOGLE_PROFILE,
-        userId: user?.id ?? null,
-        ...(!user ? { otpHash: null, otpExpiresAt: null, resendAvailableAt: null } : {}),
-      } });
+      const pending = await tx.pendingAuth.create({
+        data: {
+          ...nextPending,
+          kind: user
+            ? PendingAuthKind.GOOGLE_LINK
+            : PendingAuthKind.GOOGLE_PROFILE,
+          userId: user?.id ?? null,
+          ...(!user
+            ? { otpHash: null, otpExpiresAt: null, resendAvailableAt: null }
+            : {}),
+        },
+      });
       await tx.pendingAuth.delete({ where: { id: challenge.id } });
       return { status: GOOGLE_CHALLENGE_STATUS.PENDING, pending };
     });
   }
 
-  findUserById(id: string): Promise<(PublicUser & { isActive: boolean; tokenVersion: number }) | null> {
+  findUserById(
+    id: string,
+  ): Promise<
+    (PublicUser & { isActive: boolean; tokenVersion: number }) | null
+  > {
     return this.prisma.user.findUnique({
       where: { id },
-      select: { id: true, email: true, fullName: true, phone: true, role: true, roles: true, verified: true, isActive: true, tokenVersion: true,
-        staffPermissions: true, organizationUnitId: true, organizationUnit: { select: { id: true, code: true, name: true, managingAgencyId: true, managingAgency: { select: { id: true, code: true, name: true } } } } },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        phone: true,
+        role: true,
+        roles: true,
+        verified: true,
+        isActive: true,
+        tokenVersion: true,
+        staffPermissions: true,
+        organizationUnitId: true,
+        organizationUnit: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            managingAgencyId: true,
+            managingAgency: { select: { id: true, code: true, name: true } },
+          },
+        },
+      },
     });
   }
 
@@ -131,7 +201,15 @@ export class AuthRepository {
         tokenVersion: true,
         staffPermissions: true,
         organizationUnitId: true,
-        organizationUnit: { select: { id: true, code: true, name: true, managingAgencyId: true, managingAgency: { select: { id: true, code: true, name: true } } } },
+        organizationUnit: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            managingAgencyId: true,
+            managingAgency: { select: { id: true, code: true, name: true } },
+          },
+        },
       },
     });
   }
@@ -143,40 +221,66 @@ export class AuthRepository {
     });
   }
 
-  changePassword(id: string, currentPasswordHash: string, newPasswordHash: string) {
+  changePassword(
+    id: string,
+    currentPasswordHash: string,
+    newPasswordHash: string,
+  ) {
     return this.prisma.user.updateMany({
-      where: { id, password: currentPasswordHash, verified: true, isActive: true },
+      where: {
+        id,
+        password: currentPasswordHash,
+        verified: true,
+        isActive: true,
+      },
       data: { password: newPasswordHash, tokenVersion: { increment: 1 } },
     });
   }
 
-  createPendingRegistration(data: Prisma.PendingAuthUncheckedCreateInput) {
-    return this.prisma.pendingAuth.create({ data });
+  async createPendingRegistration(
+    data: Prisma.PendingAuthUncheckedCreateInput,
+  ) {
+    const created = await this.prisma.pendingAuth.create({ data });
+    await this.cleanupExpiredPendingAuth();
+    return created;
   }
 
-  findPendingRegistration(tokenHash: string, kinds: PendingAuthKind[] = [PendingAuthKind.EMAIL_REGISTER, PendingAuthKind.GOOGLE_REGISTER]) {
-    return this.prisma.pendingAuth.findUnique({ where: { tokenHash, kind: { in: kinds } } });
-  }
-
-  async pendingRegistrationStatus(tokenHash: string) {
-    return this.prisma.$transaction(async (tx) => {
-      const rows = await tx.$queryRaw<PendingAuth[]>(Prisma.sql`
-        SELECT * FROM ${databaseObject('pending_auth')}
-        WHERE "tokenHash" = ${tokenHash} AND "kind" IN ('EMAIL_REGISTER', 'GOOGLE_REGISTER', 'GOOGLE_LINK')
-        FOR UPDATE
-      `);
-      const pending = rows[0];
-      if (!pending || pending.expiresAt <= new Date()) {
-        return { status: OTP_VERIFY_STATUS.INVALID };
-      }
-      if (pending.attempts >= OTP_MAX_ATTEMPTS) {
-        return { status: OTP_VERIFY_STATUS.LOCKED };
-      }
-      return { status: OTP_VERIFY_STATUS.OK, pending };
+  findPendingRegistration(
+    tokenHash: string,
+    kinds: PendingAuthKind[] = [
+      PendingAuthKind.EMAIL_REGISTER,
+      PendingAuthKind.GOOGLE_REGISTER,
+    ],
+  ) {
+    return this.prisma.pendingAuth.findUnique({
+      where: { tokenHash, kind: { in: kinds } },
     });
   }
 
-  async startGoogleRegistration(tokenHash: string, profile: { fullName: string; phone: string | null }, otpHash: string) {
+  async pendingRegistrationStatus(tokenHash: string) {
+    const pending = await this.prisma.pendingAuth.findUnique({
+      where: { tokenHash },
+    });
+    if (
+      !pending ||
+      (pending.kind !== PendingAuthKind.EMAIL_REGISTER &&
+        pending.kind !== PendingAuthKind.GOOGLE_REGISTER &&
+        pending.kind !== PendingAuthKind.GOOGLE_LINK) ||
+      pending.expiresAt <= new Date()
+    ) {
+      return { status: OTP_VERIFY_STATUS.INVALID };
+    }
+    if (pending.attempts >= OTP_MAX_ATTEMPTS) {
+      return { status: OTP_VERIFY_STATUS.LOCKED };
+    }
+    return { status: OTP_VERIFY_STATUS.OK, pending };
+  }
+
+  async startGoogleRegistration(
+    tokenHash: string,
+    profile: { fullName: string; phone: string | null },
+    otpHash: string,
+  ) {
     return this.prisma.$transaction(async (tx) => {
       const rows = await tx.$queryRaw<PendingAuth[]>(Prisma.sql`
         SELECT * FROM ${databaseObject('pending_auth')}
@@ -184,12 +288,26 @@ export class AuthRepository {
       `);
       const pending = rows[0];
       const now = new Date();
-      if (!pending || pending.expiresAt <= now || !pending.email || !pending.googleSub) return null;
-      return tx.pendingAuth.update({ where: { id: pending.id }, data: {
-        ...profile, kind: PendingAuthKind.GOOGLE_REGISTER, otpHash, attempts: 0,
-        otpExpiresAt: new Date(Math.min(now.getTime() + OTP_TTL_MS, pending.expiresAt.getTime())),
-        resendAvailableAt: new Date(now.getTime() + 60_000),
-      } });
+      if (
+        !pending ||
+        pending.expiresAt <= now ||
+        !pending.email ||
+        !pending.googleSub
+      )
+        return null;
+      return tx.pendingAuth.update({
+        where: { id: pending.id },
+        data: {
+          ...profile,
+          kind: PendingAuthKind.GOOGLE_REGISTER,
+          otpHash,
+          attempts: 0,
+          otpExpiresAt: new Date(
+            Math.min(now.getTime() + OTP_TTL_MS, pending.expiresAt.getTime()),
+          ),
+          resendAvailableAt: new Date(now.getTime() + 60_000),
+        },
+      });
     });
   }
 
@@ -204,12 +322,23 @@ export class AuthRepository {
       if (pending && pending.attempts >= OTP_MAX_ATTEMPTS) {
         return { status: OTP_VERIFY_STATUS.LOCKED };
       }
-      if (!pending || pending.expiresAt <= now || !pending.otpExpiresAt || pending.otpExpiresAt <= now ||
-        !pending.otpHash || !pending.userId || !pending.email || !pending.googleSub) {
+      if (
+        !pending ||
+        pending.expiresAt <= now ||
+        !pending.otpExpiresAt ||
+        pending.otpExpiresAt <= now ||
+        !pending.otpHash ||
+        !pending.userId ||
+        !pending.email ||
+        !pending.googleSub
+      ) {
         return { status: OTP_VERIFY_STATUS.INVALID };
       }
       if (!this.equal(pending.otpHash, codeHash)) {
-        await tx.pendingAuth.update({ where: { id: pending.id }, data: { attempts: { increment: 1 } } });
+        await tx.pendingAuth.update({
+          where: { id: pending.id },
+          data: { attempts: { increment: 1 } },
+        });
         return {
           status:
             pending.attempts + 1 >= OTP_MAX_ATTEMPTS
@@ -217,17 +346,45 @@ export class AuthRepository {
               : OTP_VERIFY_STATUS.INVALID,
         };
       }
-      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM ${databaseObject('users')} WHERE "id" = ${pending.userId} FOR UPDATE`);
-      const include = { organizationUnit: { select: { id: true, code: true, name: true, managingAgencyId: true, managingAgency: { select: { id: true, code: true, name: true } } } } };
-      const user = await tx.user.findUnique({ where: { id: pending.userId }, include });
-      if (!user || !user.isActive || !user.verified || user.email !== pending.email || user.googleSub !== null ||
-        pending.expiresAt <= new Date() || pending.otpExpiresAt <= new Date()) {
+      await tx.$queryRaw(
+        Prisma.sql`SELECT "id" FROM ${databaseObject('users')} WHERE "id" = ${pending.userId} FOR UPDATE`,
+      );
+      const include = {
+        organizationUnit: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            managingAgencyId: true,
+            managingAgency: { select: { id: true, code: true, name: true } },
+          },
+        },
+      };
+      const user = await tx.user.findUnique({
+        where: { id: pending.userId },
+        include,
+      });
+      if (
+        !user ||
+        !user.isActive ||
+        !user.verified ||
+        user.email !== pending.email ||
+        user.googleSub !== null ||
+        pending.expiresAt <= new Date() ||
+        pending.otpExpiresAt <= new Date()
+      ) {
         return { status: OTP_VERIFY_STATUS.INVALID };
       }
-      if (await tx.user.findUnique({ where: { googleSub: pending.googleSub } })) {
+      if (
+        await tx.user.findUnique({ where: { googleSub: pending.googleSub } })
+      ) {
         return { status: OTP_VERIFY_STATUS.COLLISION };
       }
-      const updated = await tx.user.update({ where: { id: user.id }, data: { googleSub: pending.googleSub }, include });
+      const updated = await tx.user.update({
+        where: { id: user.id },
+        data: { googleSub: pending.googleSub },
+        include,
+      });
       await tx.pendingAuth.delete({ where: { id: pending.id } });
       return { status: OTP_VERIFY_STATUS.SESSION, user: updated };
     });
@@ -242,28 +399,65 @@ export class AuthRepository {
       `);
       const pending = rows[0];
       const now = new Date();
-      if (pending && pending.attempts >= OTP_MAX_ATTEMPTS) return OTP_VERIFY_STATUS.LOCKED;
-      if (!pending || pending.expiresAt <= now || !pending.otpExpiresAt || pending.otpExpiresAt <= now ||
-        !pending.otpHash) return false;
+      if (pending && pending.attempts >= OTP_MAX_ATTEMPTS)
+        return OTP_VERIFY_STATUS.LOCKED;
+      if (
+        !pending ||
+        pending.expiresAt <= now ||
+        !pending.otpExpiresAt ||
+        pending.otpExpiresAt <= now ||
+        !pending.otpHash
+      )
+        return false;
       if (!this.equal(pending.otpHash, codeHash)) {
         // Return instead of throwing so the failed attempt is committed.
-        await tx.pendingAuth.update({ where: { id: pending.id }, data: { attempts: { increment: 1 } } });
-        return pending.attempts + 1 >= OTP_MAX_ATTEMPTS ? OTP_VERIFY_STATUS.LOCKED : false;
+        await tx.pendingAuth.update({
+          where: { id: pending.id },
+          data: { attempts: { increment: 1 } },
+        });
+        return pending.attempts + 1 >= OTP_MAX_ATTEMPTS
+          ? OTP_VERIFY_STATUS.LOCKED
+          : false;
       }
-      if (!pending.email || !pending.fullName ||
-        (pending.kind === PendingAuthKind.EMAIL_REGISTER ? !pending.passwordHash : !pending.googleSub)) return false;
-      await tx.user.create({ data: {
-        email: pending.email, fullName: pending.fullName, phone: pending.phone,
-        password: pending.kind === PendingAuthKind.EMAIL_REGISTER ? pending.passwordHash : null,
-        googleSub: pending.kind === PendingAuthKind.GOOGLE_REGISTER ? pending.googleSub : null,
-        role: Role.REGISTRANT, roles: [Role.REGISTRANT], verified: true,
-      } });
+      if (
+        !pending.email ||
+        !pending.fullName ||
+        (pending.kind === PendingAuthKind.EMAIL_REGISTER
+          ? !pending.passwordHash
+          : !pending.googleSub)
+      )
+        return false;
+      await tx.user.create({
+        data: {
+          email: pending.email,
+          fullName: pending.fullName,
+          phone: pending.phone,
+          password:
+            pending.kind === PendingAuthKind.EMAIL_REGISTER
+              ? pending.passwordHash
+              : null,
+          googleSub:
+            pending.kind === PendingAuthKind.GOOGLE_REGISTER
+              ? pending.googleSub
+              : null,
+          role: Role.REGISTRANT,
+          roles: [Role.REGISTRANT],
+          verified: true,
+        },
+      });
       await tx.pendingAuth.delete({ where: { id: pending.id } });
       return true;
     });
   }
 
-  async replacePendingRegistrationOtp(tokenHash: string, otpHash: string, kinds: PendingAuthKind[] = [PendingAuthKind.EMAIL_REGISTER, PendingAuthKind.GOOGLE_REGISTER]) {
+  async replacePendingRegistrationOtp(
+    tokenHash: string,
+    otpHash: string,
+    kinds: PendingAuthKind[] = [
+      PendingAuthKind.EMAIL_REGISTER,
+      PendingAuthKind.GOOGLE_REGISTER,
+    ],
+  ) {
     return this.prisma.$transaction(async (tx) => {
       const rows = await tx.$queryRaw<PendingAuth[]>(Prisma.sql`
         SELECT * FROM ${databaseObject('pending_auth')}
@@ -285,7 +479,9 @@ export class AuthRepository {
         where: { id: pending.id },
         data: {
           otpHash,
-          otpExpiresAt: new Date(Math.min(now.getTime() + OTP_TTL_MS, pending.expiresAt.getTime())),
+          otpExpiresAt: new Date(
+            Math.min(now.getTime() + OTP_TTL_MS, pending.expiresAt.getTime()),
+          ),
           resendAvailableAt: new Date(now.getTime() + 60_000),
         },
       });
@@ -293,10 +489,38 @@ export class AuthRepository {
     });
   }
 
-  async saveOtp(email: string, purpose: OtpPurpose, codeHash: string, userId?: string) {
+  async deletePendingRegistration(tokenHash: string) {
+    await this.prisma.pendingAuth.deleteMany({
+      where: {
+        tokenHash,
+        kind: {
+          in: [PendingAuthKind.EMAIL_REGISTER, PendingAuthKind.GOOGLE_REGISTER],
+        },
+      },
+    });
+  }
+
+  async saveOtp(
+    email: string,
+    purpose: OtpPurpose,
+    codeHash: string,
+    userId?: string,
+  ) {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + OTP_TTL_MS);
-    await this.prisma.$transaction(async (tx) => {
+    const cooldownStart = new Date(now.getTime() - 60_000);
+    const result = await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`${email}:${purpose}`}))`,
+      );
+      const latest = await tx.otpCode.findFirst({
+        where: { email, purpose },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      });
+      if (latest && latest.createdAt > cooldownStart) {
+        return { sent: false as const };
+      }
       await tx.otpCode.updateMany({
         where: { email, purpose, usedAt: null },
         data: { usedAt: now },
@@ -304,7 +528,48 @@ export class AuthRepository {
       await tx.otpCode.create({
         data: { email, purpose, code: codeHash, expiresAt, userId },
       });
+      return { sent: true as const };
     });
+    if (result.sent) {
+      await this.cleanupExpiredOtpCodes();
+    }
+    return result;
+  }
+
+  private async cleanupExpiredPendingAuth() {
+    try {
+      const expired = await this.prisma.pendingAuth.findMany({
+        where: { expiresAt: { lte: new Date() } },
+        orderBy: { expiresAt: 'asc' },
+        take: 100,
+        select: { id: true },
+      });
+      if (expired.length > 0) {
+        await this.prisma.pendingAuth.deleteMany({
+          where: { id: { in: expired.map((row) => row.id) } },
+        });
+      }
+    } catch {
+      // Best-effort batched expiry sweep
+    }
+  }
+
+  private async cleanupExpiredOtpCodes() {
+    try {
+      const expired = await this.prisma.otpCode.findMany({
+        where: { expiresAt: { lte: new Date() } },
+        orderBy: { expiresAt: 'asc' },
+        take: 100,
+        select: { id: true },
+      });
+      if (expired.length > 0) {
+        await this.prisma.otpCode.deleteMany({
+          where: { id: { in: expired.map((row) => row.id) } },
+        });
+      }
+    } catch {
+      // Best-effort batched expiry sweep
+    }
   }
 
   async consumeOtp(
@@ -315,7 +580,13 @@ export class AuthRepository {
   ) {
     return this.prisma.$transaction(async (tx) => {
       const rows = await tx.$queryRaw<
-        { id: string; code: string; attempts: number; expiresAt: Date; usedAt: Date | null }[]
+        {
+          id: string;
+          code: string;
+          attempts: number;
+          expiresAt: Date;
+          usedAt: Date | null;
+        }[]
       >(Prisma.sql`
         SELECT "id", "code", "attempts", "expiresAt", "usedAt"
         FROM ${databaseObject('otp_codes')}
@@ -325,13 +596,22 @@ export class AuthRepository {
       `);
       const otp = rows[0];
       const now = new Date();
-      if (!otp || otp.usedAt || otp.expiresAt <= now || otp.attempts >= OTP_MAX_ATTEMPTS) return false;
+      if (
+        !otp ||
+        otp.usedAt ||
+        otp.expiresAt <= now ||
+        otp.attempts >= OTP_MAX_ATTEMPTS
+      )
+        return false;
 
       if (!this.equal(otp.code, codeHash)) {
         const attempts = otp.attempts + 1;
         await tx.otpCode.update({
           where: { id: otp.id },
-          data: { attempts, ...(attempts >= OTP_MAX_ATTEMPTS ? { usedAt: now } : {}) },
+          data: {
+            attempts,
+            ...(attempts >= OTP_MAX_ATTEMPTS ? { usedAt: now } : {}),
+          },
         });
         return false;
       }
@@ -339,7 +619,12 @@ export class AuthRepository {
       await tx.otpCode.update({ where: { id: otp.id }, data: { usedAt: now } });
       if (purpose === OtpPurpose.REGISTER) {
         const result = await tx.user.updateMany({
-          where: { email, role: Role.REGISTRANT, verified: false, isActive: true },
+          where: {
+            email,
+            role: Role.REGISTRANT,
+            verified: false,
+            isActive: true,
+          },
           data: { verified: true },
         });
         return result.count === 1;

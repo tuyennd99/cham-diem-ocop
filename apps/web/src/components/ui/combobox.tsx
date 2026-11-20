@@ -268,7 +268,7 @@ function ComboboxAnchor({
       data-slot='combobox-anchor'
       data-multiple={uiContext?.multiple ? 'true' : undefined}
       className={cn(
-        'border-border bg-surface text-fg data-focused:ring-ring relative flex h-9 min-h-9 w-full min-w-0 items-center justify-between gap-2 rounded-md border px-3 py-1.5 text-sm shadow-xs transition-[color,box-shadow] data-disabled:cursor-not-allowed data-disabled:opacity-50 data-focused:ring-1',
+        'border-border bg-surface text-fg data-focused:ring-ring data-focused:border-ring focus-within:ring-ring focus-within:border-ring relative flex h-9 min-h-9 w-full min-w-0 items-center justify-between gap-2 rounded-md border px-3 py-1.5 text-sm shadow-xs transition-[color,box-shadow] focus-within:ring-2 data-disabled:cursor-not-allowed data-disabled:opacity-50 data-focused:ring-2',
         className,
       )}
       {...props}
@@ -431,7 +431,7 @@ function ComboboxContent({
           onTouchMove?.(event);
         }}
         className={cn(
-          'border-border bg-popover text-popover-foreground data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 pointer-events-auto z-[100] max-h-80 min-w-(--dice-anchor-width) origin-(--dice-transform-origin) overflow-x-hidden overflow-y-auto rounded-md border p-1 shadow-md',
+          'border-border bg-popover text-popover-foreground data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 pointer-events-auto z-[100] max-h-80 w-(--dice-anchor-width) max-w-[min(var(--dice-anchor-width,24rem),calc(100vw-2rem))] min-w-(--dice-anchor-width) origin-(--dice-transform-origin) overflow-x-hidden overflow-y-auto rounded-md border p-1 shadow-md',
           className,
         )}
         {...props}
@@ -512,6 +512,7 @@ function ComboboxItem({
   className,
   children,
   outset = true,
+  title,
   ...props
 }: React.ComponentProps<typeof ComboboxPrimitive.Item> & {
   outset?: boolean;
@@ -520,12 +521,15 @@ function ComboboxItem({
   if (uiContext?.visibleValues && !uiContext.visibleValues.has(props.value)) {
     return null;
   }
+  const resolvedTitle =
+    title ?? (typeof props.label === 'string' ? props.label : getNodeText(children) || undefined);
 
   return (
     <ComboboxPrimitive.Item
       data-slot='combobox-item'
+      title={resolvedTitle}
       className={cn(
-        'data-highlighted:bg-accent-soft data-highlighted:text-fg relative flex w-full cursor-default items-center rounded-sm py-1.5 text-sm outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50',
+        'data-highlighted:bg-accent-soft data-highlighted:text-fg relative flex w-full min-w-0 cursor-default items-center rounded-sm py-1.5 text-sm outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50',
         outset ? 'pr-8 pl-2' : 'pr-2 pl-8',
         className,
       )}
@@ -539,7 +543,9 @@ function ComboboxItem({
       >
         <Check className='size-4' />
       </ComboboxPrimitive.ItemIndicator>
-      <ComboboxPrimitive.ItemText>{children}</ComboboxPrimitive.ItemText>
+      <ComboboxPrimitive.ItemText className='min-w-0 flex-1 truncate'>
+        {children}
+      </ComboboxPrimitive.ItemText>
     </ComboboxPrimitive.Item>
   );
 }

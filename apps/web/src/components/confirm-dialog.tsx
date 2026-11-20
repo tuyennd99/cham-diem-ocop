@@ -38,7 +38,13 @@ export function ConfirmDialog({
 }) {
   const errors = Array.isArray(error) ? error : error ? [error] : [];
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && pending) return;
+        onOpenChange(nextOpen);
+      }}
+    >
       <DialogContent
         className='admin-dialog max-h-[90vh] max-w-md overflow-y-auto'
         data-admin-ui='true'
@@ -49,10 +55,16 @@ export function ConfirmDialog({
         </DialogHeader>
         {errors.length > 0 && <AlertError title='Không thể thực hiện thao tác' errors={errors} />}
         <DialogFooter>
-          <Button variant='outline' onClick={() => onOpenChange(false)}>
+          <Button
+            type='button'
+            variant='outline'
+            disabled={pending}
+            onClick={() => onOpenChange(false)}
+          >
             Hủy
           </Button>
           <Button
+            type='button'
             variant={destructive ? 'destructive' : 'default'}
             loading={pending}
             disabled={pending || confirmDisabled}

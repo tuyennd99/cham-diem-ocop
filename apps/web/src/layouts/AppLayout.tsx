@@ -1,7 +1,7 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { STAFF_PERMISSION } from '@ocop/shared';
-import { useNavigate } from '@tanstack/react-router';
+import { useNavigate, useRouterState } from '@tanstack/react-router';
 import { Tooltip } from 'radix-ui';
 import { ADMIN_SIDEBAR_COLLAPSED_STORAGE_KEY } from '../constants/auth';
 import { homeFor, setSession, useSession } from '../lib/auth';
@@ -18,6 +18,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
     return false;
   });
   const session = useSession();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const density = pathname.startsWith('/admin')
+    ? 'compact'
+    : pathname.startsWith('/my')
+      ? 'comfortable'
+      : undefined;
   const role = session?.user.role;
   const permissions = session?.user.staffPermissions ?? [];
   const canView = hasStaffPermission(session?.user, STAFF_PERMISSION.VIEW);
@@ -40,11 +46,24 @@ export function AppLayout({ children }: { children: ReactNode }) {
     void navigate({ to: '/login' });
   }, [navigate]);
 
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (density) {
+      document.documentElement.dataset.density = density;
+    } else {
+      delete document.documentElement.dataset.density;
+    }
+    return () => {
+      delete document.documentElement.dataset.density;
+    };
+  }, [density]);
+
   return (
     <Tooltip.Provider delayDuration={200}>
       <div
         className='application-shell'
         data-admin-ui='true'
+        data-density={density}
         data-sidebar-collapsed={sidebarCollapsed ? 'true' : undefined}
       >
         <WorkspaceSidebar

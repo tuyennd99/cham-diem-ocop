@@ -1,8 +1,6 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
-import { ApiExceptionFilter } from '../filters/api-exception.filter';
-import { ApiResponseInterceptor } from '../interceptors/api-response.interceptor';
 import { env } from './env';
 
 export function configureApp(app: INestApplication) {
@@ -39,30 +37,28 @@ export function configureApp(app: INestApplication) {
 
   app.setGlobalPrefix('api');
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-  app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }));
-  app.useGlobalFilters(new ApiExceptionFilter());
-  app.useGlobalInterceptors(new ApiResponseInterceptor());
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    }),
+  );
 
-  const document = createOpenApiDocument(app);
-  SwaggerModule.setup('docs', app, document, {
-    customSiteTitle: 'Api Docs',
-    customfavIcon: 'https://avatars.githubusercontent.com/u/6936373?s=200&v=4',
-    customJs: [
-      'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui-bundle.min.js',
-      'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui-standalone-preset.min.js',
-    ],
-    customCssUrl: [
-      'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui.min.css',
-      'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui-standalone-preset.min.css',
-      'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui.css',
-    ],
-  });
+  if (process.env.NODE_ENV !== 'production') {
+    const document = createOpenApiDocument(app);
+    SwaggerModule.setup('docs', app, document, {
+      customSiteTitle: 'Api Docs',
+    });
+  }
 }
 
 export function createOpenApiDocument(app: INestApplication) {
   const config = new DocumentBuilder()
     .setTitle('Hệ thống chấm điểm sản phẩm OCOP')
-    .setDescription('API đăng ký sản phẩm, chấm điểm OCOP và quản trị phân công. Sử dụng JWT Bearer token.')
+    .setDescription(
+      'API đăng ký sản phẩm, chấm điểm OCOP và quản trị phân công. Sử dụng JWT Bearer token.',
+    )
     .setVersion('1.0')
     .addBearerAuth(
       {

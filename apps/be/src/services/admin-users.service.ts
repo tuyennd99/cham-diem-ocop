@@ -4,7 +4,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import bcrypt from 'bcryptjs';
 import { Role } from '@prisma/client';
 import {
   AdminUsersQueryDto,
@@ -18,11 +17,8 @@ import {
 } from '../dtos/admin-users.dto';
 import { AdminUsersRepository } from '../repositories/admin-users.repository';
 import type { RequestMeta } from '../types/auth';
-import {
-  PASSWORD_MAX_BYTES,
-  PASSWORD_ROUNDS,
-  PRISMA_ERROR_CODE,
-} from '../constants/auth';
+import { isUniqueConstraint } from '../prisma/errors';
+import { assertPasswordLength, hashPassword } from '../utils/password';
 
 @Injectable()
 export class AdminUsersService {
@@ -47,7 +43,11 @@ export class AdminUsersService {
     return user;
   }
 
-  async createUser(input: CreateAdminUserDto, actorId: string, meta: RequestMeta) {
+  async createUser(
+    input: CreateAdminUserDto,
+    actorId: string,
+    meta: RequestMeta,
+  ) {
     const email = input.email.trim().toLowerCase();
     const fullName = input.fullName.trim();
     const reason = input.reason.trim();
@@ -55,14 +55,18 @@ export class AdminUsersService {
     if (!reason) throw new BadRequestException('Reason is required');
     const password = await this.hashPassword(input.password);
     try {
-      return await this.repository.createUser({
-        ...input,
-        email,
-        fullName,
-        phone: input.phone?.trim() || null,
-        password,
-        reason,
-      }, actorId, meta);
+      return await this.repository.createUser(
+        {
+          ...input,
+          email,
+          fullName,
+          phone: input.phone?.trim() || null,
+          password,
+          reason,
+        },
+        actorId,
+        meta,
+      );
     } catch (error) {
       if (this.isUniqueConstraint(error)) {
         throw new ConflictException('Email is already registered');
@@ -79,16 +83,21 @@ export class AdminUsersService {
   ) {
     const { reason, ...changes } = input;
     if (!reason.trim()) throw new BadRequestException('Reason is required');
-    const user = await this.repository.updateUserProfile(id, {
-      ...changes,
-      ...(changes.fullName === undefined
-        ? {}
-        : { fullName: changes.fullName.trim() }),
-      ...(changes.phone === undefined
-        ? {}
-        : { phone: changes.phone?.trim() || null }),
-      reason: reason.trim(),
-    }, actorId, meta);
+    const user = await this.repository.updateUserProfile(
+      id,
+      {
+        ...changes,
+        ...(changes.fullName === undefined
+          ? {}
+          : { fullName: changes.fullName.trim() }),
+        ...(changes.phone === undefined
+          ? {}
+          : { phone: changes.phone?.trim() || null }),
+        reason: reason.trim(),
+      },
+      actorId,
+      meta,
+    );
     if (!user) throw new NotFoundException('User not found');
     return user;
   }
@@ -119,9 +128,12 @@ export class AdminUsersService {
     if (!current) throw new NotFoundException('User not found');
     const minimum = current.role === Role.REGISTRANT ? 8 : 12;
     if (input.password.length < minimum) {
-      throw new BadRequestException(`Password must be at least ${minimum} characters`);
+      throw new BadRequestException(
+        `Password must be at least ${minimum} characters`,
+      );
     }
-    if (!input.reason.trim()) throw new BadRequestException('Reason is required');
+    if (!input.reason.trim())
+      throw new BadRequestException('Reason is required');
     const password = await this.hashPassword(input.password);
     const user = await this.repository.resetUserPassword(
       id,
@@ -165,20 +177,11 @@ export class AdminUsersService {
   }
 
   private async hashPassword(password: string) {
-    if (Buffer.byteLength(password, 'utf8') > PASSWORD_MAX_BYTES) {
-      throw new BadRequestException(
-        `Password must be at most ${PASSWORD_MAX_BYTES} UTF-8 bytes`,
-      );
-    }
-    return bcrypt.hash(password, PASSWORD_ROUNDS);
+    assertPasswordLength(password);
+    return hashPassword(password);
   }
 
   private isUniqueConstraint(error: unknown): boolean {
-    return (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      error.code === PRISMA_ERROR_CODE.UNIQUE_CONSTRAINT
-    );
+    return isUniqueConstraint(error);
   }
 }

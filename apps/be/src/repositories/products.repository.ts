@@ -13,20 +13,27 @@ import {
   StaffPermission,
 } from '@prisma/client';
 import {
-  formatProductCode,
   isSeoEligibleProduct,
   SEO_ELIGIBLE_PRODUCT_STATUSES,
+  type ProductSortBy,
 } from '@ocop/shared';
+import { type OrderByBuilder, resolveOrderBy } from '../prisma/order-by';
 import { PrismaService } from '../prisma/prisma.service';
+import { REGISTRATION_UNIT_SELECT } from '../prisma/selects';
 import { databaseObject } from '../prisma/sql';
 import { lockEvaluationCategory } from '../utils/evaluation-result';
 import {
   MAX_ATTACHMENTS_PER_PRODUCT,
   MAX_FILES_PER_PRODUCT,
   MAX_VIDEOS_PER_PRODUCT,
+  PRODUCT_DATE_BASIS,
   PRODUCT_MUTATION_ACTOR_KIND,
+  PRODUCT_SORT_BY,
+  SORT_DIRECTION,
 } from '../constants/products';
+import type { MyProductsQueryDto } from '../dtos/products.dto';
 import { isVideoAttachmentName } from '../utils/product-files';
+import { generateNextLocalityCode } from '../utils/locality-code';
 import {
   findProductIdsMatchingCodeQuery,
   withProductCode,
@@ -36,6 +43,7 @@ import { assertCriteriaSetReady } from '../utils/category-availability';
 import { writeAudit } from '../utils/audit-log';
 import {
   buildRegistrationSnapshot,
+  extractSafeApplicationForm,
   mergeProductApplicationFormData,
   validateProductDraftWrite,
 } from '../utils/registration-snapshot';
@@ -86,6 +94,44 @@ const registrantProductInclude = {
   },
 } satisfies Prisma.ProductInclude;
 
+const ownerProductListSelect = {
+  id: true,
+  codeNumber: true,
+  registrantId: true,
+  createdById: true,
+  localityId: true,
+  name: true,
+  description: true,
+  formData: true,
+  status: true,
+  returnReason: true,
+  returnedAt: true,
+  submittedAt: true,
+  approvedAt: true,
+  completedAt: true,
+  publicationState: true,
+  publishedFinalScore: true,
+  publishedStarRating: true,
+  publishedAt: true,
+  finalScore: true,
+  starRating: true,
+  createdAt: true,
+  updatedAt: true,
+  locality: true,
+  category: {
+    select: {
+      id: true,
+      name: true,
+      isActive: true,
+      criteriaSet: { select: { isActive: true } },
+    },
+  },
+  attachments: {
+    select: { id: true, type: true, fileName: true, createdAt: true },
+    orderBy: { createdAt: 'asc' as const },
+  },
+} satisfies Prisma.ProductSelect;
+
 type ProductDraftCreate = {
   registrantId: string;
   categoryId: string;
@@ -124,50 +170,65 @@ function sanitizePublicProductResult<
   return next;
 }
 
+const MY_PRODUCT_ORDER_BY: Record<
+  ProductSortBy,
+  OrderByBuilder<Prisma.ProductOrderByWithRelationInput>
+> = {
+  [PRODUCT_SORT_BY.NAME]: (dir = SORT_DIRECTION.DESC) => [
+    { name: dir },
+    { id: dir },
+  ],
+  [PRODUCT_SORT_BY.FINAL_SCORE]: (dir = SORT_DIRECTION.DESC) => [
+    { finalScore: { sort: dir, nulls: 'last' } },
+    { id: dir },
+  ],
+  [PRODUCT_SORT_BY.SUBMITTED_AT]: (dir = SORT_DIRECTION.DESC) => [
+    { submittedAt: { sort: dir, nulls: 'last' } },
+    { updatedAt: dir },
+    { id: dir },
+  ],
+};
+
+const DEFAULT_MY_PRODUCT_ORDER_BY: OrderByBuilder<
+  Prisma.ProductOrderByWithRelationInput
+> = (dir = SORT_DIRECTION.DESC) => [{ updatedAt: dir }, { id: dir }];
+
 @Injectable()
 export class ProductsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  categoryExists(id: string) {
-    return this.prisma.productCategory
-      .count({ where: { id } })
-      .then((count) => count > 0);
-  }
-
-  listCategories() {
-    return this.prisma.productCategory
-      .findMany({
-        where: {
-          isActive: true,
-          criteriaSet: { is: { isActive: true } },
-        },
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          criteriaSet: {
-            select: {
-              isActive: true,
-              name: true,
-              source: true,
-              criteria: {
-                orderBy: { order: 'asc' },
-                select: {
-                  id: true,
-                  code: true,
-                  name: true,
-                  maxScore: true,
-                  order: true,
-                  subCriteria: {
-                    orderBy: { order: 'asc' },
-                    select: {
-                      id: true,
-                      content: true,
-                      order: true,
-                      options: {
-                        orderBy: { order: 'asc' },
-                        select: { id: true, label: true, points: true },
-                      },
+  async listCategories() {
+    const categories = await this.prisma.productCategory.findMany({
+      where: {
+        isActive: true,
+        criteriaSet: { is: { isActive: true } },
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        criteriaSet: {
+          select: {
+            isActive: true,
+            name: true,
+            source: true,
+            criteria: {
+              orderBy: { order: 'asc' },
+              select: {
+                id: true,
+                code: true,
+                name: true,
+                maxScore: true,
+                order: true,
+                subCriteria: {
+                  orderBy: { order: 'asc' },
+                  select: {
+                    id: true,
+                    content: true,
+                    order: true,
+                    options: {
+                      orderBy: { order: 'asc' },
+                      select: { id: true, label: true, points: true },
                     },
                   },
                 },
@@ -175,28 +236,27 @@ export class ProductsRepository {
             },
           },
         },
-        orderBy: [{ order: 'asc' }, { id: 'asc' }],
-      })
-      .then((categories) =>
-        categories.flatMap(({ criteriaSet, ...category }) => {
-          if (!criteriaSet) return [];
-          try {
-            assertCriteriaSetReady(criteriaSet);
-          } catch {
-            return [];
-          }
-          return [
-            {
-              ...category,
-              criteriaSet: {
-                name: criteriaSet.name,
-                source: criteriaSet.source,
-                criteria: criteriaSet.criteria,
-              },
-            },
-          ];
-        }),
-      );
+      },
+      orderBy: [{ order: 'asc' }, { id: 'asc' }],
+    });
+    return categories.flatMap(({ criteriaSet, ...category }) => {
+      if (!criteriaSet) return [];
+      try {
+        assertCriteriaSetReady(criteriaSet);
+      } catch {
+        return [];
+      }
+      return [
+        {
+          ...category,
+          criteriaSet: {
+            name: criteriaSet.name,
+            source: criteriaSet.source,
+            criteria: criteriaSet.criteria,
+          },
+        },
+      ];
+    });
   }
 
   async listPublic(input: {
@@ -252,7 +312,10 @@ export class ProductsRepository {
       this.prisma.product.findMany({
         where,
         select: publicProductSelect,
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        orderBy: [
+          { createdAt: SORT_DIRECTION.DESC },
+          { id: SORT_DIRECTION.DESC },
+        ],
         skip: (input.page - 1) * input.limit,
         take: input.limit,
       }),
@@ -264,42 +327,143 @@ export class ProductsRepository {
     };
   }
 
-  findPublicById(id: string) {
-    return this.prisma.product
-      .findFirst({
-        where: {
-          id,
-          status: {
-            in: [
-              ProductStatus.SUBMITTED,
-              ProductStatus.APPROVED,
-              ProductStatus.SCORING,
-              ProductStatus.COMPLETED,
-            ],
-          },
+  async findPublicById(id: string) {
+    const product = await this.prisma.product.findFirst({
+      where: {
+        id,
+        status: {
+          in: [
+            ProductStatus.SUBMITTED,
+            ProductStatus.APPROVED,
+            ProductStatus.SCORING,
+            ProductStatus.COMPLETED,
+          ],
         },
-        select: publicProductSelect,
-      })
-      .then((product) => product && sanitizePublicProductResult(product));
+      },
+      select: publicProductSelect,
+    });
+    return product && sanitizePublicProductResult(product);
   }
 
-  listMine(registrantId: string) {
-    return this.prisma.product
-      .findMany({
-        where: { registrantId },
-        include: registrantProductInclude,
-        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-      })
-      .then((rows) => rows.map(sanitizePublicProductResult));
+  listMine(registrantId: string, query: MyProductsQueryDto) {
+    const orderBy = resolveOrderBy(
+      query.sortBy,
+      query.sortDirection ?? SORT_DIRECTION.DESC,
+      MY_PRODUCT_ORDER_BY,
+      DEFAULT_MY_PRODUCT_ORDER_BY,
+    );
+
+    return this.prisma.$transaction(
+      async (tx) => {
+        const codeMatchIds = query.q
+          ? await findProductIdsMatchingCodeQuery(tx, query.q, {
+              registrantId,
+            })
+          : [];
+        const conditions: Prisma.ProductWhereInput[] = [{ registrantId }];
+        if (query.status) conditions.push({ status: query.status });
+        if (query.categoryId) conditions.push({ categoryId: query.categoryId });
+        if (query.registrationType) {
+          conditions.push({
+            formData: {
+              path: ['registrationType'],
+              equals: query.registrationType,
+            },
+          });
+        }
+        if (query.assessmentYear !== undefined) {
+          conditions.push({
+            formData: {
+              path: ['assessmentYear'],
+              equals: query.assessmentYear,
+            },
+          });
+        }
+        if (query.starRating) {
+          conditions.push({
+            status: ProductStatus.COMPLETED,
+            publicationState: ProductPublicationState.PUBLISHED,
+            starRating: query.starRating,
+          });
+        }
+        if (query.from && query.toExclusive) {
+          const fromDate = new Date(query.from);
+          const toDate = new Date(query.toExclusive);
+          if (query.dateBasis === PRODUCT_DATE_BASIS.COMPLETED_AT) {
+            conditions.push({ completedAt: { gte: fromDate, lt: toDate } });
+          } else {
+            conditions.push({
+              OR: [
+                { submittedAt: { gte: fromDate, lt: toDate } },
+                {
+                  submittedAt: null,
+                  updatedAt: { gte: fromDate, lt: toDate },
+                },
+              ],
+            });
+          }
+        }
+        if (query.q) {
+          conditions.push({
+            OR: [
+              { name: { contains: query.q, mode: 'insensitive' } },
+              { id: { contains: query.q, mode: 'insensitive' } },
+              ...(codeMatchIds.length ? [{ id: { in: codeMatchIds } }] : []),
+              {
+                formData: {
+                  path: ['entityName'],
+                  string_contains: query.q,
+                  mode: 'insensitive',
+                },
+              },
+            ],
+          });
+        }
+        const where: Prisma.ProductWhereInput = { AND: conditions };
+
+        const rows = await tx.product.findMany({
+          where,
+          select: ownerProductListSelect,
+          orderBy,
+          skip: (query.page - 1) * query.limit,
+          take: query.limit,
+        });
+        const total = await tx.product.count({ where });
+        const grouped = await tx.product.groupBy({
+          by: ['status'],
+          where: { registrantId },
+          _count: { _all: true },
+        });
+        const statusCounts: Record<ProductStatus, number> & { total: number } =
+          {
+            total: 0,
+            DRAFT: 0,
+            SUBMITTED: 0,
+            RETURNED: 0,
+            APPROVED: 0,
+            SCORING: 0,
+            COMPLETED: 0,
+          };
+        for (const item of grouped) {
+          statusCounts[item.status] = item._count._all;
+          statusCounts.total += item._count._all;
+        }
+        return {
+          data: rows.map(sanitizePublicProductResult),
+          total,
+          statusCounts,
+        };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
   }
 
-  findMine(id: string, registrantId: string) {
-    return this.prisma.product
-      .findFirst({
-        where: { id, registrantId },
-        include: registrantProductInclude,
-      })
-      .then((product) => product && sanitizePublicProductResult(product));
+  async findMine(id: string, registrantId: string) {
+    const product = await this.prisma.product.findFirst({
+      where: { id, registrantId },
+      include: registrantProductInclude,
+    });
+    return product && sanitizePublicProductResult(product);
   }
 
   findForMutation(id: string, actor: ProductMutationActor) {
@@ -310,94 +474,97 @@ export class ProductsRepository {
   }
 
   create(input: ProductDraftCreate, actor: ProductMutationActor) {
-    return this.prisma.$transaction(async (tx) => {
-      await this.lockCategoryRows(tx, [input.categoryId]);
-      await this.assertActiveCategory(tx, input.categoryId);
-      const registrantId =
-        actor.kind === PRODUCT_MUTATION_ACTOR_KIND.OWNER
-          ? actor.id
-          : input.registrantId;
-      if (actor.kind === PRODUCT_MUTATION_ACTOR_KIND.MANAGER) {
-        await tx.$queryRaw(
-          Prisma.sql`SELECT "id" FROM ${databaseObject('users')} WHERE "id" = ${registrantId} FOR UPDATE`,
-        );
-        const registrant = await tx.user.findUnique({
-          where: { id: registrantId },
-          select: {
-            role: true,
-            roles: true,
-            staffPermissions: true,
-            verified: true,
-            isActive: true,
-          },
-        });
-        const hasRegistrantRole =
-          registrant &&
-          registrant.role !== Role.JUDGE &&
-          !registrant.staffPermissions?.includes(StaffPermission.SCORE) &&
-          (registrant.role === Role.REGISTRANT ||
-            Boolean(registrant.roles?.includes(Role.REGISTRANT)));
-        if (
-          !registrant ||
-          !hasRegistrantRole ||
-          !registrant.verified ||
-          !registrant.isActive
-        ) {
-          throw new NotFoundException('Active verified registrant not found');
+    return this.prisma.$transaction(
+      async (tx) => {
+        await this.lockCategoryRows(tx, [input.categoryId]);
+        await this.assertActiveCategory(tx, input.categoryId);
+        const registrantId =
+          actor.kind === PRODUCT_MUTATION_ACTOR_KIND.OWNER
+            ? actor.id
+            : input.registrantId;
+        if (actor.kind === PRODUCT_MUTATION_ACTOR_KIND.MANAGER) {
+          await tx.$queryRaw(
+            Prisma.sql`SELECT "id" FROM ${databaseObject('users')} WHERE "id" = ${registrantId} FOR UPDATE`,
+          );
+          const registrant = await tx.user.findUnique({
+            where: { id: registrantId },
+            select: {
+              role: true,
+              roles: true,
+              staffPermissions: true,
+              verified: true,
+              isActive: true,
+            },
+          });
+          const hasRegistrantRole =
+            registrant &&
+            registrant.role !== Role.JUDGE &&
+            !registrant.staffPermissions?.includes(StaffPermission.SCORE) &&
+            (registrant.role === Role.REGISTRANT ||
+              Boolean(registrant.roles?.includes(Role.REGISTRANT)));
+          if (
+            !registrant ||
+            !hasRegistrantRole ||
+            !registrant.verified ||
+            !registrant.isActive
+          ) {
+            throw new NotFoundException('Active verified registrant not found');
+          }
         }
-      }
-      const validated = validateProductDraftWrite({
-        name: input.name,
-        categoryId: input.categoryId,
-        localityId: input.localityId,
-        formData: input.formData,
-      });
-      const resolvedLocality = await this.resolveOrCreateLocality(
-        tx,
-        input.localityId,
-        validated.formData,
-      );
-      if (!resolvedLocality) {
-        throw new BadRequestException(
-          'Không thể lưu hồ sơ: thiếu địa bàn hành chính (xã/phường).',
-        );
-      }
-      const created = await tx.product.create({
-        data: {
-          registrantId,
-          categoryId: validated.categoryId,
-          name: validated.name,
-          description: input.description,
-          formData: validated.formData as unknown as Prisma.InputJsonValue,
-          localityId: resolvedLocality.id,
-          createdById: actor.id,
-        },
-        include: registrantProductInclude,
-      });
-      await recordProductStatusEvent(
-        tx,
-        created.id,
-        null,
-        ProductStatus.DRAFT,
-        actor.id,
-        created.createdAt,
-        actor.kind === PRODUCT_MUTATION_ACTOR_KIND.MANAGER
-          ? actor.reason
-          : undefined,
-      );
-      if (actor.kind === PRODUCT_MUTATION_ACTOR_KIND.MANAGER) {
-        await writeAudit(tx, {
-          actorId: actor.id,
-          action: 'product.create_on_behalf',
-          entityType: 'Product',
-          entityId: created.id,
-          afterData: this.auditProduct(created),
-          reason: actor.reason,
-          ...actor.meta,
+        const validated = validateProductDraftWrite({
+          name: input.name,
+          categoryId: input.categoryId,
+          localityId: input.localityId,
+          formData: input.formData,
         });
-      }
-      return sanitizePublicProductResult(created);
-    }, { timeout: 15000, maxWait: 10000 });
+        const resolvedLocality = await this.resolveOrCreateLocality(
+          tx,
+          input.localityId,
+          validated.formData,
+        );
+        if (!resolvedLocality) {
+          throw new BadRequestException(
+            'Không thể lưu hồ sơ: thiếu địa bàn hành chính (xã/phường).',
+          );
+        }
+        const created = await tx.product.create({
+          data: {
+            registrantId,
+            categoryId: validated.categoryId,
+            name: validated.name,
+            description: input.description,
+            formData: validated.formData as unknown as Prisma.InputJsonValue,
+            localityId: resolvedLocality.id,
+            createdById: actor.id,
+          },
+          include: registrantProductInclude,
+        });
+        await recordProductStatusEvent(
+          tx,
+          created.id,
+          null,
+          ProductStatus.DRAFT,
+          actor.id,
+          created.createdAt,
+          actor.kind === PRODUCT_MUTATION_ACTOR_KIND.MANAGER
+            ? actor.reason
+            : undefined,
+        );
+        if (actor.kind === PRODUCT_MUTATION_ACTOR_KIND.MANAGER) {
+          await writeAudit(tx, {
+            actorId: actor.id,
+            action: 'product.create_on_behalf',
+            entityType: 'Product',
+            entityId: created.id,
+            afterData: this.auditProduct(created),
+            reason: actor.reason,
+            ...actor.meta,
+          });
+        }
+        return sanitizePublicProductResult(created);
+      },
+      { timeout: 15000, maxWait: 10000 },
+    );
   }
 
   async updateDraft(
@@ -501,18 +668,16 @@ export class ProductsRepository {
           where: { id },
           include: registrantProductInclude,
         });
-        if (actor.kind === PRODUCT_MUTATION_ACTOR_KIND.MANAGER) {
-          await writeAudit(tx, {
-            actorId: actor.id,
-            action: 'product.update_on_behalf',
-            entityType: 'Product',
-            entityId: id,
+        await this.writeManagerProductAudit(
+          tx,
+          actor,
+          'product.update_on_behalf',
+          id,
+          {
             beforeData: this.auditProduct(current),
             afterData: this.auditProduct(product),
-            reason: actor.reason,
-            ...actor.meta,
-          });
-        }
+          },
+        );
         return sanitizePublicProductResult(product);
       }
       const updated = await tx.product.updateMany({
@@ -528,18 +693,16 @@ export class ProductsRepository {
         where: { id },
         include: registrantProductInclude,
       });
-      if (actor.kind === PRODUCT_MUTATION_ACTOR_KIND.MANAGER) {
-        await writeAudit(tx, {
-          actorId: actor.id,
-          action: 'product.update_on_behalf',
-          entityType: 'Product',
-          entityId: id,
+      await this.writeManagerProductAudit(
+        tx,
+        actor,
+        'product.update_on_behalf',
+        id,
+        {
           beforeData: this.auditProduct(current),
           afterData: this.auditProduct(product),
-          reason: actor.reason,
-          ...actor.meta,
-        });
-      }
+        },
+      );
       return sanitizePublicProductResult(product);
     });
   }
@@ -591,54 +754,8 @@ export class ProductsRepository {
 
   async submitDraft(id: string, actor: ProductMutationActor) {
     return this.prisma.$transaction(async (tx) => {
-      const initial = await (
-        typeof tx.product.findUnique === 'function'
-          ? tx.product.findUnique({
-              where: { id, ...this.actorWhere(actor) },
-              select: { categoryId: true },
-            })
-          : tx.product.findFirst({
-              where: { ...this.actorWhere(actor), id },
-              select: { categoryId: true },
-            })
-      );
-      if (!initial) return null;
-      await this.lockCategoryRows(tx, [initial.categoryId]);
-      await this.lockProduct(tx, id);
-      const product = await tx.product.findFirst({
-        where: {
-          ...this.actorWhere(actor),
-          id,
-          status: { in: editableStatuses },
-        },
-        select: {
-          id: true,
-          codeNumber: true,
-          registrantId: true,
-          categoryId: true,
-          localityId: true,
-          name: true,
-          description: true,
-          status: true,
-          formData: true,
-          category: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          registrant: {
-            select: { id: true, fullName: true, email: true, phone: true },
-          },
-        },
-      });
+      const product = await this.lockAndLoadSubmitProduct(tx, id, actor);
       if (!product) return null;
-      if (product.categoryId !== initial.categoryId) {
-        throw new ConflictException(
-          'Product category changed while submitting',
-        );
-      }
-      await this.assertActiveCategory(tx, product.categoryId);
       const locality = await this.resolveOrCreateLocality(
         tx,
         product.localityId,
@@ -689,12 +806,12 @@ export class ProductsRepository {
           ? actor.reason
           : undefined,
       );
-      if (actor.kind === PRODUCT_MUTATION_ACTOR_KIND.MANAGER) {
-        await writeAudit(tx, {
-          actorId: actor.id,
-          action: 'product.submit_on_behalf',
-          entityType: 'Product',
-          entityId: id,
+      await this.writeManagerProductAudit(
+        tx,
+        actor,
+        'product.submit_on_behalf',
+        id,
+        {
           beforeData: {
             id,
             registrantId: product.registrantId,
@@ -707,10 +824,8 @@ export class ProductsRepository {
             localityId: locality.id,
             status: ProductStatus.SUBMITTED,
           },
-          reason: actor.reason,
-          ...actor.meta,
-        });
-      }
+        },
+      );
       const result = await tx.product.findUniqueOrThrow({
         where: { id },
         include: registrantProductInclude,
@@ -746,16 +861,10 @@ export class ProductsRepository {
         select: { id: true },
       });
       if (!product) return null;
-      const existingAttachments =
-        typeof tx.attachment.findMany === 'function'
-          ? await tx.attachment.findMany({
-              where: { productId },
-              select: { fileName: true },
-            })
-          : Array.from(
-              { length: await tx.attachment.count({ where: { productId } }) },
-              (_, i) => ({ fileName: `file-${i}.png` }),
-            );
+      const existingAttachments = await tx.attachment.findMany({
+        where: { productId },
+        select: { fileName: true },
+      });
       const videoCount = existingAttachments.filter((att) =>
         isVideoAttachmentName(att.fileName),
       ).length;
@@ -888,12 +997,77 @@ export class ProductsRepository {
         ...(canManage
           ? {}
           : {
-              type: AttachmentType.EVIDENCE,
               product: { is: { status: { not: ProductStatus.DRAFT } } },
             }),
       },
       select: { filePath: true, fileName: true },
     });
+  }
+
+  private async writeManagerProductAudit(
+    tx: Prisma.TransactionClient,
+    actor: ProductMutationActor,
+    action: string,
+    entityId: string,
+    data: { beforeData?: unknown; afterData?: unknown },
+  ) {
+    if (actor.kind !== PRODUCT_MUTATION_ACTOR_KIND.MANAGER) return;
+    await writeAudit(tx, {
+      actorId: actor.id,
+      action,
+      entityType: 'Product',
+      entityId,
+      ...data,
+      reason: actor.reason,
+      ...actor.meta,
+    });
+  }
+
+  private async lockAndLoadSubmitProduct(
+    tx: Prisma.TransactionClient,
+    id: string,
+    actor: ProductMutationActor,
+  ) {
+    const initial = await tx.product.findFirst({
+      where: { ...this.actorWhere(actor), id },
+      select: { categoryId: true },
+    });
+    if (!initial) return null;
+    await this.lockCategoryRows(tx, [initial.categoryId]);
+    await this.lockProduct(tx, id);
+    const product = await tx.product.findFirst({
+      where: {
+        ...this.actorWhere(actor),
+        id,
+        status: { in: editableStatuses },
+      },
+      select: {
+        id: true,
+        codeNumber: true,
+        registrantId: true,
+        categoryId: true,
+        localityId: true,
+        name: true,
+        description: true,
+        status: true,
+        formData: true,
+        category: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        registrant: {
+          select: { id: true, fullName: true, email: true, phone: true },
+        },
+      },
+    });
+    if (!product) return null;
+    if (product.categoryId !== initial.categoryId) {
+      throw new ConflictException('Product category changed while submitting');
+    }
+    await this.assertActiveCategory(tx, product.categoryId);
+    return product;
   }
 
   private async assertActiveCategory(tx: Prisma.TransactionClient, id: string) {
@@ -992,24 +1166,24 @@ export class ProductsRepository {
     });
     if (existing) {
       if (!existing.isActive) {
-        return tx.locality.update({
-          where: { id: existing.id },
-          data: { isActive: true },
-        });
+        throw new ConflictException('Locality is not currently available');
       }
       return existing;
     }
 
     const allCodes = await tx.locality.findMany({ select: { code: true } });
     const usedCodes = new Set(allCodes.map((r) => r.code.toUpperCase()));
-    let code = localityCode ? localityCode.toUpperCase() : '';
-    if (!code || usedCodes.has(code)) {
-      let seq = allCodes.length + 1;
-      while (usedCodes.has(`XP${seq}`)) {
-        seq += 1;
-      }
-      code = `XP${seq}`;
-    }
+    const normalizedRequestedCode = localityCode.toUpperCase();
+    const validRequested =
+      normalizedRequestedCode &&
+      normalizedRequestedCode.length <= 50 &&
+      !usedCodes.has(normalizedRequestedCode);
+    const code = validRequested
+      ? normalizedRequestedCode
+      : await generateNextLocalityCode(
+          tx,
+          allCodes.map((r) => r.code),
+        );
 
     return tx.locality.create({
       data: {
@@ -1048,7 +1222,7 @@ export class ProductsRepository {
       status: product.status,
       ...(product.formData === undefined
         ? {}
-        : { formData: this.auditFormData(product.formData) }),
+        : { formData: extractSafeApplicationForm(product.formData) }),
     };
   }
 
@@ -1056,19 +1230,7 @@ export class ProductsRepository {
     return this.prisma.registrationUnit.findMany({
       where: { registrantId },
       orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
-      select: {
-        id: true,
-        entityName: true,
-        representativeName: true,
-        representativeTitle: true,
-        contactAddress: true,
-        provinceName: true,
-        localityName: true,
-        localityCode: true,
-        phone: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: REGISTRATION_UNIT_SELECT,
     });
   }
 
@@ -1097,19 +1259,7 @@ export class ProductsRepository {
         localityCode: input.localityCode,
         phone: input.phone,
       },
-      select: {
-        id: true,
-        entityName: true,
-        representativeName: true,
-        representativeTitle: true,
-        contactAddress: true,
-        provinceName: true,
-        localityName: true,
-        localityCode: true,
-        phone: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: REGISTRATION_UNIT_SELECT,
     });
   }
 
@@ -1144,19 +1294,7 @@ export class ProductsRepository {
         localityCode: input.localityCode,
         phone: input.phone,
       },
-      select: {
-        id: true,
-        entityName: true,
-        representativeName: true,
-        representativeTitle: true,
-        contactAddress: true,
-        provinceName: true,
-        localityName: true,
-        localityCode: true,
-        phone: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: REGISTRATION_UNIT_SELECT,
     });
   }
 
@@ -1165,34 +1303,5 @@ export class ProductsRepository {
       where: { id, registrantId },
     });
     return deleted.count > 0;
-  }
-
-  private auditFormData(value: unknown) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-    const source = value as Record<string, unknown>;
-    const allowed = [
-      'entityName',
-      'representativeName',
-      'representativeTitle',
-      'contactAddress',
-      'provinceName',
-      'localityName',
-      'localityCode',
-      'phone',
-      'email',
-      'registrationType',
-      'sampleQuantity',
-      'assessmentYear',
-      'declarationAccepted',
-    ];
-    return Object.fromEntries(
-      allowed.flatMap((key) => {
-        const field = source[key];
-        return field === null ||
-          ['string', 'number', 'boolean'].includes(typeof field)
-          ? [[key, field]]
-          : [];
-      }),
-    );
   }
 }

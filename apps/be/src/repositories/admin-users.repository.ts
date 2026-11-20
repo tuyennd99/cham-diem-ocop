@@ -1,6 +1,17 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, Role, StaffPermission } from '@prisma/client';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma, ProductStatus, Role, StaffPermission } from '@prisma/client';
+import type { AdminUserSortBy, OrganizationUnitSortBy } from '@ocop/shared';
 import { USER_KIND } from '../constants/auth';
+import {
+  ADMIN_USER_SORT_BY,
+  ORGANIZATION_UNIT_SORT_BY,
+  SORT_DIRECTION,
+} from '../constants/products';
 import type {
   AdminUsersQueryDto,
   CreateAdminUserDto,
@@ -10,6 +21,12 @@ import type {
   UpdateAdminUserStatusDto,
   UpdateOrganizationUnitDto,
 } from '../dtos/admin-users.dto';
+import {
+  computePaginationSkip,
+  computeSafePaginationSkip,
+  MAX_DB_INT4,
+} from '../dtos/common.dto';
+import { type OrderByBuilder, resolveOrderBy } from '../prisma/order-by';
 import { PrismaService } from '../prisma/prisma.service';
 import { databaseObject } from '../prisma/sql';
 import type { RequestMeta } from '../types/auth';
@@ -20,6 +37,77 @@ import {
   createStaff,
   lockStaffMutation,
 } from '../utils/staff-access';
+
+const ADMIN_USER_ORDER_BY: Record<
+  AdminUserSortBy,
+  OrderByBuilder<Prisma.UserOrderByWithRelationInput>
+> = {
+  [ADMIN_USER_SORT_BY.FULL_NAME]: (dir = SORT_DIRECTION.ASC) => [
+    { fullName: dir },
+    { id: SORT_DIRECTION.ASC },
+  ],
+  [ADMIN_USER_SORT_BY.EMAIL]: (dir = SORT_DIRECTION.ASC) => [
+    { email: dir },
+    { id: SORT_DIRECTION.ASC },
+  ],
+  [ADMIN_USER_SORT_BY.UNIT]: (dir = SORT_DIRECTION.ASC) => [
+    { organizationUnit: { name: dir } },
+    { id: SORT_DIRECTION.ASC },
+  ],
+  [ADMIN_USER_SORT_BY.VERIFIED]: (dir = SORT_DIRECTION.ASC) => [
+    { verified: dir },
+    { id: SORT_DIRECTION.ASC },
+  ],
+  [ADMIN_USER_SORT_BY.IS_ACTIVE]: (dir = SORT_DIRECTION.ASC) => [
+    { isActive: dir },
+    { id: SORT_DIRECTION.ASC },
+  ],
+  [ADMIN_USER_SORT_BY.CREATED_AT]: (dir = SORT_DIRECTION.DESC) => [
+    { createdAt: dir },
+    { id: dir },
+  ],
+};
+
+const DEFAULT_ADMIN_USER_ORDER_BY: Prisma.UserOrderByWithRelationInput[] = [
+  { createdAt: SORT_DIRECTION.DESC },
+  { id: SORT_DIRECTION.DESC },
+];
+
+const ORGANIZATION_UNIT_ORDER_BY: Record<
+  OrganizationUnitSortBy,
+  OrderByBuilder<Prisma.OrganizationUnitOrderByWithRelationInput>
+> = {
+  [ORGANIZATION_UNIT_SORT_BY.CODE]: (dir = SORT_DIRECTION.ASC) => [
+    { code: dir },
+    { id: SORT_DIRECTION.ASC },
+  ],
+  [ORGANIZATION_UNIT_SORT_BY.NAME]: (dir = SORT_DIRECTION.ASC) => [
+    { name: dir },
+    { id: SORT_DIRECTION.ASC },
+  ],
+  [ORGANIZATION_UNIT_SORT_BY.MANAGING_AGENCY]: (dir = SORT_DIRECTION.ASC) => [
+    { managingAgency: { name: dir } },
+    { order: SORT_DIRECTION.ASC },
+    { id: SORT_DIRECTION.ASC },
+  ],
+  [ORGANIZATION_UNIT_SORT_BY.DESCRIPTION]: (dir = SORT_DIRECTION.ASC) => [
+    { description: { sort: dir, nulls: 'last' } },
+    { order: SORT_DIRECTION.ASC },
+    { id: SORT_DIRECTION.ASC },
+  ],
+  [ORGANIZATION_UNIT_SORT_BY.IS_ACTIVE]: (dir = SORT_DIRECTION.ASC) => [
+    { isActive: dir },
+    { order: SORT_DIRECTION.ASC },
+    { id: SORT_DIRECTION.ASC },
+  ],
+  [ORGANIZATION_UNIT_SORT_BY.ORDER]: (dir = SORT_DIRECTION.ASC) => [
+    { order: dir },
+    { id: SORT_DIRECTION.ASC },
+  ],
+};
+
+const DEFAULT_ORGANIZATION_UNIT_ORDER_BY: Prisma.OrganizationUnitOrderByWithRelationInput[] =
+  [{ order: SORT_DIRECTION.ASC }, { id: SORT_DIRECTION.ASC }];
 
 const unitSummarySelect = {
   id: true,
@@ -72,11 +160,10 @@ export class AdminUsersRepository {
       isActive,
       verified,
       kind,
+      sortBy,
+      sortDirection,
     } = query;
-    const skip = (page - 1) * limit;
-    if (!Number.isSafeInteger(page) || !Number.isSafeInteger(skip)) {
-      throw new BadRequestException('Pagination exceeds the safe integer range');
-    }
+    const skip = computePaginationSkip(page, limit);
     const conditions: Prisma.UserWhereInput[] = [];
     if (q) {
       conditions.push({
@@ -108,24 +195,32 @@ export class AdminUsersRepository {
     }
     const where: Prisma.UserWhereInput = {
       ...(kind
-        ? {
-            role:
-              kind === USER_KIND.STAFF
-                ? { not: Role.REGISTRANT }
-                : Role.REGISTRANT,
-          }
+        ? kind === USER_KIND.STAFF
+          ? { role: { not: Role.REGISTRANT } }
+          : {
+              OR: [
+                { role: Role.REGISTRANT },
+                { roles: { has: Role.REGISTRANT } },
+              ],
+            }
         : {}),
       ...(organizationUnitId ? { organizationUnitId } : {}),
       ...(isActive === undefined ? {} : { isActive }),
       ...(verified === undefined ? {} : { verified }),
       ...(conditions.length ? { AND: conditions } : {}),
     };
+    const orderBy = resolveOrderBy(
+      sortBy,
+      sortDirection,
+      ADMIN_USER_ORDER_BY,
+      DEFAULT_ADMIN_USER_ORDER_BY,
+    );
     const [data, total] = await this.prisma.$transaction(
       [
         this.prisma.user.findMany({
           where,
           select: adminUserSelect,
-          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          orderBy,
           skip,
           take: limit,
         }),
@@ -196,7 +291,6 @@ export class AdminUsersRepository {
   ) {
     return this.prisma.$transaction(
       async (tx) => {
-        await lockStaffMutation(tx);
         await assertStaffManager(tx, actorId);
         const current = await tx.user.findUnique({
           where: { id },
@@ -211,14 +305,93 @@ export class AdminUsersRepository {
           },
         });
         if (!current) return null;
-        if (current.role !== Role.REGISTRANT || current.staffPermissions.length > 0) {
+        if (
+          current.role === Role.REGISTRANT &&
+          current.staffPermissions.length === 0
+        ) {
+          await tx.$queryRaw(
+            Prisma.sql`SELECT "id" FROM ${databaseObject('users')} WHERE "id" = ${id} FOR UPDATE`,
+          );
+          const before = await tx.user.findUnique({
+            where: { id },
+            select: {
+              id: true,
+              role: true,
+              roles: true,
+              staffPermissions: true,
+              organizationUnitId: true,
+              isActive: true,
+              verified: true,
+            },
+          });
+          if (!before) return null;
+          if (
+            before.role === Role.REGISTRANT &&
+            before.staffPermissions.length === 0
+          ) {
+            if (before.isActive === input.isActive) {
+              return tx.user.findUnique({
+                where: { id },
+                select: adminUserSelect,
+              });
+            }
+            const after = await tx.user.update({
+              where: { id },
+              data: {
+                isActive: input.isActive,
+                tokenVersion: { increment: 1 },
+              },
+              select: adminUserSelect,
+            });
+            await writeAudit(tx, {
+              actorId,
+              action: 'user.status_update',
+              entityType: 'User',
+              entityId: id,
+              beforeData: {
+                role: before.role,
+                isActive: before.isActive,
+                verified: before.verified,
+              },
+              afterData: {
+                role: after.role,
+                isActive: after.isActive,
+                verified: after.verified,
+              },
+              reason: input.reason,
+              requestId: meta.requestId,
+              ipAddress: meta.ipAddress,
+              userAgent: meta.userAgent,
+            });
+            return after;
+          }
+        }
+        await lockStaffMutation(tx);
+        await assertStaffManager(tx, actorId);
+        const lockedCurrent = await tx.user.findUnique({
+          where: { id },
+          select: {
+            id: true,
+            role: true,
+            roles: true,
+            staffPermissions: true,
+            organizationUnitId: true,
+            isActive: true,
+            verified: true,
+          },
+        });
+        if (!lockedCurrent) return null;
+        if (
+          lockedCurrent.role !== Role.REGISTRANT ||
+          lockedCurrent.staffPermissions.length > 0
+        ) {
           await applyStaffAccess(
             tx,
             id,
             {
-              staffPermissions: current.staffPermissions,
-              roles: current.roles,
-              organizationUnitId: current.organizationUnitId,
+              staffPermissions: lockedCurrent.staffPermissions,
+              roles: lockedCurrent.roles,
+              organizationUnitId: lockedCurrent.organizationUnitId,
               isActive: input.isActive,
               reason: input.reason,
             },
@@ -228,15 +401,7 @@ export class AdminUsersRepository {
           );
           return tx.user.findUnique({ where: { id }, select: adminUserSelect });
         }
-        await tx.$queryRaw(
-          Prisma.sql`SELECT "id" FROM ${databaseObject('users')} WHERE "id" = ${id} FOR UPDATE`,
-        );
-        const before = await tx.user.findUnique({
-          where: { id },
-          select: { id: true, role: true, isActive: true, verified: true },
-        });
-        if (!before) return null;
-        if (before.isActive === input.isActive) {
+        if (lockedCurrent.isActive === input.isActive) {
           return tx.user.findUnique({ where: { id }, select: adminUserSelect });
         }
         const after = await tx.user.update({
@@ -249,7 +414,11 @@ export class AdminUsersRepository {
           action: 'user.status_update',
           entityType: 'User',
           entityId: id,
-          beforeData: before,
+          beforeData: {
+            role: lockedCurrent.role,
+            isActive: lockedCurrent.isActive,
+            verified: lockedCurrent.verified,
+          },
           afterData: {
             role: after.role,
             isActive: after.isActive,
@@ -311,13 +480,16 @@ export class AdminUsersRepository {
   }
 
   async listOrganizationUnits(query: OrganizationUnitsQueryDto) {
-    const { page, limit, q, isActive, managingAgencyId } = query;
-    const skip = (page - 1) * limit;
-    if (!Number.isSafeInteger(page) || !Number.isSafeInteger(skip)) {
-      throw new BadRequestException(
-        'Pagination exceeds the safe integer range',
-      );
-    }
+    const {
+      page,
+      limit,
+      q,
+      isActive,
+      managingAgencyId,
+      sortBy,
+      sortDirection,
+    } = query;
+    const skip = computeSafePaginationSkip(page, limit);
     const where: Prisma.OrganizationUnitWhereInput = {
       isActive,
       ...(managingAgencyId ? { managingAgencyId } : {}),
@@ -330,12 +502,24 @@ export class AdminUsersRepository {
           }
         : {}),
     };
+    if (skip > MAX_DB_INT4) {
+      return {
+        data: [],
+        total: await this.prisma.organizationUnit.count({ where }),
+      };
+    }
+    const orderBy = resolveOrderBy(
+      sortBy,
+      sortDirection,
+      ORGANIZATION_UNIT_ORDER_BY,
+      DEFAULT_ORGANIZATION_UNIT_ORDER_BY,
+    );
     const [data, total] = await this.prisma.$transaction(
       [
         this.prisma.organizationUnit.findMany({
           where,
           select: organizationUnitSelect,
-          orderBy: [{ order: 'asc' }, { id: 'asc' }],
+          orderBy,
           skip,
           take: limit,
         }),
@@ -356,10 +540,12 @@ export class AdminUsersRepository {
       if (data.managingAgencyId) {
         const agency = await tx.managingAgency.findUnique({
           where: { id: data.managingAgencyId },
-          select: { id: true },
+          select: { id: true, isActive: true },
         });
-        if (!agency) {
-          throw new BadRequestException('Managing agency not found');
+        if (!agency || !agency.isActive) {
+          throw new BadRequestException(
+            'Managing agency is inactive or not found',
+          );
         }
       }
       const unit = await tx.organizationUnit.create({
@@ -398,10 +584,53 @@ export class AdminUsersRepository {
       if (changes.managingAgencyId) {
         const agency = await tx.managingAgency.findUnique({
           where: { id: changes.managingAgencyId },
+          select: { id: true, isActive: true },
+        });
+        if (!agency || !agency.isActive) {
+          throw new BadRequestException(
+            'Managing agency is inactive or not found',
+          );
+        }
+      }
+      if (before.isActive && changes.isActive === false) {
+        const unitJudges = await tx.user.findMany({
+          where: {
+            organizationUnitId: id,
+            role: { not: Role.REGISTRANT },
+            staffPermissions: { has: StaffPermission.SCORE },
+            isActive: true,
+            verified: true,
+          },
           select: { id: true },
         });
-        if (!agency) {
-          throw new BadRequestException('Managing agency not found');
+        if (unitJudges.length > 0) {
+          const judgeIds = unitJudges.map((j) => j.id);
+          const openStatuses = [
+            ProductStatus.SUBMITTED,
+            ProductStatus.APPROVED,
+            ProductStatus.SCORING,
+          ];
+          const openProductAssignments = await tx.productJudgeAssignment.count({
+            where: {
+              judgeId: { in: judgeIds },
+              isActive: true,
+              product: { status: { in: openStatuses } },
+            },
+          });
+          const openCategoryAssignments = await tx.product.count({
+            where: {
+              status: { in: openStatuses },
+              judgeAssignments: { none: {} },
+              category: {
+                assignments: { some: { judgeId: { in: judgeIds } } },
+              },
+            },
+          });
+          if (openProductAssignments > 0 || openCategoryAssignments > 0) {
+            throw new ConflictException(
+              'Reassign open products before deactivating organization unit',
+            );
+          }
         }
       }
       const after = await tx.organizationUnit.update({

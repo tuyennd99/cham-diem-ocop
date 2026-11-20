@@ -1,5 +1,7 @@
 # Kế hoạch sửa lỗi & chuẩn hóa Backend (`@ocop/api`)
 
+> **Trạng thái (19/11/2026):** Task 1–3 đã hoàn thành. Toàn bộ các hạng mục còn lại (Task 4–8) đã được **hợp nhất** cùng các phát hiện rà soát backend (Đợt 1–3) vào nguồn chân lý duy nhất tại [`docs/superpowers/specs/2026-11-18-codebase-optimization-and-remediation-spec.md`](docs/superpowers/specs/2026-11-18-codebase-optimization-and-remediation-spec.md) theo lộ trình 4 gói (**Gói 0 → Gói A → Gói B → Gói C**). File này được giữ lại để lưu dấu mốc Task 1–3 đã hoàn thành.
+
 ## Goal
 Khắc phục các vấn đề bảo mật, phân lớp, cấu hình TypeScript/ESLint và đồng bộ tài liệu/test DB dùng trực tiếp `DATABASE_URL` cho `apps/be`.
 

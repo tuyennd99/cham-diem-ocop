@@ -8,7 +8,19 @@ import type {
 } from '@ocop/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { Eye, Filter, Inbox, Pencil, Plus, RotateCcw, Send, Tag, Trash2 } from 'lucide-react';
+import {
+  CheckCircle2,
+  Eye,
+  Filter,
+  Inbox,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Send,
+  Tag,
+  Trash2,
+  Undo2,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import AlertError from '@/components/alert-error';
 import { ConfirmDialog } from '@/components/confirm-dialog';
@@ -29,10 +41,19 @@ import {
   ComboboxTrigger,
 } from '@/components/ui/combobox';
 import { DataTable, type DataTableColumnDef } from '@/components/ui/data-table';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { myProductsApi } from '../../api';
+import { adminProductsApi, myProductsApi } from '../../api';
 import {
   ADMIN_MODAL_ACTION,
   ALL,
@@ -55,6 +76,7 @@ import { queryKeys } from '../../constants/query-key';
 import { usePaginatedList } from '../../hooks/use-paginated-list';
 import { PageContainer, PageHeader } from '../../layouts';
 import {
+  formatDate,
   nextVietnameseDayIso,
   vietnameseDateInput,
   vietnameseDayRange,
@@ -64,6 +86,7 @@ import {
 import {
   parseAdminProductSearch,
   toAdminProductApiQuery,
+  toMyProductApiQuery,
   type AdminProductSearch,
 } from '../../lib/admin-search';
 import { ADMINISTRATIVE_PROVINCES } from '../../lib/administrative-divisions';
@@ -73,7 +96,6 @@ import {
   displayProductCode,
   formatExactScore,
   formatStarRatingLabel,
-  matchesProductSearchKeyword,
 } from '../../lib/print-format';
 import { getSavedProductSubmitIssues } from '../../lib/save-product-draft';
 import { hasStaffPermission } from '../../lib/session-contract';
@@ -184,13 +206,18 @@ export function AdminProductsPage({
   const [filterError, setFilterError] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // Owner-specific draft actions (submit / delete)
+  // Owner-specific draft actions (submit / delete) and Chair/Admin quick approve / return
   const [actionError, setActionError] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirmState, setConfirmState] = useState<{
     mode: typeof ADMIN_MODAL_ACTION.SUBMIT | typeof ADMIN_MODAL_ACTION.DELETE;
     product: RegistrantProduct;
   } | null>(null);
+  const [adminActionState, setAdminActionState] = useState<{
+    mode: typeof ADMIN_MODAL_ACTION.APPROVE | typeof ADMIN_MODAL_ACTION.RETURN;
+    product: AdminProductListItem;
+  } | null>(null);
+  const [adminActionReason, setAdminActionReason] = useState('');
   const [previewGallery, setPreviewGallery] = useState<{
     items: ImagePreviewItem[];
     index: number;
@@ -208,13 +235,7 @@ export function AdminProductsPage({
   const [localityPage, setLocalityPage] = useState(1);
   const [selectedLocality, setSelectedLocality] = useState<LocalityRecord | null>(null);
 
-  const adminCategoriesQuery = useAdminCategories(
-    {
-      page: 1,
-      limit: 100,
-    },
-    !isOwner,
-  );
+  const adminCategoriesQuery = useAdminCategories({}, !isOwner);
   const publicCategoriesQuery = useCategories(isOwner);
   const selectedCategoryDetail = useAdminCategoryDetail(
     !isOwner ? (draftFilters.categoryId ?? appliedSearch.categoryId ?? null) : null,
@@ -230,8 +251,9 @@ export function AdminProductsPage({
   );
 
   const apiQuery = toAdminProductApiQuery(appliedSearch);
+  const ownerApiQuery = toMyProductApiQuery(appliedSearch);
   const adminListQuery = useAdminProductList(adminMode, canManage, apiQuery, !isOwner);
-  const ownerListQuery = useMyProducts(isOwner);
+  const ownerListQuery = useMyProducts(ownerApiQuery, isOwner);
 
   const loadError = isOwner ? ownerListQuery.error : adminListQuery.error;
   const loading = isOwner ? ownerListQuery.isPending : adminListQuery.isPending;
@@ -245,99 +267,24 @@ export function AdminProductsPage({
   const localities = localityQuery.data?.data ?? [];
   const localityMeta = localityQuery.data?.meta;
 
-  const ownerStatusCounts = useMemo(() => {
-    const counts: Record<ProductStatus, number> & { total: number } = {
-      total: 0,
-      DRAFT: 0,
-      SUBMITTED: 0,
-      RETURNED: 0,
-      APPROVED: 0,
-      SCORING: 0,
-      COMPLETED: 0,
-    };
-    if (!isOwner) return counts;
-    for (const item of ownerListQuery.data ?? []) {
-      counts.total += 1;
-      if (item.status in counts) {
-        counts[item.status] += 1;
-      }
-    }
-    return counts;
-  }, [isOwner, ownerListQuery.data]);
-
-  const ownerFilteredResult = useMemo(() => {
-    if (!isOwner) return { rows: [] as ProductRowItem[], total: 0, page: 1 };
-    const source = ownerListQuery.data ?? [];
-    const keyword = appliedSearch.q?.trim().toLowerCase();
-    const filtered = source.filter((item) => {
-      if (appliedSearch.status && item.status !== appliedSearch.status) return false;
-      if (keyword && !matchesProductSearchKeyword(item, keyword)) {
-        return false;
-      }
-      if (appliedSearch.categoryId && item.category.id !== appliedSearch.categoryId) return false;
-      if (
-        appliedSearch.registrationType &&
-        item.formData?.registrationType !== appliedSearch.registrationType
-      ) {
-        return false;
-      }
-      if (
-        appliedSearch.assessmentYear &&
-        Number(item.formData?.assessmentYear) !== appliedSearch.assessmentYear
-      ) {
-        return false;
-      }
-      if (appliedSearch.starRating && item.starRating !== appliedSearch.starRating) return false;
-      if (appliedSearch.from || appliedSearch.toExclusive) {
-        const rawDate =
-          appliedSearch.dateBasis === PRODUCT_DATE_BASIS.COMPLETED_AT
-            ? item.completedAt
-            : (item.submittedAt ?? item.updatedAt);
-        if (!rawDate) return false;
-        const ts = Date.parse(rawDate);
-        if (appliedSearch.from && ts < Date.parse(appliedSearch.from)) return false;
-        if (appliedSearch.toExclusive && ts >= Date.parse(appliedSearch.toExclusive)) return false;
-      }
-      return true;
-    });
-
-    const sortBy = appliedSearch.sortBy ?? PRODUCT_SORT_BY.SUBMITTED_AT;
-    const dir =
-      (appliedSearch.sortDirection ?? SORT_DIRECTION.DESC) === SORT_DIRECTION.ASC ? 1 : -1;
-    const sorted = [...filtered].sort((a, b) => {
-      if (sortBy === PRODUCT_SORT_BY.NAME) {
-        return a.name.localeCompare(b.name, 'vi') * dir;
-      }
-      if (sortBy === PRODUCT_SORT_BY.FINAL_SCORE) {
-        const scoreA = a.finalScore ?? -1;
-        const scoreB = b.finalScore ?? -1;
-        return (scoreA - scoreB) * dir;
-      }
-      const timeA = Date.parse(a.submittedAt ?? a.updatedAt ?? '') || 0;
-      const timeB = Date.parse(b.submittedAt ?? b.updatedAt ?? '') || 0;
-      return (timeA - timeB) * dir;
-    });
-
-    const pageSize = appliedSearch.limit ?? 20;
-    const total = sorted.length;
-    const maxPage = Math.max(1, Math.ceil(total / pageSize));
-    const page = Math.min(Math.max(1, appliedSearch.page ?? 1), maxPage);
-    const start = (page - 1) * pageSize;
-    return {
-      rows: sorted.slice(start, start + pageSize),
-      total,
-      page,
-    };
-  }, [appliedSearch, isOwner, ownerListQuery.data]);
+  const ownerStatusCounts = ownerListQuery.data?.meta?.statusCounts ?? {
+    total: 0,
+    DRAFT: 0,
+    SUBMITTED: 0,
+    RETURNED: 0,
+    APPROVED: 0,
+    SCORING: 0,
+    COMPLETED: 0,
+  };
 
   const data: ProductRowItem[] = isOwner
-    ? ownerFilteredResult.rows
+    ? (ownerListQuery.data?.data ?? [])
     : (adminListQuery.data?.data ?? []);
   const totalCount = isOwner
-    ? ownerFilteredResult.total
+    ? (ownerListQuery.data?.meta?.total ?? data.length)
     : (adminListQuery.data?.meta?.total ?? data.length);
   const currentPage = isOwner
-    ? ownerFilteredResult.page
+    ? (ownerListQuery.data?.meta?.page ?? requestedPage)
     : (adminListQuery.data?.meta?.page ?? requestedPage);
 
   useEffect(() => {
@@ -356,9 +303,8 @@ export function AdminProductsPage({
     try {
       if (confirmMode === ADMIN_MODAL_ACTION.DELETE) {
         await myProductsApi.remove(product.id);
-        queryClient.setQueryData<RegistrantProduct[]>(queryKeys.myProducts.list, (rows = []) =>
-          rows.filter((item) => item.id !== product.id),
-        );
+        queryClient.removeQueries({ queryKey: queryKeys.myProducts.detail(product.id) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.myProducts.listAll });
         toast.success('Đã xóa bản nháp sản phẩm.');
       } else {
         const issues = getSavedProductSubmitIssues(product);
@@ -368,16 +314,51 @@ export function AdminProductsPage({
           return;
         }
         const { data: updated } = await myProductsApi.submit(product.id);
-        queryClient.setQueryData<RegistrantProduct[]>(queryKeys.myProducts.list, (rows = []) =>
-          rows.map((item) => (item.id === product.id ? { ...item, ...updated } : item)),
-        );
         queryClient.setQueryData<RegistrantProduct>(
           queryKeys.myProducts.detail(product.id),
           (current) => (current ? { ...current, ...updated } : updated),
         );
+        void queryClient.invalidateQueries({ queryKey: queryKeys.myProducts.listAll });
         toast.success('Đã nộp hồ sơ tới hội đồng đánh giá.');
       }
       setConfirmState(null);
+    } catch (cause) {
+      const msg = messageOf(cause);
+      setActionError(msg);
+      toast.error(msg);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function executeAdminTableAction() {
+    if (!adminActionState || busy) return;
+    const { mode: actionMode, product } = adminActionState;
+    const trimmedReason = adminActionReason.trim();
+    if (actionMode === ADMIN_MODAL_ACTION.RETURN && !trimmedReason) {
+      setActionError('Nhập lý do trả lại hồ sơ trước khi tiếp tục.');
+      return;
+    }
+    setBusy(true);
+    setActionError('');
+    try {
+      if (actionMode === ADMIN_MODAL_ACTION.APPROVE) {
+        await adminProductsApi.approve(product.id, trimmedReason || undefined);
+      } else {
+        await adminProductsApi.returnProduct(product.id, trimmedReason);
+      }
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminProducts.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.judge.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.myProducts.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.publicProducts.all });
+      toast.success(
+        actionMode === ADMIN_MODAL_ACTION.APPROVE
+          ? 'Đã duyệt hồ sơ và tự động phân công giám khảo theo cơ quan quản lý.'
+          : 'Đã trả lại hồ sơ cho người đăng ký.',
+      );
+      setAdminActionState(null);
+      setAdminActionReason('');
     } catch (cause) {
       const msg = messageOf(cause);
       setActionError(msg);
@@ -518,8 +499,8 @@ export function AdminProductsPage({
                 {isOwner && 'updatedAt' in product
                   ? ` · ${
                       product.submittedAt
-                        ? `Đã nộp ${new Date(product.submittedAt).toLocaleDateString('vi-VN')}`
-                        : `Cập nhật ${new Date(product.updatedAt).toLocaleDateString('vi-VN')}`
+                        ? `Đã nộp ${formatDate(product.submittedAt)}`
+                        : `Cập nhật ${formatDate(product.updatedAt)}`
                     }`
                   : ''}
               </div>
@@ -584,7 +565,7 @@ export function AdminProductsPage({
           if (isOwner) {
             const ownerProduct = product as RegistrantProduct;
             return (
-              <div className='flex items-center justify-center gap-1.5'>
+              <div className='admin-table-actions admin-table-actions--icons min-w-24'>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button asChild variant='secondary' size='icon-sm'>
@@ -628,7 +609,7 @@ export function AdminProductsPage({
                       <TooltipTrigger asChild>
                         <Button
                           type='button'
-                          variant='secondary'
+                          variant='primary'
                           size='icon-sm'
                           disabled={busy}
                           aria-label={
@@ -681,32 +662,92 @@ export function AdminProductsPage({
           }
 
           return (
-            <div className='flex items-center justify-end gap-2'>
-              <Button asChild variant='secondary' size='sm'>
-                <Link
-                  to={
-                    mode === PRODUCT_WORKSPACE_MODE.PRODUCTS
-                      ? '/admin/products/$id'
-                      : '/admin/registrations/$id'
-                  }
-                  params={{ id: product.id }}
-                  search={appliedSearch}
-                >
-                  Mở hồ sơ
-                </Link>
-              </Button>
+            <div className='admin-table-actions admin-table-actions--icons min-w-24'>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button asChild variant='secondary' size='icon-sm'>
+                    <Link
+                      to={
+                        mode === PRODUCT_WORKSPACE_MODE.PRODUCTS
+                          ? '/admin/products/$id'
+                          : '/admin/registrations/$id'
+                      }
+                      params={{ id: product.id }}
+                      search={appliedSearch}
+                      aria-label={`Mở hồ sơ ${product.name}`}
+                    >
+                      <Eye className='size-4' aria-hidden='true' />
+                    </Link>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Mở hồ sơ</TooltipContent>
+              </Tooltip>
+              {product.status === PRODUCT_STATUS.SUBMITTED && (
+                <>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type='button'
+                        variant='primary'
+                        size='icon-sm'
+                        disabled={busy}
+                        aria-label={`Duyệt hồ sơ ${product.name}`}
+                        onClick={() => {
+                          setActionError('');
+                          setAdminActionReason('');
+                          setAdminActionState({
+                            mode: ADMIN_MODAL_ACTION.APPROVE,
+                            product: product as AdminProductListItem,
+                          });
+                        }}
+                      >
+                        <CheckCircle2 className='size-4' aria-hidden='true' />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Duyệt hồ sơ</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type='button'
+                        variant='destructive'
+                        size='icon-sm'
+                        disabled={busy}
+                        aria-label={`Trả lại hồ sơ ${product.name}`}
+                        onClick={() => {
+                          setActionError('');
+                          setAdminActionReason('');
+                          setAdminActionState({
+                            mode: ADMIN_MODAL_ACTION.RETURN,
+                            product: product as AdminProductListItem,
+                          });
+                        }}
+                      >
+                        <Undo2 className='size-4' aria-hidden='true' />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Trả lại hồ sơ</TooltipContent>
+                  </Tooltip>
+                </>
+              )}
               {canManage &&
                 (product.status === PRODUCT_STATUS.DRAFT ||
                   product.status === PRODUCT_STATUS.RETURNED) && (
-                  <Button asChild variant='secondary' size='sm'>
-                    <Link
-                      to='/admin/registrations/$id/edit'
-                      params={{ id: product.id }}
-                      search={appliedSearch}
-                    >
-                      Sửa phiếu
-                    </Link>
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button asChild variant='secondary' size='icon-sm'>
+                        <Link
+                          to='/admin/registrations/$id/edit'
+                          params={{ id: product.id }}
+                          search={appliedSearch}
+                          aria-label={`Sửa phiếu ${product.name}`}
+                        >
+                          <Pencil className='size-4' aria-hidden='true' />
+                        </Link>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Sửa phiếu</TooltipContent>
+                  </Tooltip>
                 )}
             </div>
           );
@@ -1623,6 +1664,116 @@ export function AdminProductsPage({
             />
           );
         })()}
+      {!isOwner && (
+        <Dialog
+          open={adminActionState !== null}
+          onOpenChange={(open) => {
+            if (!open && !busy) {
+              setAdminActionState(null);
+              setAdminActionReason('');
+              setActionError('');
+            }
+          }}
+        >
+          <DialogContent className='admin-dialog max-w-lg' data-admin-ui='true'>
+            <DialogHeader className='pr-6'>
+              <DialogTitle>
+                {adminActionState?.mode === ADMIN_MODAL_ACTION.RETURN
+                  ? 'Trả lại hồ sơ sản phẩm'
+                  : 'Duyệt hồ sơ sản phẩm'}
+              </DialogTitle>
+              <DialogDescription>
+                {adminActionState?.mode === ADMIN_MODAL_ACTION.RETURN
+                  ? 'Hồ sơ sẽ chuyển về trạng thái Bị trả lại kèm lý do để người đăng ký chỉnh sửa và nộp lại.'
+                  : 'Sau khi duyệt, hệ thống tự động phân công tất cả giám khảo đang hoạt động thuộc các cơ quan quản lý của phân loại sản phẩm này.'}
+              </DialogDescription>
+            </DialogHeader>
+            {adminActionState && (
+              <div className='border-border bg-secondary/70 rounded-md border px-3.5 py-2.5 text-sm'>
+                <div className='text-fg font-semibold'>{adminActionState.product.name}</div>
+                <div className='text-muted mt-0.5 text-xs'>
+                  Mã hồ sơ: {displayProductCode(adminActionState.product)}
+                  {adminActionState.product.registrant?.fullName
+                    ? ` · ${adminActionState.product.registrant.fullName}`
+                    : ''}
+                </div>
+              </div>
+            )}
+            <div className='flex flex-col gap-4'>
+              <FormField
+                label={
+                  adminActionState?.mode === ADMIN_MODAL_ACTION.RETURN
+                    ? 'Lý do trả lại hồ sơ'
+                    : 'Ghi chú (tùy chọn)'
+                }
+                htmlFor='admin-table-action-reason'
+                required={adminActionState?.mode === ADMIN_MODAL_ACTION.RETURN}
+              >
+                {adminActionState?.mode === ADMIN_MODAL_ACTION.RETURN ? (
+                  <Textarea
+                    id='admin-table-action-reason'
+                    rows={4}
+                    className='min-h-24 resize-y'
+                    value={adminActionReason}
+                    maxLength={255}
+                    disabled={busy}
+                    placeholder='Nhập rõ nội dung cần người đăng ký bổ sung hoặc chỉnh sửa…'
+                    onChange={(event) => setAdminActionReason(event.target.value)}
+                    required
+                  />
+                ) : (
+                  <Input
+                    id='admin-table-action-reason'
+                    value={adminActionReason}
+                    maxLength={255}
+                    disabled={busy}
+                    placeholder='Nhập lý do hoặc ghi chú…'
+                    onChange={(event) => setAdminActionReason(event.target.value)}
+                  />
+                )}
+              </FormField>
+              {actionError ? (
+                <AlertError title='Không thể thực hiện thao tác' errors={[actionError]} />
+              ) : null}
+              <DialogFooter className='pt-2'>
+                <Button
+                  type='button'
+                  variant='outline'
+                  disabled={busy}
+                  onClick={() => {
+                    setAdminActionState(null);
+                    setAdminActionReason('');
+                    setActionError('');
+                  }}
+                >
+                  Hủy
+                </Button>
+                {adminActionState?.mode === ADMIN_MODAL_ACTION.RETURN ? (
+                  <Button
+                    type='button'
+                    variant='destructive'
+                    loading={busy}
+                    disabled={busy || !adminActionReason.trim()}
+                    onClick={() => void executeAdminTableAction()}
+                  >
+                    {busy ? 'Đang trả lại…' : 'Xác nhận trả lại hồ sơ'}
+                  </Button>
+                ) : (
+                  <Button
+                    type='button'
+                    variant='primary'
+                    loading={busy}
+                    disabled={busy}
+                    onClick={() => void executeAdminTableAction()}
+                  >
+                    {busy ? 'Đang duyệt…' : 'Xác nhận duyệt hồ sơ'}
+                  </Button>
+                )}
+              </DialogFooter>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
       <ImagePreviewDialog
         items={previewGallery?.items ?? []}
         activeIndex={previewGallery ? previewGallery.index : null}

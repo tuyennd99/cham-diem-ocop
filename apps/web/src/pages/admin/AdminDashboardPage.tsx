@@ -36,7 +36,7 @@ import {
   STAFF_PERMISSION,
 } from '../../constants/consts';
 import { ADMIN_DASHBOARD_STATUS_LABEL, PRODUCT_STATUS_TONE } from '../../constants/product-status';
-import { currentVietnameseYear } from '../../lib/admin-date';
+import { currentVietnameseYear, formatDateTime } from '../../lib/admin-date';
 import { parseAdminDashboardSearch } from '../../lib/admin-search';
 import { ADMINISTRATIVE_PROVINCES } from '../../lib/administrative-divisions';
 import { errorText } from '../../lib/api-error';
@@ -51,7 +51,6 @@ import {
   formatNeedsAttentionSubmittedAt,
   partitionZeroCategories,
   partitionZeroMonths,
-  sortNeedsAttentionByOldest,
 } from '../../lib/report-format';
 import { hasStaffPermission } from '../../lib/session-contract';
 import { useAdminDashboard } from '../../queries/admin';
@@ -116,10 +115,9 @@ export function AdminDashboardPage({
   const [localityProvince, setLocalityProvince] = useState('');
   const [queuePage, setQueuePage] = useState(1);
   const [queueSearch, setQueueSearch] = useState('');
-  const categoriesQuery = useAdminCategories({
-    page: 1,
-    limit: 100,
-  });
+  const [judgePage, setJudgePage] = useState(1);
+  const [judgeSearch, setJudgeSearch] = useState('');
+  const categoriesQuery = useAdminCategories();
   const localitiesQuery = useAdminLocalities({
     page: 1,
     limit: 100,
@@ -132,7 +130,13 @@ export function AdminDashboardPage({
     isFetching,
     error: loadError,
     refetch,
-  } = useAdminDashboard({ ...appliedSearch, queuePage, queueSearch: queueSearch || undefined });
+  } = useAdminDashboard({
+    ...appliedSearch,
+    queuePage,
+    queueSearch: queueSearch || undefined,
+    judgePage,
+    judgeSearch: judgeSearch || undefined,
+  });
   const error = errorText(loadError);
 
   useEffect(() => {
@@ -140,6 +144,12 @@ export function AdminDashboardPage({
     if (isFetching || total === undefined) return;
     setQueuePage((page) => Math.min(page, Math.max(1, Math.ceil(total / 5))));
   }, [data?.needsAttentionTotal, isFetching]);
+
+  useEffect(() => {
+    const total = data?.judgesTotal;
+    if (isFetching || total === undefined) return;
+    setJudgePage((page) => Math.min(page, Math.max(1, Math.ceil(total / 5))));
+  }, [data?.judgesTotal, isFetching]);
 
   const categories = categoriesQuery.data?.data ?? [];
   const localities = localitiesQuery.data?.data ?? [];
@@ -735,12 +745,10 @@ export function AdminDashboardPage({
                 <strong>Kỳ đang xem:</strong> {data.period.label}
               </span>
               <span>
-                <strong>Mốc chốt số liệu:</strong>{' '}
-                {new Date(data.period.asOf).toLocaleString('vi-VN')}
+                <strong>Mốc chốt số liệu:</strong> {formatDateTime(data.period.asOf)}
               </span>
               <span>
-                <strong>Cập nhật lúc:</strong>{' '}
-                {new Date(data.period.generatedAt).toLocaleString('vi-VN')}
+                <strong>Cập nhật lúc:</strong> {formatDateTime(data.period.generatedAt)}
               </span>
             </div>
             {data.period.isPartialPeriod && (
@@ -888,7 +896,7 @@ export function AdminDashboardPage({
                 {data.needsAttention.length || queueSearch || isFetching ? (
                   <DashboardList
                     label='hồ sơ cần xử lý'
-                    items={sortNeedsAttentionByOldest(data.needsAttention)}
+                    items={data.needsAttention}
                     searchLabel='Tìm tên hồ sơ hoặc danh mục'
                     searchText={(product) => `${product.name} ${product.category.name}`}
                     server={{
@@ -979,11 +987,22 @@ export function AdminDashboardPage({
                   </Link>
                 </div>
                 <div className='dashboard-desk-body'>
-                  {data.judges.length ? (
+                  {data.judges.length || judgeSearch || isFetching ? (
                     <DashboardList
                       label='giám khảo'
                       items={data.judges}
                       searchText={(judge) => judge.fullName}
+                      server={{
+                        page: judgePage,
+                        total: data.judgesTotal ?? data.judges.length,
+                        query: judgeSearch,
+                        loading: isFetching,
+                        onPage: setJudgePage,
+                        onSearch: (value) => {
+                          setJudgeSearch(value);
+                          setJudgePage(1);
+                        },
+                      }}
                     >
                       {(judges) => (
                         <DataTable

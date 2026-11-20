@@ -2,6 +2,8 @@ import {
   buildAnalyticsDashboard,
   buildRegistrationReport,
   buildResultsReport,
+  computeComparisonDelta,
+  resolveProductStatusAtAsOf,
   resolveVietnamPeriod,
   statusAtAsOf,
   type ReportingProductRecord,
@@ -242,7 +244,11 @@ describe('H6 reporting and analytics dashboard engine', () => {
       historyAvailableFrom: historyFrom,
       assignmentHistoryAvailable: false,
     });
-    expect(janRes.rows[0]).toMatchObject({ key: baseCategory.id, label: baseCategory.name, drillDown: { categoryId: baseCategory.id } });
+    expect(janRes.rows[0]).toMatchObject({
+      key: baseCategory.id,
+      label: baseCategory.name,
+      drillDown: { categoryId: baseCategory.id },
+    });
     expect(janRes.rows[0].drillDown).not.toHaveProperty('groupId');
     expect(janRes.totals).toMatchObject({
       completedCount: 1,
@@ -293,10 +299,14 @@ describe('H6 reporting and analytics dashboard engine', () => {
       needsAttention: [],
     });
     expect(febDash.kpis).toHaveLength(8);
-    expect(febDash.charts.byCategory).toEqual([{
-      categoryId: baseCategory.id, categoryName: baseCategory.name,
-      registeredCount: 0, completedCount: 1,
-    }]);
+    expect(febDash.charts.byCategory).toEqual([
+      {
+        categoryId: baseCategory.id,
+        categoryName: baseCategory.name,
+        registeredCount: 0,
+        completedCount: 1,
+      },
+    ]);
     expect(febDash.charts).not.toHaveProperty('byProductGroup');
     const kpiById = new Map(febDash.kpis.map((k) => [k.id, k]));
     expect(kpiById.get('registeredInPeriod')?.value).toBe(0);
@@ -307,5 +317,54 @@ describe('H6 reporting and analytics dashboard engine', () => {
       'INSUFFICIENT_HISTORY',
     );
     expect(kpiById.get('underAssignedBacklogAtAsOf')?.value).toBeNull();
+  });
+
+  it('keeps previous=null as null delta instead of coercing null to 0 in computeComparisonDelta', () => {
+    expect(computeComparisonDelta(80, null)).toEqual({
+      current: 80,
+      previous: null,
+      deltaAbsolute: null,
+      deltaPercent: null,
+      comparisonNote: 'NO_PRIOR_DATA',
+    });
+    expect(computeComparisonDelta(5, 0)).toEqual({
+      current: 5,
+      previous: 0,
+      deltaAbsolute: 5,
+      deltaPercent: null,
+      comparisonNote: 'NO_PRIOR_DATA',
+    });
+  });
+
+  it('uses current status when history is missing only at current/future asOf and completedAt < asOf otherwise (#53)', () => {
+    const now = new Date('2026-03-10T10:00:00+07:00');
+    const historicalAsOf = new Date('2026-02-01T00:00:00+07:00');
+    const productWithoutHistory = {
+      status: 'SCORING' as const,
+      completedAt: null,
+      statusEvents: [],
+    };
+    expect(
+      resolveProductStatusAtAsOf(productWithoutHistory, historicalAsOf, now),
+    ).toBeNull();
+    expect(resolveProductStatusAtAsOf(productWithoutHistory, now, now)).toBe(
+      'SCORING',
+    );
+
+    const completedAtBoundary = {
+      status: 'COMPLETED' as const,
+      completedAt: new Date('2026-02-01T00:00:00+07:00'),
+      statusEvents: [],
+    };
+    expect(
+      resolveProductStatusAtAsOf(completedAtBoundary, historicalAsOf, now),
+    ).toBeNull();
+    expect(
+      resolveProductStatusAtAsOf(
+        completedAtBoundary,
+        new Date('2026-02-01T00:00:01+07:00'),
+        now,
+      ),
+    ).toBe('COMPLETED');
   });
 });

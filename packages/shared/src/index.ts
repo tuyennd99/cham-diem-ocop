@@ -46,12 +46,25 @@ export interface OrganizationUnitRecord extends OrganizationUnitSummary {
   updatedAt: string;
 }
 
+export const ORGANIZATION_UNIT_SORT_BY = {
+  ORDER: "order",
+  CODE: "code",
+  NAME: "name",
+  MANAGING_AGENCY: "managingAgency",
+  DESCRIPTION: "description",
+  IS_ACTIVE: "isActive",
+} as const;
+export type OrganizationUnitSortBy =
+  (typeof ORGANIZATION_UNIT_SORT_BY)[keyof typeof ORGANIZATION_UNIT_SORT_BY];
+
 export interface OrganizationUnitQuery {
   page?: number;
   limit?: number;
   q?: string;
   isActive?: boolean;
   managingAgencyId?: string;
+  sortBy?: OrganizationUnitSortBy;
+  sortDirection?: SortDirection;
 }
 
 export interface CreateOrganizationUnitInput {
@@ -88,6 +101,17 @@ export interface AdminUserRecord {
   createdAt: string;
 }
 
+export const ADMIN_USER_SORT_BY = {
+  CREATED_AT: "createdAt",
+  FULL_NAME: "fullName",
+  EMAIL: "email",
+  UNIT: "unit",
+  VERIFIED: "verified",
+  IS_ACTIVE: "isActive",
+} as const;
+export type AdminUserSortBy =
+  (typeof ADMIN_USER_SORT_BY)[keyof typeof ADMIN_USER_SORT_BY];
+
 export interface AdminUserQuery {
   page?: number;
   limit?: number;
@@ -98,6 +122,8 @@ export interface AdminUserQuery {
   isActive?: boolean;
   verified?: boolean;
   kind?: "STAFF" | "REGISTRANT";
+  sortBy?: AdminUserSortBy;
+  sortDirection?: SortDirection;
 }
 
 export interface CreateAdminUserInput {
@@ -140,12 +166,26 @@ export interface LocalityRecord {
   isActive: boolean;
 }
 
+export const LOCALITY_SORT_BY = {
+  CODE: "code",
+  EVENT_NAME: "eventName",
+  NAME: "name",
+  PROVINCE_NAME: "provinceName",
+  EFFECTIVE_RANGE: "effectiveRange",
+  REGISTRATION_RANGE: "registrationRange",
+  IS_ACTIVE: "isActive",
+} as const;
+export type LocalitySortBy =
+  (typeof LOCALITY_SORT_BY)[keyof typeof LOCALITY_SORT_BY];
+
 export interface LocalityQuery {
   page?: number;
   limit?: number;
   q?: string;
   provinceName?: string;
   isActive?: boolean;
+  sortBy?: LocalitySortBy;
+  sortDirection?: SortDirection;
 }
 
 export type PublicLocalityQuery = Omit<LocalityQuery, "isActive">;
@@ -155,8 +195,8 @@ export interface CreateLocalityInput {
   eventName?: string;
   name: string;
   provinceName: string;
-  effectiveFrom?: string | null;
-  effectiveTo?: string | null;
+  effectiveFrom: string;
+  effectiveTo: string;
   registrationFrom?: string | null;
   registrationTo?: string | null;
   isActive: boolean;
@@ -218,12 +258,24 @@ export interface AdminCategoryDetail extends Omit<
   managingAgencies?: ManagingAgencySummary[];
 }
 
+export const ADMIN_CATEGORY_SORT_BY = {
+  ORDER: "order",
+  NAME: "name",
+  CRITERIA_SET: "criteriaSet",
+  REFERENCE_COUNT: "referenceCount",
+  IS_ACTIVE: "isActive",
+} as const;
+export type AdminCategorySortBy =
+  (typeof ADMIN_CATEGORY_SORT_BY)[keyof typeof ADMIN_CATEGORY_SORT_BY];
+
 export interface AdminCategoryQuery {
   page?: number;
   limit?: number;
   q?: string;
   isActive?: boolean;
   managingAgencyId?: string;
+  sortBy?: AdminCategorySortBy;
+  sortDirection?: SortDirection;
 }
 
 export interface CreateAdminCategoryInput {
@@ -245,6 +297,63 @@ export interface UpdateAdminCategoryInput {
 
 export const PRODUCT_CODE_PREFIX = "OCOP-";
 export const PRODUCT_CODE_MIN_DIGITS = 6;
+export const DATE_FORMAT = "dd/MM/yyyy";
+export const DATE_TIME_FORMAT = "dd/MM/yyyy HH:mm:ss";
+
+const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
+const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+function formatUtcDatePattern(utcDate: Date, pattern: string): string {
+  const tokens: Record<string, string> = {
+    yyyy: String(utcDate.getUTCFullYear()),
+    MM: String(utcDate.getUTCMonth() + 1).padStart(2, "0"),
+    dd: String(utcDate.getUTCDate()).padStart(2, "0"),
+    HH: String(utcDate.getUTCHours()).padStart(2, "0"),
+    mm: String(utcDate.getUTCMinutes()).padStart(2, "0"),
+    ss: String(utcDate.getUTCSeconds()).padStart(2, "0"),
+  };
+  return pattern.replace(/yyyy|MM|dd|HH|mm|ss/g, (token) => tokens[token]);
+}
+
+/**
+ * Format a calendar date or ISO timestamp in Asia/Ho_Chi_Minh (+07:00).
+ */
+export function formatDate(
+  value: string | Date | null | undefined,
+  pattern: string = DATE_FORMAT,
+): string {
+  if (!value) return "";
+  if (typeof value === "string") {
+    const dayMatch = DATE_ONLY_RE.exec(value);
+    if (dayMatch) {
+      const year = Number(dayMatch[1]);
+      const month = Number(dayMatch[2]);
+      const day = Number(dayMatch[3]);
+      const dt = new Date(Date.UTC(year, month - 1, day));
+      if (
+        dt.getUTCFullYear() !== year ||
+        dt.getUTCMonth() !== month - 1 ||
+        dt.getUTCDate() !== day
+      ) {
+        return "";
+      }
+      return formatUtcDatePattern(dt, pattern);
+    }
+  }
+  const ms = value instanceof Date ? value.getTime() : Date.parse(value);
+  if (!Number.isFinite(ms)) return "";
+  return formatUtcDatePattern(new Date(ms + VN_OFFSET_MS), pattern);
+}
+
+/**
+ * Format a timestamp with time in Asia/Ho_Chi_Minh (+07:00).
+ */
+export function formatDateTime(
+  value: string | Date | null | undefined,
+  pattern: string = DATE_TIME_FORMAT,
+): string {
+  return formatDate(value, pattern);
+}
 
 export function formatProductCode(
   codeNumber: number | null | undefined,
@@ -468,6 +577,26 @@ export interface AdminProductQuery {
   sortDirection?: "asc" | "desc";
 }
 
+export type MyProductQuery = Omit<
+  AdminProductQuery,
+  "registrantId" | "registrantQ" | "localityId" | "unmappedLocality"
+>;
+
+export interface PaginatedMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export type MyProductStatusCounts = Record<ProductStatus, number> & {
+  total: number;
+};
+
+export interface MyProductsPaginatedMeta extends PaginatedMeta {
+  statusCounts: MyProductStatusCounts;
+}
+
 export type AdminProductCategory = ProductCategory;
 
 export interface ProductJudgeAssignmentRecord {
@@ -590,6 +719,7 @@ export interface ScoreOption {
 
 export interface SubCriterion {
   id: string;
+  code?: string;
   content: string;
   order: number;
   options: ScoreOption[];
@@ -599,6 +729,8 @@ export interface Criterion {
   id: string;
   code: string;
   name: string;
+  sectionCode?: string;
+  sectionName?: string;
   maxScore: number;
   order: number;
   subCriteria: SubCriterion[];
@@ -615,8 +747,18 @@ export interface Evaluation {
   status: string;
   total: number | null;
   scores: EvaluationScore[];
+  versionToken?: string;
   isAssignmentRemoved?: boolean;
 }
+
+export const ADMIN_CRITERIA_SET_SORT_BY = {
+  CATEGORY_NAME: "categoryName",
+  SOURCE: "source",
+  CRITERION_COUNT: "criterionCount",
+  MAX_SCORE: "maxScore",
+} as const;
+export type AdminCriteriaSetSortBy =
+  (typeof ADMIN_CRITERIA_SET_SORT_BY)[keyof typeof ADMIN_CRITERIA_SET_SORT_BY];
 
 export interface AdminCriteriaSetQuery {
   page?: number;
@@ -624,6 +766,8 @@ export interface AdminCriteriaSetQuery {
   q?: string;
   categoryId?: string;
   isActive?: boolean;
+  sortBy?: AdminCriteriaSetSortBy;
+  sortDirection?: SortDirection;
 }
 
 export interface AdminCriteriaSetRecord {
@@ -651,6 +795,17 @@ export const EVALUATION_STATUS = {
 export type EvaluationRecordStatus =
   (typeof EVALUATION_STATUS)[keyof typeof EVALUATION_STATUS];
 
+export const ADMIN_EVALUATION_SORT_BY = {
+  PRODUCT: "product",
+  JUDGE: "judge",
+  SCOPE: "scope",
+  STATUS: "status",
+  SUBMITTED_AT: "submittedAt",
+  TOTAL: "total",
+} as const;
+export type AdminEvaluationSortBy =
+  (typeof ADMIN_EVALUATION_SORT_BY)[keyof typeof ADMIN_EVALUATION_SORT_BY];
+
 export interface AdminEvaluationQuery {
   page?: number;
   limit?: number;
@@ -659,6 +814,45 @@ export interface AdminEvaluationQuery {
   categoryId?: string;
   judgeId?: string;
   status?: EvaluationRecordStatus;
+  sortBy?: AdminEvaluationSortBy;
+  sortDirection?: SortDirection;
+}
+
+export const JUDGE_QUEUE_SORT_BY = {
+  UPDATED_AT: "updatedAt",
+  NAME: "name",
+  CATEGORY: "category",
+  STATUS: "status",
+  EVAL_STATUS: "evalStatus",
+  TOTAL_SCORE: "totalScore",
+  ATTACHMENTS: "attachments",
+} as const;
+export type JudgeQueueSortBy =
+  (typeof JUDGE_QUEUE_SORT_BY)[keyof typeof JUDGE_QUEUE_SORT_BY];
+
+export interface JudgeQueueQuery {
+  page?: number;
+  limit?: number;
+  q?: string;
+  categoryId?: string;
+  evaluationStatus?: EvaluationRecordStatus;
+  sortBy?: JudgeQueueSortBy;
+  sortDirection?: SortDirection;
+}
+
+export interface JudgeQueueCounts {
+  total: number;
+  open: number;
+  submitted: number;
+  excluded: number;
+}
+
+export interface JudgeQueueMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  counts?: JudgeQueueCounts;
 }
 
 export interface AdminEvaluationRecord {
@@ -901,6 +1095,8 @@ export interface AdminReportFilterQuery {
 export interface AdminDashboardQuery extends AdminReportFilterQuery {
   queuePage?: number;
   queueSearch?: string;
+  judgePage?: number;
+  judgeSearch?: string;
 }
 
 export interface AdminReportQuery extends AdminReportFilterQuery {
@@ -1080,6 +1276,7 @@ export interface AdminAnalyticsDashboardResponse {
   };
   comparisonTable: DashboardKpiItem[];
   productsByStatus: Record<ProductStatus, number>;
+  judgesTotal?: number;
   judges: Array<{
     judgeId: string;
     fullName: string;

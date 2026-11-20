@@ -65,6 +65,12 @@ export interface RegistrationResponse extends RegistrationTokenInput, OtpTiming 
   email: string;
   expiresAt: string;
 }
+export interface LegacyPendingRegistrationResponse {
+  email: string;
+  legacyPending: true;
+  message: string;
+}
+export type RegisterResponse = RegistrationResponse | LegacyPendingRegistrationResponse;
 export interface RegistrationStatus extends OtpTiming {
   mode: 'register' | 'google-link';
   email: string;

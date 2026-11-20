@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useForm } from '@tanstack/react-form';
 import { toast } from 'sonner';
 import AlertError from '@/components/alert-error';
+import { useAppForm } from '@/components/form';
 import { FormField } from '@/components/form-field';
 import PasswordInput from '@/components/password-input';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,7 @@ export function ForgotPasswordPage() {
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
 
-  const sendCodeForm = useForm({
+  const sendCodeForm = useAppForm({
     defaultValues: { email: '' },
     onSubmit: async ({ value }) => {
       setError('');
@@ -34,7 +34,7 @@ export function ForgotPasswordPage() {
     },
   });
 
-  const resetForm = useForm({
+  const resetForm = useAppForm({
     defaultValues: { code: '', password: '' },
     onSubmit: async ({ value }) => {
       setError('');
@@ -70,96 +70,101 @@ export function ForgotPasswordPage() {
       backLabel='Quay lại trang đăng nhập'
     >
       {!sent ? (
-        <form
-          className='account-form'
-          onSubmit={(event) => {
-            event.preventDefault();
-            void sendCodeForm.handleSubmit();
-          }}
-        >
-          <sendCodeForm.Field name='email'>
-            {(field) => (
-              <FormField label='Email' htmlFor={`forgot-password-${field.name}`}>
-                <Input
-                  id={`forgot-password-${field.name}`}
-                  name={field.name}
-                  type='email'
-                  autoComplete='email'
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                  required
-                />
-              </FormField>
-            )}
-          </sendCodeForm.Field>
-          {notice && (
-            <p className='form-note' role='status'>
-              {notice}
-            </p>
-          )}
-          {error && <AlertError title='Không thể gửi mã xác thực' errors={[error]} />}
-          <sendCodeForm.Subscribe selector={(state) => state.isSubmitting}>
-            {(busy) => (
+        <sendCodeForm.Subscribe selector={(state) => state.isSubmitting}>
+          {(busy) => (
+            <form
+              className='account-form'
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (busy) return;
+                void sendCodeForm.handleSubmit();
+              }}
+            >
+              <sendCodeForm.Field name='email'>
+                {(field) => (
+                  <FormField label='Email' htmlFor={`forgot-password-${field.name}`}>
+                    <Input
+                      id={`forgot-password-${field.name}`}
+                      name={field.name}
+                      type='email'
+                      autoComplete='email'
+                      disabled={busy}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(event) => field.handleChange(event.target.value)}
+                      required
+                    />
+                  </FormField>
+                )}
+              </sendCodeForm.Field>
+              {notice && (
+                <p className='form-note' role='status'>
+                  {notice}
+                </p>
+              )}
+              {error && <AlertError title='Không thể gửi mã xác thực' errors={[error]} />}
               <Button type='submit' className='auth-submit-btn' loading={busy} disabled={busy}>
                 {busy ? 'Đang gửi…' : 'Gửi mã xác thực'}
               </Button>
-            )}
-          </sendCodeForm.Subscribe>
-        </form>
+            </form>
+          )}
+        </sendCodeForm.Subscribe>
       ) : (
-        <form
-          className='account-form'
-          onSubmit={(event) => {
-            event.preventDefault();
-            void resetForm.handleSubmit();
-          }}
-        >
-          <resetForm.Field name='code'>
-            {(field) => (
-              <FormField label='Mã OTP' htmlFor={`forgot-password-${field.name}`}>
-                <Input
-                  id={`forgot-password-${field.name}`}
-                  name={field.name}
-                  className='otp-code-input'
-                  inputMode='numeric'
-                  autoComplete='one-time-code'
-                  pattern='[0-9]{6}'
-                  maxLength={6}
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                  required
-                />
-              </FormField>
-            )}
-          </resetForm.Field>
-          <resetForm.Field name='password'>
-            {(field) => (
-              <FormField label='Mật khẩu mới' htmlFor={`forgot-password-${field.name}`}>
-                <PasswordInput
-                  id={`forgot-password-${field.name}`}
-                  name={field.name}
-                  autoComplete='new-password'
-                  minLength={8}
-                  maxLength={72}
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                  required
-                />
-              </FormField>
-            )}
-          </resetForm.Field>
-          {error && <AlertError title='Không thể đặt lại mật khẩu' errors={[error]} />}
-          <resetForm.Subscribe selector={(state) => state.isSubmitting}>
-            {(busy) => (
+        <resetForm.Subscribe selector={(state) => state.isSubmitting}>
+          {(busy) => (
+            <form
+              className='account-form'
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (busy) return;
+                void resetForm.handleSubmit();
+              }}
+            >
+              <resetForm.Field name='code'>
+                {(field) => (
+                  <FormField label='Mã OTP' htmlFor={`forgot-password-${field.name}`}>
+                    <Input
+                      id={`forgot-password-${field.name}`}
+                      name={field.name}
+                      className='otp-code-input'
+                      inputMode='numeric'
+                      autoComplete='one-time-code'
+                      pattern='[0-9]{6}'
+                      maxLength={6}
+                      disabled={busy}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(event) => field.handleChange(event.target.value)}
+                      required
+                    />
+                  </FormField>
+                )}
+              </resetForm.Field>
+              <resetForm.Field name='password'>
+                {(field) => (
+                  <FormField label='Mật khẩu mới' htmlFor={`forgot-password-${field.name}`}>
+                    <PasswordInput
+                      id={`forgot-password-${field.name}`}
+                      name={field.name}
+                      autoComplete='new-password'
+                      minLength={8}
+                      maxLength={72}
+                      disabled={busy}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(event) => field.handleChange(event.target.value)}
+                      required
+                    />
+                  </FormField>
+                )}
+              </resetForm.Field>
+              {error && <AlertError title='Không thể đặt lại mật khẩu' errors={[error]} />}
               <Button type='submit' className='auth-submit-btn' loading={busy} disabled={busy}>
                 {busy ? 'Đang lưu…' : 'Đặt lại mật khẩu'}
               </Button>
-            )}
-          </resetForm.Subscribe>
-        </form>
+            </form>
+          )}
+        </resetForm.Subscribe>
       )}
     </AuthFrame>
   );

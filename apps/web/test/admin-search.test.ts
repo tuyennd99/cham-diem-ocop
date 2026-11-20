@@ -8,9 +8,17 @@ import {
   parseAdminReportsSearch,
   parseAdminScoringSearch,
   parseAdminUsersSearch,
+  parseJudgeQueueSearch,
   parsePublicProductsSearch,
   normalizePublicProductsSearch,
+  toAdminCategoryApiQuery,
+  toAdminCriteriaSetsApiQuery,
+  toAdminEvaluationsApiQuery,
+  toAdminLocalityApiQuery,
   toAdminProductApiQuery,
+  toAdminUnitsApiQuery,
+  toAdminUsersApiQuery,
+  toJudgeQueueApiQuery,
 } from '../src/lib/admin-search';
 
 it('retains report filters, page and explicit boolean without carrying unknown keys', () => {
@@ -162,4 +170,95 @@ it('parses and normalizes public catalog search for clean page 1 URLs and sequen
     limit: 20,
     categoryId: 'cat-1',
   });
+});
+
+it('parses and forwards backend sortBy and sortDirection for admin lists and omits pagination from fixed category queries', () => {
+  const defaultCatalog = parseAdminCatalogSearch({});
+  assert.deepEqual(toAdminCategoryApiQuery(defaultCatalog), {});
+
+  const sortedCatalog = parseAdminCatalogSearch({
+    q: 'Chè',
+    isActive: 'true',
+    managingAgencyId: 'agency-1',
+    sortBy: 'referenceCount',
+    sortDirection: 'desc',
+  });
+  assert.deepEqual(toAdminCategoryApiQuery(sortedCatalog), {
+    q: 'Chè',
+    isActive: true,
+    managingAgencyId: 'agency-1',
+    sortBy: 'referenceCount',
+    sortDirection: 'desc',
+  });
+
+  const sortedLocality = parseAdminCatalogSearch({
+    page: '2',
+    limit: '20',
+    provinceName: 'Hà Nội',
+    sortBy: 'effectiveRange',
+    sortDirection: 'asc',
+  });
+  assert.deepEqual(toAdminLocalityApiQuery(sortedLocality), {
+    page: 2,
+    limit: 20,
+    provinceName: 'Hà Nội',
+    sortBy: 'effectiveRange',
+    sortDirection: 'asc',
+  });
+
+  const sortedUsers = parseAdminUsersSearch({
+    page: '1',
+    limit: '20',
+    sortBy: 'fullName',
+    sortDirection: 'asc',
+  });
+  assert.equal(toAdminUsersApiQuery(sortedUsers).sortBy, 'fullName');
+  assert.equal(toAdminUsersApiQuery(sortedUsers).sortDirection, 'asc');
+
+  const sortedUnits = parseAdminUsersSearch({
+    tab: 'units',
+    managingAgencyId: 'agency-1',
+    sortBy: 'managingAgency',
+    sortDirection: 'desc',
+  });
+  assert.equal(toAdminUnitsApiQuery(sortedUnits).managingAgencyId, 'agency-1');
+  assert.equal(toAdminUnitsApiQuery(sortedUnits).sortBy, 'managingAgency');
+  assert.equal(toAdminUnitsApiQuery(sortedUnits).sortDirection, 'desc');
+
+  const sortedSets = parseAdminScoringSearch({
+    tab: 'sets',
+    sortBy: 'criterionCount',
+    sortDirection: 'desc',
+  });
+  assert.equal(toAdminCriteriaSetsApiQuery(sortedSets).sortBy, 'criterionCount');
+  assert.equal(toAdminCriteriaSetsApiQuery(sortedSets).sortDirection, 'desc');
+
+  const sortedEvals = parseAdminScoringSearch({
+    tab: 'evaluations',
+    sortBy: 'total',
+    sortDirection: 'desc',
+  });
+  assert.equal(toAdminEvaluationsApiQuery(sortedEvals).sortBy, 'total');
+  assert.equal(toAdminEvaluationsApiQuery(sortedEvals).sortDirection, 'desc');
+
+  const validJudgeQueue = parseJudgeQueueSearch({
+    page: '2',
+    limit: '10',
+    q: 'OCOP-000001',
+    categoryId: 'cat-1',
+    evaluationStatus: 'IN_PROGRESS',
+    sortBy: 'updatedAt',
+    sortDirection: 'desc',
+  });
+  assert.deepEqual(toJudgeQueueApiQuery(validJudgeQueue), {
+    page: 2,
+    limit: 10,
+    q: 'OCOP-000001',
+    categoryId: 'cat-1',
+    evaluationStatus: 'IN_PROGRESS',
+    sortBy: 'updatedAt',
+    sortDirection: 'desc',
+  });
+  const invalidSortJudgeQueue = parseJudgeQueueSearch({ sortBy: 'injectedField' });
+  assert.equal(invalidSortJudgeQueue.sortBy, undefined);
 });

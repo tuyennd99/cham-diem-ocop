@@ -11,10 +11,19 @@ export async function recordProductStatusEvent(
   reason?: string,
 ) {
   if (fromStatus === toStatus) return;
-  const latest = await tx.productStatusEvent.aggregate({ where: { productId }, _max: { sequence: true } });
-  await tx.productStatusEvent.create({ data: {
-    productId, fromStatus, toStatus, actorId, createdAt,
-    sequence: (latest._max.sequence ?? 0) + 1,
-    ...(reason === undefined ? {} : { reason }),
-  } });
+  const latest = await tx.productStatusEvent.aggregate({
+    where: { productId },
+    _max: { sequence: true },
+  });
+  await tx.productStatusEvent.create({
+    data: {
+      productId,
+      fromStatus,
+      toStatus,
+      actorId,
+      createdAt,
+      sequence: (latest._max.sequence ?? 0) + 1,
+      ...(reason === undefined ? {} : { reason }),
+    },
+  });
 }

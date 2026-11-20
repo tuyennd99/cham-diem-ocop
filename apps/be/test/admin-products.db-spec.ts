@@ -1,6 +1,10 @@
 import { adminFixture, draftPayload } from './support/admin-fixture';
-import { withTestApp } from './support/db-app';
-import { Prisma } from '@prisma/client';
+import { apiRequest, withTestApp } from './support/db-app';
+import {
+  Prisma,
+  ProductPublicationState,
+  ProductStatus,
+} from '@prisma/client';
 import { databaseObject } from '../src/prisma/sql';
 
 describe('admin product mutations and registration snapshots', () => {
@@ -102,38 +106,28 @@ describe('admin product mutations and registration snapshots', () => {
     });
   });
 
-  it('allows incomplete drafts without locality, then requires complete form and effective locality to submit', async () => {
+  it('rejects incomplete drafts without locality and rejects submit if locality is deactivated afterward', async () => {
     await withTestApp(async ({ app, prisma, baseUrl }) => {
       const f = await adminFixture(app, prisma, baseUrl);
       const category = await prisma.productCategory.findFirstOrThrow({
         where: { isActive: true },
       });
-      const created = await f.call('owner', '/my/products', 'POST', {
+      const incomplete = await f.call('owner', '/my/products', 'POST', {
         categoryId: category.id,
         name: 'Incomplete draft',
         formData: {},
       });
-      expect(created.status).toBe(201);
-      expect(created.body.data).toMatchObject({ localityId: null });
+      expect(incomplete.status).toBe(400);
 
-      const submit = await f.call(
+      const created = await f.call(
         'owner',
-        `/my/products/${created.body.data.id}/submit`,
+        '/my/products',
         'POST',
-        {},
+        draftPayload(category.id, f.locality.id),
       );
-      expect(submit.status).toBe(400);
+      expect(created.status).toBe(201);
+      expect(created.body.data).toMatchObject({ localityId: f.locality.id });
 
-      const complete = await f.call(
-        'owner',
-        `/my/products/${created.body.data.id}`,
-        'PUT',
-        {
-          ...draftPayload(category.id, f.locality.id),
-          localityId: f.locality.id,
-        },
-      );
-      expect(complete.status).toBe(200);
       await prisma.locality.update({
         where: { id: f.locality.id },
         data: { isActive: false },
@@ -736,7 +730,7 @@ describe('admin product mutations and registration snapshots', () => {
         where: { isActive: true },
       });
 
-      // REG-01: Minimal draft save (only name + categoryId, sampleQuantity = 0, no localityId, declarationAccepted = false)
+      // REG-01: Minimal/incomplete draft write (sampleQuantity = 0, no localityId, declarationAccepted = false) is rejected with 400
       const minDraftRes = await f.call('owner', '/my/products', 'POST', {
         name: 'Mật ong nháp tối thiểu REG-01',
         categoryId: category.id,
@@ -745,16 +739,7 @@ describe('admin product mutations and registration snapshots', () => {
           declarationAccepted: false,
         },
       });
-      expect(minDraftRes.status).toBe(201);
-      expect(minDraftRes.body.data).toMatchObject({
-        status: 'DRAFT',
-        localityId: null,
-        formData: {
-          sampleQuantity: 0,
-          declarationAccepted: false,
-        },
-      });
-      const draftId = minDraftRes.body.data.id as string;
+      expect(minDraftRes.status).toBe(400);
 
       // REG-02: Populate full 3-step formData, reload via GET /my/products/:id, update sampleQuantity from 6 -> 10 while preserving all other fields
       const fullForm = {
@@ -770,19 +755,15 @@ describe('admin product mutations and registration snapshots', () => {
         assessmentYear: 2026,
         declarationAccepted: true,
       };
-      const savedFull = await f.call(
-        'owner',
-        `/my/products/${draftId}`,
-        'PUT',
-        {
-          name: 'Mật ong rừng tràm U Minh nguyên chất 500ml',
-          categoryId: category.id,
-          localityId: f.locality.id,
-          description: 'Mật ong khai thác tự nhiên từ rừng tràm U Minh Hạ.',
-          formData: fullForm,
-        },
-      );
-      expect(savedFull.status).toBe(200);
+      const savedFull = await f.call('owner', '/my/products', 'POST', {
+        name: 'Mật ong rừng tràm U Minh nguyên chất 500ml',
+        categoryId: category.id,
+        localityId: f.locality.id,
+        description: 'Mật ong khai thác tự nhiên từ rừng tràm U Minh Hạ.',
+        formData: fullForm,
+      });
+      expect(savedFull.status).toBe(201);
+      const draftId = savedFull.body.data.id as string;
 
       const reloaded = await f.call('owner', `/my/products/${draftId}`);
       expect(reloaded.status).toBe(200);
@@ -809,7 +790,7 @@ describe('admin product mutations and registration snapshots', () => {
         sampleQuantity: 10,
       });
 
-      // REG-03: Each missing mandatory condition on POST /my/products/:id/submit returns 400 and keeps DRAFT
+      // REG-03: Each missing mandatory condition on POST /my/products returns 400; legacy incomplete DB draft still fails POST /submit with 400
       const missingCases: Array<{
         localityId: string | null;
         formData: Record<string, unknown>;
@@ -856,19 +837,32 @@ describe('admin product mutations and registration snapshots', () => {
           localityId: testCase.localityId,
           formData: testCase.formData,
         });
-        expect(branchDraft.status).toBe(201);
-        const branchId = branchDraft.body.data.id as string;
-        const branchSubmit = await f.call(
-          'owner',
-          `/my/products/${branchId}/submit`,
-          'POST',
-        );
-        expect(branchSubmit.status).toBe(400);
-        expect(
-          (await prisma.product.findUniqueOrThrow({ where: { id: branchId } }))
-            .status,
-        ).toBe('DRAFT');
+        expect(branchDraft.status).toBe(400);
       }
+
+      const legacyIncomplete = await prisma.product.create({
+        data: {
+          registrantId: f.owner.id,
+          categoryId: category.id,
+          localityId: f.locality.id,
+          name: 'Hồ sơ nháp chưa hoàn thiện REG-03',
+          status: 'DRAFT',
+          formData: { ...fullForm, declarationAccepted: false },
+        },
+      });
+      const legacySubmit = await f.call(
+        'owner',
+        `/my/products/${legacyIncomplete.id}/submit`,
+        'POST',
+      );
+      expect(legacySubmit.status).toBe(400);
+      expect(
+        (
+          await prisma.product.findUniqueOrThrow({
+            where: { id: legacyIncomplete.id },
+          })
+        ).status,
+      ).toBe('DRAFT');
 
       // REG-03 boundary validation on create/update: assessmentYear outside 2020..2100 or invalid sampleQuantity returns 400
       for (const badForm of [
@@ -1005,6 +999,164 @@ describe('admin product mutations and registration snapshots', () => {
       expect(reassessAfter.registrationSnapshot).toMatchObject({
         formData: { registrationType: 'REASSESSMENT' },
       });
+    });
+  });
+
+  it('blocks auto-reactivating inactive locality via formData and enforces 255-char limit on return reason', async () => {
+    await withTestApp(async ({ app, prisma, baseUrl }) => {
+      const f = await adminFixture(app, prisma, baseUrl);
+      const category = await prisma.productCategory.findFirstOrThrow({
+        where: { isActive: true },
+      });
+      const inactiveLoc = await prisma.locality.create({
+        data: {
+          code: `XP-INACT-${Date.now()}`,
+          eventName: 'Xã Đã Tắt',
+          name: 'Xã Đã Tắt',
+          provinceName: 'Tỉnh Đã Tắt',
+          isActive: false,
+        },
+      });
+      const base = draftPayload(category.id);
+      const createOnInactive = await f.call('owner', '/my/products', 'POST', {
+        ...base,
+        localityId: null,
+        formData: {
+          ...base.formData,
+          provinceName: 'Tỉnh Đã Tắt',
+          localityName: 'Xã Đã Tắt',
+        },
+      });
+      expect(createOnInactive.status).toBe(409);
+      expect(
+        (await prisma.locality.findUniqueOrThrow({ where: { id: inactiveLoc.id } }))
+          .isActive,
+      ).toBe(false);
+
+      const submitted = await prisma.product.create({
+        data: {
+          registrantId: f.owner.id,
+          categoryId: category.id,
+          localityId: f.locality.id,
+          name: 'Product for return length check',
+          status: ProductStatus.SUBMITTED,
+          submittedAt: new Date(),
+          formData: {},
+        },
+      });
+      const tooLong = await f.call(
+        'viewer',
+        `/admin/products/${submitted.id}/return`,
+        'POST',
+        { reason: 'a'.repeat(256) },
+      );
+      expect(tooLong.status).toBe(400);
+
+      const exactMax = await f.call(
+        'viewer',
+        `/admin/products/${submitted.id}/return`,
+        'POST',
+        { reason: 'b'.repeat(255) },
+      );
+      expect(exactMax.status).toBe(201);
+      expect(exactMax.body.data.returnReason).toBe('b'.repeat(255));
+    });
+  });
+
+  it('preserves public fixed order, nulls last, and equal-value tie-breakers across pages (#55)', async () => {
+    await withTestApp(async ({ app, prisma, baseUrl }) => {
+      const f = await adminFixture(app, prisma, baseUrl);
+      const category = await prisma.productCategory.findFirstOrThrow();
+      const baseTime = new Date('2026-02-01T00:00:00Z');
+      await prisma.product.createMany({
+        data: [
+          {
+            id: 'sort-prod-a',
+            registrantId: f.owner.id,
+            categoryId: category.id,
+            localityId: f.locality.id,
+            name: 'Sort Tie Product',
+            status: ProductStatus.COMPLETED,
+            publicationState: ProductPublicationState.PUBLISHED,
+            submittedAt: baseTime,
+            completedAt: baseTime,
+            finalScore: 80,
+            starRating: 4,
+            createdAt: new Date('2026-02-01T00:00:00Z'),
+            formData: {},
+          },
+          {
+            id: 'sort-prod-b',
+            registrantId: f.owner.id,
+            categoryId: category.id,
+            localityId: f.locality.id,
+            name: 'Sort Tie Product',
+            status: ProductStatus.COMPLETED,
+            publicationState: ProductPublicationState.PUBLISHED,
+            submittedAt: baseTime,
+            completedAt: baseTime,
+            finalScore: 80,
+            starRating: 4,
+            createdAt: new Date('2026-02-01T00:00:00Z'),
+            formData: {},
+          },
+          {
+            id: 'sort-prod-null',
+            registrantId: f.owner.id,
+            categoryId: category.id,
+            localityId: f.locality.id,
+            name: 'Sort Tie Product',
+            status: ProductStatus.APPROVED,
+            submittedAt: null,
+            finalScore: null,
+            createdAt: new Date('2026-01-31T00:00:00Z'),
+            formData: {},
+          },
+        ],
+      });
+
+      const pub1 = await apiRequest<any>(
+        baseUrl,
+        '/products?q=Sort%20Tie%20Product&limit=1&page=1',
+      );
+      const pub2 = await apiRequest<any>(
+        baseUrl,
+        '/products?q=Sort%20Tie%20Product&limit=1&page=2',
+      );
+      expect(pub1.body.data.map((p: any) => p.id)).toEqual(['sort-prod-b']);
+      expect(pub2.body.data.map((p: any) => p.id)).toEqual(['sort-prod-a']);
+
+      const myScore1 = await f.call(
+        'owner',
+        '/my/products?q=Sort%20Tie%20Product&sortBy=finalScore&sortDirection=asc&limit=2&page=1',
+      );
+      const myScore2 = await f.call(
+        'owner',
+        '/my/products?q=Sort%20Tie%20Product&sortBy=finalScore&sortDirection=asc&limit=2&page=2',
+      );
+      expect(myScore1.body.data.map((p: any) => p.id)).toEqual([
+        'sort-prod-a',
+        'sort-prod-b',
+      ]);
+      expect(myScore2.body.data.map((p: any) => p.id)).toEqual([
+        'sort-prod-null',
+      ]);
+
+      const adminPage1 = await f.call(
+        'viewer',
+        '/admin/products?q=Sort%20Tie%20Product&sortBy=finalScore&sortDirection=desc&limit=2&page=1',
+      );
+      const adminPage2 = await f.call(
+        'viewer',
+        '/admin/products?q=Sort%20Tie%20Product&sortBy=finalScore&sortDirection=desc&limit=2&page=2',
+      );
+      expect(adminPage1.body.data.map((p: any) => p.id)).toEqual([
+        'sort-prod-b',
+        'sort-prod-a',
+      ]);
+      expect(adminPage2.body.data.map((p: any) => p.id)).toEqual([
+        'sort-prod-null',
+      ]);
     });
   });
 });

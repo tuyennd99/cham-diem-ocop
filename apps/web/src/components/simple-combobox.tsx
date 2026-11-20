@@ -1,6 +1,5 @@
 'use client';
 
-import { isEmpty } from 'lodash';
 import {
   Combobox,
   ComboboxAnchor,
@@ -54,7 +53,7 @@ export function SimpleCombobox({
         <ComboboxTrigger />
       </ComboboxAnchor>
       <ComboboxContent>
-        <ComboboxEmpty>{isEmpty(options) ? 'Không có dữ liệu' : emptyText}</ComboboxEmpty>
+        <ComboboxEmpty>{options.length === 0 ? 'Không có dữ liệu' : emptyText}</ComboboxEmpty>
         {options.map((option) => (
           <ComboboxItem
             key={option.value}

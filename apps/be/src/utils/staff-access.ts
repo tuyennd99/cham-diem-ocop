@@ -37,13 +37,7 @@ const accessSelect = {
 } as const;
 
 export async function lockStaffMutation(tx: Prisma.TransactionClient) {
-  await tx.$queryRaw(
-    Prisma.sql`SELECT "id" FROM ${databaseObject('product_categories')} ORDER BY "id" FOR UPDATE`,
-  );
-  await tx.$queryRaw(
-    Prisma.sql`SELECT "id" FROM ${databaseObject('users')}
-      WHERE "role" <> ${Role.REGISTRANT}::${databaseObject('Role')} ORDER BY "id" FOR UPDATE`,
-  );
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('staff_access_mutation'))`;
 }
 
 export async function assertStaffManager(
@@ -128,7 +122,10 @@ export async function createStaff(
     staffPermissions: input.staffPermissions,
     currentRole: Role.VIEWER,
   });
-  if (!resolved.staffPermissions.length && !resolved.roles.includes(Role.REGISTRANT)) {
+  if (
+    !resolved.staffPermissions.length &&
+    !resolved.roles.includes(Role.REGISTRANT)
+  ) {
     throw new BadRequestException(
       'Active staff must have at least one permission',
     );
@@ -204,7 +201,9 @@ export async function applyStaffAccess(
       id,
       OR: [
         { role: { not: Role.REGISTRANT } },
-        ...(Array.isArray(input.roles) && input.roles.length > 0 ? [{ id }] : []),
+        ...(Array.isArray(input.roles) && input.roles.length > 0
+          ? [{ id }]
+          : []),
       ],
     },
     select: accessSelect,
@@ -293,9 +292,33 @@ export async function applyStaffAccess(
     currentPermissions.includes(StaffPermission.SCORE) &&
     (!isActive || !permissions.includes(StaffPermission.SCORE))
   ) {
-    const [openCategoryProducts, openProductAssignments] = await Promise.all([
-      tx.product.count({
-        where: {
+    await tx.$queryRaw(
+      Prisma.sql`SELECT "id" FROM ${databaseObject('product_categories')}
+        WHERE "id" IN (
+          SELECT "categoryId" FROM ${databaseObject('judge_assignments')} WHERE "judgeId" = ${id}
+        )
+        ORDER BY "id" FOR UPDATE`,
+    );
+    await tx.$queryRaw(
+      Prisma.sql`SELECT "id" FROM ${databaseObject('users')} WHERE "id" = ${id} FOR UPDATE`,
+    );
+    const openCategoryProducts = await tx.product.count({
+      where: {
+        status: {
+          in: [
+            ProductStatus.SUBMITTED,
+            ProductStatus.APPROVED,
+            ProductStatus.SCORING,
+          ],
+        },
+        category: { assignments: { some: { judgeId: id } } },
+      },
+    });
+    const openProductAssignments = await tx.productJudgeAssignment.count({
+      where: {
+        judgeId: id,
+        isActive: true,
+        product: {
           status: {
             in: [
               ProductStatus.SUBMITTED,
@@ -303,25 +326,9 @@ export async function applyStaffAccess(
               ProductStatus.SCORING,
             ],
           },
-          category: { assignments: { some: { judgeId: id } } },
         },
-      }),
-      tx.productJudgeAssignment.count({
-        where: {
-          judgeId: id,
-          isActive: true,
-          product: {
-            status: {
-              in: [
-                ProductStatus.SUBMITTED,
-                ProductStatus.APPROVED,
-                ProductStatus.SCORING,
-              ],
-            },
-          },
-        },
-      }),
-    ]);
+      },
+    });
     if (openCategoryProducts || openProductAssignments) {
       throw new ConflictException(
         'Reassign open products before removing scoring access',

@@ -18,7 +18,9 @@ async function withFixture(
     await prisma.product.deleteMany({
       where: { registrantId: fixture.registrantId },
     });
-    await prisma.criteriaSet.deleteMany({ where: { categoryId: fixture.categoryId } });
+    await prisma.criteriaSet.deleteMany({
+      where: { categoryId: fixture.categoryId },
+    });
     await prisma.productCategory.delete({ where: { id: fixture.categoryId } });
     await prisma.user.deleteMany({
       where: {
@@ -499,7 +501,12 @@ describe('assignment persistence', () => {
         await evaluations.saveDraft(
           fixture.judgeIds[0],
           fixture.productId,
-          scorePayload(fixture, 50, 40, 'Ghi chú tiêu chí A giữ nguyên (ASG-07)'),
+          scorePayload(
+            fixture,
+            50,
+            40,
+            'Ghi chú tiêu chí A giữ nguyên (ASG-07)',
+          ),
         );
 
         const assertDraftPreserved = async () => {
@@ -642,7 +649,9 @@ describe('assignment persistence', () => {
 
         // Product remains SCORING with null finalScore/starRating because criterion B is uncovered
         await expect(
-          prisma.product.findUniqueOrThrow({ where: { id: fixture.productId } }),
+          prisma.product.findUniqueOrThrow({
+            where: { id: fixture.productId },
+          }),
         ).resolves.toMatchObject({
           status: ProductStatus.SCORING,
           finalScore: null,
@@ -804,7 +813,8 @@ describe('assignment persistence', () => {
           expect(outcomes[1]).toMatchObject({
             status: 'rejected',
             reason: expect.objectContaining({
-              message: 'Score every assigned subcriterion before submitting',
+              message:
+                'Score at least one assigned subcriterion before submitting',
             }),
           });
           await expect(

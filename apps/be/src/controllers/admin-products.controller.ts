@@ -138,12 +138,7 @@ export class AdminProductsController {
     @CurrentUser() principal: AuthenticatedPrincipal,
     @Req() request: Request,
   ) {
-    return this.admin.approveProduct(
-      id,
-      body,
-      principal,
-      requestMeta(request),
-    );
+    return this.admin.approveProduct(id, body, principal, requestMeta(request));
   }
 
   @Post(':id/return')
@@ -155,12 +150,7 @@ export class AdminProductsController {
     @CurrentUser() principal: AuthenticatedPrincipal,
     @Req() request: Request,
   ) {
-    return this.admin.returnProduct(
-      id,
-      body,
-      principal,
-      requestMeta(request),
-    );
+    return this.admin.returnProduct(id, body, principal, requestMeta(request));
   }
 
   @Post(':id/publish-results')
@@ -189,12 +179,7 @@ export class AdminProductsController {
     @CurrentUser() principal: AuthenticatedPrincipal,
     @Req() request: Request,
   ) {
-    return this.admin.reopenProduct(
-      id,
-      body,
-      principal,
-      requestMeta(request),
-    );
+    return this.admin.reopenProduct(id, body, principal, requestMeta(request));
   }
 
   @Get(':id/eligible-judges')
@@ -272,7 +257,7 @@ export class AdminProductsController {
     },
   })
   @UseInterceptors(
-    new CleanupRejectedUploadInterceptor(),
+    CleanupRejectedUploadInterceptor,
     FileInterceptor('file', productUploadOptions()),
   )
   upload(

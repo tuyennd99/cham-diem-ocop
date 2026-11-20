@@ -1,14 +1,18 @@
 import { Transform, Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ProductStatus } from '@prisma/client';
 import {
   IsBoolean,
+  IsDateString,
   IsDefined,
   IsEmail,
+  IsEnum,
   IsIn,
   IsInt,
   IsObject,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -16,13 +20,21 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
-import { productRegistrationTypes } from '../constants/products';
+import {
+  PRODUCT_DATE_BASIS,
+  SORT_DIRECTION,
+  productDateBasisValues,
+  productRegistrationTypes,
+  productSortByValues,
+  sortDirectionValues,
+} from '../constants/products';
 
-const trimRequired = ({ value }: { value: unknown }) =>
-  typeof value === 'string' ? value.trim() : value;
-
-const parseQueryBoolean = ({ value }: { value: unknown }) =>
-  value === 'true' ? true : value === 'false' ? false : value;
+import {
+  normalizedEmail,
+  parseQueryBoolean,
+  trimRequired,
+  trimSearch,
+} from './common.dto';
 
 export class ProductApplicationDto {
   @ApiPropertyOptional({ maxLength: 255, nullable: true })
@@ -66,7 +78,9 @@ export class ProductApplicationDto {
   provinceName?: string;
 
   @ApiPropertyOptional({ maxLength: 255, nullable: true })
-  @ValidateIf((_object, value) => value !== undefined && value !== null && value !== '')
+  @ValidateIf(
+    (_object, value) => value !== undefined && value !== null && value !== '',
+  )
   @Transform(trimRequired)
   @IsString()
   @MinLength(1)
@@ -74,7 +88,9 @@ export class ProductApplicationDto {
   localityName?: string;
 
   @ApiPropertyOptional({ maxLength: 50, nullable: true })
-  @ValidateIf((_object, value) => value !== undefined && value !== null && value !== '')
+  @ValidateIf(
+    (_object, value) => value !== undefined && value !== null && value !== '',
+  )
   @Transform(trimRequired)
   @IsString()
   @MinLength(1)
@@ -82,17 +98,19 @@ export class ProductApplicationDto {
   localityCode?: string;
 
   @ApiPropertyOptional({ maxLength: 30, nullable: true })
-  @ValidateIf((_object, value) => value !== undefined && value !== null && value !== '')
+  @ValidateIf(
+    (_object, value) => value !== undefined && value !== null && value !== '',
+  )
   @Transform(trimRequired)
   @IsString()
   @MaxLength(30)
   phone?: string;
 
   @ApiPropertyOptional({ format: 'email', maxLength: 320, nullable: true })
-  @ValidateIf((_object, value) => value !== undefined && value !== null && value !== '')
-  @Transform(({ value }) =>
-    typeof value === 'string' ? value.trim().toLowerCase() : value,
+  @ValidateIf(
+    (_object, value) => value !== undefined && value !== null && value !== '',
   )
+  @Transform(normalizedEmail)
   @IsEmail()
   @MaxLength(320)
   email?: string;
@@ -200,11 +218,16 @@ export class ProductUpdateDto {
 }
 
 export class PublicProductQueryDto {
-  @ApiPropertyOptional({ minimum: 1, default: 1 })
+  @ApiPropertyOptional({
+    minimum: 1,
+    maximum: Number.MAX_SAFE_INTEGER,
+    default: 1,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(Number.MAX_SAFE_INTEGER)
   page = 1;
 
   @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 20 })
@@ -223,7 +246,7 @@ export class PublicProductQueryDto {
 
   @ApiPropertyOptional({ maxLength: 100 })
   @IsOptional()
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @Transform(trimRequired)
   @IsString()
   @MaxLength(100)
   q?: string;
@@ -233,6 +256,103 @@ export class PublicProductQueryDto {
   @Transform(parseQueryBoolean)
   @IsBoolean()
   approvedOnly?: boolean;
+}
+
+export class MyProductsQueryDto {
+  @ApiPropertyOptional({
+    minimum: 1,
+    maximum: Number.MAX_SAFE_INTEGER,
+    default: 1,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(Number.MAX_SAFE_INTEGER)
+  page = 1;
+
+  @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 20 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit = 20;
+
+  @ApiPropertyOptional({ maxLength: 100 })
+  @IsOptional()
+  @Transform(trimSearch)
+  @IsString()
+  @MaxLength(100)
+  q?: string;
+
+  @ApiPropertyOptional({ maxLength: 100 })
+  @IsOptional()
+  @Transform(trimRequired)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  categoryId?: string;
+
+  @ApiPropertyOptional({ enum: ProductStatus })
+  @IsOptional()
+  @IsEnum(ProductStatus)
+  status?: ProductStatus;
+
+  @ApiPropertyOptional({ enum: productRegistrationTypes })
+  @IsOptional()
+  @IsIn(productRegistrationTypes)
+  registrationType?: (typeof productRegistrationTypes)[number];
+
+  @ApiPropertyOptional({ minimum: 2020, maximum: 2100 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(2020)
+  @Max(2100)
+  assessmentYear?: number;
+
+  @ApiPropertyOptional({
+    enum: productDateBasisValues,
+    default: PRODUCT_DATE_BASIS.SUBMITTED_AT,
+  })
+  @IsOptional()
+  @IsIn(productDateBasisValues)
+  dateBasis: (typeof productDateBasisValues)[number] =
+    PRODUCT_DATE_BASIS.SUBMITTED_AT;
+
+  @ApiPropertyOptional({ format: 'date-time' })
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsDateString({ strict: true })
+  @Matches(/(?:Z|[+-]\d{2}:\d{2})$/i)
+  from?: string;
+
+  @ApiPropertyOptional({ format: 'date-time' })
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsDateString({ strict: true })
+  @Matches(/(?:Z|[+-]\d{2}:\d{2})$/i)
+  toExclusive?: string;
+
+  @ApiPropertyOptional({ enum: [1, 2, 3, 4, 5] })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  starRating?: 1 | 2 | 3 | 4 | 5;
+
+  @ApiPropertyOptional({ enum: productSortByValues })
+  @IsOptional()
+  @IsIn(productSortByValues)
+  sortBy?: (typeof productSortByValues)[number];
+
+  @ApiPropertyOptional({
+    enum: sortDirectionValues,
+    default: SORT_DIRECTION.DESC,
+  })
+  @IsOptional()
+  @IsIn(sortDirectionValues)
+  sortDirection?: (typeof sortDirectionValues)[number];
 }
 
 const trimNullableOptional = ({ value }: { value: unknown }) =>

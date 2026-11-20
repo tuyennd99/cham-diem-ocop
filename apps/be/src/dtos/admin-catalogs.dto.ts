@@ -1,5 +1,4 @@
 import { Transform, Type } from 'class-transformer';
-import type { TransformFnParams } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   ArrayMaxSize,
@@ -7,6 +6,7 @@ import {
   IsArray,
   IsBoolean,
   IsDateString,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -23,18 +23,27 @@ import {
 } from 'class-validator';
 import type {
   AdminCategoryQuery,
+  AdminCategorySortBy,
   CreateAdminCategoryInput,
   CreateLocalityInput,
   LocalityQuery,
+  LocalitySortBy,
   PublicLocalityQuery,
+  SortDirection,
   UpdateLocalityInput,
   UpdateAdminCategoryInput,
 } from '@ocop/shared';
+import {
+  adminCategorySortByValues,
+  localitySortByValues,
+  sortDirectionValues,
+} from '../constants/products';
 
-const trimString = ({ value }: TransformFnParams) =>
-  typeof value === 'string' ? value.trim() : value;
-const strictBoolean = ({ value }: TransformFnParams) =>
-  value === 'true' ? true : value === 'false' ? false : value;
+import {
+  parseQueryBoolean as strictBoolean,
+  trimRequired as trimString,
+} from './common.dto';
+
 const ISO_TIMESTAMP_WITH_OFFSET =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/i;
 
@@ -77,11 +86,16 @@ class RegistrationToAfterFrom implements ValidatorConstraintInterface {
 }
 
 abstract class CatalogQueryDto {
-  @ApiPropertyOptional({ minimum: 1, default: 1 })
+  @ApiPropertyOptional({
+    minimum: 1,
+    maximum: Number.MAX_SAFE_INTEGER,
+    default: 1,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(Number.MAX_SAFE_INTEGER)
   page = 1;
 
   @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 20 })
@@ -92,10 +106,11 @@ abstract class CatalogQueryDto {
   @Max(100)
   limit = 20;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ maxLength: 100 })
   @IsOptional()
   @Transform(trimString)
   @IsString()
+  @MaxLength(100)
   q?: string;
 
   @ApiPropertyOptional({ type: Boolean })
@@ -109,12 +124,30 @@ export class AdminCategoriesQueryDto
   extends CatalogQueryDto
   implements AdminCategoryQuery
 {
+  @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 100 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  override limit = 100;
+
   @ApiPropertyOptional({ maxLength: 100 })
   @IsOptional()
   @Transform(trimString)
   @IsString()
   @MaxLength(100)
   managingAgencyId?: string;
+
+  @ApiPropertyOptional({ enum: adminCategorySortByValues })
+  @IsOptional()
+  @IsIn(adminCategorySortByValues)
+  sortBy?: AdminCategorySortBy;
+
+  @ApiPropertyOptional({ enum: sortDirectionValues })
+  @IsOptional()
+  @IsIn(sortDirectionValues)
+  sortDirection?: SortDirection;
 }
 
 export class CreateAdminCategoryDto implements CreateAdminCategoryInput {
@@ -202,11 +235,16 @@ export class UpdateAdminCategoryDto implements UpdateAdminCategoryInput {
 }
 
 abstract class LocalitiesQueryDto {
-  @ApiPropertyOptional({ minimum: 1, default: 1 })
+  @ApiPropertyOptional({
+    minimum: 1,
+    maximum: Number.MAX_SAFE_INTEGER,
+    default: 1,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(Number.MAX_SAFE_INTEGER)
   page = 1;
 
   @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 20 })
@@ -217,17 +255,29 @@ abstract class LocalitiesQueryDto {
   @Max(100)
   limit = 20;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ maxLength: 100 })
   @IsOptional()
   @Transform(trimString)
   @IsString()
+  @MaxLength(100)
   q?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ maxLength: 255 })
   @IsOptional()
   @Transform(trimString)
   @IsString()
+  @MaxLength(255)
   provinceName?: string;
+
+  @ApiPropertyOptional({ enum: localitySortByValues })
+  @IsOptional()
+  @IsIn(localitySortByValues)
+  sortBy?: LocalitySortBy;
+
+  @ApiPropertyOptional({ enum: sortDirectionValues })
+  @IsOptional()
+  @IsIn(sortDirectionValues)
+  sortDirection?: SortDirection;
 }
 
 export class AdminLocalitiesQueryDto
@@ -276,22 +326,20 @@ export class CreateLocalityDto implements CreateLocalityInput {
   @MaxLength(255)
   provinceName!: string;
 
-  @ApiPropertyOptional({ nullable: true, format: 'date-time' })
-  @IsOptional()
+  @ApiProperty({ format: 'date-time' })
   @Transform(trimString)
   @IsString()
   @IsDateString({ strict: true })
   @Matches(ISO_TIMESTAMP_WITH_OFFSET)
-  effectiveFrom?: string | null;
+  effectiveFrom!: string;
 
-  @ApiPropertyOptional({ nullable: true, format: 'date-time' })
-  @IsOptional()
+  @ApiProperty({ format: 'date-time' })
   @Transform(trimString)
   @IsString()
   @IsDateString({ strict: true })
   @Matches(ISO_TIMESTAMP_WITH_OFFSET)
   @Validate(EffectiveToAfterFrom)
-  effectiveTo?: string | null;
+  effectiveTo!: string;
 
   @ApiPropertyOptional({ nullable: true, format: 'date-time' })
   @IsOptional()

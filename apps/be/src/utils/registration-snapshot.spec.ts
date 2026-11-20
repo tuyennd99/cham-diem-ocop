@@ -114,8 +114,9 @@ describe('buildRegistrationSnapshot', () => {
     ['assessmentYear', 2101, 'năm đăng ký phải là số nguyên từ 2020 đến 2100'],
     ['declarationAccepted', false, 'chưa xác nhận cam kết hồ sơ'],
   ])('names the invalid field %s', (key, value, message) => {
-    expect(() => validateProductApplicationForm({ ...product.formData, [key]: value }))
-      .toThrow(message);
+    expect(() =>
+      validateProductApplicationForm({ ...product.formData, [key]: value }),
+    ).toThrow(message);
   });
 
   it('reports all invalid fields without echoing saved private values', () => {
@@ -141,13 +142,19 @@ describe('buildRegistrationSnapshot', () => {
   });
 
   it('accepts a phone instead of email and valid numeric boundaries', () => {
-    expect(validateProductApplicationForm({
-      ...product.formData,
-      email: '',
+    expect(
+      validateProductApplicationForm({
+        ...product.formData,
+        email: '',
+        phone: '0123456789',
+        sampleQuantity: 100000,
+        assessmentYear: 2020,
+      }),
+    ).toMatchObject({
       phone: '0123456789',
       sampleQuantity: 100000,
       assessmentYear: 2020,
-    })).toMatchObject({ phone: '0123456789', sampleQuantity: 100000, assessmentYear: 2020 });
+    });
   });
 
   describe('validateProductDraftWrite & mergeProductApplicationFormData', () => {

@@ -1,5 +1,12 @@
 import {
+  ADMIN_CATEGORY_SORT_BY,
+  ADMIN_CRITERIA_SET_SORT_BY,
+  ADMIN_EVALUATION_SORT_BY,
+  ADMIN_USER_SORT_BY,
   EVALUATION_STATUS,
+  JUDGE_QUEUE_SORT_BY,
+  LOCALITY_SORT_BY,
+  ORGANIZATION_UNIT_SORT_BY,
   PRODUCT_DATE_BASIS,
   PRODUCT_REGISTRATION_TYPE,
   PRODUCT_SORT_BY,
@@ -9,18 +16,28 @@ import {
   STAFF_PERMISSION,
   USER_KIND,
   type AdminCategoryQuery,
+  type AdminCategorySortBy,
   type AdminCriteriaSetQuery,
+  type AdminCriteriaSetSortBy,
   type AdminEvaluationQuery,
+  type AdminEvaluationSortBy,
   type AdminProductQuery,
   type AdminReportFilterQuery,
   type AdminReportQuery,
   type AdminUserQuery,
+  type AdminUserSortBy,
   type EvaluationRecordStatus,
+  type JudgeQueueQuery,
+  type JudgeQueueSortBy,
   type LocalityQuery,
+  type LocalitySortBy,
+  type MyProductQuery,
   type OrganizationUnitQuery,
+  type OrganizationUnitSortBy,
   type ProductRegistrationType,
   type ProductStatus,
   type ReportGroupBy,
+  type SortDirection,
   type StaffPermission,
 } from '@ocop/shared';
 import {
@@ -39,6 +56,7 @@ export type AdminProductDetailTab =
 export type AdminProductSearch = AdminProductQuery & {
   tab?: AdminProductDetailTab;
   returnMode?: typeof PRODUCT_WORKSPACE_MODE.PRODUCTS | typeof PRODUCT_WORKSPACE_MODE.REGISTRATIONS;
+  returnProductId?: string;
 };
 
 const PRODUCT_STATUSES: readonly ProductStatus[] = [
@@ -192,6 +210,9 @@ export function parseAdminProductSearch(search: Record<string, unknown>): AdminP
   ] as const);
   if (returnMode !== undefined) result.returnMode = returnMode;
 
+  const returnProductId = parseScalarString(search.returnProductId, 100);
+  if (returnProductId !== undefined) result.returnProductId = returnProductId;
+
   return result;
 }
 
@@ -204,21 +225,59 @@ export function parseAdminProductPrintSearch(search: Record<string, unknown>): A
 }
 
 export function toAdminProductApiQuery(search: AdminProductSearch): AdminProductQuery {
-  const { tab: _tab, returnMode: _returnMode, ...query } = search;
+  const {
+    tab: _tab,
+    returnMode: _returnMode,
+    returnProductId: _returnProductId,
+    ...query
+  } = search;
+  return query;
+}
+
+export function toMyProductApiQuery(search: AdminProductSearch): MyProductQuery {
+  const {
+    tab: _tab,
+    returnMode: _returnMode,
+    returnProductId: _returnProductId,
+    registrantId: _registrantId,
+    registrantQ: _registrantQ,
+    localityId: _localityId,
+    unmappedLocality: _unmappedLocality,
+    ...query
+  } = search;
   return query;
 }
 
 export type AdminCatalogTab = (typeof ADMIN_CATALOG_TAB)[keyof typeof ADMIN_CATALOG_TAB];
 
-export type AdminCatalogSearch = AdminCategoryQuery &
+export type AdminCatalogSearch = Omit<AdminCategoryQuery, 'sortBy'> &
   Pick<LocalityQuery, 'provinceName'> & {
     tab?: AdminCatalogTab;
+    sortBy?: AdminCategorySortBy | LocalitySortBy;
+    sortDirection?: SortDirection;
   };
 
 const CATALOG_TABS: readonly AdminCatalogTab[] = [
   ADMIN_CATALOG_TAB.CATALOG,
   ADMIN_CATALOG_TAB.LOCALITIES,
 ];
+const ADMIN_CATEGORY_SORT_BYS: readonly AdminCategorySortBy[] = [
+  ADMIN_CATEGORY_SORT_BY.ORDER,
+  ADMIN_CATEGORY_SORT_BY.NAME,
+  ADMIN_CATEGORY_SORT_BY.CRITERIA_SET,
+  ADMIN_CATEGORY_SORT_BY.REFERENCE_COUNT,
+  ADMIN_CATEGORY_SORT_BY.IS_ACTIVE,
+];
+const LOCALITY_SORT_BYS: readonly LocalitySortBy[] = [
+  LOCALITY_SORT_BY.CODE,
+  LOCALITY_SORT_BY.EVENT_NAME,
+  LOCALITY_SORT_BY.NAME,
+  LOCALITY_SORT_BY.PROVINCE_NAME,
+  LOCALITY_SORT_BY.EFFECTIVE_RANGE,
+  LOCALITY_SORT_BY.REGISTRATION_RANGE,
+  LOCALITY_SORT_BY.IS_ACTIVE,
+];
+const SORT_DIRECTIONS: readonly SortDirection[] = [SORT_DIRECTION.ASC, SORT_DIRECTION.DESC];
 
 export function parseAdminCatalogSearch(search: Record<string, unknown>): AdminCatalogSearch {
   const result: AdminCatalogSearch = {
@@ -232,22 +291,34 @@ export function parseAdminCatalogSearch(search: Record<string, unknown>): AdminC
   const isActive = parseScalarBoolean(search.isActive);
   if (isActive !== undefined) result.isActive = isActive;
 
+  const managingAgencyId = parseScalarString(search.managingAgencyId, 100);
+  if (managingAgencyId !== undefined) result.managingAgencyId = managingAgencyId;
+
   const provinceName = parseScalarString(search.provinceName, 255);
   if (provinceName !== undefined) result.provinceName = provinceName;
 
   const tab = parseEnum(search.tab, CATALOG_TABS);
   if (tab !== undefined) result.tab = tab;
 
+  const sortBy =
+    parseEnum(search.sortBy, ADMIN_CATEGORY_SORT_BYS) ??
+    parseEnum(search.sortBy, LOCALITY_SORT_BYS);
+  if (sortBy !== undefined) result.sortBy = sortBy;
+
+  const sortDirection = parseEnum(search.sortDirection, SORT_DIRECTIONS);
+  if (sortDirection !== undefined) result.sortDirection = sortDirection;
+
   return result;
 }
 
 export function toAdminCategoryApiQuery(search: AdminCatalogSearch): AdminCategoryQuery {
-  const query: AdminCategoryQuery = {
-    page: search.page ?? 1,
-    limit: search.limit ?? 20,
-  };
+  const query: AdminCategoryQuery = {};
   if (search.q !== undefined) query.q = search.q;
   if (search.isActive !== undefined) query.isActive = search.isActive;
+  if (search.managingAgencyId !== undefined) query.managingAgencyId = search.managingAgencyId;
+  const sortBy = parseEnum(search.sortBy, ADMIN_CATEGORY_SORT_BYS);
+  if (sortBy !== undefined) query.sortBy = sortBy;
+  if (search.sortDirection !== undefined) query.sortDirection = search.sortDirection;
   return query;
 }
 
@@ -263,13 +334,19 @@ export function toAdminLocalityApiQuery(search: AdminCatalogSearch): LocalityQue
   if (search.q !== undefined) query.q = search.q;
   if (search.isActive !== undefined) query.isActive = search.isActive;
   if (search.provinceName !== undefined) query.provinceName = search.provinceName;
+  const sortBy = parseEnum(search.sortBy, LOCALITY_SORT_BYS);
+  if (sortBy !== undefined) query.sortBy = sortBy;
+  if (search.sortDirection !== undefined) query.sortDirection = search.sortDirection;
   return query;
 }
 
 export type AdminUsersTab = (typeof ADMIN_USERS_TAB)[keyof typeof ADMIN_USERS_TAB];
 
-export type AdminUsersSearch = AdminUserQuery & {
+export type AdminUsersSearch = Omit<AdminUserQuery, 'sortBy'> & {
   tab?: AdminUsersTab;
+  managingAgencyId?: string;
+  sortBy?: AdminUserSortBy | OrganizationUnitSortBy;
+  sortDirection?: SortDirection;
 };
 
 const STAFF_PERMISSIONS: readonly StaffPermission[] = [
@@ -279,6 +356,22 @@ const STAFF_PERMISSIONS: readonly StaffPermission[] = [
 ];
 const USER_KINDS = [USER_KIND.STAFF, USER_KIND.REGISTRANT] as const;
 const USERS_TABS: readonly AdminUsersTab[] = [ADMIN_USERS_TAB.USERS, ADMIN_USERS_TAB.UNITS];
+const ADMIN_USER_SORT_BYS: readonly AdminUserSortBy[] = [
+  ADMIN_USER_SORT_BY.CREATED_AT,
+  ADMIN_USER_SORT_BY.FULL_NAME,
+  ADMIN_USER_SORT_BY.EMAIL,
+  ADMIN_USER_SORT_BY.UNIT,
+  ADMIN_USER_SORT_BY.VERIFIED,
+  ADMIN_USER_SORT_BY.IS_ACTIVE,
+];
+const ORGANIZATION_UNIT_SORT_BYS: readonly OrganizationUnitSortBy[] = [
+  ORGANIZATION_UNIT_SORT_BY.ORDER,
+  ORGANIZATION_UNIT_SORT_BY.CODE,
+  ORGANIZATION_UNIT_SORT_BY.NAME,
+  ORGANIZATION_UNIT_SORT_BY.MANAGING_AGENCY,
+  ORGANIZATION_UNIT_SORT_BY.DESCRIPTION,
+  ORGANIZATION_UNIT_SORT_BY.IS_ACTIVE,
+];
 
 export function parseAdminUsersSearch(search: Record<string, unknown>): AdminUsersSearch {
   const result: AdminUsersSearch = {
@@ -295,6 +388,9 @@ export function parseAdminUsersSearch(search: Record<string, unknown>): AdminUse
   const organizationUnitId = parseScalarString(search.organizationUnitId, 100);
   if (organizationUnitId !== undefined) result.organizationUnitId = organizationUnitId;
 
+  const managingAgencyId = parseScalarString(search.managingAgencyId, 100);
+  if (managingAgencyId !== undefined) result.managingAgencyId = managingAgencyId;
+
   const isActive = parseScalarBoolean(search.isActive);
   if (isActive !== undefined) result.isActive = isActive;
 
@@ -306,6 +402,14 @@ export function parseAdminUsersSearch(search: Record<string, unknown>): AdminUse
 
   const tab = parseEnum(search.tab, USERS_TABS);
   if (tab !== undefined) result.tab = tab;
+
+  const sortBy =
+    parseEnum(search.sortBy, ADMIN_USER_SORT_BYS) ??
+    parseEnum(search.sortBy, ORGANIZATION_UNIT_SORT_BYS);
+  if (sortBy !== undefined) result.sortBy = sortBy;
+
+  const sortDirection = parseEnum(search.sortDirection, SORT_DIRECTIONS);
+  if (sortDirection !== undefined) result.sortDirection = sortDirection;
 
   return result;
 }
@@ -321,6 +425,9 @@ export function toAdminUsersApiQuery(search: AdminUsersSearch): AdminUserQuery {
   if (search.isActive !== undefined) query.isActive = search.isActive;
   if (search.verified !== undefined) query.verified = search.verified;
   if (search.kind !== undefined) query.kind = search.kind;
+  const sortBy = parseEnum(search.sortBy, ADMIN_USER_SORT_BYS);
+  if (sortBy !== undefined) query.sortBy = sortBy;
+  if (search.sortDirection !== undefined) query.sortDirection = search.sortDirection;
   return query;
 }
 
@@ -331,14 +438,20 @@ export function toAdminUnitsApiQuery(search: AdminUsersSearch): OrganizationUnit
   };
   if (search.q !== undefined) query.q = search.q;
   if (search.isActive !== undefined) query.isActive = search.isActive;
+  if (search.managingAgencyId !== undefined) query.managingAgencyId = search.managingAgencyId;
+  const sortBy = parseEnum(search.sortBy, ORGANIZATION_UNIT_SORT_BYS);
+  if (sortBy !== undefined) query.sortBy = sortBy;
+  if (search.sortDirection !== undefined) query.sortDirection = search.sortDirection;
   return query;
 }
 
 export type AdminScoringTab = (typeof ADMIN_SCORING_TAB)[keyof typeof ADMIN_SCORING_TAB];
 
-export type AdminScoringSearch = AdminCriteriaSetQuery &
-  AdminEvaluationQuery & {
+export type AdminScoringSearch = Omit<AdminCriteriaSetQuery, 'sortBy'> &
+  Omit<AdminEvaluationQuery, 'sortBy'> & {
     tab?: AdminScoringTab;
+    sortBy?: AdminCriteriaSetSortBy | AdminEvaluationSortBy;
+    sortDirection?: SortDirection;
   };
 
 const SCORING_TABS: readonly AdminScoringTab[] = [
@@ -349,6 +462,20 @@ const EVALUATION_STATUSES: readonly EvaluationRecordStatus[] = [
   EVALUATION_STATUS.IN_PROGRESS,
   EVALUATION_STATUS.SUBMITTED,
   EVALUATION_STATUS.EXCLUDED,
+];
+const ADMIN_CRITERIA_SET_SORT_BYS: readonly AdminCriteriaSetSortBy[] = [
+  ADMIN_CRITERIA_SET_SORT_BY.CATEGORY_NAME,
+  ADMIN_CRITERIA_SET_SORT_BY.SOURCE,
+  ADMIN_CRITERIA_SET_SORT_BY.CRITERION_COUNT,
+  ADMIN_CRITERIA_SET_SORT_BY.MAX_SCORE,
+];
+const ADMIN_EVALUATION_SORT_BYS: readonly AdminEvaluationSortBy[] = [
+  ADMIN_EVALUATION_SORT_BY.PRODUCT,
+  ADMIN_EVALUATION_SORT_BY.JUDGE,
+  ADMIN_EVALUATION_SORT_BY.SCOPE,
+  ADMIN_EVALUATION_SORT_BY.STATUS,
+  ADMIN_EVALUATION_SORT_BY.SUBMITTED_AT,
+  ADMIN_EVALUATION_SORT_BY.TOTAL,
 ];
 
 export function parseAdminScoringSearch(search: Record<string, unknown>): AdminScoringSearch {
@@ -378,6 +505,14 @@ export function parseAdminScoringSearch(search: Record<string, unknown>): AdminS
   const tab = parseEnum(search.tab, SCORING_TABS);
   if (tab !== undefined) result.tab = tab;
 
+  const sortBy =
+    parseEnum(search.sortBy, ADMIN_CRITERIA_SET_SORT_BYS) ??
+    parseEnum(search.sortBy, ADMIN_EVALUATION_SORT_BYS);
+  if (sortBy !== undefined) result.sortBy = sortBy;
+
+  const sortDirection = parseEnum(search.sortDirection, SORT_DIRECTIONS);
+  if (sortDirection !== undefined) result.sortDirection = sortDirection;
+
   return result;
 }
 
@@ -389,6 +524,9 @@ export function toAdminCriteriaSetsApiQuery(search: AdminScoringSearch): AdminCr
   if (search.q !== undefined) query.q = search.q;
   if (search.categoryId !== undefined) query.categoryId = search.categoryId;
   if (search.isActive !== undefined) query.isActive = search.isActive;
+  const sortBy = parseEnum(search.sortBy, ADMIN_CRITERIA_SET_SORT_BYS);
+  if (sortBy !== undefined) query.sortBy = sortBy;
+  if (search.sortDirection !== undefined) query.sortDirection = search.sortDirection;
   return query;
 }
 
@@ -402,6 +540,9 @@ export function toAdminEvaluationsApiQuery(search: AdminScoringSearch): AdminEva
   if (search.categoryId !== undefined) query.categoryId = search.categoryId;
   if (search.judgeId !== undefined) query.judgeId = search.judgeId;
   if (search.status !== undefined) query.status = search.status;
+  const sortBy = parseEnum(search.sortBy, ADMIN_EVALUATION_SORT_BYS);
+  if (sortBy !== undefined) query.sortBy = sortBy;
+  if (search.sortDirection !== undefined) query.sortDirection = search.sortDirection;
   return query;
 }
 
@@ -514,15 +655,17 @@ export function normalizePublicProductsSearch(
   return result;
 }
 
-export interface JudgeQueueSearch {
-  page?: number;
-  limit?: number;
-  q?: string;
-  categoryId?: string;
-  evaluationStatus?: EvaluationRecordStatus;
-  sortBy?: string;
-  sortDirection?: 'asc' | 'desc';
-}
+const JUDGE_QUEUE_SORT_BYS: readonly JudgeQueueSortBy[] = [
+  JUDGE_QUEUE_SORT_BY.UPDATED_AT,
+  JUDGE_QUEUE_SORT_BY.NAME,
+  JUDGE_QUEUE_SORT_BY.CATEGORY,
+  JUDGE_QUEUE_SORT_BY.STATUS,
+  JUDGE_QUEUE_SORT_BY.EVAL_STATUS,
+  JUDGE_QUEUE_SORT_BY.TOTAL_SCORE,
+  JUDGE_QUEUE_SORT_BY.ATTACHMENTS,
+];
+
+export type JudgeQueueSearch = JudgeQueueQuery;
 
 export function parseJudgeQueueSearch(search: Record<string, unknown>): JudgeQueueSearch {
   const result: JudgeQueueSearch = {
@@ -535,12 +678,22 @@ export function parseJudgeQueueSearch(search: Record<string, unknown>): JudgeQue
   if (categoryId !== undefined) result.categoryId = categoryId;
   const evaluationStatus = parseEnum(search.evaluationStatus, EVALUATION_STATUSES);
   if (evaluationStatus !== undefined) result.evaluationStatus = evaluationStatus;
-  const sortBy = parseScalarString(search.sortBy, 50);
+  const sortBy = parseEnum(search.sortBy, JUDGE_QUEUE_SORT_BYS);
   if (sortBy !== undefined) result.sortBy = sortBy;
-  const sortDirection = parseEnum(search.sortDirection, [
-    SORT_DIRECTION.ASC,
-    SORT_DIRECTION.DESC,
-  ] as const);
+  const sortDirection = parseEnum(search.sortDirection, SORT_DIRECTIONS);
   if (sortDirection !== undefined) result.sortDirection = sortDirection;
   return result;
+}
+
+export function toJudgeQueueApiQuery(search: JudgeQueueSearch): JudgeQueueQuery {
+  const query: JudgeQueueQuery = {
+    page: search.page ?? 1,
+    limit: search.limit ?? 10,
+  };
+  if (search.q !== undefined) query.q = search.q;
+  if (search.categoryId !== undefined) query.categoryId = search.categoryId;
+  if (search.evaluationStatus !== undefined) query.evaluationStatus = search.evaluationStatus;
+  if (search.sortBy !== undefined) query.sortBy = search.sortBy;
+  if (search.sortDirection !== undefined) query.sortDirection = search.sortDirection;
+  return query;
 }

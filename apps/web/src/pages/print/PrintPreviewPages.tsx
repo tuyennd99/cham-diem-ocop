@@ -9,7 +9,7 @@ import {
   ProductResultsPrintSheet,
   RegistrationPrintSheet,
 } from '../../components/print/OcopPrintSheets';
-import { PRODUCT_WORKSPACE_MODE } from '../../constants/consts';
+import { ADMIN_PRODUCT_DETAIL_TAB, PRODUCT_WORKSPACE_MODE } from '../../constants/consts';
 import type { AdminProductSearch } from '../../lib/admin-search';
 import { errorText } from '../../lib/api-error';
 import { useSession } from '../../lib/auth';
@@ -50,14 +50,30 @@ export function BlankCriteriaPrintPreviewPage({ criteriaSetId }: { criteriaSetId
   );
 }
 
-export function AdminEvaluationPrintPreviewPage({ evaluationId }: { evaluationId: string }) {
+export function AdminEvaluationPrintPreviewPage({
+  evaluationId,
+  search,
+}: {
+  evaluationId: string;
+  search?: AdminProductSearch;
+}) {
   const { data, error, isPending, refetch } = useEvaluationPrintData(evaluationId);
   const err = errorText(error);
+  const { returnMode, returnProductId, ...restSearch } = search ?? {};
+  const backTo = returnProductId
+    ? `/admin/${returnMode ?? PRODUCT_WORKSPACE_MODE.PRODUCTS}/${encodeURIComponent(returnProductId)}`
+    : '/admin/scoring-forms';
+  const backSearch = returnProductId
+    ? { ...restSearch, tab: restSearch.tab ?? ADMIN_PRODUCT_DETAIL_TAB.RESULTS }
+    : undefined;
+  const backLabel = returnProductId ? 'Quay lại hồ sơ' : 'Danh sách phiếu chấm';
+
   return (
     <section className='print-preview-page'>
       <PrintPageToolbar
-        backTo='/admin/scoring-forms'
-        backLabel='Danh sách phiếu chấm'
+        backTo={backTo}
+        backSearch={backSearch}
+        backLabel={backLabel}
         title='Xem trước Phiếu chấm sản phẩm A4'
       />
       {isPending && <PageSpin />}

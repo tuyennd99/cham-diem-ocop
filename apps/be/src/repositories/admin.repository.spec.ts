@@ -14,15 +14,13 @@ describe('AdminRepository.replaceAssignments', () => {
           .mockResolvedValue([{ id: 'product-1', categoryId: 'category-1' }]),
       },
       productCategory: {
-        findMany: jest
-          .fn()
-          .mockResolvedValue([
-            {
-              id: 'category-1',
-              name: 'Thực phẩm',
-              criteriaSet: { criteria: [{ id: 'criterion-1', code: '1.1' }] },
-            },
-          ]),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'category-1',
+            name: 'Thực phẩm',
+            criteriaSet: { criteria: [{ id: 'criterion-1', code: '1.1' }] },
+          },
+        ]),
       },
     };
     const prisma = {

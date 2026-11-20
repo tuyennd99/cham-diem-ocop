@@ -9,7 +9,7 @@ describe('HealthService', () => {
   beforeEach(() => {
     prisma = {
       $transaction: jest.fn().mockResolvedValue(undefined),
-    } as unknown as jest.Mocked<Pick<PrismaService, '$transaction'>>;
+    };
     service = new HealthService(prisma as unknown as PrismaService);
   });
 
@@ -19,24 +19,37 @@ describe('HealthService', () => {
   });
 
   it('checks the database inside a bounded transaction', async () => {
-    const executeRaw = jest.fn();
-    const queryRaw = jest.fn();
-    prisma.$transaction.mockImplementationOnce(async (callback: never) => {
-      await (callback as unknown as (tx: unknown) => Promise<void>)({
+    const executeRaw = jest.fn((_sql: TemplateStringsArray) =>
+      Promise.resolve(1),
+    );
+    const queryRaw = jest.fn((_sql: TemplateStringsArray) =>
+      Promise.resolve([]),
+    );
+    prisma.$transaction.mockImplementationOnce((async (
+      callback: (tx: unknown) => Promise<void>,
+    ) => {
+      await callback({
         $executeRaw: executeRaw,
         $queryRaw: queryRaw,
       });
       return undefined as never;
-    });
+    }) as never);
 
     await expect(service.ready()).resolves.toEqual({ status: 'ok' });
-    expect(executeRaw.mock.calls[0][0][0]).toContain("SET LOCAL statement_timeout = '2000ms'");
-    expect(queryRaw.mock.calls[0][0][0]).toContain('SELECT 1');
-    expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), { timeout: 3000, maxWait: 1000 });
+    expect(executeRaw.mock.calls[0]?.[0]?.[0]).toContain(
+      "SET LOCAL statement_timeout = '2000ms'",
+    );
+    expect(queryRaw.mock.calls[0]?.[0]?.[0]).toContain('SELECT 1');
+    expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+      timeout: 3000,
+      maxWait: 1000,
+    });
   });
 
   it('reports unavailable when the database check fails while keeping liveness independent', async () => {
-    prisma.$transaction.mockRejectedValueOnce(new Error('database unavailable'));
+    prisma.$transaction.mockRejectedValueOnce(
+      new Error('database unavailable'),
+    );
     await expect(service.ready()).rejects.toMatchObject({
       constructor: ServiceUnavailableException,
       message: 'Database is unavailable',

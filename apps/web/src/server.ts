@@ -1,10 +1,13 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, readFileSync } from 'node:fs';
+import { stat } from 'node:fs/promises';
 import {
   createServer as createHttpServer,
   type IncomingMessage,
   type ServerResponse,
 } from 'node:http';
 import { extname, join, relative, resolve, sep } from 'node:path';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 import { renderAppRequest } from './entry-server';
 
@@ -77,26 +80,35 @@ export function createNodeSsrHandler(options: StartWebSsrServerOptions = {}) {
         (req.method === 'GET' || req.method === 'HEAD') &&
         pathname !== '/' &&
         pathname !== '/index.html' &&
-        !pathname.includes('\0') &&
-        existsSync(resolvedRoot)
+        !pathname.includes('\0')
       ) {
         const candidatePath = resolve(resolvedRoot, '.' + pathname);
         if (
           (candidatePath === resolvedRoot || candidatePath.startsWith(resolvedRoot + sep)) &&
-          relative(resolvedRoot, candidatePath).split(sep)[0].toLowerCase() !== 'server' &&
-          existsSync(candidatePath) &&
-          statSync(candidatePath).isFile()
+          relative(resolvedRoot, candidatePath).split(sep)[0].toLowerCase() !== 'server'
         ) {
-          const ext = extname(candidatePath).toLowerCase();
-          const contentType = MIME_TYPES[ext] || 'application/octet-stream';
-          res.statusCode = 200;
-          res.setHeader('Content-Type', contentType);
-          if (req.method === 'HEAD') {
-            res.end();
+          let isFile = false;
+          try {
+            isFile = (await stat(candidatePath)).isFile();
+          } catch {
+            isFile = false;
+          }
+          if (isFile) {
+            const ext = extname(candidatePath).toLowerCase();
+            const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+            const cacheControl = pathname.startsWith('/assets/')
+              ? 'public, max-age=31536000, immutable'
+              : 'public, max-age=3600';
+            res.statusCode = 200;
+            res.setHeader('Content-Type', contentType);
+            res.setHeader('Cache-Control', cacheControl);
+            if (req.method === 'HEAD') {
+              res.end();
+              return;
+            }
+            await pipeline(createReadStream(candidatePath), res);
             return;
           }
-          res.end(readFileSync(candidatePath));
-          return;
         }
       }
 
@@ -127,6 +139,14 @@ export function createNodeSsrHandler(options: StartWebSsrServerOptions = {}) {
 
       if (req.method === 'HEAD') {
         res.end();
+        return;
+      }
+
+      if (webResponse.body) {
+        await pipeline(
+          Readable.fromWeb(webResponse.body as unknown as import('node:stream/web').ReadableStream),
+          res,
+        );
         return;
       }
 

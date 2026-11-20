@@ -1,3 +1,4 @@
+import type { MyProductQuery, MyProductsPaginatedMeta } from '@ocop/shared';
 import { API } from '../constants/api';
 import { validateProductFile } from '../lib/attachments';
 import type { ProductAttachmentRecord } from '../types/product';
@@ -10,7 +11,11 @@ import type {
 import { requestBlob, requestJson } from './base-request';
 
 export const myProductsApi = {
-  list: () => requestJson<RegistrantProduct[]>({ url: API.my.products }),
+  list: (query: MyProductQuery = {}) =>
+    requestJson<RegistrantProduct[], MyProductsPaginatedMeta>({
+      url: API.my.products,
+      params: query,
+    }),
   detail: (id: string) => requestJson<RegistrantProduct>({ url: API.my.product(id) }),
   create: (data: ProductWriteInput) =>
     requestJson<RegistrantProduct>({ url: API.my.products, method: 'POST', data }),

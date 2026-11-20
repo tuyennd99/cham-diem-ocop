@@ -57,19 +57,19 @@ export async function recomputeProductResult(
     );
   }
 
-  const productAssignments =
-    typeof tx.productJudgeAssignment?.findMany === 'function'
-      ? await tx.productJudgeAssignment.findMany({
-          where: { productId },
-          select: {
-            judgeId: true,
-            isActive: true,
-            mustSubmitToComplete: true,
-          },
-        })
-      : [];
+  const productAssignments = await tx.productJudgeAssignment.findMany({
+    where: { productId },
+    select: {
+      judgeId: true,
+      isActive: true,
+      mustSubmitToComplete: true,
+    },
+  });
 
-  if (productAssignments.length === 0 && product.status === ProductStatus.COMPLETED) {
+  if (
+    productAssignments.length === 0 &&
+    product.status === ProductStatus.COMPLETED
+  ) {
     return;
   }
 
@@ -115,11 +115,6 @@ export async function recomputeProductResult(
       const evaluation = submittedByJudge.get(assignment.judgeId);
       if (!evaluation) continue;
       if (
-        evaluation.scores.length !== allSubcriterionIds.length ||
-        allSubcriterionIds.some(
-          (id) =>
-            !evaluation.scores.some((score) => score.subCriterionId === id),
-        ) ||
         evaluation.scores.some(
           (score) =>
             !allSubcriterionIds.includes(score.subCriterionId) ||
@@ -292,10 +287,6 @@ export async function recomputeProductResult(
       continue;
     }
     if (
-      evaluation.scores.length !== expectedSubcriteria.length ||
-      expectedSubcriteria.some(
-        (id) => !evaluation.scores.some((score) => score.subCriterionId === id),
-      ) ||
       evaluation.scores.some(
         (score) =>
           !expectedSubcriteria.includes(score.subCriterionId) ||

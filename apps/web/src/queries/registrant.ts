@@ -1,11 +1,13 @@
-import { useQuery } from '@tanstack/react-query';
+import type { MyProductQuery } from '@ocop/shared';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { myProductsApi, myRegistrationUnitsApi } from '../api';
 import { queryKeys } from '../constants/query-key';
 
-export function useMyProducts(enabled = true) {
+export function useMyProducts(query: MyProductQuery = {}, enabled = true) {
   return useQuery({
-    queryKey: queryKeys.myProducts.list,
-    queryFn: async () => (await myProductsApi.list()).data,
+    queryKey: queryKeys.myProducts.list(query),
+    queryFn: () => myProductsApi.list(query),
+    placeholderData: keepPreviousData,
     enabled,
   });
 }

@@ -19,10 +19,10 @@ import { useSession } from '../../lib/auth';
 import { useMe } from '../../queries/common';
 
 const ROLE_LABELS: Record<Role, string> = {
-  ADMIN: 'Quản trị viên (ADMIN)',
-  VIEWER: 'Chủ trì (VIEWER)',
-  JUDGE: 'Giám khảo hội đồng (JUDGE)',
-  REGISTRANT: 'Người đăng ký (REGISTRANT)',
+  ADMIN: 'Quản trị viên',
+  VIEWER: 'Chủ trì',
+  JUDGE: 'Giám khảo hội đồng',
+  REGISTRANT: 'Người đăng ký',
 };
 
 const PERMISSION_LABELS: Record<StaffPermission, string> = {
@@ -219,7 +219,7 @@ export function AccountPage() {
                     <span className='mt-1 flex flex-wrap gap-1.5'>
                       {user.staffPermissions.map((permission) => (
                         <Badge key={permission} variant='secondary'>
-                          {PERMISSION_LABELS[permission]} ({permission})
+                          {PERMISSION_LABELS[permission]}
                         </Badge>
                       ))}
                     </span>

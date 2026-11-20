@@ -17,16 +17,17 @@ export function useManagingAgencies(enabled = true) {
   return useQuery({
     queryKey: queryKeys.adminCatalogs.managingAgencies,
     queryFn: async () => (await adminCatalogsApi.managingAgencies()).data,
-    staleTime: 5 * 60_000,
+    staleTime: Infinity,
     enabled,
   });
 }
 
-export function useAdminCategories(query: AdminCategoryQuery, enabled = true) {
+export function useAdminCategories(query: AdminCategoryQuery = {}, enabled = true) {
   return useQuery({
     queryKey: queryKeys.adminCatalogs.categories.list(query),
     queryFn: () => adminCatalogsApi.categories(query),
     placeholderData: keepPreviousData,
+    staleTime: Infinity,
     enabled,
   });
 }
@@ -35,6 +36,7 @@ export function useAdminCategoryDetail(id: string | null) {
   return useQuery({
     queryKey: queryKeys.adminCatalogs.categories.detail(id ?? ''),
     queryFn: () => adminCatalogsApi.category(id!),
+    staleTime: Infinity,
     enabled: Boolean(id),
   });
 }

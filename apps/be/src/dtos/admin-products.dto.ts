@@ -34,11 +34,16 @@ const parseQueryBoolean = ({ value }: { value: unknown }) =>
   value === 'true' ? true : value === 'false' ? false : value;
 
 export class AdminProductQueryDto {
-  @ApiPropertyOptional({ minimum: 1, default: 1 })
+  @ApiPropertyOptional({
+    minimum: 1,
+    maximum: Number.MAX_SAFE_INTEGER,
+    default: 1,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(Number.MAX_SAFE_INTEGER)
   page = 1;
 
   @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 20 })
@@ -198,11 +203,11 @@ export class ApproveProductDto {
 }
 
 export class ReturnProductDto {
-  @ApiProperty({ minLength: 1, maxLength: 1000 })
+  @ApiProperty({ minLength: 1, maxLength: 255 })
   @Transform(trimText)
   @IsString()
   @MinLength(1)
-  @MaxLength(1000)
+  @MaxLength(255)
   reason!: string;
 }
 

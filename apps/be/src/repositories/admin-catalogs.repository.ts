@@ -7,9 +7,16 @@ import { Prisma, ProductStatus } from '@prisma/client';
 import type {
   AdminCategoryDetail,
   AdminCategoryRecord,
+  AdminCategorySortBy,
   LocalityQuery,
   LocalityRecord,
+  LocalitySortBy,
 } from '@ocop/shared';
+import {
+  ADMIN_CATEGORY_SORT_BY,
+  LOCALITY_SORT_BY,
+  SORT_DIRECTION,
+} from '../constants/products';
 import type {
   AdminCategoriesQueryDto,
   CreateLocalityDto,
@@ -17,11 +24,92 @@ import type {
   UpdateLocalityDto,
   UpdateAdminCategoryDto,
 } from '../dtos/admin-catalogs.dto';
+import { computePaginationSkip } from '../dtos/common.dto';
+import { type OrderByBuilder, resolveOrderBy } from '../prisma/order-by';
 import { PrismaService } from '../prisma/prisma.service';
 import { databaseObject } from '../prisma/sql';
 import type { RequestMeta } from '../types/auth';
 import { assertCriteriaSetReady } from '../utils/category-availability';
 import { writeAudit } from '../utils/audit-log';
+import { generateNextLocalityCode } from '../utils/locality-code';
+
+const LOCALITY_ORDER_BY: Record<
+  LocalitySortBy,
+  OrderByBuilder<Prisma.LocalityOrderByWithRelationInput>
+> = {
+  [LOCALITY_SORT_BY.CODE]: (dir = SORT_DIRECTION.ASC) => [
+    { code: dir },
+    { id: SORT_DIRECTION.ASC },
+  ],
+  [LOCALITY_SORT_BY.EVENT_NAME]: (dir = SORT_DIRECTION.ASC) => [
+    { eventName: dir },
+    { name: dir },
+    { id: SORT_DIRECTION.ASC },
+  ],
+  [LOCALITY_SORT_BY.NAME]: (dir = SORT_DIRECTION.ASC) => [
+    { name: dir },
+    { id: SORT_DIRECTION.ASC },
+  ],
+  [LOCALITY_SORT_BY.PROVINCE_NAME]: (dir = SORT_DIRECTION.ASC) => [
+    { provinceName: dir },
+    { name: SORT_DIRECTION.ASC },
+    { id: SORT_DIRECTION.ASC },
+  ],
+  [LOCALITY_SORT_BY.EFFECTIVE_RANGE]: (dir = SORT_DIRECTION.ASC) => [
+    { effectiveFrom: { sort: dir, nulls: 'last' } },
+    { effectiveTo: { sort: dir, nulls: 'last' } },
+    { id: SORT_DIRECTION.ASC },
+  ],
+  [LOCALITY_SORT_BY.REGISTRATION_RANGE]: (dir = SORT_DIRECTION.ASC) => [
+    { registrationFrom: { sort: dir, nulls: 'last' } },
+    { registrationTo: { sort: dir, nulls: 'last' } },
+    { id: SORT_DIRECTION.ASC },
+  ],
+  [LOCALITY_SORT_BY.IS_ACTIVE]: (dir = SORT_DIRECTION.ASC) => [
+    { isActive: dir },
+    { provinceName: SORT_DIRECTION.ASC },
+    { name: SORT_DIRECTION.ASC },
+    { id: SORT_DIRECTION.ASC },
+  ],
+};
+
+const DEFAULT_LOCALITY_ORDER_BY: Prisma.LocalityOrderByWithRelationInput[] = [
+  { provinceName: SORT_DIRECTION.ASC },
+  { name: SORT_DIRECTION.ASC },
+  { id: SORT_DIRECTION.ASC },
+];
+
+const ADMIN_CATEGORY_ORDER_BY: Record<
+  AdminCategorySortBy,
+  OrderByBuilder<Prisma.ProductCategoryOrderByWithRelationInput>
+> = {
+  [ADMIN_CATEGORY_SORT_BY.NAME]: (dir = SORT_DIRECTION.ASC) => [
+    { name: dir },
+    { id: SORT_DIRECTION.ASC },
+  ],
+  [ADMIN_CATEGORY_SORT_BY.IS_ACTIVE]: (dir = SORT_DIRECTION.ASC) => [
+    { isActive: dir },
+    { order: SORT_DIRECTION.ASC },
+    { id: SORT_DIRECTION.ASC },
+  ],
+  [ADMIN_CATEGORY_SORT_BY.REFERENCE_COUNT]: (dir = SORT_DIRECTION.ASC) => [
+    { products: { _count: dir } },
+    { order: SORT_DIRECTION.ASC },
+    { id: SORT_DIRECTION.ASC },
+  ],
+  [ADMIN_CATEGORY_SORT_BY.CRITERIA_SET]: (dir = SORT_DIRECTION.ASC) => [
+    { criteriaSet: { criteria: { _count: dir } } },
+    { order: SORT_DIRECTION.ASC },
+    { id: SORT_DIRECTION.ASC },
+  ],
+  [ADMIN_CATEGORY_SORT_BY.ORDER]: (dir = SORT_DIRECTION.ASC) => [
+    { order: dir },
+    { id: SORT_DIRECTION.ASC },
+  ],
+};
+
+const DEFAULT_ADMIN_CATEGORY_ORDER_BY: Prisma.ProductCategoryOrderByWithRelationInput[] =
+  [{ order: SORT_DIRECTION.ASC }, { id: SORT_DIRECTION.ASC }];
 
 const categoryFields = {
   id: true,
@@ -196,20 +284,6 @@ function assertRegistrationRange(
   }
 }
 
-async function generateNextLocalityCode(
-  tx: Prisma.TransactionClient,
-): Promise<string> {
-  const existing = await tx.locality.findMany({
-    select: { code: true },
-  });
-  const usedCodes = new Set(existing.map((r) => r.code.toUpperCase()));
-  let seq = existing.length + 1;
-  while (usedCodes.has(`XP${seq}`)) {
-    seq += 1;
-  }
-  return `XP${seq}`;
-}
-
 async function assertNoOverlappingEvent(
   tx: Prisma.TransactionClient,
   input: {
@@ -220,9 +294,6 @@ async function assertNoOverlappingEvent(
     effectiveTo: Date | null;
   },
 ) {
-  if (!input.effectiveFrom && !input.effectiveTo) {
-    return;
-  }
   const siblings = await tx.locality.findMany({
     where: {
       ...(input.excludeId ? { id: { not: input.excludeId } } : {}),
@@ -237,6 +308,18 @@ async function assertNoOverlappingEvent(
       effectiveTo: true,
     },
   });
+
+  if (!input.effectiveFrom && !input.effectiveTo) {
+    const duplicateDateless = siblings.find(
+      (sibling) => !sibling.effectiveFrom && !sibling.effectiveTo,
+    );
+    if (duplicateDateless) {
+      throw new ConflictException(
+        `Đã tồn tại bản ghi địa bàn nền cho ${input.name} (${input.provinceName}).`,
+      );
+    }
+    return;
+  }
 
   const newStart = input.effectiveFrom
     ? input.effectiveFrom.getTime()
@@ -276,13 +359,15 @@ export class AdminCatalogsRepository {
   }
 
   async listLocalities(query: LocalityQuery, publicOnly = false) {
-    const { page, limit, q, provinceName } = query;
-    const skip = (page - 1) * limit;
-    if (!Number.isSafeInteger(page) || !Number.isSafeInteger(skip)) {
-      throw new BadRequestException(
-        'Pagination exceeds the safe integer range',
-      );
-    }
+    const {
+      page = 1,
+      limit = 20,
+      q,
+      provinceName,
+      sortBy,
+      sortDirection,
+    } = query;
+    const skip = computePaginationSkip(page, limit);
     const where: Prisma.LocalityWhereInput = {
       ...(provinceName
         ? { provinceName: { contains: provinceName, mode: 'insensitive' } }
@@ -305,12 +390,18 @@ export class AdminCatalogsRepository {
           ? {}
           : { isActive: query.isActive }),
     };
+    const orderBy = resolveOrderBy(
+      sortBy,
+      sortDirection,
+      LOCALITY_ORDER_BY,
+      DEFAULT_LOCALITY_ORDER_BY,
+    );
     const [rows, total] = await this.prisma.$transaction(
       [
         this.prisma.locality.findMany({
           where,
           select: localitySelect,
-          orderBy: [{ provinceName: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+          orderBy,
           skip,
           take: limit,
         }),
@@ -347,7 +438,8 @@ export class AdminCatalogsRepository {
         effectiveFrom: from,
         effectiveTo: to,
       });
-      const code = requestedCode?.trim() || (await generateNextLocalityCode(tx));
+      const code =
+        requestedCode?.trim() || (await generateNextLocalityCode(tx));
       const row = await tx.locality.create({
         data: {
           ...fields,
@@ -400,6 +492,14 @@ export class AdminCatalogsRepository {
         requested.effectiveTo === undefined
           ? before.effectiveTo
           : effectiveDate(requested.effectiveTo);
+      if (
+        (before.effectiveFrom !== null && effectiveFrom === null) ||
+        (before.effectiveTo !== null && effectiveTo === null)
+      ) {
+        throw new BadRequestException(
+          'Thời gian sự kiện là bắt buộc và không thể xóa trống.',
+        );
+      }
       const registrationFrom =
         requested.registrationFrom === undefined
           ? before.registrationFrom
@@ -500,13 +600,16 @@ export class AdminCatalogsRepository {
   }
 
   async listCategories(query: AdminCategoriesQueryDto) {
-    const { page, limit, q, isActive, managingAgencyId } = query;
-    const skip = (page - 1) * limit;
-    if (!Number.isSafeInteger(page) || !Number.isSafeInteger(skip)) {
-      throw new BadRequestException(
-        'Pagination exceeds the safe integer range',
-      );
-    }
+    const {
+      page,
+      limit,
+      q,
+      isActive,
+      managingAgencyId,
+      sortBy,
+      sortDirection,
+    } = query;
+    const skip = computePaginationSkip(page, limit);
     const where: Prisma.ProductCategoryWhereInput = {
       ...(isActive === undefined ? {} : { isActive }),
       ...(managingAgencyId
@@ -521,26 +624,32 @@ export class AdminCatalogsRepository {
           }
         : {}),
     };
+    const orderBy = resolveOrderBy(
+      sortBy,
+      sortDirection,
+      ADMIN_CATEGORY_ORDER_BY,
+      DEFAULT_ADMIN_CATEGORY_ORDER_BY,
+    );
     return this.prisma.$transaction(
       async (tx) => {
         const rows = await tx.productCategory.findMany({
           where,
           select: adminCategorySelect,
-          orderBy: [{ order: 'asc' }, { id: 'asc' }],
+          orderBy,
           skip,
           take: limit,
         });
-        const [total, submitted] = await Promise.all([
-          tx.productCategory.count({ where }),
-          tx.product.groupBy({
-            by: ['categoryId'],
-            where: {
-              categoryId: { in: rows.map(({ id }) => id) },
-              status: { in: submittedStatuses },
-            },
-            _count: { _all: true },
-          }),
-        ]);
+        const total = await tx.productCategory.count({ where });
+        const submitted = rows.length
+          ? await tx.product.groupBy({
+              by: ['categoryId'],
+              where: {
+                categoryId: { in: rows.map(({ id }) => id) },
+                status: { in: submittedStatuses },
+              },
+              _count: { _all: true },
+            })
+          : [];
         const submittedByCategory = new Map(
           submitted.map(({ categoryId, _count }) => [categoryId, _count._all]),
         );
@@ -647,6 +756,61 @@ export class AdminCatalogsRepository {
     );
   }
 
+  private async assertCategoryReadyForActivation(
+    tx: Prisma.TransactionClient,
+    categoryId: string,
+  ) {
+    const currentSet = await tx.criteriaSet.findUnique({
+      where: { categoryId },
+      select: {
+        isActive: true,
+        criteria: {
+          select: {
+            maxScore: true,
+            subCriteria: {
+              select: { options: { select: { id: true } } },
+            },
+          },
+        },
+      },
+    });
+    assertCriteriaSetReady(currentSet);
+  }
+
+  private async resolveCategoryAgencySync(
+    tx: Prisma.TransactionClient,
+    beforeAgencyIds: string[],
+    managingAgencyIds: string[] | undefined,
+  ): Promise<{ validAgencyIds?: string[]; agenciesChanged: boolean }> {
+    if (managingAgencyIds === undefined) {
+      return { agenciesChanged: false };
+    }
+    const validAgencyIds = await this.validateAgencyIds(tx, managingAgencyIds);
+    const prevSorted = [...beforeAgencyIds].sort();
+    const nextSorted = [...validAgencyIds].sort();
+    const agenciesChanged =
+      prevSorted.length !== nextSorted.length ||
+      prevSorted.some((agencyId, idx) => agencyId !== nextSorted[idx]);
+    return { validAgencyIds, agenciesChanged };
+  }
+
+  private async replaceCategoryAgencies(
+    tx: Prisma.TransactionClient,
+    categoryId: string,
+    validAgencyIds: string[],
+  ) {
+    await tx.productCategoryAgency.deleteMany({
+      where: { categoryId },
+    });
+    if (!validAgencyIds.length) return;
+    await tx.productCategoryAgency.createMany({
+      data: validAgencyIds.map((agencyId) => ({
+        categoryId,
+        agencyId,
+      })),
+    });
+  }
+
   updateCategory(
     id: string,
     input: UpdateAdminCategoryDto,
@@ -663,35 +827,15 @@ export class AdminCatalogsRepository {
         });
         if (!before) return null;
         if (requested.isActive === true) {
-          const currentSet = await tx.criteriaSet.findUnique({
-            where: { categoryId: id },
-            select: {
-              isActive: true,
-              criteria: {
-                select: {
-                  maxScore: true,
-                  subCriteria: {
-                    select: { options: { select: { id: true } } },
-                  },
-                },
-              },
-            },
-          });
-          assertCriteriaSetReady(currentSet);
+          await this.assertCategoryReadyForActivation(tx, id);
         }
 
-        let validAgencyIds: string[] | undefined;
-        let agenciesChanged = false;
-        if (managingAgencyIds !== undefined) {
-          validAgencyIds = await this.validateAgencyIds(tx, managingAgencyIds);
-          const beforeAgencyIds = before.agencyLinks
-            .map((l) => l.agency.id)
-            .sort();
-          const nextSorted = [...validAgencyIds].sort();
-          agenciesChanged =
-            beforeAgencyIds.length !== nextSorted.length ||
-            beforeAgencyIds.some((aId, idx) => aId !== nextSorted[idx]);
-        }
+        const { validAgencyIds, agenciesChanged } =
+          await this.resolveCategoryAgencySync(
+            tx,
+            before.agencyLinks.map((l) => l.agency.id),
+            managingAgencyIds,
+          );
 
         const data: Prisma.ProductCategoryUncheckedUpdateInput = {
           ...(requested.name === undefined ? {} : { name: requested.name }),
@@ -716,17 +860,7 @@ export class AdminCatalogsRepository {
         }
 
         if (agenciesChanged && validAgencyIds !== undefined) {
-          await tx.productCategoryAgency.deleteMany({
-            where: { categoryId: id },
-          });
-          if (validAgencyIds.length > 0) {
-            await tx.productCategoryAgency.createMany({
-              data: validAgencyIds.map((agencyId) => ({
-                categoryId: id,
-                agencyId,
-              })),
-            });
-          }
+          await this.replaceCategoryAgencies(tx, id, validAgencyIds);
         }
 
         const row = Object.keys(data).length

@@ -8,10 +8,15 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { OtpPurpose, PendingAuthKind, Role, StaffPermission } from '@prisma/client';
+import {
+  OtpPurpose,
+  PendingAuthKind,
+  Role,
+  StaffPermission,
+} from '@prisma/client';
 import type { OrganizationUnitSummary } from '@ocop/shared';
 import bcrypt from 'bcryptjs';
-import { createHash, createHmac, randomBytes, randomInt, randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { env } from '../config/env';
 import {
   ACCESS_TOKEN_TTL_SECONDS,
@@ -23,19 +28,29 @@ import {
   MAIL_OTP_PURPOSE,
   OTP_TTL_MS,
   OTP_VERIFY_STATUS,
-  PASSWORD_MAX_BYTES,
   PASSWORD_ROUNDS,
-  PRISMA_ERROR_CODE,
   type GoogleAuthIntent,
 } from '../constants/auth';
+import { isUniqueConstraint } from '../prisma/errors';
+import { assertPasswordLength, hashPassword } from '../utils/password';
 import { AuthRepository } from '../repositories/auth.repository';
 import { MailService } from './mail.service';
 import { OtpService } from './otp.service';
 import { GoogleIdentityService } from './google-identity.service';
-import type { AccessTokenPayload, PublicUser } from '../types/auth';
-import { effectiveStaffPermissions, effectiveUserRoles } from '../utils/staff-permissions';
+import type {
+  AccessTokenPayload,
+  AuthenticatedPrincipal,
+  PublicUser,
+} from '../types/auth';
+import {
+  effectiveStaffPermissions,
+  effectiveUserRoles,
+} from '../utils/staff-permissions';
 
-const DUMMY_BCRYPT_HASH = bcrypt.hashSync(randomBytes(32).toString('hex'), PASSWORD_ROUNDS);
+const DUMMY_BCRYPT_HASH = bcrypt.hashSync(
+  randomBytes(32).toString('hex'),
+  PASSWORD_ROUNDS,
+);
 
 @Injectable()
 export class AuthService {
@@ -50,71 +65,144 @@ export class AuthService {
   ) {}
 
   async googleChallenge() {
-    if (!env(process.env).googleClientId) throw new ServiceUnavailableException('Google sign-in is not configured');
+    if (!env(process.env).googleClientId)
+      throw new ServiceUnavailableException('Google sign-in is not configured');
     const challengeToken = randomBytes(32).toString('hex');
     const nonce = randomBytes(32).toString('hex');
     const now = new Date();
     await this.repository.createGoogleChallenge({
-      kind: PendingAuthKind.GOOGLE_CHALLENGE, tokenHash: this.hashToken(challengeToken), nonceHash: this.hashToken(nonce),
-      createdAt: now, expiresAt: new Date(now.getTime() + 5 * 60_000),
+      kind: PendingAuthKind.GOOGLE_CHALLENGE,
+      tokenHash: this.otpService.hashToken(challengeToken),
+      nonceHash: this.otpService.hashToken(nonce),
+      createdAt: now,
+      expiresAt: new Date(now.getTime() + 5 * 60_000),
     });
     return { challengeToken, nonce };
   }
 
-  async google(input: { challengeToken: string; credential: string; intent: GoogleAuthIntent }) {
-    if (!env(process.env).googleClientId) throw new ServiceUnavailableException('Google sign-in is not configured');
-    const tokenHash = this.hashToken(input.challengeToken);
+  async google(input: {
+    challengeToken: string;
+    credential: string;
+    intent: GoogleAuthIntent;
+  }) {
+    if (!env(process.env).googleClientId)
+      throw new ServiceUnavailableException('Google sign-in is not configured');
+    const tokenHash = this.otpService.hashToken(input.challengeToken);
     const challenge = await this.repository.findGoogleChallenge(tokenHash);
-    if (!challenge?.nonceHash || challenge.expiresAt <= new Date()) throw new UnauthorizedException('Invalid or expired Google challenge');
-    const identity = await this.googleIdentityService.verify(input.credential, challenge.nonceHash);
+    if (!challenge?.nonceHash || challenge.expiresAt <= new Date())
+      throw new UnauthorizedException('Invalid or expired Google challenge');
+    const identity = await this.googleIdentityService.verify(
+      input.credential,
+      challenge.nonceHash,
+    );
     const registrationToken = randomBytes(32).toString('hex');
     const id = randomUUID();
-    const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
+    const code = this.otpService.generateCode();
     const now = new Date();
     let result: Awaited<ReturnType<AuthRepository['consumeGoogleChallenge']>>;
     try {
-      result = await this.repository.consumeGoogleChallenge(tokenHash, identity, input.intent, {
-        id, kind: PendingAuthKind.GOOGLE_PROFILE, tokenHash: this.hashToken(registrationToken),
-        email: identity.email, googleSub: identity.sub, fullName: identity.suggestedName,
-        otpHash: createHmac('sha256', env(process.env).jwtSecret).update(`${id}:${MAIL_OTP_PURPOSE.GOOGLE_LINK}:${code}`).digest('hex'),
-        createdAt: now, expiresAt: new Date(now.getTime() + 15 * 60_000),
-        otpExpiresAt: new Date(now.getTime() + OTP_TTL_MS), resendAvailableAt: new Date(now.getTime() + 60_000),
-      });
+      result = await this.repository.consumeGoogleChallenge(
+        tokenHash,
+        identity,
+        input.intent,
+        {
+          id,
+          kind: PendingAuthKind.GOOGLE_PROFILE,
+          tokenHash: this.otpService.hashToken(registrationToken),
+          email: identity.email,
+          googleSub: identity.sub,
+          fullName: identity.suggestedName,
+          otpHash: this.otpService.hash(id, MAIL_OTP_PURPOSE.GOOGLE_LINK, code),
+          createdAt: now,
+          expiresAt: new Date(now.getTime() + 15 * 60_000),
+          otpExpiresAt: new Date(now.getTime() + OTP_TTL_MS),
+          resendAvailableAt: new Date(now.getTime() + 60_000),
+        },
+      );
     } catch (error) {
-      if (this.isUniqueConstraint(error)) throw new ConflictException('Google account is already linked; sign in again');
+      if (isUniqueConstraint(error))
+        throw new ConflictException(
+          'Google account is already linked; sign in again',
+        );
       throw error;
     }
-    if (result.status === GOOGLE_CHALLENGE_STATUS.USED_SUB) throw new ConflictException('Tài khoản Google này đã được dùng');
-    if (result.status === GOOGLE_CHALLENGE_STATUS.EMAIL_EXISTS) throw new ConflictException('Email đã được đăng ký; hãy đăng nhập để liên kết tài khoản Google');
-    if (result.status === GOOGLE_CHALLENGE_STATUS.COLLISION) throw new ConflictException('Google account is already linked; sign in again');
-    if (result.status === GOOGLE_CHALLENGE_STATUS.INVALID) throw new UnauthorizedException('Invalid or expired Google challenge');
-    if (result.status === GOOGLE_CHALLENGE_STATUS.UNAVAILABLE) throw new UnauthorizedException('Account is unavailable');
+    if (result.status === GOOGLE_CHALLENGE_STATUS.USED_SUB)
+      throw new ConflictException('Tài khoản Google này đã được dùng');
+    if (result.status === GOOGLE_CHALLENGE_STATUS.EMAIL_EXISTS)
+      throw new ConflictException(
+        'Email đã được đăng ký; hãy đăng nhập để liên kết tài khoản Google',
+      );
+    if (result.status === GOOGLE_CHALLENGE_STATUS.COLLISION)
+      throw new ConflictException(
+        'Google account is already linked; sign in again',
+      );
+    if (result.status === GOOGLE_CHALLENGE_STATUS.INVALID)
+      throw new UnauthorizedException('Invalid or expired Google challenge');
+    if (result.status === GOOGLE_CHALLENGE_STATUS.UNAVAILABLE)
+      throw new UnauthorizedException('Account is unavailable');
     if (result.status === GOOGLE_CHALLENGE_STATUS.SESSION) {
       const user = result.user;
-      return { kind: GOOGLE_RESULT_KIND.SESSION, ...await this.issueToken({
-        sub: user.id, email: user.email, role: user.role, tokenVersion: user.tokenVersion,
-      }, this.publicUser(user)) };
+      return {
+        kind: GOOGLE_RESULT_KIND.SESSION,
+        ...(await this.issueToken(
+          {
+            sub: user.id,
+            email: user.email,
+            role: user.role,
+            tokenVersion: user.tokenVersion,
+          },
+          this.publicUser(user),
+        )),
+      };
     }
     const pending = result.pending;
     if (pending.kind === PendingAuthKind.GOOGLE_PROFILE) {
-      return { kind: GOOGLE_RESULT_KIND.PROFILE, registrationToken, email: pending.email, suggestedName: pending.fullName };
+      return {
+        kind: GOOGLE_RESULT_KIND.PROFILE,
+        registrationToken,
+        email: pending.email,
+        suggestedName: pending.fullName,
+      };
     }
     try {
-      await this.mailService.sendOtp(pending.email!, code, MAIL_OTP_PURPOSE.GOOGLE_LINK);
+      await this.mailService.sendOtp(
+        pending.email!,
+        code,
+        MAIL_OTP_PURPOSE.GOOGLE_LINK,
+      );
     } catch {
-      throw new InternalServerErrorException('Could not send verification email');
+      throw new InternalServerErrorException(
+        'Could not send verification email',
+      );
     }
-    return { kind: GOOGLE_RESULT_KIND.LINK_OTP, registrationToken, email: pending.email, expiresAt: pending.expiresAt,
-      otpExpiresAt: pending.otpExpiresAt, resendAvailableAt: pending.resendAvailableAt };
+    return {
+      kind: GOOGLE_RESULT_KIND.LINK_OTP,
+      registrationToken,
+      email: pending.email,
+      expiresAt: pending.expiresAt,
+      otpExpiresAt: pending.otpExpiresAt,
+      resendAvailableAt: pending.resendAvailableAt,
+    };
   }
 
-  async googleRegister(input: { registrationToken: string; fullName: string; phone?: string }) {
-    const { pending, code, registrationToken } = await this.otpService.issueGoogleRegistration(input.registrationToken, {
-      fullName: input.fullName.trim(), phone: input.phone?.trim() || null,
-    });
+  async googleRegister(input: {
+    registrationToken: string;
+    fullName: string;
+    phone?: string;
+  }) {
+    const { pending, code, registrationToken } =
+      await this.otpService.issueGoogleRegistration(input.registrationToken, {
+        fullName: input.fullName.trim(),
+        phone: input.phone?.trim() || null,
+      });
     await this.sendRegistrationOtp(pending.email!, code);
-    return { registrationToken, email: pending.email, expiresAt: pending.expiresAt,
-      otpExpiresAt: pending.otpExpiresAt, resendAvailableAt: pending.resendAvailableAt };
+    return {
+      registrationToken,
+      email: pending.email,
+      expiresAt: pending.expiresAt,
+      otpExpiresAt: pending.otpExpiresAt,
+      resendAvailableAt: pending.resendAvailableAt,
+    };
   }
 
   async googleLinkVerify(registrationToken: string, code: string) {
@@ -122,28 +210,53 @@ export class AuthService {
     try {
       result = await this.otpService.verifyGoogleLink(registrationToken, code);
     } catch (error) {
-      if (this.isUniqueConstraint(error)) throw new ConflictException('Google account is already linked; sign in again');
+      if (isUniqueConstraint(error))
+        throw new ConflictException(
+          'Google account is already linked; sign in again',
+        );
       throw error;
     }
-    if (result.status === OTP_VERIFY_STATUS.COLLISION) throw new ConflictException('Google account is already linked; sign in again');
+    if (result.status === OTP_VERIFY_STATUS.COLLISION || !result.user) {
+      throw new ConflictException(
+        'Google account is already linked; sign in again',
+      );
+    }
     const user = result.user;
-    return { kind: GOOGLE_RESULT_KIND.SESSION, ...await this.issueToken({
-      sub: user.id, email: user.email, role: user.role, tokenVersion: user.tokenVersion,
-    }, this.publicUser(user)) };
+    return {
+      kind: GOOGLE_RESULT_KIND.SESSION,
+      ...(await this.issueToken(
+        {
+          sub: user.id,
+          email: user.email,
+          role: user.role,
+          tokenVersion: user.tokenVersion,
+        },
+        this.publicUser(user),
+      )),
+    };
   }
 
   async googleLinkResend(registrationToken: string) {
-    const { pending, code } = await this.otpService.resendRegistration(registrationToken, MAIL_OTP_PURPOSE.GOOGLE_LINK);
+    const { pending, code } = await this.otpService.resendRegistration(
+      registrationToken,
+      MAIL_OTP_PURPOSE.GOOGLE_LINK,
+    );
     try {
-      await this.mailService.sendOtp(pending.email!, code, MAIL_OTP_PURPOSE.GOOGLE_LINK);
+      await this.mailService.sendOtp(
+        pending.email!,
+        code,
+        MAIL_OTP_PURPOSE.GOOGLE_LINK,
+      );
     } catch {
-      throw new InternalServerErrorException('Could not send verification email');
+      throw new InternalServerErrorException(
+        'Could not send verification email',
+      );
     }
-    return { message: 'Verification code sent', otpExpiresAt: pending.otpExpiresAt, resendAvailableAt: pending.resendAvailableAt };
-  }
-
-  private hashToken(token: string) {
-    return createHash('sha256').update(token).digest('hex');
+    return {
+      message: 'Verification code sent',
+      otpExpiresAt: pending.otpExpiresAt,
+      resendAvailableAt: pending.resendAvailableAt,
+    };
   }
 
   async register(input: {
@@ -153,15 +266,52 @@ export class AuthService {
     phone?: string;
   }) {
     const email = this.normalizeEmail(input.email);
-    this.assertPassword(input.password);
-    if (await this.repository.findUserByEmail(email)) throw new ConflictException('Email is already registered');
-    const { registrationToken, pending, code } = await this.otpService.issueRegistration({
-      email, passwordHash: await bcrypt.hash(input.password, PASSWORD_ROUNDS),
-      fullName: input.fullName.trim(), phone: input.phone?.trim() || null,
-    });
-    await this.sendRegistrationOtp(email, code);
-    return { registrationToken, email, expiresAt: pending.expiresAt,
-      otpExpiresAt: pending.otpExpiresAt, resendAvailableAt: pending.resendAvailableAt };
+    assertPasswordLength(input.password);
+    const existing = await this.repository.findUserByEmail(email);
+    if (existing) {
+      if (
+        existing.role === Role.REGISTRANT &&
+        existing.verified === false &&
+        existing.isActive
+      ) {
+        const code = await this.otpService.issue(
+          email,
+          OtpPurpose.REGISTER,
+          existing.id,
+        );
+        await this.sendRegistrationOtp(email, code);
+        return {
+          email,
+          legacyPending: true,
+          message: 'Verification code sent',
+        };
+      }
+      throw new ConflictException('Email is already registered');
+    }
+    const { registrationToken, pending, code } =
+      await this.otpService.issueRegistration({
+        email,
+        passwordHash: await hashPassword(input.password),
+        fullName: input.fullName.trim(),
+        phone: input.phone?.trim() || null,
+      });
+    try {
+      await this.sendRegistrationOtp(email, code);
+    } catch (error) {
+      try {
+        await this.otpService.discardRegistration(registrationToken);
+      } catch {
+        // Best-effort cleanup of unverified snapshot on SMTP failure.
+      }
+      throw error;
+    }
+    return {
+      registrationToken,
+      email,
+      expiresAt: pending.expiresAt,
+      otpExpiresAt: pending.otpExpiresAt,
+      resendAvailableAt: pending.resendAvailableAt,
+    };
   }
 
   registrationStatus(registrationToken: string) {
@@ -172,28 +322,40 @@ export class AuthService {
     try {
       await this.otpService.verifyRegistration(registrationToken, code);
     } catch (error) {
-      if (this.isUniqueConstraint(error)) throw new ConflictException('Email is already registered');
+      if (isUniqueConstraint(error))
+        throw new ConflictException('Email is already registered');
       throw error;
     }
     return { message: 'Registration completed' };
   }
 
   async resendRegistrationOtp(registrationToken: string) {
-    const { pending, code } = await this.otpService.resendRegistration(registrationToken);
+    const { pending, code } =
+      await this.otpService.resendRegistration(registrationToken);
     await this.sendRegistrationOtp(pending.email!, code);
-    return { message: 'Verification code sent', otpExpiresAt: pending.otpExpiresAt, resendAvailableAt: pending.resendAvailableAt };
+    return {
+      message: 'Verification code sent',
+      otpExpiresAt: pending.otpExpiresAt,
+      resendAvailableAt: pending.resendAvailableAt,
+    };
   }
 
   private async sendRegistrationOtp(email: string, code: string) {
     try {
       await this.mailService.sendOtp(email, code, MAIL_OTP_PURPOSE.REGISTER);
     } catch {
-      throw new InternalServerErrorException('Could not send verification email');
+      throw new InternalServerErrorException(
+        'Could not send verification email',
+      );
     }
   }
 
   async verifyLegacyRegistration(email: string, code: string) {
-    await this.otpService.verify(this.normalizeEmail(email), OtpPurpose.REGISTER, code);
+    await this.otpService.verify(
+      this.normalizeEmail(email),
+      OtpPurpose.REGISTER,
+      code,
+    );
     return { message: 'Account verified' };
   }
 
@@ -202,13 +364,20 @@ export class AuthService {
     const user = await this.repository.findUserByEmail(email);
     if (user?.role === Role.REGISTRANT && !user.verified && user.isActive) {
       try {
-        const code = await this.otpService.issue(email, OtpPurpose.REGISTER, user.id);
+        const code = await this.otpService.issue(
+          email,
+          OtpPurpose.REGISTER,
+          user.id,
+        );
         await this.mailService.sendOtp(email, code, MAIL_OTP_PURPOSE.REGISTER);
       } catch {
         this.logger.error('Registration verification email could not be sent');
       }
     }
-    return { message: 'If an unverified account exists, a verification code has been sent' };
+    return {
+      message:
+        'If an unverified account exists, a verification code has been sent',
+    };
   }
 
   async login(rawEmail: string, password: string) {
@@ -221,13 +390,17 @@ export class AuthService {
     if (!(await bcrypt.compare(password, user.password))) {
       throw new UnauthorizedException('Invalid email or password');
     }
-    if (!user.verified || !user.isActive) throw new UnauthorizedException('Account is unavailable');
-    return this.issueToken({
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-      tokenVersion: user.tokenVersion,
-    }, this.publicUser(user));
+    if (!user.verified || !user.isActive)
+      throw new UnauthorizedException('Account is unavailable');
+    return this.issueToken(
+      {
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+        tokenVersion: user.tokenVersion,
+      },
+      this.publicUser(user),
+    );
   }
 
   async seedAccounts() {
@@ -247,8 +420,16 @@ export class AuthService {
     const user = await this.repository.findUserByEmail(email);
     if (user?.verified && user.isActive) {
       try {
-        const code = await this.otpService.issue(email, OtpPurpose.RESET_PASSWORD, user.id);
-        await this.mailService.sendOtp(email, code, MAIL_OTP_PURPOSE.RESET_PASSWORD);
+        const code = await this.otpService.issue(
+          email,
+          OtpPurpose.RESET_PASSWORD,
+          user.id,
+        );
+        await this.mailService.sendOtp(
+          email,
+          code,
+          MAIL_OTP_PURPOSE.RESET_PASSWORD,
+        );
       } catch {
         this.logger.error('Password reset email could not be sent');
       }
@@ -257,22 +438,34 @@ export class AuthService {
   }
 
   async resetPassword(rawEmail: string, code: string, newPassword: string) {
-    this.assertPassword(newPassword);
+    assertPasswordLength(newPassword);
     await this.otpService.verify(
       this.normalizeEmail(rawEmail),
       OtpPurpose.RESET_PASSWORD,
       code,
-      await bcrypt.hash(newPassword, PASSWORD_ROUNDS),
+      await hashPassword(newPassword),
     );
     return { message: 'Password reset' };
   }
 
-  async changePassword(userId: string, currentPassword: string, newPassword: string) {
-    this.assertPassword(currentPassword);
-    this.assertPassword(newPassword);
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ) {
+    assertPasswordLength(currentPassword);
+    assertPasswordLength(newPassword);
     const user = await this.repository.findCredentialsById(userId);
-    if (user?.verified && user.isActive && !user.password) throw new BadRequestException('Use forgot password to set an application password');
-    if (!user?.verified || !user.isActive || !(await bcrypt.compare(currentPassword, user.password))) {
+    if (user?.verified && user.isActive && !user.password)
+      throw new BadRequestException(
+        'Use forgot password to set an application password',
+      );
+    if (
+      !user?.verified ||
+      !user.isActive ||
+      !user.password ||
+      !(await bcrypt.compare(currentPassword, user.password))
+    ) {
       throw new UnauthorizedException('Current password is incorrect');
     }
     if (await bcrypt.compare(newPassword, user.password)) {
@@ -281,31 +474,78 @@ export class AuthService {
     const updated = await this.repository.changePassword(
       userId,
       user.password,
-      await bcrypt.hash(newPassword, PASSWORD_ROUNDS),
+      await hashPassword(newPassword),
     );
-    if (!updated.count) throw new ConflictException('Password changed; sign in again');
+    if (!updated.count)
+      throw new ConflictException('Password changed; sign in again');
     return { message: 'Password changed' };
   }
 
-  async me(userId: string): Promise<PublicUser> {
+  async me(
+    userId: string,
+    loadedUser?: AuthenticatedPrincipal | AccessTokenPayload,
+  ): Promise<PublicUser> {
+    if (
+      loadedUser &&
+      'fullName' in loadedUser &&
+      loadedUser.fullName !== undefined &&
+      loadedUser.verified !== undefined
+    ) {
+      if (!loadedUser.verified || loadedUser.isActive === false) {
+        throw new UnauthorizedException('Authentication required');
+      }
+      return this.publicUser({
+        id: loadedUser.id ?? userId,
+        email: loadedUser.email,
+        fullName: loadedUser.fullName,
+        phone: loadedUser.phone ?? null,
+        role: loadedUser.role,
+        roles: loadedUser.roles,
+        verified: loadedUser.verified,
+        staffPermissions: loadedUser.staffPermissions,
+        organizationUnitId: loadedUser.organizationUnitId,
+        organizationUnit: loadedUser.organizationUnit,
+      });
+    }
     const user = await this.repository.findUserById(userId);
-    if (!user?.verified || !user.isActive) throw new UnauthorizedException('Authentication required');
+    if (!user?.verified || !user.isActive)
+      throw new UnauthorizedException('Authentication required');
     return this.publicUser(user);
   }
 
   async updateProfile(
     userId: string,
     input: { fullName: string; phone?: string | null },
+    loadedUser?: AuthenticatedPrincipal | AccessTokenPayload,
   ): Promise<PublicUser> {
-    const current = await this.repository.findUserById(userId);
-    if (!current?.verified || !current.isActive) {
-      throw new UnauthorizedException('Authentication required');
+    let existingPhone: string | null | undefined;
+    if (
+      loadedUser &&
+      'verified' in loadedUser &&
+      loadedUser.verified !== undefined &&
+      (input.phone !== undefined || 'phone' in loadedUser)
+    ) {
+      if (!loadedUser.verified || loadedUser.isActive === false) {
+        throw new UnauthorizedException('Authentication required');
+      }
+      existingPhone = loadedUser.phone ?? null;
+    } else {
+      const current = await this.repository.findUserById(userId);
+      if (!current?.verified || !current.isActive) {
+        throw new UnauthorizedException('Authentication required');
+      }
+      existingPhone = current.phone;
     }
     const fullName = input.fullName.trim();
     if (!fullName) {
       throw new BadRequestException('Họ và tên không được để trống');
     }
-    const phone = input.phone ? input.phone.trim() || null : null;
+    const phone =
+      input.phone === undefined
+        ? (existingPhone ?? null)
+        : input.phone
+          ? input.phone.trim() || null
+          : null;
     const updated = await this.repository.updateProfile(userId, {
       fullName,
       phone,
@@ -356,20 +596,5 @@ export class AuthService {
 
   private normalizeEmail(email: string) {
     return email.trim().toLowerCase();
-  }
-
-  private assertPassword(password: string) {
-    if (Buffer.byteLength(password, 'utf8') > PASSWORD_MAX_BYTES) {
-      throw new BadRequestException(`Password must be at most ${PASSWORD_MAX_BYTES} UTF-8 bytes`);
-    }
-  }
-
-  private isUniqueConstraint(error: unknown): boolean {
-    return (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      error.code === PRISMA_ERROR_CODE.UNIQUE_CONSTRAINT
-    );
   }
 }

@@ -1,4 +1,11 @@
 import type {
+  AdminCategorySortBy,
+  AdminCriteriaSetSortBy,
+  AdminEvaluationSortBy,
+  AdminUserSortBy,
+  JudgeQueueSortBy,
+  LocalitySortBy,
+  OrganizationUnitSortBy,
   ProductDateBasis,
   ProductRegistrationType,
   ProductSortBy,
@@ -56,6 +63,130 @@ export const sortDirectionValues = [
   SORT_DIRECTION.ASC,
   SORT_DIRECTION.DESC,
 ] as const satisfies readonly SortDirection[];
+
+export const ADMIN_USER_SORT_BY = {
+  CREATED_AT: 'createdAt',
+  FULL_NAME: 'fullName',
+  EMAIL: 'email',
+  UNIT: 'unit',
+  VERIFIED: 'verified',
+  IS_ACTIVE: 'isActive',
+} as const satisfies Record<string, AdminUserSortBy>;
+
+export const adminUserSortByValues = [
+  ADMIN_USER_SORT_BY.CREATED_AT,
+  ADMIN_USER_SORT_BY.FULL_NAME,
+  ADMIN_USER_SORT_BY.EMAIL,
+  ADMIN_USER_SORT_BY.UNIT,
+  ADMIN_USER_SORT_BY.VERIFIED,
+  ADMIN_USER_SORT_BY.IS_ACTIVE,
+] as const satisfies readonly AdminUserSortBy[];
+
+export const ORGANIZATION_UNIT_SORT_BY = {
+  ORDER: 'order',
+  CODE: 'code',
+  NAME: 'name',
+  MANAGING_AGENCY: 'managingAgency',
+  DESCRIPTION: 'description',
+  IS_ACTIVE: 'isActive',
+} as const satisfies Record<string, OrganizationUnitSortBy>;
+
+export const organizationUnitSortByValues = [
+  ORGANIZATION_UNIT_SORT_BY.ORDER,
+  ORGANIZATION_UNIT_SORT_BY.CODE,
+  ORGANIZATION_UNIT_SORT_BY.NAME,
+  ORGANIZATION_UNIT_SORT_BY.MANAGING_AGENCY,
+  ORGANIZATION_UNIT_SORT_BY.DESCRIPTION,
+  ORGANIZATION_UNIT_SORT_BY.IS_ACTIVE,
+] as const satisfies readonly OrganizationUnitSortBy[];
+
+export const LOCALITY_SORT_BY = {
+  CODE: 'code',
+  EVENT_NAME: 'eventName',
+  NAME: 'name',
+  PROVINCE_NAME: 'provinceName',
+  EFFECTIVE_RANGE: 'effectiveRange',
+  REGISTRATION_RANGE: 'registrationRange',
+  IS_ACTIVE: 'isActive',
+} as const satisfies Record<string, LocalitySortBy>;
+
+export const localitySortByValues = [
+  LOCALITY_SORT_BY.CODE,
+  LOCALITY_SORT_BY.EVENT_NAME,
+  LOCALITY_SORT_BY.NAME,
+  LOCALITY_SORT_BY.PROVINCE_NAME,
+  LOCALITY_SORT_BY.EFFECTIVE_RANGE,
+  LOCALITY_SORT_BY.REGISTRATION_RANGE,
+  LOCALITY_SORT_BY.IS_ACTIVE,
+] as const satisfies readonly LocalitySortBy[];
+
+export const ADMIN_CATEGORY_SORT_BY = {
+  ORDER: 'order',
+  NAME: 'name',
+  CRITERIA_SET: 'criteriaSet',
+  REFERENCE_COUNT: 'referenceCount',
+  IS_ACTIVE: 'isActive',
+} as const satisfies Record<string, AdminCategorySortBy>;
+
+export const adminCategorySortByValues = [
+  ADMIN_CATEGORY_SORT_BY.ORDER,
+  ADMIN_CATEGORY_SORT_BY.NAME,
+  ADMIN_CATEGORY_SORT_BY.CRITERIA_SET,
+  ADMIN_CATEGORY_SORT_BY.REFERENCE_COUNT,
+  ADMIN_CATEGORY_SORT_BY.IS_ACTIVE,
+] as const satisfies readonly AdminCategorySortBy[];
+
+export const ADMIN_CRITERIA_SET_SORT_BY = {
+  CATEGORY_NAME: 'categoryName',
+  SOURCE: 'source',
+  CRITERION_COUNT: 'criterionCount',
+  MAX_SCORE: 'maxScore',
+} as const satisfies Record<string, AdminCriteriaSetSortBy>;
+
+export const adminCriteriaSetSortByValues = [
+  ADMIN_CRITERIA_SET_SORT_BY.CATEGORY_NAME,
+  ADMIN_CRITERIA_SET_SORT_BY.SOURCE,
+  ADMIN_CRITERIA_SET_SORT_BY.CRITERION_COUNT,
+  ADMIN_CRITERIA_SET_SORT_BY.MAX_SCORE,
+] as const satisfies readonly AdminCriteriaSetSortBy[];
+
+export const ADMIN_EVALUATION_SORT_BY = {
+  PRODUCT: 'product',
+  JUDGE: 'judge',
+  SCOPE: 'scope',
+  STATUS: 'status',
+  SUBMITTED_AT: 'submittedAt',
+  TOTAL: 'total',
+} as const satisfies Record<string, AdminEvaluationSortBy>;
+
+export const adminEvaluationSortByValues = [
+  ADMIN_EVALUATION_SORT_BY.PRODUCT,
+  ADMIN_EVALUATION_SORT_BY.JUDGE,
+  ADMIN_EVALUATION_SORT_BY.SCOPE,
+  ADMIN_EVALUATION_SORT_BY.STATUS,
+  ADMIN_EVALUATION_SORT_BY.SUBMITTED_AT,
+  ADMIN_EVALUATION_SORT_BY.TOTAL,
+] as const satisfies readonly AdminEvaluationSortBy[];
+
+export const JUDGE_QUEUE_SORT_BY = {
+  UPDATED_AT: 'updatedAt',
+  NAME: 'name',
+  CATEGORY: 'category',
+  STATUS: 'status',
+  EVAL_STATUS: 'evalStatus',
+  TOTAL_SCORE: 'totalScore',
+  ATTACHMENTS: 'attachments',
+} as const satisfies Record<string, JudgeQueueSortBy>;
+
+export const judgeQueueSortByValues = [
+  JUDGE_QUEUE_SORT_BY.UPDATED_AT,
+  JUDGE_QUEUE_SORT_BY.NAME,
+  JUDGE_QUEUE_SORT_BY.CATEGORY,
+  JUDGE_QUEUE_SORT_BY.STATUS,
+  JUDGE_QUEUE_SORT_BY.EVAL_STATUS,
+  JUDGE_QUEUE_SORT_BY.TOTAL_SCORE,
+  JUDGE_QUEUE_SORT_BY.ATTACHMENTS,
+] as const satisfies readonly JudgeQueueSortBy[];
 
 export const REPORT_GROUP_BY = {
   MONTH: 'month',
@@ -147,4 +278,5 @@ export type UploadFileKind =
 
 export const MAX_FILES_PER_PRODUCT = 5;
 export const MAX_VIDEOS_PER_PRODUCT = 1;
-export const MAX_ATTACHMENTS_PER_PRODUCT = MAX_FILES_PER_PRODUCT + MAX_VIDEOS_PER_PRODUCT;
+export const MAX_ATTACHMENTS_PER_PRODUCT =
+  MAX_FILES_PER_PRODUCT + MAX_VIDEOS_PER_PRODUCT;

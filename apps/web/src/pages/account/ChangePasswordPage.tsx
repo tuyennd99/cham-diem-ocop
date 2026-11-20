@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { PageContainer, PageHeader } from '@/layouts/PageLayout';
-import { useForm } from '@tanstack/react-form';
+import { useForm, useSelector } from '@tanstack/react-form';
 import { Link } from '@tanstack/react-router';
 import { toast } from 'sonner';
 import AlertError from '@/components/alert-error';
@@ -41,6 +41,7 @@ const passwordFields: Array<{
 
 export function ChangePasswordPage() {
   const [error, setError] = useState('');
+  const [redirecting, setRedirecting] = useState(false);
 
   const form = useForm({
     defaultValues: {
@@ -65,8 +66,8 @@ export function ChangePasswordPage() {
           currentPassword: value.currentPassword,
           newPassword: value.newPassword,
         });
+        setRedirecting(true);
         toast.success('Đã đổi mật khẩu thành công. Vui lòng đăng nhập lại.');
-        form.reset();
         setSession(null);
         window.location.replace('/login');
       } catch (cause) {
@@ -79,6 +80,8 @@ export function ChangePasswordPage() {
       }
     },
   });
+  const isSubmitting = useSelector(form.store, (state) => state.isSubmitting);
+  const busy = isSubmitting || redirecting;
 
   return (
     <PageContainer>
@@ -96,6 +99,7 @@ export function ChangePasswordPage() {
         className='admin-form account-form filter-card'
         onSubmit={(event) => {
           event.preventDefault();
+          if (busy) return;
           void form.handleSubmit();
         }}
       >
@@ -112,6 +116,7 @@ export function ChangePasswordPage() {
                   autoComplete={config.autoComplete}
                   minLength={config.minLength}
                   maxLength={72}
+                  disabled={busy}
                   value={field.state.value}
                   onBlur={field.handleBlur}
                   onChange={(event) => field.handleChange(event.target.value)}
@@ -122,18 +127,20 @@ export function ChangePasswordPage() {
           </form.Field>
         ))}
         {error && <AlertError title='Không thể cập nhật mật khẩu' errors={[error]} />}
-        <form.Subscribe selector={(state) => state.isSubmitting}>
-          {(busy) => (
-            <div className='admin-actions'>
-              <Button type='submit' loading={busy} disabled={busy}>
-                {busy ? 'Đang cập nhật…' : 'Cập nhật mật khẩu'}
-              </Button>
-              <Button asChild variant='secondary'>
-                <Link to='/account'>Hủy</Link>
-              </Button>
-            </div>
+        <div className='admin-actions'>
+          <Button type='submit' loading={busy} disabled={busy}>
+            {busy ? 'Đang cập nhật…' : 'Cập nhật mật khẩu'}
+          </Button>
+          {busy ? (
+            <Button type='button' variant='secondary' disabled>
+              Hủy
+            </Button>
+          ) : (
+            <Button asChild variant='secondary'>
+              <Link to='/account'>Hủy</Link>
+            </Button>
           )}
-        </form.Subscribe>
+        </div>
       </form>
     </PageContainer>
   );

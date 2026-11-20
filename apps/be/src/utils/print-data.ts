@@ -10,17 +10,15 @@ import {
   type EvaluationPrintCriterionRow,
   type EvaluationPrintData,
   type EvaluationRecordStatus,
-  type ProductApplicationForm,
   type ProductResultsPrintData,
   type RegistrationPrintData,
   type RegistrationSnapshot,
   type ScoreOption,
 } from '@ocop/shared';
-import {
-  EVALUATION_PROVENANCE,
-  PRINT_DATA_KIND,
-  productRegistrationTypes,
-} from '../constants/products';
+import { EVALUATION_PROVENANCE, PRINT_DATA_KIND } from '../constants/products';
+import { extractSafeApplicationForm } from './registration-snapshot';
+
+export { extractSafeApplicationForm };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -30,55 +28,6 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function asString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value : null;
-}
-
-export function extractSafeApplicationForm(
-  value: unknown,
-): Partial<ProductApplicationForm> {
-  const source = asRecord(value);
-  if (!source) return {};
-  const result: Record<string, string | number | boolean> = {};
-  for (const field of [
-    'entityName',
-    'representativeName',
-    'representativeTitle',
-    'contactAddress',
-    'provinceName',
-    'phone',
-    'email',
-  ]) {
-    if (typeof source[field] === 'string') {
-      result[field] = source[field] as string;
-    }
-  }
-  if (
-    typeof source.registrationType === 'string' &&
-    (productRegistrationTypes as readonly string[]).includes(
-      source.registrationType,
-    )
-  ) {
-    result.registrationType = source.registrationType;
-  }
-  if (
-    typeof source.sampleQuantity === 'number' &&
-    Number.isInteger(source.sampleQuantity) &&
-    source.sampleQuantity >= 0 &&
-    source.sampleQuantity <= 100000
-  ) {
-    result.sampleQuantity = source.sampleQuantity;
-  }
-  if (
-    typeof source.assessmentYear === 'number' &&
-    Number.isInteger(source.assessmentYear) &&
-    source.assessmentYear >= 2020 &&
-    source.assessmentYear <= 2100
-  ) {
-    result.assessmentYear = source.assessmentYear;
-  }
-  if (typeof source.declarationAccepted === 'boolean') {
-    result.declarationAccepted = source.declarationAccepted;
-  }
-  return result as Partial<ProductApplicationForm>;
 }
 
 export function formatStarPrintLabel(
@@ -297,7 +246,7 @@ export function buildEvaluationPrintData(
   input: EvaluationPrintBuildInput,
 ): EvaluationPrintData {
   const generatedAt = (input.generatedAt ?? new Date()).toISOString();
-  const isDraft = input.status !== EvaluationStatus.SUBMITTED;
+  const isDraft = input.status === EvaluationStatus.IN_PROGRESS;
   const parsedSnap = !isDraft
     ? parseEvaluationSnapshot(input.submissionSnapshot)
     : null;
@@ -339,8 +288,7 @@ export function buildEvaluationPrintData(
 
   if (catalogCriteria.length > 0) {
     for (const criterion of catalogCriteria) {
-      const inScope =
-        assignedSet.size === 0 || assignedSet.has(criterion.id);
+      const inScope = assignedSet.size === 0 || assignedSet.has(criterion.id);
       const snapMeta = snapCriterionMeta.get(criterion.id);
       const subRows = criterion.subCriteria.map((sub) => {
         const maxPoints = sub.options.length
@@ -529,7 +477,14 @@ function parseRegistrationSnapshot(raw: unknown): RegistrationSnapshot | null {
   const reg = asRecord(snap.registrant);
   const cat = asRecord(snap.category);
   const loc = asRecord(snap.locality);
-  if (!prod || !reg || !cat || !loc || (snap.version === 1 && !asRecord(cat.group))) return null;
+  if (
+    !prod ||
+    !reg ||
+    !cat ||
+    !loc ||
+    (snap.version === 1 && !asRecord(cat.group))
+  )
+    return null;
   return snap as unknown as RegistrationSnapshot;
 }
 
@@ -724,7 +679,9 @@ export function buildProductResultsPrintData(input: {
   const resolvedCodeNumber =
     regSnapCodeNumber ??
     (typeof product.codeNumber === 'number' ? product.codeNumber : undefined);
-  const codeFromCurrentProduct = Boolean(regSnap && !regSnapCode && currentCode);
+  const codeFromCurrentProduct = Boolean(
+    regSnap && !regSnapCode && currentCode,
+  );
   const safeForm = regSnap
     ? extractSafeApplicationForm(regSnap.formData)
     : extractSafeApplicationForm(product.formData);
@@ -792,7 +749,9 @@ export function buildProductResultsPrintData(input: {
         : (evaluation.judge.organizationUnit?.name ?? null),
       status: evaluation.status,
       submittedAt:
-        parsedSnap?.submittedAt ?? evaluation.submittedAt?.toISOString() ?? null,
+        parsedSnap?.submittedAt ??
+        evaluation.submittedAt?.toISOString() ??
+        null,
       isPartialScope,
       total: parsedSnap?.total ?? evaluation.total,
       scopeMaxScore,

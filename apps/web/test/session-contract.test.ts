@@ -158,6 +158,21 @@ describe('client session permissions', () => {
     assert.equal(homeFor(user!.role, user!.staffPermissions), '/judge');
   });
 
+  it('preserves explicit empty staffPermissions: [] and grants VIEW whenever MANAGE is present', () => {
+    const emptyStaff = normalizeSession({
+      accessToken: 'token',
+      user: { ...viewer.user, role: 'ADMIN', staffPermissions: [] },
+    })?.user;
+    assert.deepEqual(emptyStaff?.staffPermissions, []);
+
+    const manageOnly = normalizeSession({
+      accessToken: 'token',
+      user: { ...viewer.user, role: 'ADMIN', staffPermissions: ['MANAGE'] },
+    })?.user;
+    assert.deepEqual(manageOnly?.staffPermissions, ['MANAGE', 'VIEW']);
+    assert.equal(hasStaffPermission(manageOnly, 'VIEW'), true);
+  });
+
   it('allows combined MANAGE and SCORE sessions into both areas', () => {
     const user = {
       ...viewer.user,

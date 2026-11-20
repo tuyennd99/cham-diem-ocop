@@ -12,10 +12,12 @@ import 'yet-another-react-lightbox/plugins/counter.css';
 import 'yet-another-react-lightbox/plugins/thumbnails.css';
 import {
   getCachedAttachmentObjectUrl,
-  loadAttachmentWithCache,
   prefetchProductAttachments,
   type ProductAttachmentMode,
 } from '@/pages/registrant/AttachmentLink';
+import { useSession } from '@/lib/auth';
+import { syncPrivateAttachmentLoad } from '@/lib/private-attachment-cache';
+import { getSessionScope } from '@/lib/session-contract';
 
 export type ImagePreviewItem =
   | {
@@ -65,11 +67,13 @@ export function ImagePreviewDialog({
   onIndexChange,
   contextLabel,
 }: ImagePreviewDialogProps) {
+  const sessionScope = getSessionScope(useSession());
   const isOpen = activeIndex !== null && activeIndex >= 0 && activeIndex < items.length;
   const [resolvedUrls, setResolvedUrls] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
     for (const item of items) {
       if (item.kind === 'private') {
+        if (!sessionScope) continue;
         const cached = getCachedAttachmentObjectUrl(item.productId, item.id);
         if (cached) initial[item.id] = cached;
       } else if (item.kind === 'url') {
@@ -85,6 +89,8 @@ export function ImagePreviewDialog({
   // so opening the lightbox or switching between images is instantaneous.
   useEffect(() => {
     let active = true;
+    const cleanups: Array<() => void> = [];
+    const nextResolved: Record<string, string> = {};
     const privateByProduct = new Map<
       string,
       { mode: ProductAttachmentMode; productId: string; ids: string[] }
@@ -92,22 +98,23 @@ export function ImagePreviewDialog({
 
     for (const item of items) {
       if (item.kind === 'private') {
+        if (!sessionScope) continue;
         const cached = getCachedAttachmentObjectUrl(item.productId, item.id);
         if (cached) {
-          setResolvedUrls((prev) =>
-            prev[item.id] === cached ? prev : { ...prev, [item.id]: cached },
-          );
+          nextResolved[item.id] = cached;
         } else {
-          void loadAttachmentWithCache(item.mode, item.productId, item.id)
-            .then((entry) => {
-              if (!active) return;
-              setResolvedUrls((prev) =>
-                prev[item.id] === entry.objectUrl ? prev : { ...prev, [item.id]: entry.objectUrl },
-              );
-            })
-            .catch(() => {
-              // ignore individual load error
-            });
+          cleanups.push(
+            syncPrivateAttachmentLoad(item.mode, item.productId, item.id, {
+              isActive: () => active,
+              onSuccess: (entry) => {
+                setResolvedUrls((prev) =>
+                  prev[item.id] === entry.objectUrl
+                    ? prev
+                    : { ...prev, [item.id]: entry.objectUrl },
+                );
+              },
+            }),
+          );
         }
         const groupKey = `${item.mode}:${item.productId}`;
         const group = privateByProduct.get(groupKey) ?? {
@@ -118,16 +125,13 @@ export function ImagePreviewDialog({
         group.ids.push(item.id);
         privateByProduct.set(groupKey, group);
       } else if (item.kind === 'url') {
-        setResolvedUrls((prev) =>
-          prev[item.id] === item.url ? prev : { ...prev, [item.id]: item.url },
-        );
+        nextResolved[item.id] = item.url;
       } else if (item.kind === 'file') {
-        const fileUrl = getOrCreateFileObjectUrl(item.file);
-        setResolvedUrls((prev) =>
-          prev[item.id] === fileUrl ? prev : { ...prev, [item.id]: fileUrl },
-        );
+        nextResolved[item.id] = getOrCreateFileObjectUrl(item.file);
       }
     }
+
+    setResolvedUrls(nextResolved);
 
     for (const group of privateByProduct.values()) {
       prefetchProductAttachments(group.mode, group.productId, group.ids);
@@ -135,8 +139,9 @@ export function ImagePreviewDialog({
 
     return () => {
       active = false;
+      for (const cancel of cleanups) cancel();
     };
-  }, [items]);
+  }, [items, sessionScope]);
 
   const slides = useMemo<SlideImage[]>(
     () =>

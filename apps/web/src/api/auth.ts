@@ -12,6 +12,7 @@ import type {
   MessageResponse,
   OtpTiming,
   RegisterInput,
+  RegisterResponse,
   RegistrationResponse,
   RegistrationStatus,
   RegistrationTokenInput,
@@ -28,7 +29,7 @@ export const authApi = {
   login: (data: LoginInput) =>
     requestJson<LoginResponse>({ url: API.auth.login, method: 'POST', data }),
   register: (data: RegisterInput) =>
-    requestJson<RegistrationResponse>({ url: API.auth.register, method: 'POST', data }),
+    requestJson<RegisterResponse>({ url: API.auth.register, method: 'POST', data }),
   registrationStatus: (data: RegistrationTokenInput) =>
     requestJson<RegistrationStatus>({ url: API.auth.registrationStatus, method: 'POST', data }),
   verifyOtp: (data: VerifyOtpInput) =>

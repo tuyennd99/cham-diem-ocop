@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AdminUserRecord, LocalityRecord } from '@ocop/shared';
-import { useForm, useSelector } from '@tanstack/react-form';
+import { useSelector } from '@tanstack/react-form';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useBlocker, useNavigate } from '@tanstack/react-router';
-import { omit, toString } from 'lodash';
 import {
   Building2,
   CheckCircle2,
-  CircleDashed,
   FileUp,
   Film,
   MapPin,
@@ -17,6 +15,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import AlertError from '@/components/alert-error';
+import { useAppForm } from '@/components/form';
 import { FormField } from '@/components/form-field';
 import { ImagePreviewDialog, type ImagePreviewItem } from '@/components/image-preview-dialog';
 import PageSpin from '@/components/page-spin';
@@ -91,8 +90,11 @@ import {
   saveProductDraft,
 } from '../../lib/save-product-draft';
 import { hasStaffPermission } from '../../lib/session-contract';
-import { AttachmentLink } from '../../pages/registrant/AttachmentLink';
-import { useAdminProductDetail, useProductDraftCommands } from '../../queries/admin-products';
+import {
+  invalidateProductDraftQueries,
+  useAdminProductDetail,
+  useProductDraftCommands,
+} from '../../queries/admin-products';
 import { useRegistrantOwners } from '../../queries/admin-users';
 import { useCategories, useLocalities } from '../../queries/common';
 import { useMyProduct, useMyRegistrationUnits } from '../../queries/registrant';
@@ -100,6 +102,8 @@ import type {
   RegistrantProduct as Product,
   RegistrantFormData as RegistrationFormData,
 } from '../../types/registrant';
+import { DraftSavedAttachmentsSection } from './draft-editor/DraftSavedAttachmentsSection';
+import { DraftSummaryAside } from './draft-editor/DraftSummaryAside';
 
 interface ProductEditorFormValues extends RegistrationFormData {
   name: string;
@@ -150,17 +154,21 @@ const validRegistrationTypes = new Set<RegistrationFormData['registrationType']>
   PRODUCT_REGISTRATION_TYPE.REASSESSMENT,
 ]);
 
+function asText(value: unknown): string {
+  return value == null ? '' : String(value);
+}
+
 function toEditorValues(
   product: Product,
   accountDefaults?: { phone?: string | null; email?: string | null },
 ): ProductEditorFormValues {
   const saved = product.formData ?? {};
-  const rawType = toString(saved.registrationType) as RegistrationFormData['registrationType'];
-  const savedPhone = toString(saved.phone);
-  const savedEmail = toString(saved.email);
-  const savedProvince = toString(saved.provinceName) || (product.locality?.provinceName ?? '');
-  const savedLocalityName = toString(saved.localityName) || (product.locality?.name ?? '');
-  const savedLocalityCode = toString(saved.localityCode) || (product.locality?.code ?? '');
+  const rawType = asText(saved.registrationType) as RegistrationFormData['registrationType'];
+  const savedPhone = asText(saved.phone);
+  const savedEmail = asText(saved.email);
+  const savedProvince = asText(saved.provinceName) || (product.locality?.provinceName ?? '');
+  const savedLocalityName = asText(saved.localityName) || (product.locality?.name ?? '');
+  const savedLocalityCode = asText(saved.localityCode) || (product.locality?.code ?? '');
   return {
     name: product.name,
     description: product.description ?? '',
@@ -168,16 +176,16 @@ function toEditorValues(
     localityId: product.localityId ?? '',
     localityName: savedLocalityName,
     localityCode: savedLocalityCode,
-    entityName: toString(saved.entityName),
-    representativeName: toString(saved.representativeName),
-    representativeTitle: toString(saved.representativeTitle),
-    contactAddress: toString(saved.contactAddress),
+    entityName: asText(saved.entityName),
+    representativeName: asText(saved.representativeName),
+    representativeTitle: asText(saved.representativeTitle),
+    contactAddress: asText(saved.contactAddress),
     provinceName: savedProvince,
     phone: savedPhone || (accountDefaults?.phone ?? ''),
     email: savedEmail || (accountDefaults?.email ?? ''),
     registrationType: validRegistrationTypes.has(rawType) ? rawType : '',
-    sampleQuantity: saved.sampleQuantity == null ? '' : toString(saved.sampleQuantity),
-    assessmentYear: saved.assessmentYear == null ? currentYear : toString(saved.assessmentYear),
+    sampleQuantity: saved.sampleQuantity == null ? '' : asText(saved.sampleQuantity),
+    assessmentYear: saved.assessmentYear == null ? currentYear : asText(saved.assessmentYear),
     declarationAccepted: saved.declarationAccepted === true,
   };
 }
@@ -313,6 +321,8 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
   }));
   const createStarted = useRef(false);
   const savedNavigation = useRef(false);
+  const submittingRef = useRef(false);
+  const [submitting, setSubmitting] = useState(false);
   const submitIntentRef = useRef<'draft' | 'submit'>('draft');
   const [activeSubmitIntent, setActiveSubmitIntent] = useState<'draft' | 'submit'>('draft');
   const initializedKeyRef = useRef<string | null>(null);
@@ -338,10 +348,11 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
   );
   const commands = useProductDraftCommands(mode, { registrantId, reason });
 
-  const form = useForm({
+  const form = useAppForm({
     defaultValues: baselineValues,
     onSubmit: async ({ value }) => {
       if (
+        submittingRef.current ||
         !canStartProductDraftSave({
           reviewRequired,
           createOutcomeUnknown,
@@ -355,7 +366,14 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
       setCreateOutcomeUnknown(false);
       setUploadFailureId('');
       const submitAfterSave = submitIntentRef.current === 'submit';
+      const shouldSaveUnit =
+        mode === PRODUCT_WORKSPACE_MODE.OWNER && saveUnitToSettings && !selectedUnitId;
+      const wasReturned = product?.status === PRODUCT_STATUS.RETURNED;
+      const hadExistingProduct = Boolean(product);
       let latestSavedProduct: Product | null = product;
+      let uploadedCount = 0;
+      submittingRef.current = true;
+      setSubmitting(true);
       try {
         const selectedFiles = [...files, ...videoFiles];
         if (mode === PRODUCT_WORKSPACE_MODE.ADMIN && !product && !registrantId) {
@@ -402,7 +420,13 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
         setHasAttemptedSubmit(false);
         const sampleQuantity = Number(value.sampleQuantity.trim());
         const assessmentYear = Number(value.assessmentYear.trim());
-        const registrationFields = omit(value, ['name', 'description', 'categoryId', 'localityId']);
+        const {
+          name: _omitName,
+          description: _omitDescription,
+          categoryId: _omitCategoryId,
+          localityId: _omitLocalityId,
+          ...registrationFields
+        } = value;
         const formData = {
           ...registrationFields,
           localityName: value.localityName?.trim() || undefined,
@@ -424,6 +448,11 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
             createStarted.current = true;
             return commands.create(data);
           },
+          upload: async (id: string, file: File) => {
+            const uploaded = await commands.upload(id, file);
+            uploadedCount += 1;
+            return uploaded;
+          },
         };
         const result = await saveProductDraft({
           existingProduct: product ?? undefined,
@@ -433,46 +462,36 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
           submitAfterSave,
           onDraftSaved: (saved) => {
             latestSavedProduct = saved;
-            setProduct(saved);
-            setFiles([]);
-            setVideoFiles([]);
-            setBaselineValues(value);
-            baselineRef.current = {
-              values: value,
-              registrantId,
-              reason,
-            };
+            if (saved.status === PRODUCT_STATUS.DRAFT || saved.status === PRODUCT_STATUS.RETURNED) {
+              setProduct(saved);
+            }
           },
         });
-        setProduct(result.product);
         if (result.kind === DRAFT_SAVE_RESULT_KIND.UPLOAD_FAILED) {
+          setProduct(result.product);
           setReviewRequired(result.requiresReview);
           setUploadFailureId(result.product.id);
           setFiles(result.remainingFiles.filter((file) => !isVideoFileName(file.name)));
           setVideoFiles(result.remainingFiles.filter((file) => isVideoFileName(file.name)));
+          setBaselineValues(value);
+          baselineRef.current = {
+            values: value,
+            registrantId,
+            reason,
+          };
+          invalidateProductDraftQueries(queryClient, mode);
           setError(result.message);
           toast.error(result.message);
           return;
         }
 
-        setReviewRequired(false);
-        setFiles([]);
-        setVideoFiles([]);
-        setBaselineValues(value);
-        baselineRef.current = {
-          values: value,
-          registrantId,
-          reason,
-        };
-
         const unitSaveResult = await quickSaveRegistrationUnitAfterDraft({
-          enabled: mode === PRODUCT_WORKSPACE_MODE.OWNER && saveUnitToSettings && !selectedUnitId,
+          enabled: shouldSaveUnit,
           values: value,
           createUnit: (unitPayload) => myRegistrationUnitsApi.create(unitPayload),
         });
 
         const isSubmittedResult = result.kind === DRAFT_SAVE_RESULT_KIND.SUBMITTED;
-        const wasReturned = product?.status === PRODUCT_STATUS.RETURNED;
 
         if (unitSaveResult.kind === QUICK_SAVE_UNIT_OUTCOME.SAVED) {
           setSelectedUnitId(unitSaveResult.nextSelectedUnitId);
@@ -485,7 +504,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
               ? wasReturned
                 ? 'Đã nộp lại hồ sơ sản phẩm và lưu đơn vị vào Cấu hình chung.'
                 : 'Đã lưu, nộp hồ sơ sản phẩm và lưu đơn vị vào Cấu hình chung.'
-              : product
+              : hadExistingProduct
                 ? 'Đã cập nhật hồ sơ sản phẩm và lưu đơn vị vào Cấu hình chung.'
                 : 'Đã tạo hồ sơ sản phẩm mới và lưu đơn vị vào Cấu hình chung.',
           );
@@ -505,6 +524,17 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
               ),
             );
           } else {
+            setProduct(result.product);
+            setReviewRequired(false);
+            setFiles([]);
+            setVideoFiles([]);
+            setBaselineValues(value);
+            baselineRef.current = {
+              values: value,
+              registrantId,
+              reason,
+            };
+            invalidateProductDraftQueries(queryClient, mode);
             setError(unitSaveResult.message);
             toast.error(unitSaveResult.message);
             return;
@@ -517,11 +547,16 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                 : wasReturned
                   ? 'Đã lưu và nộp lại hồ sơ sản phẩm.'
                   : 'Đã lưu và nộp hồ sơ sản phẩm.'
-              : product
+              : hadExistingProduct
                 ? 'Đã cập nhật hồ sơ sản phẩm.'
                 : 'Đã tạo hồ sơ sản phẩm mới.',
           );
         }
+
+        if (mode === PRODUCT_WORKSPACE_MODE.OWNER) {
+          queryClient.setQueryData(queryKeys.myProducts.detail(result.product.id), result.product);
+        }
+        invalidateProductDraftQueries(queryClient, mode, { submitted: isSubmittedResult });
 
         savedNavigation.current = true;
         try {
@@ -538,6 +573,26 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
           savedNavigation.current = false;
         }
       } catch (cause) {
+        if (latestSavedProduct) {
+          if (
+            latestSavedProduct.status === PRODUCT_STATUS.DRAFT ||
+            latestSavedProduct.status === PRODUCT_STATUS.RETURNED
+          ) {
+            setProduct(latestSavedProduct);
+          }
+          if (uploadedCount > 0) {
+            const remaining = [...files, ...videoFiles].slice(uploadedCount);
+            setFiles(remaining.filter((file) => !isVideoFileName(file.name)));
+            setVideoFiles(remaining.filter((file) => isVideoFileName(file.name)));
+          }
+          setBaselineValues(value);
+          baselineRef.current = {
+            values: value,
+            registrantId,
+            reason,
+          };
+          invalidateProductDraftQueries(queryClient, mode);
+        }
         const unknownCreate =
           createStarted.current &&
           !latestSavedProduct &&
@@ -548,10 +603,15 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
           : messageOf(cause);
         setError(errMsg);
         toast.error(errMsg);
+      } finally {
+        submittingRef.current = false;
+        setSubmitting(false);
       }
     },
   });
 
+  const isFormSubmitting = useSelector(form.store, (state) => state.isSubmitting);
+  const busy = isFormSubmitting || submitting;
   const currentValues = useSelector(form.store, (state) => state.values);
   const staticWardsInProvince = useWardsByProvince(currentValues.provinceName);
   const dirty =
@@ -566,12 +626,16 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
   useBlocker({
     shouldBlockFn: () =>
       !savedNavigation.current &&
+      !submittingRef.current &&
       dirty &&
       !window.confirm('Hồ sơ có thay đổi chưa lưu. Rời trang và bỏ thay đổi?'),
-    enableBeforeUnload: () => dirty && !savedNavigation.current,
+    enableBeforeUnload: () => dirty && !savedNavigation.current && !submittingRef.current,
   });
 
   useEffect(() => {
+    if (submittingRef.current || savedNavigation.current) {
+      return;
+    }
     if (categoryQuery.isPending || productPending) {
       setLoaded(false);
       return;
@@ -585,11 +649,36 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
     }
     const activeCategories = categoryQuery.data ?? [];
     const current = queryProduct ?? null;
-    setProduct(current);
-    setCategories(productEditorCategories(activeCategories, current));
+    if (productId) {
+      setProduct(current);
+    }
+    setCategories(productEditorCategories(activeCategories, current ?? product));
 
-    const sourceKey = `${productId ?? 'new'}:${current?.id ?? ''}:${current?.updatedAt ?? ''}:${activeCategories[0]?.id ?? ''}:${defaultPhone}:${defaultEmail}`;
+    const sourceKey = productId ? `edit:${productId}:${current?.id ?? ''}` : 'new';
     if (initializedKeyRef.current === sourceKey) {
+      if (!productId) {
+        const currentFormValues = form.state.values;
+        const defaultedPatch: Partial<ProductEditorFormValues> = {};
+        if (!currentFormValues.categoryId && activeCategories[0]?.id) {
+          form.setFieldValue('categoryId', activeCategories[0].id, { dontUpdateMeta: true });
+          defaultedPatch.categoryId = activeCategories[0].id;
+        }
+        if (!currentFormValues.phone && defaultPhone) {
+          form.setFieldValue('phone', defaultPhone, { dontUpdateMeta: true });
+          defaultedPatch.phone = defaultPhone;
+        }
+        if (!currentFormValues.email && defaultEmail) {
+          form.setFieldValue('email', defaultEmail, { dontUpdateMeta: true });
+          defaultedPatch.email = defaultEmail;
+        }
+        if (Object.keys(defaultedPatch).length > 0 && !form.state.isTouched) {
+          setBaselineValues((prev) => {
+            const nextBaseline = { ...prev, ...defaultedPatch };
+            baselineRef.current = { ...baselineRef.current, values: nextBaseline };
+            return nextBaseline;
+          });
+        }
+      }
       return;
     }
     initializedKeyRef.current = sourceKey;
@@ -633,6 +722,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
     defaultEmail,
     defaultPhone,
     form,
+    product,
     productError,
     productId,
     productPending,
@@ -727,14 +817,6 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
   const localityIdsByName = new Map(
     localityOptions.map((loc) => [loc.name.trim().toLowerCase(), loc]),
   );
-  const activeRegistrantSummary =
-    mode === PRODUCT_WORKSPACE_MODE.OWNER
-      ? `${session?.user.fullName ?? 'Người đăng ký'}${session?.user.email ? ` (${session.user.email})` : ''}`
-      : product
-        ? `${adminProductQuery.data?.data.registrant.fullName ?? ''} (${adminProductQuery.data?.data.registrant.email ?? ''})`
-        : selectedRegistrant
-          ? `${selectedRegistrant.fullName} (${selectedRegistrant.email})`
-          : 'Chưa chọn người đăng ký';
 
   const backLink =
     mode === PRODUCT_WORKSPACE_MODE.ADMIN ? (
@@ -795,34 +877,31 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
       ? `ward-name:${currentValues.localityName}`
       : ALL;
 
+  const fallbackTitle =
+    mode === PRODUCT_WORKSPACE_MODE.ADMIN
+      ? productId
+        ? 'Sửa phiếu đăng ký'
+        : 'Nhập phiếu đăng ký'
+      : productId
+        ? product?.status === PRODUCT_STATUS.RETURNED
+          ? 'Chỉnh sửa hồ sơ bị trả lại'
+          : 'Sửa hồ sơ nháp'
+        : 'Tạo hồ sơ sản phẩm';
+  const pageTitle = productId
+    ? currentValues.name.trim() || product?.name || fallbackTitle
+    : fallbackTitle;
+
   return (
     <PageContainer className='admin-draft-editor'>
       <PageHeader
         backLink={backLink}
-        title={
-          mode === PRODUCT_WORKSPACE_MODE.ADMIN
-            ? productId
-              ? 'Sửa phiếu đăng ký'
-              : 'Nhập phiếu đăng ký'
-            : productId
-              ? product?.status === PRODUCT_STATUS.RETURNED
-                ? 'Chỉnh sửa hồ sơ bị trả lại'
-                : 'Sửa hồ sơ nháp'
-              : 'Tạo hồ sơ sản phẩm'
-        }
+        title={pageTitle}
         badge={
           <Badge
             variant={product?.status === PRODUCT_STATUS.RETURNED ? 'destructive' : 'secondary'}
           >
             {product?.status === PRODUCT_STATUS.RETURNED ? 'Bị trả lại' : 'Bản nháp'}
           </Badge>
-        }
-        description={
-          <>
-            Người đăng ký: <strong>{activeRegistrantSummary}</strong> · Đính kèm tối đa{' '}
-            {MAX_PRODUCT_FILES} tệp ảnh/PDF (mỗi tệp không quá 2 MB) và {MAX_PRODUCT_VIDEOS} video
-            (không quá 50 MB).
-          </>
         }
       />
 
@@ -860,7 +939,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                       variant='secondary'
                       size='sm'
                       type='button'
-                      disabled={registrantPage <= 1 || registrantLookup.isPending}
+                      disabled={busy || registrantPage <= 1 || registrantLookup.isPending}
                       onClick={() => setRegistrantPage((page) => Math.max(1, page - 1))}
                     >
                       Trước
@@ -875,6 +954,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                       size='sm'
                       type='button'
                       disabled={
+                        busy ||
                         registrantLookup.isPending ||
                         registrantTotalPages === 0 ||
                         registrantPage >= registrantTotalPages
@@ -893,6 +973,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                     <Input
                       id='admin-draft-registrant-search'
                       value={registrantSearch}
+                      disabled={busy}
                       onChange={(event) => {
                         setRegistrantSearch(event.target.value);
                         setRegistrantPage(1);
@@ -908,6 +989,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                   >
                     <Combobox
                       value={registrantId || ALL}
+                      disabled={busy}
                       onValueChange={(value) => {
                         const nextId = value === ALL ? '' : value;
                         const selected =
@@ -950,6 +1032,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                     <Input
                       id='admin-draft-reason'
                       value={reason}
+                      disabled={busy}
                       maxLength={255}
                       placeholder='Ghi rõ lý do nhập hoặc chỉnh sửa hộ người đăng ký…'
                       onChange={(event) => setReason(event.target.value)}
@@ -977,6 +1060,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                   <Input
                     id='admin-draft-reason'
                     value={reason}
+                    disabled={busy}
                     maxLength={255}
                     placeholder='Ghi rõ lý do nhập hoặc chỉnh sửa hộ người đăng ký…'
                     onChange={(event) => setReason(event.target.value)}
@@ -1012,8 +1096,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                   <div>
                     <h2 id='draft-section-unit'>Đơn vị đăng ký</h2>
                     <p className='draft-step-subtitle'>
-                      Khai báo địa bàn hành chính (Tỉnh/Thành phố, Xã/Phường), đơn vị sản xuất và
-                      thông tin liên hệ.
+                      Khai báo địa bàn hành chính, đơn vị sản xuất và thông tin liên hệ.
                     </p>
                   </div>
                   <span className='draft-step-counter'>Phần 1 / 3</span>
@@ -1049,6 +1132,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                                 <Checkbox
                                   id='editor-save-unit-to-settings'
                                   checked={saveUnitToSettings}
+                                  disabled={busy}
                                   onCheckedChange={(checked) => {
                                     setSaveUnitToSettings(checked === true);
                                     setUnitSaveNotice('');
@@ -1065,7 +1149,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                           </div>
                           <Combobox
                             value={selectedUnitId || ALL}
-                            disabled={registrationUnitsQuery.isLoading}
+                            disabled={busy || registrationUnitsQuery.isLoading}
                             onValueChange={(value) => {
                               if (value === ALL || !value) {
                                 setSelectedUnitId('');
@@ -1215,6 +1299,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                               >
                                 <Combobox
                                   value={provinceField.state.value || ALL}
+                                  disabled={busy}
                                   onValueChange={(value) => {
                                     const nextProvince = value === ALL ? '' : value;
                                     provinceField.handleChange(nextProvince);
@@ -1275,7 +1360,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                           >
                             <Combobox
                               value={currentComboValue}
-                              disabled={!currentValues.provinceName}
+                              disabled={busy || !currentValues.provinceName}
                               onValueChange={(value) => {
                                 if (value === ALL || !value) {
                                   field.handleChange('');
@@ -1383,6 +1468,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                                   min={2020}
                                   max={2100}
                                   step={1}
+                                  disabled={busy}
                                   value={yearField.state.value}
                                   onBlur={yearField.handleBlur}
                                   onChange={(event) => yearField.handleChange(event.target.value)}
@@ -1428,7 +1514,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                                 autoComplete={config.autoComplete}
                                 value={field.state.value}
                                 readOnly={config.disabled}
-                                disabled={config.disabled}
+                                disabled={busy || config.disabled}
                                 onBlur={field.handleBlur}
                                 onChange={(event) => field.handleChange(event.target.value)}
                                 placeholder={config.placeholder}
@@ -1451,6 +1537,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                             <Input
                               id='product-draft-3'
                               value={field.state.value}
+                              disabled={busy}
                               onBlur={field.handleBlur}
                               onChange={(event) => field.handleChange(event.target.value)}
                               placeholder='Số nhà, đường, xã/phường, tỉnh/thành phố…'
@@ -1488,6 +1575,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                         <Input
                           id='product-draft-4'
                           value={field.state.value}
+                          disabled={busy}
                           onBlur={field.handleBlur}
                           onChange={(event) => field.handleChange(event.target.value)}
                           placeholder='Nhập tên thương mại chính thức của sản phẩm…'
@@ -1507,6 +1595,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                       >
                         <Combobox
                           value={field.state.value || ALL}
+                          disabled={busy}
                           onValueChange={(value) => field.handleChange(value === ALL ? '' : value)}
                         >
                           <ComboboxAnchor>
@@ -1554,6 +1643,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                       >
                         <Combobox
                           value={field.state.value || ALL}
+                          disabled={busy}
                           onValueChange={(value) =>
                             field.handleChange(
                               (value === ALL
@@ -1602,6 +1692,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                           min={1}
                           max={100000}
                           step={1}
+                          disabled={busy}
                           value={field.state.value}
                           onBlur={field.handleBlur}
                           onChange={(event) => field.handleChange(event.target.value)}
@@ -1622,6 +1713,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                           id='product-draft-6'
                           rows={4}
                           maxLength={10000}
+                          disabled={busy}
                           value={field.state.value}
                           onBlur={field.handleBlur}
                           onChange={(event) => field.handleChange(event.target.value)}
@@ -1666,104 +1758,95 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                         <strong>2 MB</strong>.
                       </p>
 
-                      <form.Subscribe selector={(state) => state.isSubmitting}>
-                        {(busy) => (
-                          <FileUpload
-                            value={files}
-                            onValueChange={setFiles}
-                            accept={PRODUCT_DOCUMENT_IMAGE_ACCEPT}
-                            maxFiles={remainingFileSlots}
-                            maxSize={MAX_PRODUCT_FILE_BYTES}
-                            multiple
-                            disabled={busy || reviewRequired || remainingFileSlots === 0}
-                            onFileValidate={(file) => {
-                              try {
-                                if (isVideoFileName(file.name)) {
-                                  return 'Vui lòng tải video ở khung Video sản phẩm bên cạnh.';
-                                }
-                                validateProductFile(file);
-                                return null;
-                              } catch (err) {
-                                return messageOf(err);
-                              }
-                            }}
-                            onFileReject={(_file, message) => {
-                              setError(message);
-                            }}
-                          >
-                            <FileUploadDropzone className='draft-file-dropzone'>
-                              <div className='draft-file-dropzone-icon'>
-                                <Upload className='size-5' aria-hidden='true' />
-                              </div>
-                              <div className='grid gap-1'>
-                                <p className='draft-file-dropzone-title'>
-                                  Kéo thả ảnh/PDF vào đây hoặc nhấn để chọn tệp
-                                </p>
-                                <p className='draft-file-dropzone-sub'>
-                                  PNG, JPG, WEBP, GIF, PDF (còn trống {remainingFileSlots}/
-                                  {MAX_PRODUCT_FILES} tệp · tối đa 2 MB/tệp)
-                                </p>
-                              </div>
-                              <FileUploadTrigger asChild>
-                                <Button
-                                  type='button'
-                                  variant='secondary'
-                                  size='sm'
-                                  className='mt-1'
-                                >
-                                  Chọn tệp ảnh / PDF
-                                </Button>
-                              </FileUploadTrigger>
-                            </FileUploadDropzone>
+                      <FileUpload
+                        value={files}
+                        onValueChange={setFiles}
+                        accept={PRODUCT_DOCUMENT_IMAGE_ACCEPT}
+                        maxFiles={remainingFileSlots}
+                        maxSize={MAX_PRODUCT_FILE_BYTES}
+                        multiple
+                        disabled={busy || reviewRequired || remainingFileSlots === 0}
+                        onFileValidate={(file) => {
+                          try {
+                            if (isVideoFileName(file.name)) {
+                              return 'Vui lòng tải video ở khung Video sản phẩm bên cạnh.';
+                            }
+                            validateProductFile(file);
+                            return null;
+                          } catch (err) {
+                            return messageOf(err);
+                          }
+                        }}
+                        onFileReject={(_file, message) => {
+                          setError(message);
+                        }}
+                      >
+                        <FileUploadDropzone className='draft-file-dropzone'>
+                          <div className='draft-file-dropzone-icon'>
+                            <Upload className='size-5' aria-hidden='true' />
+                          </div>
+                          <div className='grid gap-1'>
+                            <p className='draft-file-dropzone-title'>
+                              Kéo thả ảnh/PDF vào đây hoặc nhấn để chọn tệp
+                            </p>
+                            <p className='draft-file-dropzone-sub'>
+                              PNG, JPG, WEBP, GIF, PDF (còn trống {remainingFileSlots}/
+                              {MAX_PRODUCT_FILES} tệp · tối đa 2 MB/tệp)
+                            </p>
+                          </div>
+                          <FileUploadTrigger asChild>
+                            <Button type='button' variant='secondary' size='sm' className='mt-1'>
+                              Chọn tệp ảnh / PDF
+                            </Button>
+                          </FileUploadTrigger>
+                        </FileUploadDropzone>
 
-                            <FileUploadList className='mt-2'>
-                              {files.map((file, index) => {
-                                const filePreviewId = `local-file-${index}-${file.name}-${file.size}`;
-                                const previewIdx = previewItems.findIndex(
-                                  (item) => item.id === filePreviewId,
-                                );
-                                return (
-                                  <FileUploadItem
-                                    key={`${index}:${file.name}:${file.size}`}
-                                    value={file}
-                                    className='draft-file-item'
+                        <FileUploadList className='mt-2'>
+                          {files.map((file, index) => {
+                            const filePreviewId = `local-file-${index}-${file.name}-${file.size}`;
+                            const previewIdx = previewItems.findIndex(
+                              (item) => item.id === filePreviewId,
+                            );
+                            return (
+                              <FileUploadItem
+                                key={`${index}:${file.name}:${file.size}`}
+                                value={file}
+                                className='draft-file-item'
+                              >
+                                {previewIdx >= 0 ? (
+                                  <button
+                                    type='button'
+                                    className='cursor-zoom-in rounded border-0 bg-transparent p-0'
+                                    onClick={() => setPreviewImageIndex(previewIdx)}
+                                    aria-label={`Xem trước ảnh ${file.name}`}
                                   >
-                                    {previewIdx >= 0 ? (
-                                      <button
-                                        type='button'
-                                        className='cursor-zoom-in rounded border-0 bg-transparent p-0'
-                                        onClick={() => setPreviewImageIndex(previewIdx)}
-                                        aria-label={`Xem trước ảnh ${file.name}`}
-                                      >
-                                        <FileUploadItemPreview />
-                                      </button>
-                                    ) : (
-                                      <FileUploadItemPreview />
-                                    )}
-                                    <FileUploadItemMetadata />
-                                    <FileUploadItemDelete asChild>
-                                      <Button type='button' variant='secondary' size='sm'>
-                                        <Trash2 className='size-3.5' aria-hidden='true' />
-                                        <span>Xóa</span>
-                                      </Button>
-                                    </FileUploadItemDelete>
-                                  </FileUploadItem>
-                                );
-                              })}
-                            </FileUploadList>
-
-                            {files.length > 1 && (
-                              <div className='mt-1 flex justify-end'>
-                                <FileUploadClear asChild>
+                                    <FileUploadItemPreview />
+                                  </button>
+                                ) : (
+                                  <FileUploadItemPreview />
+                                )}
+                                <FileUploadItemMetadata />
+                                <FileUploadItemDelete asChild>
                                   <Button type='button' variant='secondary' size='sm'>
-                                    Xóa tất cả tệp mới chọn ({files.length})
+                                    <Trash2 className='size-3.5' aria-hidden='true' />
+                                    <span>Xóa</span>
                                   </Button>
-                                </FileUploadClear>
-                              </div>
-                            )}
-                          </FileUpload>
+                                </FileUploadItemDelete>
+                              </FileUploadItem>
+                            );
+                          })}
+                        </FileUploadList>
+
+                        {files.length > 1 && (
+                          <div className='mt-1 flex justify-end'>
+                            <FileUploadClear asChild>
+                              <Button type='button' variant='secondary' size='sm'>
+                                Xóa tất cả tệp mới chọn ({files.length})
+                              </Button>
+                            </FileUploadClear>
+                          </div>
                         )}
-                      </form.Subscribe>
+                      </FileUpload>
                     </div>
 
                     {/* KHUNG 2: TỐI ĐA 1 VIDEO (<= 50 MB) */}
@@ -1783,77 +1866,68 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                         lượng không quá <strong>50 MB</strong>.
                       </p>
 
-                      <form.Subscribe selector={(state) => state.isSubmitting}>
-                        {(busy) => (
-                          <FileUpload
-                            value={videoFiles}
-                            onValueChange={setVideoFiles}
-                            accept={PRODUCT_VIDEO_ACCEPT}
-                            maxFiles={remainingVideoSlots}
-                            maxSize={MAX_PRODUCT_VIDEO_BYTES}
-                            multiple={false}
-                            disabled={busy || reviewRequired || remainingVideoSlots === 0}
-                            onFileValidate={(file) => {
-                              try {
-                                if (!isVideoFileName(file.name)) {
-                                  return 'Khung này chỉ nhận tệp video (MP4, WebM, MOV).';
-                                }
-                                validateProductFile(file);
-                                return null;
-                              } catch (err) {
-                                return messageOf(err);
-                              }
-                            }}
-                            onFileReject={(_file, message) => {
-                              setError(message);
-                            }}
-                          >
-                            <FileUploadDropzone className='draft-file-dropzone'>
-                              <div className='draft-file-dropzone-icon'>
-                                <Film className='size-5' aria-hidden='true' />
-                              </div>
-                              <div className='grid gap-1'>
-                                <p className='draft-file-dropzone-title'>
-                                  Kéo thả video vào đây hoặc nhấn để chọn video
-                                </p>
-                                <p className='draft-file-dropzone-sub'>
-                                  MP4, WEBM, MOV (còn trống {remainingVideoSlots}/
-                                  {MAX_PRODUCT_VIDEOS} video · tối đa 50 MB)
-                                </p>
-                              </div>
-                              <FileUploadTrigger asChild>
-                                <Button
-                                  type='button'
-                                  variant='secondary'
-                                  size='sm'
-                                  className='mt-1'
-                                >
-                                  Chọn tệp video
-                                </Button>
-                              </FileUploadTrigger>
-                            </FileUploadDropzone>
+                      <FileUpload
+                        value={videoFiles}
+                        onValueChange={setVideoFiles}
+                        accept={PRODUCT_VIDEO_ACCEPT}
+                        maxFiles={remainingVideoSlots}
+                        maxSize={MAX_PRODUCT_VIDEO_BYTES}
+                        multiple={false}
+                        disabled={busy || reviewRequired || remainingVideoSlots === 0}
+                        onFileValidate={(file) => {
+                          try {
+                            if (!isVideoFileName(file.name)) {
+                              return 'Khung này chỉ nhận tệp video (MP4, WebM, MOV).';
+                            }
+                            validateProductFile(file);
+                            return null;
+                          } catch (err) {
+                            return messageOf(err);
+                          }
+                        }}
+                        onFileReject={(_file, message) => {
+                          setError(message);
+                        }}
+                      >
+                        <FileUploadDropzone className='draft-file-dropzone'>
+                          <div className='draft-file-dropzone-icon'>
+                            <Film className='size-5' aria-hidden='true' />
+                          </div>
+                          <div className='grid gap-1'>
+                            <p className='draft-file-dropzone-title'>
+                              Kéo thả video vào đây hoặc nhấn để chọn video
+                            </p>
+                            <p className='draft-file-dropzone-sub'>
+                              MP4, WEBM, MOV (còn trống {remainingVideoSlots}/{MAX_PRODUCT_VIDEOS}{' '}
+                              video · tối đa 50 MB)
+                            </p>
+                          </div>
+                          <FileUploadTrigger asChild>
+                            <Button type='button' variant='secondary' size='sm' className='mt-1'>
+                              Chọn tệp video
+                            </Button>
+                          </FileUploadTrigger>
+                        </FileUploadDropzone>
 
-                            <FileUploadList className='mt-2'>
-                              {videoFiles.map((file, index) => (
-                                <FileUploadItem
-                                  key={`${index}:${file.name}:${file.size}`}
-                                  value={file}
-                                  className='draft-file-item'
-                                >
-                                  <FileUploadItemPreview />
-                                  <FileUploadItemMetadata />
-                                  <FileUploadItemDelete asChild>
-                                    <Button type='button' variant='secondary' size='sm'>
-                                      <Trash2 className='size-3.5' aria-hidden='true' />
-                                      <span>Xóa</span>
-                                    </Button>
-                                  </FileUploadItemDelete>
-                                </FileUploadItem>
-                              ))}
-                            </FileUploadList>
-                          </FileUpload>
-                        )}
-                      </form.Subscribe>
+                        <FileUploadList className='mt-2'>
+                          {videoFiles.map((file, index) => (
+                            <FileUploadItem
+                              key={`${index}:${file.name}:${file.size}`}
+                              value={file}
+                              className='draft-file-item'
+                            >
+                              <FileUploadItemPreview />
+                              <FileUploadItemMetadata />
+                              <FileUploadItemDelete asChild>
+                                <Button type='button' variant='secondary' size='sm'>
+                                  <Trash2 className='size-3.5' aria-hidden='true' />
+                                  <span>Xóa</span>
+                                </Button>
+                              </FileUploadItemDelete>
+                            </FileUploadItem>
+                          ))}
+                        </FileUploadList>
+                      </FileUpload>
                     </div>
                   </div>
 
@@ -1870,6 +1944,7 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
                           id='product-draft-declaration'
                           className='mt-0.5'
                           checked={field.state.value}
+                          disabled={busy}
                           onBlur={field.handleBlur}
                           onCheckedChange={(checked) => field.handleChange(checked === true)}
                         />
@@ -1913,244 +1988,34 @@ export function ProductDraftEditor({ mode, productId, returnSearch }: ProductDra
           </form>
 
           {product && (
-            <PageSection aria-label='Tệp đã lưu' className='p-5'>
-              <div className='flex flex-wrap items-center justify-between gap-2'>
-                <p className='text-sm font-semibold'>Tệp đính kèm đã tải lên hồ sơ</p>
-                <Badge variant='secondary'>{product.attachments.length} tệp đính kèm</Badge>
-              </div>
-              <ul className='draft-saved-attachments mt-3'>
-                {product.attachments.map((file) => {
-                  const previewIdx =
-                    file.type === ATTACHMENT_TYPE.IMAGE && !isVideoFileName(file.fileName)
-                      ? previewItems.findIndex((item) => item.id === file.id)
-                      : -1;
-                  return (
-                    <li key={file.id} className='draft-saved-attachment-item'>
-                      <span className='attachment-ext-tag'>
-                        {isVideoFileName(file.fileName)
-                          ? 'VIDEO'
-                          : file.type === ATTACHMENT_TYPE.IMAGE
-                            ? 'ẢNH'
-                            : 'TÀI LIỆU'}
-                      </span>
-                      {previewIdx >= 0 ? (
-                        <Button
-                          type='button'
-                          variant='link'
-                          className='attachment-link-btn text-link h-auto min-h-0 justify-start p-0 text-left font-semibold break-all whitespace-normal'
-                          onClick={() => setPreviewImageIndex(previewIdx)}
-                        >
-                          {file.fileName}
-                        </Button>
-                      ) : (
-                        <AttachmentLink
-                          mode={mode}
-                          productId={product.id}
-                          attachmentId={file.id}
-                          name={file.fileName}
-                        />
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            </PageSection>
+            <DraftSavedAttachmentsSection
+              mode={mode}
+              productId={product.id}
+              attachments={product.attachments}
+              previewItems={previewItems}
+              onPreviewImage={setPreviewImageIndex}
+            />
           )}
         </div>
 
-        <aside className='draft-summary-aside' aria-label='Tóm tắt hồ sơ đang nhập'>
-          <div className='draft-summary-card'>
-            <div className='draft-summary-head'>
-              <h3>Tóm tắt phiếu đăng ký</h3>
-            </div>
-            <p className='draft-summary-note'>
-              Hoàn thành đầy đủ các mục đánh dấu <strong>*</strong> và ít nhất{' '}
-              <strong>Số điện thoại hoặc Email</strong> trước khi lưu bản nháp hoặc nộp hồ sơ.
-            </p>
-            {unsavedPrefilledFields.length > 0 && (
-              <div
-                role='status'
-                className='rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-900 dark:text-amber-200'
-              >
-                <strong>Dữ liệu tự điền chưa được lưu:</strong> {unsavedPrefilledFields.join(', ')}.
-                Bấm <strong>Lưu bản nháp</strong> hoặc <strong>Lưu hồ sơ</strong> để lưu vào hệ
-                thống.
-              </div>
-            )}
-
-            <ul className='draft-checklist'>
-              <li className={currentValues.name.trim() ? 'is-done' : undefined}>
-                {currentValues.name.trim() ? (
-                  <CheckCircle2 className='size-4' aria-hidden='true' />
-                ) : (
-                  <CircleDashed className='size-4' aria-hidden='true' />
-                )}
-                <div>
-                  <strong>
-                    Tên sản phẩm{' '}
-                    <span className='label-required-mark' aria-hidden='true'>
-                      *
-                    </span>
-                  </strong>
-                  <span>{currentValues.name.trim() || 'Chưa nhập tên sản phẩm'}</span>
-                </div>
-              </li>
-              <li
-                className={
-                  currentValues.categoryId && !selectedCategoryObj?.unavailable
-                    ? 'is-done'
-                    : undefined
-                }
-              >
-                {currentValues.categoryId && !selectedCategoryObj?.unavailable ? (
-                  <CheckCircle2 className='size-4' aria-hidden='true' />
-                ) : (
-                  <CircleDashed className='size-4' aria-hidden='true' />
-                )}
-                <div>
-                  <strong>
-                    Danh mục sản phẩm{' '}
-                    <span className='label-required-mark' aria-hidden='true'>
-                      *
-                    </span>
-                  </strong>
-                  <span>
-                    {selectedCategoryObj
-                      ? selectedCategoryObj.unavailable
-                        ? `${selectedCategoryObj.name} (ngừng sử dụng — cần đổi khi nộp)`
-                        : selectedCategoryObj.name
-                      : 'Chưa chọn danh mục'}
-                  </span>
-                </div>
-              </li>
-              <li className={hasCompleteLocality ? 'is-done' : undefined}>
-                {hasCompleteLocality ? (
-                  <CheckCircle2 className='size-4' aria-hidden='true' />
-                ) : (
-                  <CircleDashed className='size-4' aria-hidden='true' />
-                )}
-                <div>
-                  <strong>
-                    Địa bàn hành chính{' '}
-                    <span className='label-required-mark' aria-hidden='true'>
-                      *
-                    </span>
-                  </strong>
-                  <span>
-                    {hasCompleteLocality
-                      ? selectedLocalityDisplay
-                      : !currentValues.provinceName.trim()
-                        ? 'Chưa chọn Tỉnh/Thành phố và Xã/Phường'
-                        : 'Chưa chọn Xã/Phường'}
-                  </span>
-                </div>
-              </li>
-              <li className={currentValues.declarationAccepted ? 'is-done' : undefined}>
-                {currentValues.declarationAccepted ? (
-                  <CheckCircle2 className='size-4' aria-hidden='true' />
-                ) : (
-                  <CircleDashed className='size-4' aria-hidden='true' />
-                )}
-                <div>
-                  <strong>
-                    Cam kết chủ thể OCOP{' '}
-                    <span className='label-required-mark' aria-hidden='true'>
-                      *
-                    </span>
-                  </strong>
-                  <span>
-                    {currentValues.declarationAccepted
-                      ? 'Đã xác nhận cam kết'
-                      : 'Cần xác nhận trước khi lưu'}
-                  </span>
-                </div>
-              </li>
-            </ul>
-
-            <dl className='draft-summary-facts'>
-              <div>
-                <dt>Đơn vị sản xuất</dt>
-                <dd>{currentValues.entityName?.trim() || 'Chưa khai báo'}</dd>
-              </div>
-              <div>
-                <dt>Số điện thoại</dt>
-                <dd>{currentValues.phone?.trim() || 'Chưa khai báo'}</dd>
-              </div>
-              <div>
-                <dt>Email liên hệ</dt>
-                <dd>{currentValues.email?.trim() || 'Chưa khai báo'}</dd>
-              </div>
-              <div>
-                <dt>Năm đánh giá</dt>
-                <dd>{currentValues.assessmentYear.trim() || 'Chưa nhập'}</dd>
-              </div>
-              <div>
-                <dt>Tệp ảnh / PDF</dt>
-                <dd>
-                  {totalRegularFilesCount} / {MAX_PRODUCT_FILES} tệp (≤ 2 MB)
-                </dd>
-              </div>
-              <div>
-                <dt>Video sản phẩm</dt>
-                <dd>
-                  {totalVideoFilesCount} / {MAX_PRODUCT_VIDEOS} video (≤ 50 MB)
-                </dd>
-              </div>
-            </dl>
-
-            <form.Subscribe selector={(state) => state.isSubmitting}>
-              {(busy) => {
-                const canStart = canStartProductDraftSave({
-                  reviewRequired,
-                  createOutcomeUnknown,
-                });
-                const isReturned = product?.status === PRODUCT_STATUS.RETURNED;
-                return (
-                  <div className='draft-summary-actions'>
-                    <Button
-                      type='submit'
-                      form='product-draft-form'
-                      data-submit-intent='submit'
-                      variant='primary'
-                      className='w-full'
-                      loading={busy && activeSubmitIntent === 'submit'}
-                      disabled={busy || !canStart}
-                      onClick={() => {
-                        submitIntentRef.current = 'submit';
-                        setActiveSubmitIntent('submit');
-                      }}
-                    >
-                      {busy && activeSubmitIntent === 'submit'
-                        ? 'Đang lưu và nộp…'
-                        : isReturned
-                          ? 'Lưu và nộp lại'
-                          : 'Lưu hồ sơ'}
-                    </Button>
-                    <Button
-                      type='submit'
-                      form='product-draft-form'
-                      data-submit-intent='draft'
-                      variant='secondary'
-                      className='w-full'
-                      loading={busy && activeSubmitIntent === 'draft'}
-                      disabled={busy || !canStart}
-                      onClick={() => {
-                        submitIntentRef.current = 'draft';
-                        setActiveSubmitIntent('draft');
-                      }}
-                    >
-                      {busy && activeSubmitIntent === 'draft'
-                        ? 'Đang lưu…'
-                        : isReturned
-                          ? 'Lưu thay đổi'
-                          : 'Lưu bản nháp'}
-                    </Button>
-                  </div>
-                );
-              }}
-            </form.Subscribe>
-          </div>
-        </aside>
+        <DraftSummaryAside
+          currentValues={currentValues}
+          product={product}
+          selectedCategoryObj={selectedCategoryObj}
+          hasCompleteLocality={hasCompleteLocality}
+          selectedLocalityDisplay={selectedLocalityDisplay}
+          unsavedPrefilledFields={unsavedPrefilledFields}
+          totalRegularFilesCount={totalRegularFilesCount}
+          totalVideoFilesCount={totalVideoFilesCount}
+          busy={busy}
+          activeSubmitIntent={activeSubmitIntent}
+          reviewRequired={reviewRequired}
+          createOutcomeUnknown={createOutcomeUnknown}
+          onSelectSubmitIntent={(intent) => {
+            submitIntentRef.current = intent;
+            setActiveSubmitIntent(intent);
+          }}
+        />
       </div>
       {uploadFailureId && (
         <p className='form-note'>

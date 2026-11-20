@@ -164,12 +164,32 @@ it('migrates and serves the isolated database with seed data', async () => {
       { algorithm: 'HS256', issuer: 'ocop-api', audience: 'ocop-web', expiresIn: '5m' },
     );
     const category = await prisma.productCategory.findFirstOrThrow({ select: { id: true } });
+    const schemaLocality = await prisma.locality.create({
+      data: {
+        code: 'SCHEMA-TEST-LOC',
+        name: 'Schema Test Locality',
+        provinceName: 'Hà Nội',
+      },
+    });
+    const schemaFormData = {
+      entityName: 'Schema Test Cooperative',
+      representativeName: 'Schema Representative',
+      representativeTitle: 'Director',
+      contactAddress: '1 Schema Test Road',
+      provinceName: 'Hà Nội',
+      phone: '0900000001',
+      registrationType: 'FIRST',
+      sampleQuantity: 1,
+      assessmentYear: 2026,
+      declarationAccepted: true,
+    };
     const product = await prisma.product.create({
       data: {
         registrantId: registrant.id,
         categoryId: category.id,
+        localityId: schemaLocality.id,
         name: 'Schema test draft',
-        formData: {},
+        formData: schemaFormData,
       },
     });
     expect(
@@ -179,7 +199,11 @@ it('migrates and serves the isolated database with seed data', async () => {
           authorization: `Bearer ${registrantToken}`,
           'content-type': 'application/json',
         },
-        body: JSON.stringify({ name: 'Schema test edited draft' }),
+        body: JSON.stringify({
+          name: 'Schema test edited draft',
+          localityId: schemaLocality.id,
+          formData: schemaFormData,
+        }),
       })).status,
     ).toBe(200);
     await expect(prisma.product.findUniqueOrThrow({ where: { id: product.id } }))
@@ -583,8 +607,20 @@ describe('HTTP production journey', () => {
       const otherToken = await tokenFor(baseUrl, otherEmail, otherPassword);
       const draft = await post<{ data: { id: string } }>(baseUrl, '/my/products', registrantToken, {
         categoryId: category!.id,
+        localityId: locality.id,
         name: 'Journey private draft',
-        formData: {},
+        formData: {
+          entityName: 'Test Cooperative',
+          representativeName: 'Test Representative',
+          representativeTitle: 'Director',
+          contactAddress: '1 Test Road',
+          provinceName: 'Hà Nội',
+          phone: '0900000000',
+          registrationType: 'FIRST',
+          sampleQuantity: 1,
+          assessmentYear: 2026,
+          declarationAccepted: true,
+        },
       });
       expect(draft.status).toBe(201);
       const draftId = draft.body.data.id;

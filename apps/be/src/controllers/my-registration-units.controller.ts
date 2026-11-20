@@ -52,10 +52,7 @@ export class MyRegistrationUnitsController {
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   @ResponseMessage('Xóa đơn vị đăng ký thành công')
-  remove(
-    @Param('id') id: string,
-    @CurrentUser() user: AccessTokenPayload,
-  ) {
+  remove(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
     return this.service.removeRegistrationUnit(id, user.sub);
   }
 }

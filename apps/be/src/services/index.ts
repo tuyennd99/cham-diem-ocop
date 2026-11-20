@@ -4,6 +4,7 @@ import { AdminService } from './admin.service';
 import { AuthService } from './auth.service';
 import { EvaluationsService } from './evaluations.service';
 import { HealthService } from './health.service';
+import { PrintDataService } from './print-data.service';
 import { ProductsService } from './products.service';
 
 export const appServices = [
@@ -13,5 +14,6 @@ export const appServices = [
   AuthService,
   EvaluationsService,
   HealthService,
+  PrintDataService,
   ProductsService,
 ];

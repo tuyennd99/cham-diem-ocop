@@ -11,10 +11,13 @@ export class HealthService {
 
   async ready() {
     try {
-      await this.prisma.$transaction(async (tx) => {
-        await tx.$executeRaw`SET LOCAL statement_timeout = '2000ms'`;
-        await tx.$queryRaw`SELECT 1`;
-      }, { timeout: 3000, maxWait: 1000 });
+      await this.prisma.$transaction(
+        async (tx) => {
+          await tx.$executeRaw`SET LOCAL statement_timeout = '2000ms'`;
+          await tx.$queryRaw`SELECT 1`;
+        },
+        { timeout: 3000, maxWait: 1000 },
+      );
     } catch {
       throw new ServiceUnavailableException('Database is unavailable');
     }

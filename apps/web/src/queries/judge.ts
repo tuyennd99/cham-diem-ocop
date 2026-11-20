@@ -1,11 +1,14 @@
-import { useQuery } from '@tanstack/react-query';
+import type { JudgeQueueQuery } from '@ocop/shared';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { judgeApi } from '../api';
 import { queryKeys } from '../constants/query-key';
 
-export function useJudgeQueue() {
+/** Returns the full `{ data, meta }` envelope with pagination & summary counts from backend. */
+export function useJudgeQueue(query: JudgeQueueQuery = {}) {
   return useQuery({
-    queryKey: queryKeys.judge.queue,
-    queryFn: async () => (await judgeApi.queue()).data,
+    queryKey: queryKeys.judge.queue(query),
+    queryFn: () => judgeApi.queue(query),
+    placeholderData: keepPreviousData,
   });
 }
 

@@ -51,7 +51,11 @@ export class AdminUsersController {
     @CurrentUser() principal: AccessTokenPayload,
     @Req() request: Request,
   ) {
-    return this.adminUsers.createUser(body, principal.sub, requestMeta(request));
+    return this.adminUsers.createUser(
+      body,
+      principal.sub,
+      requestMeta(request),
+    );
   }
 
   @Put('users/:id')

@@ -9,7 +9,7 @@ const server = await createServer({
   envDir: false,
   appType: 'custom',
   resolve: { alias: { '@': fileURLToPath(new URL('../src', import.meta.url)) } },
-  ssr: { noExternal: ['lodash'], optimizeDeps: { include: ['react', 'react-dom', 'lodash'] } },
+  ssr: { optimizeDeps: { include: ['react', 'react-dom'] } },
   server: { middlewareMode: true, watch: null, hmr: false },
 });
 

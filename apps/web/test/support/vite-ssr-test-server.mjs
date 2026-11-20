@@ -3,8 +3,10 @@ import { createServer } from 'vite';
 
 export async function createViteSsrTestServer() {
   const root = fileURLToPath(new URL('../../', import.meta.url));
+  const cacheDir = fileURLToPath(new URL('../../node_modules/.vite-ssr-test', import.meta.url));
   return createServer({
     root,
+    cacheDir,
     configFile: false,
     envDir: false,
     appType: 'custom',
@@ -17,7 +19,6 @@ export async function createViteSsrTestServer() {
       },
     },
     ssr: {
-      noExternal: ['lodash'],
       optimizeDeps: {
         include: [
           'react',
@@ -26,10 +27,9 @@ export async function createViteSsrTestServer() {
           '@tanstack/react-query',
           '@tanstack/react-form',
           'axios',
-          'lodash',
         ],
       },
     },
-    server: { middlewareMode: true, watch: null, hmr: false },
+    server: { middlewareMode: true, watch: null, hmr: false, ws: false },
   });
 }

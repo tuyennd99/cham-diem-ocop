@@ -22,7 +22,9 @@ async function withFixture(
       where: { registrantId: fixture.registrantId },
     });
     await prisma.locality.deleteMany({ where: { id: fixture.localityId } });
-    await prisma.criteriaSet.deleteMany({ where: { categoryId: fixture.categoryId } });
+    await prisma.criteriaSet.deleteMany({
+      where: { categoryId: fixture.categoryId },
+    });
     await prisma.productCategory.delete({ where: { id: fixture.categoryId } });
     await prisma.user.deleteMany({
       where: { id: { in: [fixture.registrantId, ...fixture.judgeIds] } },
@@ -132,7 +134,12 @@ async function createFixture(prisma: PrismaService) {
   await prisma.judgeAssignment.createMany({
     data: judges.map(({ id }) => ({ judgeId: id, categoryId: category.id })),
   });
-  const product = await createProduct(prisma, registrant.id, category.id, locality.id);
+  const product = await createProduct(
+    prisma,
+    registrant.id,
+    category.id,
+    locality.id,
+  );
   return {
     categoryId: category.id,
     criteria: category.criteriaSet!.criteria,
@@ -211,41 +218,114 @@ describe('evaluation persistence', () => {
       withFixture(prisma, async (fixture) => {
         const products = new ProductsRepository(app.get(PrismaService));
         const evaluations = app.get(EvaluationsRepository);
-        const product = await products.create({
-          registrantId: fixture.registrantId,
-          categoryId: fixture.categoryId,
-          name: 'Lifecycle fixture',
-          localityId: fixture.localityId,
-          formData: {
-            entityName: 'Entity', representativeName: 'Representative', representativeTitle: 'Title',
-            contactAddress: 'Address', provinceName: 'Province', phone: '123', registrationType: 'FIRST',
-            sampleQuantity: 1, assessmentYear: 2026, declarationAccepted: true,
+        const product = await products.create(
+          {
+            registrantId: fixture.registrantId,
+            categoryId: fixture.categoryId,
+            name: 'Lifecycle fixture',
+            localityId: fixture.localityId,
+            formData: {
+              entityName: 'Entity',
+              representativeName: 'Representative',
+              representativeTitle: 'Title',
+              contactAddress: 'Address',
+              provinceName: 'Province',
+              phone: '123',
+              registrationType: 'FIRST',
+              sampleQuantity: 1,
+              assessmentYear: 2026,
+              declarationAccepted: true,
+            },
           },
-        }, { kind: 'OWNER', id: fixture.registrantId });
-        await products.submitDraft(product.id, { kind: 'OWNER', id: fixture.registrantId });
-        await prisma.judgeAssignment.delete({ where: { judgeId_categoryId: { judgeId: fixture.judgeIds[1], categoryId: fixture.categoryId } } });
-        await evaluations.saveDraft(fixture.judgeIds[0], product.id, scores(fixture, 60, 40));
+          { kind: 'OWNER', id: fixture.registrantId },
+        );
+        await products.submitDraft(product.id, {
+          kind: 'OWNER',
+          id: fixture.registrantId,
+        });
+        await prisma.judgeAssignment.delete({
+          where: {
+            judgeId_categoryId: {
+              judgeId: fixture.judgeIds[1],
+              categoryId: fixture.categoryId,
+            },
+          },
+        });
+        await evaluations.saveDraft(
+          fixture.judgeIds[0],
+          product.id,
+          scores(fixture, 60, 40),
+        );
         await evaluations.submit(fixture.judgeIds[0], product.id);
 
-        const completed = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
+        const completed = await prisma.product.findUniqueOrThrow({
+          where: { id: product.id },
+        });
         const submittedAt = completed.submittedAt;
         const completedAt = completed.completedAt;
-        const events = await prisma.productStatusEvent.findMany({ where: { productId: product.id }, orderBy: { sequence: 'asc' } });
-        expect(events.map(({ sequence, fromStatus, toStatus, actorId }) => ({ sequence, fromStatus, toStatus, actorId }))).toEqual([
-          { sequence: 1, fromStatus: null, toStatus: ProductStatus.DRAFT, actorId: fixture.registrantId },
-          { sequence: 2, fromStatus: ProductStatus.DRAFT, toStatus: ProductStatus.SUBMITTED, actorId: fixture.registrantId },
-          { sequence: 3, fromStatus: ProductStatus.SUBMITTED, toStatus: ProductStatus.SCORING, actorId: fixture.judgeIds[0] },
-          { sequence: 4, fromStatus: ProductStatus.SCORING, toStatus: ProductStatus.COMPLETED, actorId: fixture.judgeIds[0] },
+        const events = await prisma.productStatusEvent.findMany({
+          where: { productId: product.id },
+          orderBy: { sequence: 'asc' },
+        });
+        expect(
+          events.map(({ sequence, fromStatus, toStatus, actorId }) => ({
+            sequence,
+            fromStatus,
+            toStatus,
+            actorId,
+          })),
+        ).toEqual([
+          {
+            sequence: 1,
+            fromStatus: null,
+            toStatus: ProductStatus.DRAFT,
+            actorId: fixture.registrantId,
+          },
+          {
+            sequence: 2,
+            fromStatus: ProductStatus.DRAFT,
+            toStatus: ProductStatus.SUBMITTED,
+            actorId: fixture.registrantId,
+          },
+          {
+            sequence: 3,
+            fromStatus: ProductStatus.SUBMITTED,
+            toStatus: ProductStatus.SCORING,
+            actorId: fixture.judgeIds[0],
+          },
+          {
+            sequence: 4,
+            fromStatus: ProductStatus.SCORING,
+            toStatus: ProductStatus.COMPLETED,
+            actorId: fixture.judgeIds[0],
+          },
         ]);
-        expect(completed).toMatchObject({ status: ProductStatus.COMPLETED, completedAt: expect.any(Date), submittedAt: expect.any(Date) });
+        expect(completed).toMatchObject({
+          status: ProductStatus.COMPLETED,
+          completedAt: expect.any(Date),
+          submittedAt: expect.any(Date),
+        });
         expect(events[3].createdAt).toEqual(completedAt);
 
-        await expect(products.submitDraft(product.id, { kind: 'OWNER', id: fixture.registrantId })).resolves.toBeNull();
-        await expect(prisma.$transaction((tx) => recomputeProductResult(tx, product.id, fixture.judgeIds[0]))).resolves.toBeUndefined();
-        const retried = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
+        await expect(
+          products.submitDraft(product.id, {
+            kind: 'OWNER',
+            id: fixture.registrantId,
+          }),
+        ).resolves.toBeNull();
+        await expect(
+          prisma.$transaction((tx) =>
+            recomputeProductResult(tx, product.id, fixture.judgeIds[0]),
+          ),
+        ).resolves.toBeUndefined();
+        const retried = await prisma.product.findUniqueOrThrow({
+          where: { id: product.id },
+        });
         expect(retried.submittedAt).toEqual(submittedAt);
         expect(retried.completedAt).toEqual(completedAt);
-        await expect(prisma.productStatusEvent.count({ where: { productId: product.id } })).resolves.toBe(4);
+        await expect(
+          prisma.productStatusEvent.count({ where: { productId: product.id } }),
+        ).resolves.toBe(4);
       }),
     );
   });
@@ -256,25 +336,112 @@ describe('evaluation persistence', () => {
         const products = new ProductsRepository(app.get(PrismaService));
         const evaluations = app.get(EvaluationsRepository);
         const validFormData = {
-          entityName: 'Entity', representativeName: 'Representative', representativeTitle: 'Title',
-          contactAddress: 'Address', provinceName: 'Province', phone: '123', registrationType: 'FIRST' as const,
-          sampleQuantity: 1, assessmentYear: 2026, declarationAccepted: true,
+          entityName: 'Entity',
+          representativeName: 'Representative',
+          representativeTitle: 'Title',
+          contactAddress: 'Address',
+          provinceName: 'Province',
+          phone: '123',
+          registrationType: 'FIRST' as const,
+          sampleQuantity: 1,
+          assessmentYear: 2026,
+          declarationAccepted: true,
         };
-        await expect(products.create({ registrantId: fixture.registrantId, categoryId: fixture.categoryId, name: 'Incomplete draft', formData: {}, localityId: fixture.localityId }, { kind: 'OWNER', id: fixture.registrantId })).rejects.toThrow(BadRequestException);
-        const draft = await products.create({ registrantId: fixture.registrantId, categoryId: fixture.categoryId, name: 'Old draft', formData: validFormData, localityId: fixture.localityId }, { kind: 'OWNER', id: fixture.registrantId });
-        await expect(prisma.product.findUniqueOrThrow({ where: { id: draft.id } })).resolves.toMatchObject({ status: ProductStatus.DRAFT, submittedAt: null });
-        await expect(prisma.productStatusEvent.count({ where: { productId: draft.id } })).resolves.toBe(1);
-        await prisma.productCategory.update({ where: { id: fixture.categoryId }, data: { isActive: false } });
-        await prisma.criteriaSet.update({ where: { categoryId: fixture.categoryId }, data: { isActive: false } });
+        await expect(
+          products.create(
+            {
+              registrantId: fixture.registrantId,
+              categoryId: fixture.categoryId,
+              name: 'Incomplete draft',
+              formData: {},
+              localityId: fixture.localityId,
+            },
+            { kind: 'OWNER', id: fixture.registrantId },
+          ),
+        ).rejects.toThrow(BadRequestException);
+        const draft = await products.create(
+          {
+            registrantId: fixture.registrantId,
+            categoryId: fixture.categoryId,
+            name: 'Old draft',
+            formData: validFormData,
+            localityId: fixture.localityId,
+          },
+          { kind: 'OWNER', id: fixture.registrantId },
+        );
+        await expect(
+          prisma.product.findUniqueOrThrow({ where: { id: draft.id } }),
+        ).resolves.toMatchObject({
+          status: ProductStatus.DRAFT,
+          submittedAt: null,
+        });
+        await expect(
+          prisma.productStatusEvent.count({ where: { productId: draft.id } }),
+        ).resolves.toBe(1);
+        await prisma.productCategory.update({
+          where: { id: fixture.categoryId },
+          data: { isActive: false },
+        });
+        await prisma.criteriaSet.update({
+          where: { categoryId: fixture.categoryId },
+          data: { isActive: false },
+        });
 
-        expect((await products.listCategories()).some(({ id }) => id === fixture.categoryId)).toBe(false);
-        await expect(products.create({ registrantId: fixture.registrantId, categoryId: fixture.categoryId, name: 'New draft', formData: {}, localityId: fixture.localityId }, { kind: 'OWNER', id: fixture.registrantId })).rejects.toThrow(ConflictException);
-        await expect(products.updateDraft(draft.id, { kind: 'OWNER', id: fixture.registrantId }, { name: 'Edited old draft' })).resolves.toMatchObject({ name: 'Edited old draft', categoryId: fixture.categoryId });
-        await expect(products.submitDraft(draft.id, { kind: 'OWNER', id: fixture.registrantId })).rejects.toThrow(ConflictException);
-        await expect(products.findMine(draft.id, fixture.registrantId)).resolves.toMatchObject({ id: draft.id, categoryId: fixture.categoryId });
-        await expect(evaluations.getEvaluation(fixture.judgeIds[0], fixture.productId)).resolves.toMatchObject({ product: { id: fixture.productId } });
-        await evaluations.saveDraft(fixture.judgeIds[0], fixture.productId, scores(fixture, 50, 30));
-        await expect(prisma.product.findUniqueOrThrow({ where: { id: fixture.productId } })).resolves.toMatchObject({ status: ProductStatus.SCORING, categoryId: fixture.categoryId });
+        expect(
+          (await products.listCategories()).some(
+            ({ id }) => id === fixture.categoryId,
+          ),
+        ).toBe(false);
+        await expect(
+          products.create(
+            {
+              registrantId: fixture.registrantId,
+              categoryId: fixture.categoryId,
+              name: 'New draft',
+              formData: {},
+              localityId: fixture.localityId,
+            },
+            { kind: 'OWNER', id: fixture.registrantId },
+          ),
+        ).rejects.toThrow(ConflictException);
+        await expect(
+          products.updateDraft(
+            draft.id,
+            { kind: 'OWNER', id: fixture.registrantId },
+            { name: 'Edited old draft' },
+          ),
+        ).resolves.toMatchObject({
+          name: 'Edited old draft',
+          categoryId: fixture.categoryId,
+        });
+        await expect(
+          products.submitDraft(draft.id, {
+            kind: 'OWNER',
+            id: fixture.registrantId,
+          }),
+        ).rejects.toThrow(ConflictException);
+        await expect(
+          products.findMine(draft.id, fixture.registrantId),
+        ).resolves.toMatchObject({
+          id: draft.id,
+          categoryId: fixture.categoryId,
+        });
+        await expect(
+          evaluations.getEvaluation(fixture.judgeIds[0], fixture.productId),
+        ).resolves.toMatchObject({ product: { id: fixture.productId } });
+        await evaluations.saveDraft(
+          fixture.judgeIds[0],
+          fixture.productId,
+          scores(fixture, 50, 30),
+        );
+        await expect(
+          prisma.product.findUniqueOrThrow({
+            where: { id: fixture.productId },
+          }),
+        ).resolves.toMatchObject({
+          status: ProductStatus.SCORING,
+          categoryId: fixture.categoryId,
+        });
       }),
     );
   });
@@ -283,40 +450,117 @@ describe('evaluation persistence', () => {
     await withTestApp(async ({ app, prisma }) =>
       withFixture(prisma, async (fixture) => {
         const [unitAtSubmit, newUnit] = await Promise.all([
-          prisma.organizationUnit.create({ data: { code: `UNIT-A-${randomUUID()}`, name: 'Unit at submit' } }),
-          prisma.organizationUnit.create({ data: { code: `UNIT-B-${randomUUID()}`, name: 'New unit' } }),
+          prisma.organizationUnit.create({
+            data: { code: `UNIT-A-${randomUUID()}`, name: 'Unit at submit' },
+          }),
+          prisma.organizationUnit.create({
+            data: { code: `UNIT-B-${randomUUID()}`, name: 'New unit' },
+          }),
         ]);
         try {
-          await prisma.user.update({ where: { id: fixture.judgeIds[0] }, data: { organizationUnitId: unitAtSubmit.id } });
+          await prisma.user.update({
+            where: { id: fixture.judgeIds[0] },
+            data: { organizationUnitId: unitAtSubmit.id },
+          });
           const evaluations = app.get(EvaluationsRepository);
-          await evaluations.saveDraft(fixture.judgeIds[0], fixture.productId, scores(fixture, 60, 40));
+          await evaluations.saveDraft(
+            fixture.judgeIds[0],
+            fixture.productId,
+            scores(fixture, 60, 40),
+          );
           await evaluations.submit(fixture.judgeIds[0], fixture.productId);
-          const before = await prisma.evaluation.findUniqueOrThrow({ where: { judgeId_productId: { judgeId: fixture.judgeIds[0], productId: fixture.productId } } });
-          expect((before.submissionSnapshot as { product: { category: unknown } }).product.category).toEqual({ id: fixture.categoryId, name: expect.any(String) });
+          const before = await prisma.evaluation.findUniqueOrThrow({
+            where: {
+              judgeId_productId: {
+                judgeId: fixture.judgeIds[0],
+                productId: fixture.productId,
+              },
+            },
+          });
+          expect(
+            (before.submissionSnapshot as { product: { category: unknown } })
+              .product.category,
+          ).toEqual({ id: fixture.categoryId, name: expect.any(String) });
           expect(before.submissionSnapshot).toMatchObject({
             version: 2,
-            judge: { id: fixture.judgeIds[0], organizationUnit: { id: unitAtSubmit.id, code: unitAtSubmit.code, name: 'Unit at submit' } },
+            judge: {
+              id: fixture.judgeIds[0],
+              organizationUnit: {
+                id: unitAtSubmit.id,
+                code: unitAtSubmit.code,
+                name: 'Unit at submit',
+              },
+            },
             criteriaSet: { version: '1', source: null, sourceHash: null },
             assignedCriterionIds: fixture.criteria.map(({ id }) => id),
-            scores: expect.arrayContaining([expect.objectContaining({
-              criterion: expect.objectContaining({ code: 'A', name: 'Criterion A' }),
-              subCriterion: expect.objectContaining({ content: 'Subcriterion A' }),
-              option: expect.objectContaining({ points: 60 }),
-            })]),
+            scores: expect.arrayContaining([
+              expect.objectContaining({
+                criterion: expect.objectContaining({
+                  code: 'A',
+                  name: 'Criterion A',
+                }),
+                subCriterion: expect.objectContaining({
+                  content: 'Subcriterion A',
+                }),
+                option: expect.objectContaining({ points: 60 }),
+              }),
+            ]),
           });
-          await prisma.organizationUnit.update({ where: { id: unitAtSubmit.id }, data: { name: 'Renamed unit' } });
-          await prisma.user.update({ where: { id: fixture.judgeIds[0] }, data: { organizationUnitId: newUnit.id } });
-          await prisma.criteriaSet.update({ where: { categoryId: fixture.categoryId }, data: { name: 'Renamed set', source: 'new source', version: 'v2', sourceHash: 'new-hash' } });
-          await prisma.criterion.updateMany({ where: { id: { in: fixture.criteria.map(({ id }) => id) } }, data: { name: 'Renamed criterion' } });
-          await prisma.subCriterion.updateMany({ where: { criterionId: { in: fixture.criteria.map(({ id }) => id) } }, data: { content: 'Renamed subcriterion' } });
-          const subCriterionIds = fixture.criteria.flatMap(({ subCriteria }) => subCriteria.map(({ id }) => id));
-          await prisma.scoreOption.updateMany({ where: { subCriterionId: { in: subCriterionIds } }, data: { label: 'Renamed option' } });
-          await prisma.productCategory.update({ where: { id: fixture.categoryId }, data: { name: 'Renamed category' } });
-          const after = await prisma.evaluation.findUniqueOrThrow({ where: { judgeId_productId: { judgeId: fixture.judgeIds[0], productId: fixture.productId } } });
+          await prisma.organizationUnit.update({
+            where: { id: unitAtSubmit.id },
+            data: { name: 'Renamed unit' },
+          });
+          await prisma.user.update({
+            where: { id: fixture.judgeIds[0] },
+            data: { organizationUnitId: newUnit.id },
+          });
+          await prisma.criteriaSet.update({
+            where: { categoryId: fixture.categoryId },
+            data: {
+              name: 'Renamed set',
+              source: 'new source',
+              version: 'v2',
+              sourceHash: 'new-hash',
+            },
+          });
+          await prisma.criterion.updateMany({
+            where: { id: { in: fixture.criteria.map(({ id }) => id) } },
+            data: { name: 'Renamed criterion' },
+          });
+          await prisma.subCriterion.updateMany({
+            where: {
+              criterionId: { in: fixture.criteria.map(({ id }) => id) },
+            },
+            data: { content: 'Renamed subcriterion' },
+          });
+          const subCriterionIds = fixture.criteria.flatMap(({ subCriteria }) =>
+            subCriteria.map(({ id }) => id),
+          );
+          await prisma.scoreOption.updateMany({
+            where: { subCriterionId: { in: subCriterionIds } },
+            data: { label: 'Renamed option' },
+          });
+          await prisma.productCategory.update({
+            where: { id: fixture.categoryId },
+            data: { name: 'Renamed category' },
+          });
+          const after = await prisma.evaluation.findUniqueOrThrow({
+            where: {
+              judgeId_productId: {
+                judgeId: fixture.judgeIds[0],
+                productId: fixture.productId,
+              },
+            },
+          });
           expect(after.submissionSnapshot).toEqual(before.submissionSnapshot);
         } finally {
-          await prisma.user.updateMany({ where: { id: fixture.judgeIds[0] }, data: { organizationUnitId: null } });
-          await prisma.organizationUnit.deleteMany({ where: { id: { in: [unitAtSubmit.id, newUnit.id] } } });
+          await prisma.user.updateMany({
+            where: { id: fixture.judgeIds[0] },
+            data: { organizationUnitId: null },
+          });
+          await prisma.organizationUnit.deleteMany({
+            where: { id: { in: [unitAtSubmit.id, newUnit.id] } },
+          });
         }
       }),
     );
@@ -416,7 +660,7 @@ describe('evaluation persistence', () => {
     );
   });
 
-  it('rejects submission when any assigned subcriterion is missing', async () => {
+  it('allows submission when some assigned subcriteria are omitted', async () => {
     await withTestApp(async ({ app, prisma }) =>
       withFixture(prisma, async (fixture) => {
         const repository = app.get(EvaluationsRepository);
@@ -427,17 +671,9 @@ describe('evaluation persistence', () => {
         );
         await expect(
           repository.submit(fixture.judgeIds[0], fixture.productId),
-        ).rejects.toThrow(
-          'Score every assigned subcriterion before submitting',
-        );
-        await expect(
-          prisma.product.findUniqueOrThrow({
-            where: { id: fixture.productId },
-          }),
         ).resolves.toMatchObject({
-          status: ProductStatus.SCORING,
-          finalScore: null,
-          starRating: null,
+          status: EvaluationStatus.SUBMITTED,
+          total: 50,
         });
       }),
     );
@@ -594,4 +830,128 @@ describe('evaluation persistence', () => {
       );
     },
   );
+
+  it('enforces optimistic versionToken across getEvaluation, saveDraft, and submit', async () => {
+    await withTestApp(({ app, prisma }) =>
+      withFixture(prisma, async (fixture) => {
+        const evaluations = app.get(EvaluationsRepository);
+        const judgeId = fixture.judgeIds[0];
+
+        const loaded = await evaluations.getEvaluation(
+          judgeId,
+          fixture.productId,
+        );
+        expect(loaded.evaluation.versionToken).toMatch(/^[0-9a-f]{64}$/);
+
+        const saved = await evaluations.saveDraft(
+          judgeId,
+          fixture.productId,
+          scores(fixture, 30, 30),
+          loaded.evaluation.versionToken,
+        );
+        expect(saved.versionToken).not.toBe(loaded.evaluation.versionToken);
+
+        await expect(
+          evaluations.saveDraft(
+            judgeId,
+            fixture.productId,
+            scores(fixture, 40, 30),
+            loaded.evaluation.versionToken,
+          ),
+        ).rejects.toThrow(ConflictException);
+
+        await expect(
+          evaluations.submit(
+            judgeId,
+            fixture.productId,
+            loaded.evaluation.versionToken,
+          ),
+        ).rejects.toThrow(ConflictException);
+
+        const submitted = await evaluations.submit(
+          judgeId,
+          fixture.productId,
+          saved.versionToken,
+        );
+        expect(submitted).toMatchObject({
+          status: EvaluationStatus.SUBMITTED,
+          total: 60,
+        });
+        expect(submitted.versionToken).toMatch(/^[0-9a-f]{64}$/);
+      }),
+    );
+  });
+
+  it('keeps Prisma and SQL judge queue branches consistent for IN_PROGRESS products without evaluation rows, total, and counts (#55)', async () => {
+    await withTestApp(async ({ app, prisma }) =>
+      withFixture(prisma, async (fixture) => {
+        const repository = app.get(EvaluationsRepository);
+        const judgeId = fixture.judgeIds[0];
+        const secondProduct = await prisma.product.create({
+          data: {
+            registrantId: fixture.registrantId,
+            categoryId: fixture.categoryId,
+            localityId: fixture.localityId,
+            name: 'Second Queue Product',
+            status: ProductStatus.APPROVED,
+            submittedAt: new Date(),
+            formData: {},
+          },
+        });
+        await prisma.productJudgeAssignment.create({
+          data: { productId: secondProduct.id, judgeId, isActive: true },
+        });
+
+        await repository.saveDraft(
+          judgeId,
+          fixture.productId,
+          scores(fixture, 50, 30),
+        );
+        await repository.submit(judgeId, fixture.productId);
+
+        const prismaQueue = await repository.listQueue(judgeId, {
+          evaluationStatus: EvaluationStatus.IN_PROGRESS,
+          sortBy: 'name',
+          sortDirection: 'asc',
+          page: 1,
+          limit: 20,
+        });
+        const sqlQueue = await repository.listQueue(judgeId, {
+          evaluationStatus: EvaluationStatus.IN_PROGRESS,
+          sortBy: 'evalStatus',
+          sortDirection: 'asc',
+          page: 1,
+          limit: 20,
+        });
+
+        expect(prismaQueue.counts).toEqual({
+          total: 2,
+          open: 1,
+          submitted: 1,
+          excluded: 0,
+        });
+        expect(sqlQueue.counts).toEqual(prismaQueue.counts);
+        expect(prismaQueue.total).toBe(1);
+        expect(sqlQueue.total).toBe(1);
+        expect(prismaQueue.data.map((p: { id: string }) => p.id)).toEqual([
+          secondProduct.id,
+        ]);
+        expect(sqlQueue.data.map((p: { id: string }) => p.id)).toEqual([
+          secondProduct.id,
+        ]);
+
+        const sqlScoreQueue = await repository.listQueue(judgeId, {
+          sortBy: 'totalScore',
+          sortDirection: 'desc',
+          page: 1,
+          limit: 20,
+        });
+        expect(sqlScoreQueue.total).toBe(2);
+        expect(sqlScoreQueue.data.map((p: { id: string }) => p.id)).toEqual([
+          fixture.productId,
+          secondProduct.id,
+        ]);
+      }),
+    );
+  });
 });

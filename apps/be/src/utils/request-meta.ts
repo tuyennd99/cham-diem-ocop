@@ -16,7 +16,8 @@ export function requestMeta(request: Request): RequestMeta {
   const userAgent = request.headers ? request.headers['user-agent'] : undefined;
   const meta: RequestMeta = {
     ipAddress: request.ip,
-    userAgent: typeof userAgent === 'string' ? userAgent.slice(0, 500) : undefined,
+    userAgent:
+      typeof userAgent === 'string' ? userAgent.slice(0, 500) : undefined,
     requestId,
   };
   reqWithMeta._requestMeta = meta;

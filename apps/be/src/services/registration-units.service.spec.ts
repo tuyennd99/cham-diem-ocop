@@ -41,12 +41,14 @@ describe('MyRegistrationUnitsController & ProductsService registration units', (
     let seq = 1;
 
     const repository: Partial<ProductsRepository> = {
-      listRegistrationUnits: jest.fn(async (registrantId: string) =>
-        [...store.values()]
-          .filter((item) => item.registrantId === registrantId)
-          .map(({ registrantId: _owner, ...rest }) => rest),
+      listRegistrationUnits: jest.fn((registrantId: string) =>
+        Promise.resolve(
+          [...store.values()]
+            .filter((item) => item.registrantId === registrantId)
+            .map(({ registrantId: _owner, ...rest }) => rest),
+        ),
       ),
-      createRegistrationUnit: jest.fn(async (registrantId, input) => {
+      createRegistrationUnit: jest.fn((registrantId, input) => {
         const now = new Date();
         const record = {
           id: `unit-${seq++}`,
@@ -57,11 +59,13 @@ describe('MyRegistrationUnitsController & ProductsService registration units', (
         };
         store.set(record.id, record);
         const { registrantId: _owner, ...publicRecord } = record;
-        return publicRecord;
+        return Promise.resolve(publicRecord);
       }),
-      updateRegistrationUnit: jest.fn(async (id, registrantId, input) => {
+      updateRegistrationUnit: jest.fn((id, registrantId, input) => {
         const current = store.get(id);
-        if (!current || current.registrantId !== registrantId) return null;
+        if (!current || current.registrantId !== registrantId) {
+          return Promise.resolve(null);
+        }
         const updated = {
           ...current,
           ...input,
@@ -69,13 +73,15 @@ describe('MyRegistrationUnitsController & ProductsService registration units', (
         };
         store.set(id, updated);
         const { registrantId: _owner, ...publicRecord } = updated;
-        return publicRecord;
+        return Promise.resolve(publicRecord);
       }),
-      removeRegistrationUnit: jest.fn(async (id, registrantId) => {
+      removeRegistrationUnit: jest.fn((id, registrantId) => {
         const current = store.get(id);
-        if (!current || current.registrantId !== registrantId) return false;
+        if (!current || current.registrantId !== registrantId) {
+          return Promise.resolve(false);
+        }
         store.delete(id);
-        return true;
+        return Promise.resolve(true);
       }),
     };
 
@@ -140,9 +146,9 @@ describe('MyRegistrationUnitsController & ProductsService registration units', (
       }),
     ).rejects.toThrow(NotFoundException);
 
-    await expect(
-      controller.remove(createdA.id, registrantB),
-    ).rejects.toThrow(NotFoundException);
+    await expect(controller.remove(createdA.id, registrantB)).rejects.toThrow(
+      NotFoundException,
+    );
 
     const updatedA = await controller.update(createdA.id, registrantA, {
       entityName: 'HTX Nông nghiệp A (Cập nhật)',

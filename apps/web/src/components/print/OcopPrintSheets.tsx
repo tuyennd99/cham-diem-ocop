@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { PRODUCT_WORKSPACE_MODE } from '../../constants/consts';
+import { formatDateTime } from '../../lib/admin-date';
 import type { AdminProductSearch } from '../../lib/admin-search';
 import {
   displayProductCode,
@@ -25,9 +26,7 @@ import { formatFormValue } from '../../lib/utils';
 import { PrivateAttachmentThumbnail } from '../../pages/registrant/AttachmentLink';
 
 function formatViDateTime(value: string | null | undefined): string {
-  if (!value) return '—';
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('vi-VN');
+  return formatDateTime(value) || '—';
 }
 
 export function PrintPageToolbar({
@@ -210,8 +209,8 @@ export function EvaluationPrintSheet({ data }: { data: EvaluationPrintData }) {
         )}
         {!data.isDraft && !data.historicalValuesVerified && (
           <p className='print-warning-banner' role='status'>
-            Lưu ý chất lượng dữ liệu: Phiếu nộp trước thời điểm nâng cấp hệ thống (PRE_UPGRADE), một
-            số thông tin đơn vị/thời điểm lịch sử không được ghi nhận đầy đủ.
+            Lưu ý chất lượng dữ liệu: Phiếu nộp trước thời điểm nâng cấp hệ thống, một số thông tin
+            đơn vị/thời điểm lịch sử không được ghi nhận đầy đủ.
           </p>
         )}
         <dl className='print-meta-grid'>
@@ -220,7 +219,7 @@ export function EvaluationPrintSheet({ data }: { data: EvaluationPrintData }) {
             <dd>
               <strong>{data.product.name}</strong> (
               {data.product.codeFromCurrentProduct ? 'Mã hồ sơ hiện tại: ' : 'Mã hồ sơ: '}
-              <code>{displayProductCode(data.product)}</code>)
+              {displayProductCode(data.product)})
             </dd>
           </div>
           <div>
@@ -274,7 +273,7 @@ export function EvaluationPrintSheet({ data }: { data: EvaluationPrintData }) {
               Tối đa
             </th>
             <th scope='col' style={{ width: '12%' }}>
-              Điểm BE
+              Điểm đạt
             </th>
             <th scope='col' style={{ width: '24%' }}>
               Nhận xét / Ghi chú
@@ -387,8 +386,8 @@ export function ProductResultsPrintSheet({ data }: { data: ProductResultsPrintDa
         <h1>BẢNG TỔNG HỢP KẾT QUẢ ĐÁNH GIÁ SẢN PHẨM OCOP</h1>
         {!isCompleted && (
           <p className='print-warning-banner' role='status'>
-            Hồ sơ chưa hoàn tất chấm điểm ({product.status}) — Bản in này chỉ phản ánh tiến độ các
-            phiếu hiện có, chưa có điểm cuối cùng hoặc mức sao.
+            Hồ sơ chưa hoàn tất chấm điểm — Bản in này chỉ phản ánh tiến độ các phiếu hiện có, chưa
+            có điểm cuối cùng hoặc mức sao.
           </p>
         )}
         <dl className='print-meta-grid'>
@@ -397,7 +396,7 @@ export function ProductResultsPrintSheet({ data }: { data: ProductResultsPrintDa
             <dd>
               <strong>{product.name}</strong> (
               {product.codeFromCurrentProduct ? 'Mã hồ sơ hiện tại: ' : 'Mã hồ sơ: '}
-              <code>{displayProductCode(product)}</code>)
+              {displayProductCode(product)})
             </dd>
           </div>
           <div>
@@ -432,7 +431,7 @@ export function ProductResultsPrintSheet({ data }: { data: ProductResultsPrintDa
             </dd>
           </div>
           <div>
-            <dt>Điểm tổng hợp cuối cùng (BE):</dt>
+            <dt>Điểm tổng hợp cuối cùng:</dt>
             <dd>
               <strong>
                 {isCompleted
@@ -672,7 +671,7 @@ export function RegistrationPrintSheet({
               Mã hồ sơ / Ngày nộp
             </th>
             <td>
-              <code>{displayProductCode(data.product)}</code>
+              {displayProductCode(data.product)}
               {data.product.codeFromCurrentProduct ? ' (Mã hồ sơ hiện tại)' : ''} ·{' '}
               {data.isDraft
                 ? 'BẢN NHÁP (Chưa nộp)'

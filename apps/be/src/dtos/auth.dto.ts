@@ -10,10 +10,12 @@ import {
   MinLength,
 } from 'class-validator';
 
+import { GOOGLE_AUTH_INTENT, type GoogleAuthIntent } from '../constants/auth';
 import {
-  GOOGLE_AUTH_INTENT,
-  type GoogleAuthIntent,
-} from '../constants/auth';
+  normalizedEmail,
+  trimNullableOptional,
+  trimRequired,
+} from './common.dto';
 
 const googleAuthIntents = [
   GOOGLE_AUTH_INTENT.LOGIN,
@@ -22,9 +24,7 @@ const googleAuthIntents = [
 
 export class EmailDto {
   @ApiProperty({ format: 'email', maxLength: 320 })
-  @Transform(({ value }) =>
-    typeof value === 'string' ? value.trim().toLowerCase() : value,
-  )
+  @Transform(normalizedEmail)
   @IsEmail()
   @MaxLength(320)
   email!: string;
@@ -56,14 +56,14 @@ export class RegisterDto extends EmailDto {
   password!: string;
 
   @ApiProperty({ minLength: 1, maxLength: 255 })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @Transform(trimRequired)
   @IsString()
   @MinLength(1)
   @MaxLength(255)
   fullName!: string;
 
   @ApiPropertyOptional({ maxLength: 30, nullable: true })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @Transform(trimRequired)
   @IsOptional()
   @IsString()
   @MaxLength(30)
@@ -88,14 +88,14 @@ export class RegistrationTokenDto {
 
 export class GoogleRegisterDto extends RegistrationTokenDto {
   @ApiProperty({ minLength: 1, maxLength: 255 })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @Transform(trimRequired)
   @IsString()
   @MinLength(1)
   @MaxLength(255)
   fullName!: string;
 
   @ApiPropertyOptional({ maxLength: 30, nullable: true })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @Transform(trimRequired)
   @IsOptional()
   @IsString()
   @MaxLength(30)
@@ -140,18 +140,14 @@ export class ChangePasswordDto {
 
 export class UpdateProfileDto {
   @ApiProperty({ minLength: 1, maxLength: 255 })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @Transform(trimRequired)
   @IsString()
   @MinLength(1)
   @MaxLength(255)
   fullName!: string;
 
   @ApiPropertyOptional({ maxLength: 30, nullable: true })
-  @Transform(({ value }) => {
-    if (typeof value !== 'string') return value;
-    const trimmed = value.trim();
-    return trimmed.length ? trimmed : null;
-  })
+  @Transform(trimNullableOptional)
   @IsOptional()
   @IsString()
   @MaxLength(30)

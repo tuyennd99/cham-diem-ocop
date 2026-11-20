@@ -1,10 +1,10 @@
 import { Transform, Type } from 'class-transformer';
-import type { TransformFnParams } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { EvaluationStatus } from '@prisma/client';
 import {
   IsBoolean,
   IsEnum,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -15,21 +15,34 @@ import {
 } from 'class-validator';
 import type {
   AdminCriteriaSetQuery,
+  AdminCriteriaSetSortBy,
   AdminEvaluationQuery,
+  AdminEvaluationSortBy,
   EvaluationRecordStatus,
+  SortDirection,
 } from '@ocop/shared';
+import {
+  adminCriteriaSetSortByValues,
+  adminEvaluationSortByValues,
+  sortDirectionValues,
+} from '../constants/products';
 
-const trimString = ({ value }: TransformFnParams) =>
-  typeof value === 'string' ? value.trim() || undefined : value;
-const strictBoolean = ({ value }: TransformFnParams) =>
-  value === 'true' ? true : value === 'false' ? false : value;
+import {
+  parseQueryBoolean as strictBoolean,
+  trimSearch as trimString,
+} from './common.dto';
 
 export class AdminCriteriaSetsQueryDto implements AdminCriteriaSetQuery {
-  @ApiPropertyOptional({ minimum: 1, default: 1 })
+  @ApiPropertyOptional({
+    minimum: 1,
+    maximum: Number.MAX_SAFE_INTEGER,
+    default: 1,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(Number.MAX_SAFE_INTEGER)
   page = 1;
 
   @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 20 })
@@ -60,14 +73,29 @@ export class AdminCriteriaSetsQueryDto implements AdminCriteriaSetQuery {
   @Transform(strictBoolean)
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({ enum: adminCriteriaSetSortByValues })
+  @IsOptional()
+  @IsIn(adminCriteriaSetSortByValues)
+  sortBy?: AdminCriteriaSetSortBy;
+
+  @ApiPropertyOptional({ enum: sortDirectionValues })
+  @IsOptional()
+  @IsIn(sortDirectionValues)
+  sortDirection?: SortDirection;
 }
 
 export class AdminEvaluationsQueryDto implements AdminEvaluationQuery {
-  @ApiPropertyOptional({ minimum: 1, default: 1 })
+  @ApiPropertyOptional({
+    minimum: 1,
+    maximum: Number.MAX_SAFE_INTEGER,
+    default: 1,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(Number.MAX_SAFE_INTEGER)
   page = 1;
 
   @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 20 })
@@ -113,4 +141,14 @@ export class AdminEvaluationsQueryDto implements AdminEvaluationQuery {
   @IsOptional()
   @IsEnum(EvaluationStatus)
   status?: EvaluationRecordStatus;
+
+  @ApiPropertyOptional({ enum: adminEvaluationSortByValues })
+  @IsOptional()
+  @IsIn(adminEvaluationSortByValues)
+  sortBy?: AdminEvaluationSortBy;
+
+  @ApiPropertyOptional({ enum: sortDirectionValues })
+  @IsOptional()
+  @IsIn(sortDirectionValues)
+  sortDirection?: SortDirection;
 }

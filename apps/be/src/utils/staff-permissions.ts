@@ -13,13 +13,22 @@ export function effectiveStaffPermissions(user: {
     user.staffPermissions.length > 0;
   if (!hasStaffRole) return [];
   const permissions = [...new Set(user.staffPermissions)];
-  if (roles.includes(Role.ADMIN) && !permissions.includes(StaffPermission.MANAGE)) {
+  if (
+    roles.includes(Role.ADMIN) &&
+    !permissions.includes(StaffPermission.MANAGE)
+  ) {
     permissions.push(StaffPermission.MANAGE);
   }
-  if (roles.includes(Role.VIEWER) && !permissions.includes(StaffPermission.VIEW)) {
+  if (
+    roles.includes(Role.VIEWER) &&
+    !permissions.includes(StaffPermission.VIEW)
+  ) {
     permissions.push(StaffPermission.VIEW);
   }
-  if (roles.includes(Role.JUDGE) && !permissions.includes(StaffPermission.SCORE)) {
+  if (
+    roles.includes(Role.JUDGE) &&
+    !permissions.includes(StaffPermission.SCORE)
+  ) {
     permissions.push(StaffPermission.SCORE);
   }
   if (
@@ -50,7 +59,10 @@ export function effectiveUserRoles(user: {
   if (Array.isArray(user.roles) && user.roles.length > 0) {
     for (const r of user.roles) {
       if (r === Role.REGISTRANT) {
-        if (!perms.includes(StaffPermission.SCORE) && user.role !== Role.JUDGE) {
+        if (
+          !perms.includes(StaffPermission.SCORE) &&
+          user.role !== Role.JUDGE
+        ) {
           result.add(Role.REGISTRANT);
         }
       } else if (
@@ -97,14 +109,20 @@ export function resolveRolesAndPermissions(input: {
     if (derivedPerms.has(StaffPermission.MANAGE)) {
       derivedPerms.add(StaffPermission.VIEW);
     }
-    if (derivedPerms.has(StaffPermission.SCORE) && roles.includes(Role.REGISTRANT)) {
+    if (
+      derivedPerms.has(StaffPermission.SCORE) &&
+      roles.includes(Role.REGISTRANT)
+    ) {
       throw new BadRequestException(
         'Một tài khoản không được đồng thời có vai trò Người dùng (REGISTRANT) và Giám khảo (JUDGE).',
       );
     }
     perms = [...derivedPerms];
   } else if (perms) {
-    if (perms.includes(StaffPermission.MANAGE) && !perms.includes(StaffPermission.VIEW)) {
+    if (
+      perms.includes(StaffPermission.MANAGE) &&
+      !perms.includes(StaffPermission.VIEW)
+    ) {
       perms.push(StaffPermission.VIEW);
     }
     const derivedRoles = new Set<Role>();
@@ -124,11 +142,16 @@ export function resolveRolesAndPermissions(input: {
     if (perms.includes(StaffPermission.VIEW)) derivedRoles.add(Role.VIEWER);
     roles = [...derivedRoles];
   } else {
-    roles = input.currentRoles ?? (input.currentRole ? [input.currentRole] : [Role.REGISTRANT]);
+    roles =
+      input.currentRoles ??
+      (input.currentRole ? [input.currentRole] : [Role.REGISTRANT]);
     perms = [];
   }
 
-  if (roles.includes(Role.REGISTRANT) && (roles.includes(Role.JUDGE) || perms.includes(StaffPermission.SCORE))) {
+  if (
+    roles.includes(Role.REGISTRANT) &&
+    (roles.includes(Role.JUDGE) || perms.includes(StaffPermission.SCORE))
+  ) {
     throw new BadRequestException(
       'Một tài khoản không được đồng thời có vai trò Người dùng (REGISTRANT) và Giám khảo (JUDGE).',
     );
@@ -149,11 +172,4 @@ export function resolveRolesAndPermissions(input: {
     roles,
     staffPermissions: perms,
   };
-}
-
-export function staffRole(permissions: StaffPermission[]): Role {
-  if (permissions.includes(StaffPermission.MANAGE)) return Role.ADMIN;
-  if (permissions.includes(StaffPermission.SCORE)) return Role.JUDGE;
-  if (permissions.includes(StaffPermission.VIEW)) return Role.VIEWER;
-  throw new BadRequestException('Staff must have at least one permission');
 }

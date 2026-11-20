@@ -23,8 +23,17 @@ const normalizedEmail = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim().toLowerCase() : value;
 
 export class UpdateStaffAccessDto {
-  @ApiProperty({ enum: StaffPermission, isArray: true, uniqueItems: true, minItems: 1, maxItems: 3 })
-  @ValidateIf((obj: UpdateStaffAccessDto) => !Array.isArray(obj.roles) || obj.staffPermissions !== undefined)
+  @ApiProperty({
+    enum: StaffPermission,
+    isArray: true,
+    uniqueItems: true,
+    minItems: 1,
+    maxItems: 3,
+  })
+  @ValidateIf(
+    (obj: UpdateStaffAccessDto) =>
+      !Array.isArray(obj.roles) || obj.staffPermissions !== undefined,
+  )
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(3)
@@ -32,7 +41,12 @@ export class UpdateStaffAccessDto {
   @IsEnum(StaffPermission, { each: true })
   staffPermissions!: StaffPermission[];
 
-  @ApiPropertyOptional({ enum: Role, isArray: true, uniqueItems: true, maxItems: 3 })
+  @ApiPropertyOptional({
+    enum: Role,
+    isArray: true,
+    uniqueItems: true,
+    maxItems: 3,
+  })
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(3)

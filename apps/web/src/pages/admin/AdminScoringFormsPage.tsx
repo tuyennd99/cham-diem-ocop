@@ -39,6 +39,7 @@ import {
   STAFF_PERMISSION,
 } from '../../constants/consts';
 import { usePaginatedList } from '../../hooks/use-paginated-list';
+import { formatDateTime } from '../../lib/admin-date';
 import {
   parseAdminScoringSearch,
   toAdminCriteriaSetsApiQuery,
@@ -56,6 +57,7 @@ import {
   useAdminCriteriaSets,
   useAdminEvaluations,
 } from '../../queries/scoring-print';
+import { CriteriaSetDetailView } from './CriteriaSetDetailView';
 
 interface AdminScoringFormsPageProps {
   search?: AdminScoringSearch;
@@ -77,6 +79,8 @@ export function AdminScoringFormsPage({
     pageSize,
     setPage,
     setPageSize,
+    sorting,
+    setSorting,
   } = usePaginatedList<AdminScoringSearch>({
     search: controlledSearch,
     onSearchChange,
@@ -106,7 +110,7 @@ export function AdminScoringFormsPage({
   const setsApiQuery = toAdminCriteriaSetsApiQuery(appliedSearch);
   const evalsApiQuery = toAdminEvaluationsApiQuery(appliedSearch);
 
-  const categoriesQuery = useAdminCategories({ page: 1, limit: 100 });
+  const categoriesQuery = useAdminCategories();
   const setsQuery = useAdminCriteriaSets(setsApiQuery);
   const setDetailQuery = useAdminCriteriaSetDetail(selectedSetId);
   const evaluationsQuery = useAdminEvaluations(evalsApiQuery);
@@ -205,7 +209,7 @@ export function AdminScoringFormsPage({
         cell: ({ row }) => {
           const set = row.original;
           return (
-            <div className='admin-actions justify-end'>
+            <div className='admin-table-actions'>
               <Button
                 type='button'
                 variant='secondary'
@@ -240,10 +244,8 @@ export function AdminScoringFormsPage({
             <>
               <div className='text-fg font-semibold'>{ev.product.name}</div>
               <div className='text-muted mt-0.5 text-xs'>
-                <code className='font-mono' title={ev.product.id}>
-                  {displayProductCode(ev.product)}
-                </code>{' '}
-                · {ev.product.categoryName}
+                <span title={ev.product.id}>{displayProductCode(ev.product)}</span> ·{' '}
+                {ev.product.categoryName}
               </div>
             </>
           );
@@ -300,9 +302,7 @@ export function AdminScoringFormsPage({
         accessorKey: 'submittedAt',
         header: 'Ngày nộp',
         cell: ({ row }) =>
-          row.original.submittedAt
-            ? new Date(row.original.submittedAt).toLocaleString('vi-VN')
-            : 'Chưa nộp',
+          row.original.submittedAt ? formatDateTime(row.original.submittedAt) : 'Chưa nộp',
       },
       {
         accessorKey: 'total',
@@ -333,7 +333,7 @@ export function AdminScoringFormsPage({
         cell: ({ row }) => {
           const ev = row.original;
           return (
-            <div className='admin-actions justify-end'>
+            <div className='admin-table-actions'>
               <Button asChild variant='secondary' size='sm'>
                 <Link to='/print/evaluations/$id' params={{ id: ev.id }}>
                   In phiếu chấm
@@ -537,6 +537,8 @@ export function AdminScoringFormsPage({
                   page={setsMeta?.page ?? requestedPage}
                   pageSize={pageSize}
                   enableSorting
+                  sorting={sorting}
+                  onSortingChange={setSorting}
                   getRowId={(row) => row.id}
                   onPageChange={setPage}
                   onPageSizeChange={setPageSize}
@@ -755,6 +757,8 @@ export function AdminScoringFormsPage({
                   page={evalsMeta?.page ?? requestedPage}
                   pageSize={pageSize}
                   enableSorting
+                  sorting={sorting}
+                  onSortingChange={setSorting}
                   getRowId={(row) => row.id}
                   onPageChange={setPage}
                   onPageSizeChange={setPageSize}
@@ -766,7 +770,10 @@ export function AdminScoringFormsPage({
       </Tabs>
 
       <Dialog open={criteriaDialogOpen} onOpenChange={changeCriteriaDialogOpen}>
-        <DialogContent className='admin-dialog max-w-3xl' data-admin-ui='true'>
+        <DialogContent
+          className='admin-dialog max-w-[min(64rem,calc(100vw-2rem))]'
+          data-admin-ui='true'
+        >
           <DialogHeader>
             <DialogTitle>Cấu trúc bộ phiếu</DialogTitle>
             <DialogDescription>
@@ -805,28 +812,7 @@ export function AdminScoringFormsPage({
                   </Link>
                 </Button>
               </div>
-              {selectedSet.criteria.map((criterion) => (
-                <Card className='score-card p-4' key={criterion.id}>
-                  <h3>
-                    Phần {criterion.sectionCode} ({criterion.sectionName}) — {criterion.code}.{' '}
-                    {criterion.name} (Tối đa {criterion.maxScore} điểm)
-                  </h3>
-                  {criterion.subCriteria.map((sub) => (
-                    <div key={sub.id} className='mt-2'>
-                      <strong>
-                        {sub.code}. {sub.content}
-                      </strong>
-                      <ul>
-                        {sub.options.map((opt) => (
-                          <li key={opt.id}>
-                            {opt.label} — <strong>{opt.points} điểm</strong>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                </Card>
-              ))}
+              <CriteriaSetDetailView key={selectedSet.id} criteria={selectedSet.criteria} />
             </div>
           )}
         </DialogContent>

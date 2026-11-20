@@ -1,7 +1,50 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEventHandler, ComponentProps } from 'react';
-import { debounce } from 'lodash';
 import { Input } from '@/components/ui/input';
+
+interface DebouncedCallback<Args extends unknown[]> {
+  (...args: Args): void;
+  cancel: () => void;
+  flush: () => void;
+}
+
+function debounce<Args extends unknown[]>(
+  fn: (...args: Args) => void,
+  waitMs: number,
+): DebouncedCallback<Args> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let pendingArgs: Args | null = null;
+
+  const cancel = () => {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    pendingArgs = null;
+  };
+
+  const flush = () => {
+    if (timer === null || pendingArgs === null) return;
+    const args = pendingArgs;
+    cancel();
+    fn(...args);
+  };
+
+  const debounced = ((...args: Args) => {
+    pendingArgs = args;
+    if (timer !== null) clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = null;
+      const latestArgs = pendingArgs;
+      pendingArgs = null;
+      if (latestArgs) fn(...latestArgs);
+    }, waitMs);
+  }) as DebouncedCallback<Args>;
+
+  debounced.cancel = cancel;
+  debounced.flush = flush;
+  return debounced;
+}
 
 type DebouncedInputProps = Omit<ComponentProps<typeof Input>, 'value' | 'defaultValue'> & {
   value: string;

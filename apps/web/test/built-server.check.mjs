@@ -12,6 +12,10 @@ try {
   for (const path of [assets.clientEntrySrc, ...assets.stylesheetHrefs, '/og-default.png']) {
     const response = await fetch(new URL(path, origin));
     assert.equal(response.status, 200, `${path} must be served by the built server`);
+    assert.equal(
+      response.headers.get('cache-control'),
+      path.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'public, max-age=3600',
+    );
     assert.ok((await response.arrayBuffer()).byteLength > 0);
     const head = await fetch(new URL(path, origin), { method: 'HEAD' });
     assert.equal(head.status, 200);

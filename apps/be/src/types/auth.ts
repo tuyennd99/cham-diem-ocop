@@ -18,6 +18,11 @@ export interface AccessTokenPayload {
 }
 
 export interface AuthenticatedPrincipal extends AccessTokenPayload {
+  id?: string;
+  fullName?: string;
+  phone?: string | null;
+  verified?: boolean;
+  isActive?: boolean;
   roles: Role[];
   staffPermissions: StaffPermission[];
   organizationUnitId: string | null;

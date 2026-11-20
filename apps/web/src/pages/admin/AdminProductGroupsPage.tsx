@@ -41,8 +41,10 @@ import {
   useAdminCatalogMutations,
   useAdminCategories,
   useAdminCategoryDetail,
+  useManagingAgencies,
 } from '../../queries/admin-catalogs';
 import { CategoryEditorDialog } from './CategoryEditorDialog';
+import { CriteriaSetDetailView } from './CriteriaSetDetailView';
 
 interface AdminProductGroupsPageProps {
   search?: AdminCatalogSearch;
@@ -57,14 +59,7 @@ export function AdminProductGroupsPage({
   const canManage = hasStaffPermission(session?.user, STAFF_PERMISSION.MANAGE);
   const mutations = useAdminCatalogMutations();
 
-  const {
-    appliedSearch,
-    applySearch,
-    page: requestedPage,
-    pageSize,
-    setPage,
-    setPageSize,
-  } = usePaginatedList<AdminCatalogSearch>({
+  const { appliedSearch, applySearch, sorting, setSorting } = usePaginatedList<AdminCatalogSearch>({
     search: controlledSearch,
     onSearchChange,
     parseSearch: parseAdminCatalogSearch,
@@ -72,10 +67,15 @@ export function AdminProductGroupsPage({
       page: 1,
       limit: DEFAULT_PAGE_SIZE,
     },
+    defaultSortBy: 'order',
+    defaultSortDirection: 'asc',
   });
 
   const [searchText, setSearchText] = useState(appliedSearch.q ?? '');
   const [statusFilter, setStatusFilter] = useState<boolean | undefined>(appliedSearch.isActive);
+  const [managingAgencyIdFilter, setManagingAgencyIdFilter] = useState<string | undefined>(
+    appliedSearch.managingAgencyId,
+  );
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [createCategoryOpen, setCreateCategoryOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<AdminCategoryRecord | null>(null);
@@ -83,26 +83,21 @@ export function AdminProductGroupsPage({
   useEffect(() => {
     setSearchText(appliedSearch.q ?? '');
     setStatusFilter(appliedSearch.isActive);
-  }, [appliedSearch.q, appliedSearch.isActive]);
+    setManagingAgencyIdFilter(appliedSearch.managingAgencyId);
+  }, [appliedSearch.q, appliedSearch.isActive, appliedSearch.managingAgencyId]);
 
   const categoryApiQuery = toAdminCategoryApiQuery(appliedSearch);
 
   const categoriesQuery = useAdminCategories(categoryApiQuery);
+  const agenciesQuery = useManagingAgencies();
   const detailQuery = useAdminCategoryDetail(selectedCategoryId);
+  const agencies = agenciesQuery.data ?? [];
 
   const categories = categoriesQuery.data?.data ?? [];
   const categoryMeta = categoriesQuery.data?.meta;
   const selectedDetail = detailQuery.data?.data ?? null;
   const categoriesError = errorText(categoriesQuery.error);
   const detailError = errorText(detailQuery.error);
-
-  useEffect(() => {
-    if (categoriesQuery.isPending || !categoryMeta) return;
-    const maxPage = Math.max(1, categoryMeta.totalPages);
-    if (requestedPage > maxPage) {
-      setPage(maxPage);
-    }
-  }, [categoriesQuery.isPending, categoryMeta, requestedPage, setPage]);
 
   const categoryColumns = useMemo<DataTableColumnDef<AdminCategoryRecord>[]>(
     () => [
@@ -111,14 +106,13 @@ export function AdminProductGroupsPage({
         header: 'STT',
         meta: {
           align: 'right',
-          width: '4rem',
           cellClassName: 'text-muted tabular-nums',
         },
       },
       {
         accessorKey: 'name',
         header: 'Danh mục sản phẩm',
-        meta: { isRowHeader: true, width: '30%', cellClassName: 'font-normal' },
+        meta: { isRowHeader: true, cellClassName: 'font-normal' },
         cell: ({ row }) => (
           <div className='text-fg min-w-[14rem] leading-snug font-semibold'>
             {row.original.name}
@@ -127,7 +121,7 @@ export function AdminProductGroupsPage({
       },
       {
         id: 'managingAgencies',
-        header: 'Cơ quan chủ trì quản lý',
+        header: 'Cơ quan chủ trì',
         enableSorting: false,
         cell: ({ row }) => {
           const agencies = row.original.managingAgencies ?? [];
@@ -194,11 +188,11 @@ export function AdminProductGroupsPage({
         id: 'actions',
         header: 'Thao tác',
         enableSorting: false,
-        meta: { align: 'right', width: '8.5rem', cellClassName: 'whitespace-nowrap' },
+        meta: { align: 'right' },
         cell: ({ row }) => {
           const cat = row.original;
           return (
-            <div className='flex items-center justify-end gap-1.5'>
+            <div className='admin-table-actions admin-table-actions--icons admin-table-actions--end min-w-24'>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -258,7 +252,9 @@ export function AdminProductGroupsPage({
     [canManage],
   );
 
-  const hasActiveFilters = Boolean(appliedSearch.q || appliedSearch.isActive !== undefined);
+  const hasActiveFilters = Boolean(
+    appliedSearch.q || appliedSearch.isActive !== undefined || appliedSearch.managingAgencyId,
+  );
 
   return (
     <section className='admin-page'>
@@ -304,6 +300,7 @@ export function AdminProductGroupsPage({
             page: 1,
             q: searchText.trim() || undefined,
             isActive: statusFilter,
+            managingAgencyId: managingAgencyIdFilter,
           });
         }}
       >
@@ -339,6 +336,31 @@ export function AdminProductGroupsPage({
               <ComboboxItem value={ALL}>Tất cả</ComboboxItem>
               <ComboboxItem value='true'>Đang mở đăng ký</ComboboxItem>
               <ComboboxItem value='false'>Ngừng mở đăng ký</ComboboxItem>
+            </ComboboxContent>
+          </Combobox>
+        </FormField>
+        <FormField
+          label='Cơ quan chủ trì'
+          htmlFor='catalog-search-agency'
+          className='admin-filter-field'
+          data-filter-width='group'
+        >
+          <Combobox
+            value={managingAgencyIdFilter ?? ALL}
+            onValueChange={(value) => setManagingAgencyIdFilter(value === ALL ? undefined : value)}
+          >
+            <ComboboxAnchor>
+              <ComboboxInput id='catalog-search-agency' placeholder='Tất cả' />
+              <ComboboxTrigger aria-label='Mở danh sách cơ quan chủ trì' />
+            </ComboboxAnchor>
+            <ComboboxContent>
+              <ComboboxEmpty>Không tìm thấy cơ quan chủ trì.</ComboboxEmpty>
+              <ComboboxItem value={ALL}>Tất cả</ComboboxItem>
+              {agencies.map((agency) => (
+                <ComboboxItem key={agency.id} value={agency.id}>
+                  {agency.name}
+                </ComboboxItem>
+              ))}
             </ComboboxContent>
           </Combobox>
         </FormField>
@@ -383,13 +405,11 @@ export function AdminProductGroupsPage({
           <DataTable
             columns={categoryColumns}
             data={categories}
-            total={categoryMeta?.total ?? categories.length}
-            page={categoryMeta?.page ?? requestedPage}
-            pageSize={pageSize}
+            paginated={false}
             enableSorting
+            sorting={sorting}
+            onSortingChange={setSorting}
             getRowId={(row) => row.id}
-            onPageChange={setPage}
-            onPageSizeChange={setPageSize}
           />
         </div>
       )}
@@ -400,7 +420,10 @@ export function AdminProductGroupsPage({
           if (!open) setSelectedCategoryId(null);
         }}
       >
-        <DialogContent className='admin-dialog max-w-3xl' data-admin-ui='true'>
+        <DialogContent
+          className='admin-dialog max-w-[min(64rem,calc(100vw-2rem))]'
+          data-admin-ui='true'
+        >
           <DialogHeader>
             <DialogTitle>
               {selectedDetail ? `Bộ tiêu chí: ${selectedDetail.name}` : 'Chi tiết bộ tiêu chí'}
@@ -446,28 +469,12 @@ export function AdminProductGroupsPage({
                 )}
               </div>
 
-              {selectedDetail.criteriaSet?.criteria.map((criterion) => (
-                <Card className='score-card p-4' key={criterion.id}>
-                  <h3>
-                    Phần {criterion.sectionCode} ({criterion.sectionName}) — {criterion.code}.{' '}
-                    {criterion.name} (Tối đa {criterion.maxScore} điểm)
-                  </h3>
-                  {criterion.subCriteria.map((sub) => (
-                    <div key={sub.id} className='mt-2'>
-                      <strong>
-                        {sub.code}. {sub.content}
-                      </strong>
-                      <ul>
-                        {sub.options.map((opt) => (
-                          <li key={opt.id}>
-                            {opt.label} — <strong>{opt.points} điểm</strong>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                </Card>
-              ))}
+              {selectedDetail.criteriaSet && (
+                <CriteriaSetDetailView
+                  key={selectedDetail.criteriaSet.id}
+                  criteria={selectedDetail.criteriaSet.criteria}
+                />
+              )}
             </div>
           )}
         </DialogContent>

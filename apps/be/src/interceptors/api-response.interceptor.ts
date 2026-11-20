@@ -6,17 +6,19 @@ import {
   NestInterceptor,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { isObjectLike } from 'lodash';
 import { Observable, map } from 'rxjs';
 import { RESPONSE_MESSAGE_KEY } from '../decorators/response-message.decorator';
 import { ApiSuccess } from '../types/api';
+
+const isObjectLike = (value: unknown): value is object =>
+  typeof value === 'object' && value !== null;
 
 @Injectable()
 export class ApiResponseInterceptor<T> implements NestInterceptor<
   T,
   ApiSuccess<T>
 > {
-  private readonly reflector = new Reflector();
+  constructor(private readonly reflector: Reflector) {}
 
   intercept(
     context: ExecutionContext,

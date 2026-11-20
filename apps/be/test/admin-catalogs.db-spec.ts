@@ -18,6 +18,8 @@ const localityInput = (overrides: Record<string, unknown> = {}) => ({
   eventName: ' Đợt đánh giá thử nghiệm ',
   name: ' Test locality ' + randomUUID().slice(0, 8),
   provinceName: ' Test province ',
+  effectiveFrom: '2026-01-01T00:00:00+07:00',
+  effectiveTo: '2027-01-01T00:00:00+07:00',
   isActive: true,
   reason: ' Catalog setup ',
   ...overrides,
@@ -127,8 +129,8 @@ describe('H4 product catalogs', () => {
         code: input.code,
         name: 'Test locality',
         provinceName: 'Test province',
-        effectiveFrom: null,
-        effectiveTo: null,
+        effectiveFrom: '2025-12-31T17:00:00.000Z',
+        effectiveTo: '2026-12-31T17:00:00.000Z',
         isActive: true,
       });
       const audit = await prisma.auditLog.findFirstOrThrow({
@@ -234,9 +236,11 @@ describe('H4 product catalogs', () => {
       const future = localityInput({
         code: 'TEST-FUTURE-' + randomUUID(),
         effectiveFrom: new Date(now + 3_600_000).toISOString(),
+        effectiveTo: new Date(now + 7_200_000).toISOString(),
       });
       const ended = localityInput({
         code: 'TEST-END-' + randomUUID(),
+        effectiveFrom: '2020-01-01T00:00:00Z',
         effectiveTo: new Date(now).toISOString(),
       });
       const current = localityInput({
@@ -972,6 +976,107 @@ describe('H4 product catalogs', () => {
           DROP CONSTRAINT IF EXISTS ${Prisma.raw('"' + constraint + '"')}
         `);
       }
+    });
+  });
+
+  it('preserves default order, lone sortDirection, and tie-breakers across pages for both locality APIs and categories (#52)', async () => {
+    await withTestApp(async ({ app, prisma, baseUrl }) => {
+      const f = await adminFixture(app, prisma, baseUrl);
+      await prisma.locality.createMany({
+        data: [
+          {
+            id: 'sort-loc-b',
+            code: 'SORT-LOC-B',
+            name: 'Shared Ward',
+            provinceName: 'Shared Province',
+            isActive: true,
+          },
+          {
+            id: 'sort-loc-a',
+            code: 'SORT-LOC-A',
+            name: 'Shared Ward',
+            provinceName: 'Shared Province',
+            isActive: true,
+          },
+        ],
+      });
+      await prisma.productCategory.createMany({
+        data: [
+          {
+            id: 'sort-cat-b',
+            name: 'Shared Category B',
+            order: 50,
+            isActive: false,
+          },
+          {
+            id: 'sort-cat-a',
+            name: 'Shared Category A',
+            order: 50,
+            isActive: false,
+          },
+        ],
+      });
+
+      const adminDefaultLoc = await f.call(
+        'viewer',
+        localitiesPath + '?q=Shared%20Ward',
+      );
+      const adminLoneDirLoc = await f.call(
+        'viewer',
+        localitiesPath + '?q=Shared%20Ward&sortDirection=desc',
+      );
+      expect(adminDefaultLoc.status).toBe(200);
+      expect(adminLoneDirLoc.body.data).toEqual(adminDefaultLoc.body.data);
+
+      const publicDefaultLoc = await apiRequest<any>(
+        baseUrl,
+        '/localities?q=Shared%20Ward',
+      );
+      const publicLoneDirLoc = await apiRequest<any>(
+        baseUrl,
+        '/localities?q=Shared%20Ward&sortDirection=desc',
+      );
+      expect(publicDefaultLoc.status).toBe(200);
+      expect(publicLoneDirLoc.body.data).toEqual(publicDefaultLoc.body.data);
+
+      for (const endpoint of [localitiesPath, '/localities']) {
+        const callApi = (suffix: string) =>
+          endpoint === localitiesPath
+            ? f.call('viewer', endpoint + suffix)
+            : apiRequest<any>(baseUrl, endpoint + suffix);
+        const page1 = await callApi(
+          '?q=Shared%20Ward&sortBy=name&sortDirection=desc&limit=1&page=1',
+        );
+        const page2 = await callApi(
+          '?q=Shared%20Ward&sortBy=name&sortDirection=desc&limit=1&page=2',
+        );
+        expect(page1.body.data.map((row: any) => row.id)).toEqual(['sort-loc-a']);
+        expect(page2.body.data.map((row: any) => row.id)).toEqual(['sort-loc-b']);
+      }
+
+      const defaultCats = await f.call(
+        'viewer',
+        categoriesPath + '?q=Shared%20Category',
+      );
+      const loneDirCats = await f.call(
+        'viewer',
+        categoriesPath + '?q=Shared%20Category&sortDirection=desc',
+      );
+      expect(defaultCats.status).toBe(200);
+      expect(loneDirCats.body.data).toEqual(defaultCats.body.data);
+
+      const catPage1 = await f.call(
+        'viewer',
+        categoriesPath +
+          '?q=Shared%20Category&sortBy=order&sortDirection=desc&limit=1&page=1',
+      );
+      const catPage2 = await f.call(
+        'viewer',
+        categoriesPath +
+          '?q=Shared%20Category&sortBy=order&sortDirection=desc&limit=1&page=2',
+      );
+      expect(catPage1.body.data.map((row: any) => row.id)).toEqual(['sort-cat-a']);
+      expect(catPage2.body.data.map((row: any) => row.id)).toEqual(['sort-cat-b']);
     });
   });
 });

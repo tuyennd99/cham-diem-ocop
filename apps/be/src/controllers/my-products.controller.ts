@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   UploadedFile,
   UseInterceptors,
   StreamableFile,
@@ -18,10 +19,11 @@ import { CurrentUser } from '../decorators/current-user.decorator';
 import { Roles } from '../decorators/roles.decorator';
 import { ResponseMessage } from '../decorators/response-message.decorator';
 import {
+  MyProductsQueryDto,
   ProductUpdateDto,
   ProductWriteDto,
 } from '../dtos/products.dto';
-import { AdminService } from '../services/admin.service';
+import { PrintDataService } from '../services/print-data.service';
 import { ProductsService } from '../services/products.service';
 import type { AccessTokenPayload } from '../types/auth';
 import type { UploadedPrivateFile } from '../types/files';
@@ -34,16 +36,22 @@ import { asDownload, productUploadOptions } from '../utils/private-storage';
 export class MyProductsController {
   constructor(
     private readonly products: ProductsService,
-    private readonly admin: AdminService,
+    private readonly printData: PrintDataService,
   ) {}
 
   @Get()
-  list(@CurrentUser() principal: AccessTokenPayload) {
-    return this.products.listMine(principal);
+  list(
+    @CurrentUser() principal: AccessTokenPayload,
+    @Query() query: MyProductsQueryDto,
+  ) {
+    return this.products.listMine(principal, query);
   }
 
   @Get(':id')
-  detail(@Param('id') id: string, @CurrentUser() principal: AccessTokenPayload) {
+  detail(
+    @Param('id') id: string,
+    @CurrentUser() principal: AccessTokenPayload,
+  ) {
     return this.products.getMine(id, principal);
   }
 
@@ -52,7 +60,7 @@ export class MyProductsController {
     @Param('id') id: string,
     @CurrentUser() principal: AccessTokenPayload,
   ) {
-    return this.admin.myProductRegistrationPrintData(id, principal.sub);
+    return this.printData.myProductRegistrationPrintData(id, principal.sub);
   }
 
   @Get(':id/results/print-data')
@@ -60,12 +68,15 @@ export class MyProductsController {
     @Param('id') id: string,
     @CurrentUser() principal: AccessTokenPayload,
   ) {
-    return this.admin.myProductResultsPrintData(id, principal.sub);
+    return this.printData.myProductResultsPrintData(id, principal.sub);
   }
 
   @Post()
   @ResponseMessage('Tạo hồ sơ sản phẩm thành công')
-  create(@Body() body: ProductWriteDto, @CurrentUser() principal: AccessTokenPayload) {
+  create(
+    @Body() body: ProductWriteDto,
+    @CurrentUser() principal: AccessTokenPayload,
+  ) {
     return this.products.create(body, principal);
   }
 
@@ -81,13 +92,19 @@ export class MyProductsController {
 
   @Delete(':id')
   @ResponseMessage('Xóa hồ sơ sản phẩm thành công')
-  remove(@Param('id') id: string, @CurrentUser() principal: AccessTokenPayload) {
+  remove(
+    @Param('id') id: string,
+    @CurrentUser() principal: AccessTokenPayload,
+  ) {
     return this.products.remove(id, principal);
   }
 
   @Post(':id/submit')
   @ResponseMessage('Nộp hồ sơ sản phẩm thành công')
-  submit(@Param('id') id: string, @CurrentUser() principal: AccessTokenPayload) {
+  submit(
+    @Param('id') id: string,
+    @CurrentUser() principal: AccessTokenPayload,
+  ) {
     return this.products.submit(id, principal);
   }
 
@@ -95,7 +112,10 @@ export class MyProductsController {
   @Post(':id/attachments')
   @ApiConsumes('multipart/form-data')
   @ApiBody({
-    schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } } },
+    schema: {
+      type: 'object',
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
   })
   @UseInterceptors(FileInterceptor('file', productUploadOptions()))
   upload(
@@ -112,7 +132,9 @@ export class MyProductsController {
     @Param('attachmentId') attachmentId: string,
     @CurrentUser() principal: AccessTokenPayload,
   ): Promise<StreamableFile> {
-    return asDownload(await this.products.getMyAttachment(id, attachmentId, principal));
+    return asDownload(
+      await this.products.getMyAttachment(id, attachmentId, principal),
+    );
   }
 
   @Delete(':id/attachments/:attachmentId')

@@ -3,7 +3,7 @@ import { API, API_BASE } from '../constants/api';
 import { HTTP_STATUS } from '../constants/http-status';
 import { ApiError } from '../lib/api-error';
 import { getSession, setSession } from '../stores/session-store';
-import type { ApiResult } from '../types/api';
+import type { ApiPaginationMeta, ApiResult } from '../types/api';
 
 const baseRequest = axios.create({ baseURL: API_BASE });
 const publicAuthUrls = new Set<string>(
@@ -46,16 +46,11 @@ baseRequest.interceptors.response.use(
     const status = error.response.status;
     let body: unknown = error.response.data;
     if (body instanceof Blob) {
-      body = await body
-        .text()
-        .then((text) => {
-          try {
-            return JSON.parse(text) as unknown;
-          } catch {
-            return null;
-          }
-        })
-        .catch(() => null);
+      try {
+        body = JSON.parse(await body.text()) as unknown;
+      } catch {
+        body = null;
+      }
     }
     const message =
       typeof body === 'object' &&
@@ -82,13 +77,15 @@ baseRequest.interceptors.response.use(
   },
 );
 
-export async function requestJson<T>(config: AxiosRequestConfig): Promise<ApiResult<T>> {
+export async function requestJson<T, M = ApiPaginationMeta>(
+  config: AxiosRequestConfig,
+): Promise<ApiResult<T, M>> {
   const response = await baseRequest.request<unknown>(config);
   const body = response.data === '' ? null : response.data;
   if (typeof body === 'object' && body !== null && 'data' in body) {
     return {
       data: body.data as T,
-      ...('meta' in body ? { meta: body.meta as ApiResult<T>['meta'] } : {}),
+      ...('meta' in body ? { meta: body.meta as M } : {}),
     };
   }
   return { data: body as T };

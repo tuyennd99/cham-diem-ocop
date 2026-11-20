@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useForm } from '@tanstack/react-form';
 import { Link } from '@tanstack/react-router';
-import { times, trim } from 'lodash';
+import { ImageOff } from 'lucide-react';
 import { ImagePreviewDialog, type ImagePreviewItem } from '@/components/image-preview-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,7 @@ import { publicAttachmentUrl } from '../../constants/api';
 import { ALL, DEFAULT_PAGE_SIZE, LIST_PAGE_SIZES } from '../../constants/consts';
 import { PUBLIC_PRODUCT_STATUS_LABEL } from '../../constants/product-status';
 import { usePaginatedList } from '../../hooks/use-paginated-list';
+import { formatDate } from '../../lib/admin-date';
 import {
   normalizePublicProductsSearch,
   parsePublicProductsSearch,
@@ -42,14 +43,8 @@ const DEFAULT_SEARCH: PublicProductsSearch = {
   limit: DEFAULT_PAGE_SIZE,
 };
 
-const CATALOG_DATE_FORMATTER = new Intl.DateTimeFormat('vi-VN', {
-  timeZone: 'Asia/Ho_Chi_Minh',
-});
-
 function formatCatalogDate(value: string | Date): string {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return CATALOG_DATE_FORMATTER.format(date);
+  return formatDate(value);
 }
 
 function buildVisiblePages(currentPage: number, totalPages: number): number[] {
@@ -75,6 +70,7 @@ export function PublicCatalogPage({
     index: number;
     label: string;
   } | null>(null);
+  const [failedImageIds, setFailedImageIds] = useState<Set<string>>(() => new Set());
 
   const { appliedSearch, applySearch, page, pageSize, setPage, setPageSize } =
     usePaginatedList<PublicProductsSearch>({
@@ -91,7 +87,7 @@ export function PublicCatalogPage({
       categoryId: appliedSearch.categoryId ?? '',
     },
     onSubmit: async ({ value }) => {
-      const nextQ = trim(value.query);
+      const nextQ = value.query.trim();
       applySearch({
         page: 1,
         limit: pageSize,
@@ -212,7 +208,7 @@ export function PublicCatalogPage({
             Tìm kiếm
           </Button>
         </form>
-        <p className='lookup-hint'>Kết quả chỉ cập nhật sau khi bạn nhấn “Tìm kiếm”.</p>
+        {/* <p className='lookup-hint'>Kết quả chỉ cập nhật sau khi bạn nhấn “Tìm kiếm”.</p> */}
         {categoryError && (
           <p className='form-note' role='status'>
             Chưa tải được danh sách danh mục sản phẩm. Bạn vẫn có thể tìm theo tên hoặc mã hồ sơ.
@@ -247,7 +243,7 @@ export function PublicCatalogPage({
         )}
         {loading && (
           <div className='record-list-skeleton' aria-hidden='true'>
-            {times(4, (index) => (
+            {Array.from({ length: 4 }, (_, index) => (
               <div className='record-row skeleton-record' key={index}>
                 <div className='skeleton-media' />
                 <div className='skeleton-copy'>
@@ -280,84 +276,86 @@ export function PublicCatalogPage({
         )}
         {!loading && !productError && (
           <div className='record-list'>
-            {rows.map((product) => (
-              <article className='record-row' key={product.id}>
-                <div className='record-media'>
-                  {product.attachments[0] ? (
-                    <button
-                      type='button'
-                      className='block size-full cursor-zoom-in border-0 bg-transparent p-0'
-                      aria-label={`Xem phóng to ảnh ${product.name}`}
-                      onClick={() =>
-                        setPreviewGallery({
-                          items: product.attachments.map((att, idx) => ({
-                            kind: 'url',
-                            id: att.id,
-                            name: `${product.name} — Ảnh ${idx + 1}`,
-                            url: publicAttachmentUrl(product.id, att.id),
-                          })),
-                          index: 0,
-                          label: product.name,
-                        })
-                      }
-                    >
-                      <img
-                        src={publicAttachmentUrl(product.id, product.attachments[0].id)}
-                        alt={product.name}
-                        loading='lazy'
-                      />
-                    </button>
-                  ) : (
-                    <span className='empty-media' aria-label='Chưa có ảnh sản phẩm'>
-                      OCOP
-                    </span>
-                  )}
-                </div>
-                <div className='record-main'>
-                  <div className='record-badges'>
-                    <Badge variant='secondary'>{product.category.name}</Badge>
-                    <Badge
-                      variant='outline'
-                      className={`status-badge status-${product.status.toLowerCase()}`}
-                    >
-                      {PUBLIC_PRODUCT_STATUS_LABEL[product.status]}
-                    </Badge>
-                  </div>
-                  <h2>
-                    <Link to='/products/$id' params={{ id: product.id }}>
-                      {product.name}
-                    </Link>
-                  </h2>
-                  <dl className='record-facts'>
-                    <div>
-                      <dt>Mã hồ sơ</dt>
-                      <dd title={product.id}>{displayProductCode(product)}</dd>
-                    </div>
-                    <div>
-                      <dt>Ngày tạo</dt>
-                      <dd>{formatCatalogDate(product.createdAt)}</dd>
-                    </div>
-                  </dl>
-                </div>
-                <div className='record-result'>
-                  {product.publicationState !== 'UNPUBLISHED' && product.starRating ? (
-                    <div className='rating-block'>
-                      <strong>{product.starRating} sao</strong>
-                      <span className='stars' aria-hidden='true'>
-                        ★{product.starRating > 1 ? ` × ${product.starRating}` : ''}
+            {rows.map((product) => {
+              const image = product.attachments[0];
+              return (
+                <article className='record-row' key={product.id}>
+                  <div className='record-media'>
+                    {image && !failedImageIds.has(image.id) ? (
+                      <button
+                        type='button'
+                        className='block size-full cursor-zoom-in border-0 bg-transparent p-0'
+                        aria-label={`Xem phóng to ảnh ${product.name}`}
+                        onClick={() =>
+                          setPreviewGallery({
+                            items: product.attachments.map((att, idx) => ({
+                              kind: 'url',
+                              id: att.id,
+                              name: `${product.name} — Ảnh ${idx + 1}`,
+                              url: publicAttachmentUrl(product.id, att.id),
+                            })),
+                            index: 0,
+                            label: product.name,
+                          })
+                        }
+                      >
+                        <img
+                          src={publicAttachmentUrl(product.id, image.id)}
+                          alt={product.name}
+                          loading='lazy'
+                          onError={() =>
+                            setFailedImageIds((current) => new Set(current).add(image.id))
+                          }
+                        />
+                      </button>
+                    ) : (
+                      <span className='empty-media' role='img' aria-label='Chưa có ảnh sản phẩm'>
+                        <ImageOff aria-hidden='true' size={22} strokeWidth={1.75} />
+                        <span aria-hidden='true'>Chưa có ảnh</span>
                       </span>
+                    )}
+                  </div>
+                  <div className='record-main'>
+                    <div className='record-badges'>
+                      <Badge variant='secondary'>{product.category.name}</Badge>
+                      <Badge
+                        variant='outline'
+                        className={`status-badge status-${product.status.toLowerCase()}`}
+                      >
+                        {PUBLIC_PRODUCT_STATUS_LABEL[product.status]}
+                      </Badge>
                     </div>
-                  ) : (
-                    <p className='no-rating'>Chưa có kết quả</p>
-                  )}
-                  <Button asChild variant='secondary' className='detail-link'>
-                    <Link to='/products/$id' params={{ id: product.id }}>
-                      Xem hồ sơ
-                    </Link>
-                  </Button>
-                </div>
-              </article>
-            ))}
+                    <h2>
+                      <Link to='/products/$id' params={{ id: product.id }}>
+                        {product.name}
+                      </Link>
+                    </h2>
+                    <dl className='record-facts'>
+                      <div>
+                        <dt>Mã hồ sơ</dt>
+                        <dd title={product.id}>{displayProductCode(product)}</dd>
+                      </div>
+                      <div>
+                        <dt>Ngày tạo</dt>
+                        <dd>{formatCatalogDate(product.createdAt)}</dd>
+                      </div>
+                    </dl>
+                    <div className='record-result'>
+                      {product.publicationState !== 'UNPUBLISHED' && product.starRating ? (
+                        <div className='rating-block'>
+                          <strong>{product.starRating} sao</strong>
+                          <span className='stars' aria-hidden='true'>
+                            ★{product.starRating > 1 ? ` × ${product.starRating}` : ''}
+                          </span>
+                        </div>
+                      ) : (
+                        <p className='no-rating'>Chưa có kết quả đánh giá</p>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         )}
         {!productError && meta.total > 0 && (

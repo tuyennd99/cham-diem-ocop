@@ -136,7 +136,7 @@ export function CategoryEditorDialog({
           </DialogTitle>
           <DialogDescription>
             {isEdit
-              ? `Mã danh mục cố định: ${category.id}. Thay đổi liên kết Cơ quan chủ trì quản lý chỉ áp dụng tự động cho các hồ sơ được duyệt sau thời điểm thay đổi.`
+              ? `Mã danh mục cố định: ${category.id}. Thay đổi liên kết Cơ quan chủ trì chỉ áp dụng tự động cho các hồ sơ được duyệt sau thời điểm thay đổi.`
               : 'Danh mục mới được tạo ở trạng thái ngừng mở đăng ký cho tới khi nạp bộ tiêu chí hợp lệ đủ 100 điểm.'}
           </DialogDescription>
         </DialogHeader>
@@ -145,6 +145,7 @@ export function CategoryEditorDialog({
             <Input
               id='category-name'
               value={name}
+              disabled={busy}
               onChange={(event) => setName(event.target.value)}
               maxLength={255}
               required
@@ -154,6 +155,7 @@ export function CategoryEditorDialog({
             <Input
               id='category-description'
               value={description}
+              disabled={busy}
               onChange={(event) => setDescription(event.target.value)}
             />
           </FormField>
@@ -164,6 +166,7 @@ export function CategoryEditorDialog({
               min={0}
               step={1}
               value={order}
+              disabled={busy}
               onChange={(event) => setOrder(event.target.value)}
               required
             />
@@ -171,7 +174,7 @@ export function CategoryEditorDialog({
 
           <fieldset className='account-form'>
             <legend className='text-sm font-semibold'>
-              Cơ quan chủ trì quản lý (Phụ lục I Quyết định 26/2026/QĐ-TTg)
+              Cơ quan chủ trì (Phụ lục I Quyết định 26/2026/QĐ-TTg)
             </legend>
             <p className='text-muted mb-2 text-xs'>
               Một phân loại có thể thuộc một hoặc nhiều cơ quan quản lý. Khi duyệt hồ sơ, hệ thống
@@ -212,6 +215,7 @@ export function CategoryEditorDialog({
             <Input
               id='category-reason'
               value={reason}
+              disabled={busy}
               onChange={(event) => setReason(event.target.value)}
               maxLength={255}
               required

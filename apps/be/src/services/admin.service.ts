@@ -5,8 +5,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import bcrypt from 'bcryptjs';
-import { EvaluationStatus, ProductStatus, StaffPermission } from '@prisma/client';
+import {
+  EvaluationStatus,
+  ProductStatus,
+  StaffPermission,
+} from '@prisma/client';
 import {
   CreateJudgeDto,
   ReplaceAssignmentsDto,
@@ -14,6 +17,7 @@ import {
   UpdateJudgeDto,
   UpdateStaffAccessDto,
 } from '../dtos/admin.dto';
+import { computePaginationSkip } from '../dtos/common.dto';
 import {
   AddProductJudgeAssignmentDto,
   AdminProductQueryDto,
@@ -36,12 +40,9 @@ import {
   AdminRepository,
   type AdminRequestMeta,
 } from '../repositories/admin.repository';
-import {
-  PASSWORD_MAX_BYTES,
-  PASSWORD_ROUNDS,
-  PRISMA_ERROR_CODE,
-} from '../constants/auth';
+import { isUniqueConstraint } from '../prisma/errors';
 import type { AuthenticatedPrincipal } from '../types/auth';
+import { assertPasswordLength, hashPassword } from '../utils/password';
 import {
   buildAnalyticsDashboard,
   buildRegistrationReport,
@@ -55,19 +56,43 @@ export class AdminService {
   constructor(private readonly repository: AdminRepository) {}
 
   async dashboard(canManage = true, query?: AdminDashboardQueryDto) {
-    const { queuePage, queueSearch, ...reportQuery } = query ?? {};
-    const { productStatuses, judgeProgress, nextProducts, nextProductsCount } =
-      await this.repository.dashboardData(canManage, queuePage, queueSearch);
+    const { queuePage, queueSearch, judgePage, judgeSearch, ...reportQuery } =
+      query ?? {};
+    const [
+      { productStatuses, judgeProgress, nextProducts, nextProductsCount },
+      snap,
+    ] = await Promise.all([
+      this.repository.dashboardData(canManage, queuePage, queueSearch),
+      this.repository.reportingSnapshot(reportQuery),
+    ]);
     const productsByStatus = Object.fromEntries(
       Object.values(ProductStatus).map((status) => [status, 0]),
     ) as Record<ProductStatus, number>;
     for (const row of productStatuses)
       productsByStatus[row.status] = row._count._all;
 
-    const judges = judgeProgress.map((judge) => ({
+    const allJudges = judgeProgress.map((judge) => ({
       ...judge,
       pending: judge.assigned - judge.submitted,
     }));
+    const normalizedJudgeSearch = judgeSearch?.trim().toLowerCase() ?? '';
+    const filteredJudges = normalizedJudgeSearch
+      ? allJudges.filter(
+          (judge) =>
+            judge.fullName.toLowerCase().includes(normalizedJudgeSearch) ||
+            judge.judgeId.toLowerCase().includes(normalizedJudgeSearch),
+        )
+      : allJudges;
+    const shouldPageJudges =
+      judgePage !== undefined || judgeSearch !== undefined;
+    const judgeLimit = 5;
+    const resolvedJudgePage = Math.max(1, judgePage ?? 1);
+    const judges = shouldPageJudges
+      ? filteredJudges.slice(
+          (resolvedJudgePage - 1) * judgeLimit,
+          resolvedJudgePage * judgeLimit,
+        )
+      : filteredJudges;
     const needsAttention = nextProducts.map((product) => {
       const assignedJudgeIds = new Set(
         product.judgeAssignments?.length
@@ -106,7 +131,7 @@ export class AdminService {
       };
     });
 
-    if (typeof this.repository.reportingSnapshot !== 'function') {
+    if (!snap) {
       return {
         productsByStatus,
         judges,
@@ -114,7 +139,6 @@ export class AdminService {
       };
     }
 
-    const snap = await this.repository.reportingSnapshot();
     const needsAttentionWithCoverage = needsAttention.map((item) => ({
       ...item,
       submittedAt:
@@ -141,13 +165,14 @@ export class AdminService {
 
     return {
       ...analytics,
+      judgesTotal: filteredJudges.length,
       needsAttention: needsAttentionWithCoverage,
       needsAttentionTotal: nextProductsCount,
     };
   }
 
   async registrationsReport(query: AdminReportQueryDto) {
-    const snap = await this.repository.reportingSnapshot();
+    const snap = await this.repository.reportingSnapshot(query);
     return buildRegistrationReport({
       query,
       products: snap.products,
@@ -160,7 +185,7 @@ export class AdminService {
   }
 
   async resultsReport(query: AdminReportQueryDto) {
-    const snap = await this.repository.reportingSnapshot();
+    const snap = await this.repository.reportingSnapshot(query);
     return buildResultsReport({
       query,
       products: snap.products,
@@ -176,8 +201,8 @@ export class AdminService {
     return this.repository.listJudges();
   }
 
-  listEligibleJudgesForProduct(_id: string) {
-    return this.repository.listJudges();
+  listEligibleJudgesForProduct(id: string) {
+    return this.repository.listEligibleJudgesForProduct(id);
   }
 
   async updateStaffAccess(
@@ -313,9 +338,7 @@ export class AdminService {
   }
 
   async listProducts(query: AdminProductQueryDto, canManage = true) {
-    if (!Number.isSafeInteger((query.page - 1) * query.limit)) {
-      throw new BadRequestException('Page offset is too large');
-    }
+    computePaginationSkip(query.page, query.limit);
     if (
       (query.localityId && query.unmappedLocality) ||
       (query.from === undefined) !== (query.toExclusive === undefined)
@@ -663,20 +686,11 @@ export class AdminService {
   }
 
   private async hashPassword(password: string) {
-    if (Buffer.byteLength(password, 'utf8') > PASSWORD_MAX_BYTES) {
-      throw new BadRequestException(
-        `Password must be at most ${PASSWORD_MAX_BYTES} UTF-8 bytes`,
-      );
-    }
-    return bcrypt.hash(password, PASSWORD_ROUNDS);
+    assertPasswordLength(password);
+    return hashPassword(password);
   }
 
   private isUniqueConstraint(error: unknown): boolean {
-    return (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      error.code === PRISMA_ERROR_CODE.UNIQUE_CONSTRAINT
-    );
+    return isUniqueConstraint(error);
   }
 }

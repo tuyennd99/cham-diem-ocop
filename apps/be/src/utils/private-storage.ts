@@ -1,13 +1,17 @@
-import { createReadStream, mkdirSync, createWriteStream } from 'node:fs';
-import { open, stat, unlink } from 'node:fs/promises';
+import { createReadStream, createWriteStream } from 'node:fs';
+import { mkdir, open, stat, unlink } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { v7 as uuidv7 } from 'uuid';
 import { pipeline, Readable } from 'node:stream';
-import { ForbiddenException, StreamableFile } from '@nestjs/common';
+import {
+  ForbiddenException,
+  NotFoundException,
+  StreamableFile,
+} from '@nestjs/common';
 import type { MulterOptions } from '@nestjs/platform-express/multer/interfaces/multer-options.interface';
 import { detectBufferMimeType } from './product-files';
 
-export const MAX_FILE_BYTES = 2 * 1024 * 1024;
+export const MAX_FILE_BYTES = 10 * 1024 * 1024;
 export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 export const MAX_IMAGE_BYTES = MAX_VIDEO_BYTES;
 export const uuidStorageKeyPattern =
@@ -29,10 +33,16 @@ export function storageRoot(value = process.env.STORAGE_PATH) {
   return resolve(value ?? join(process.cwd(), 'storage'));
 }
 
-export function resolveStoredPath(storageKey: string, root = storageRoot()): string {
+export function resolveStoredPath(
+  storageKey: string,
+  root = storageRoot(),
+): string {
   const resolvedRoot = resolve(root);
   const path = resolve(join(resolvedRoot, storageKey));
-  if (!uuidStorageKeyPattern.test(storageKey) || !path.startsWith(`${resolvedRoot}${sep}`)) {
+  if (
+    !uuidStorageKeyPattern.test(storageKey) ||
+    !path.startsWith(`${resolvedRoot}${sep}`)
+  ) {
     throw new ForbiddenException('Invalid storage key');
   }
   return path;
@@ -60,17 +70,26 @@ export async function openStoredFile(
 ) {
   const path = resolveStoredPath(storageKey, root);
   const extension = originalName.split('.').pop()?.toLowerCase();
-  const info = await stat(path);
+  let info: Awaited<ReturnType<typeof stat>>;
   let detectedMime: string | null = null;
-  const handle = await open(path);
   try {
-    const head = Buffer.alloc(12);
-    const { bytesRead } = await handle.read(head, 0, head.length, 0);
-    detectedMime = detectBufferMimeType(head, bytesRead);
-  } finally {
-    await handle.close();
+    info = await stat(path);
+    const handle = await open(path);
+    try {
+      const head = Buffer.alloc(12);
+      const { bytesRead } = await handle.read(head, 0, head.length, 0);
+      detectedMime = detectBufferMimeType(head, bytesRead);
+    } finally {
+      await handle.close();
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      throw new NotFoundException('Attachment not found');
+    }
+    throw error;
   }
-  const fallbackMime = storedFileMimeTypes[extension ?? ''] ?? 'application/octet-stream';
+  const fallbackMime =
+    storedFileMimeTypes[extension ?? ''] ?? 'application/octet-stream';
   const mimeType =
     detectedMime === 'video/mp4' && extension === 'mov'
       ? 'video/quicktime'
@@ -99,26 +118,52 @@ type StorageCallback = (error: Error | null, file?: StoredUpload) => void;
 const openStreams = new Map<string, ReturnType<typeof createWriteStream>>();
 
 class PrivateStorage {
-  _handleFile(_request: unknown, file: IncomingFile, callback: StorageCallback) {
+  private readonly ensuredRoots = new Map<string, Promise<void>>();
+
+  private ensureRoot(root: string): Promise<void> {
+    let pending = this.ensuredRoots.get(root);
+    if (!pending) {
+      pending = mkdir(root, { recursive: true }).then(
+        () => undefined,
+        (err) => {
+          this.ensuredRoots.delete(root);
+          throw err;
+        },
+      );
+      this.ensuredRoots.set(root, pending);
+    }
+    return pending;
+  }
+
+  _handleFile(
+    _request: unknown,
+    file: IncomingFile,
+    callback: StorageCallback,
+  ) {
     const root = storageRoot();
-    mkdirSync(root, { recursive: true });
-    const filename = uuidv7();
-    const path = join(root, filename);
-    file.path = path;
-    let size = 0;
-    const output = createWriteStream(path);
-    openStreams.set(path, output);
-    output.once('close', () => openStreams.delete(path));
-    file.stream.on('data', (chunk: Buffer) => {
-      size += chunk.length;
-    });
-    pipeline(file.stream, output, (error) => {
-      if (error)
-        return this._removeFile(_request, file, (cleanupError) =>
-          callback(cleanupError ?? error),
-        );
-      callback(null, { destination: root, filename, path, size });
-    });
+    void this.ensureRoot(root).then(
+      () => {
+        const filename = uuidv7();
+        const path = join(root, filename);
+        file.path = path;
+        let size = 0;
+        const output = createWriteStream(path);
+        openStreams.set(path, output);
+        output.once('close', () => openStreams.delete(path));
+        file.stream.on('data', (chunk: Buffer) => {
+          size += chunk.length;
+        });
+        pipeline(file.stream, output, (error) => {
+          if (error)
+            return this._removeFile(_request, file, (cleanupError) =>
+              callback(cleanupError ?? error),
+            );
+          callback(null, { destination: root, filename, path, size });
+        });
+      },
+      (error: unknown) =>
+        callback(error instanceof Error ? error : new Error(String(error))),
+    );
   }
 
   _removeFile(
@@ -132,7 +177,8 @@ class PrivateStorage {
     const remove = () => {
       void unlink(path).then(
         () => callback(null),
-        (error: NodeJS.ErrnoException) => callback(error.code === 'ENOENT' ? null : error),
+        (error: NodeJS.ErrnoException) =>
+          callback(error.code === 'ENOENT' ? null : error),
       );
     };
     if (!output || output.closed) return remove();

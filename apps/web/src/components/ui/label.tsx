@@ -21,7 +21,7 @@ export function Label({ className, htmlFor, required, children, onClick, ...prop
       data-slot='label'
       htmlFor={htmlFor}
       className={cn(
-        'inline-flex items-center gap-1 text-sm leading-none font-medium peer-disabled:cursor-not-allowed peer-disabled:opacity-70',
+        'inline-flex items-center gap-1 text-sm leading-none font-semibold peer-disabled:cursor-not-allowed peer-disabled:opacity-70',
         className,
       )}
       onClick={(event) => {

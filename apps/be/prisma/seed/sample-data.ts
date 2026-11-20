@@ -182,6 +182,11 @@ export async function seedSampleOcopData(
     },
   ];
 
+  const seedEventFrom = new Date('2026-01-01T00:00:00+07:00');
+  const seedEventTo = new Date('2027-01-01T00:00:00+07:00');
+  const seedRegFrom = new Date('2026-01-01T00:00:00+07:00');
+  const seedRegTo = new Date('2026-12-31T00:00:00+07:00');
+
   for (const loc of localities) {
     await prisma.locality.upsert({
       where: { code: loc.code },
@@ -189,10 +194,10 @@ export async function seedSampleOcopData(
         eventName: loc.name,
         name: loc.name,
         provinceName: loc.provinceName,
-        effectiveFrom: null,
-        effectiveTo: null,
-        registrationFrom: null,
-        registrationTo: null,
+        effectiveFrom: seedEventFrom,
+        effectiveTo: seedEventTo,
+        registrationFrom: seedRegFrom,
+        registrationTo: seedRegTo,
         isActive: true,
       },
       create: {
@@ -201,6 +206,10 @@ export async function seedSampleOcopData(
         eventName: loc.name,
         name: loc.name,
         provinceName: loc.provinceName,
+        effectiveFrom: seedEventFrom,
+        effectiveTo: seedEventTo,
+        registrationFrom: seedRegFrom,
+        registrationTo: seedRegTo,
         isActive: true,
       },
     });

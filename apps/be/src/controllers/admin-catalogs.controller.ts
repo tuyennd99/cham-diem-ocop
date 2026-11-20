@@ -27,10 +27,7 @@ import { requestMeta } from '../utils/request-meta';
 
 @ApiTags('Admin catalogs')
 @ApiBearerAuth()
-@ApiExtraModels(
-  AdminCategoriesQueryDto,
-  AdminLocalitiesQueryDto,
-)
+@ApiExtraModels(AdminCategoriesQueryDto, AdminLocalitiesQueryDto)
 @Controller('admin')
 export class AdminCatalogsController {
   constructor(private readonly catalogs: AdminCatalogsService) {}

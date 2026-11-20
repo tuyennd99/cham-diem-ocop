@@ -16,6 +16,7 @@ import {
 import { vi } from 'date-fns/locale';
 import { ArrowRight, CalendarIcon, Check, ChevronDown } from 'lucide-react';
 import { dateMatchModifiers, type Matcher } from 'react-day-picker';
+import { DATE_FORMAT } from '@/constants/consts';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -54,7 +55,7 @@ export interface RangePickerProps {
 }
 
 const formatDisplayDate = (date: Date): string => {
-  return format(date, 'dd/MM/yyyy', { locale: vi });
+  return format(date, DATE_FORMAT, { locale: vi });
 };
 
 const getDateAdjustedForTimezone = (dateInput: Date | string): Date => {

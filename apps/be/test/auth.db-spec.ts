@@ -335,14 +335,60 @@ describe('registration creates an account only after OTP', () => {
     });
   });
 
-  it('creates no user when SMTP throws and allows a new registration attempt', async () => {
+  it('creates no user or orphan pending record when SMTP throws and allows a new registration attempt', async () => {
     await withTestApp(async ({ app, prisma, baseUrl }) => {
       const email = `smtp-${randomUUID()}@example.invalid`;
       app.get(MailService).sendOtp = jest.fn().mockRejectedValueOnce(new Error('smtp unavailable')).mockResolvedValue(undefined);
       expect((await post(baseUrl, '/auth/register', { email, password: 'ValidPassword1!', fullName: 'HTX A' })).status).toBe(500);
       expect(await prisma.user.findUnique({ where: { email } })).toBeNull();
+      expect(await prisma.pendingAuth.count({ where: { email } })).toBe(0);
       await register(baseUrl, email);
       expect(await prisma.user.findUnique({ where: { email } })).toBeNull();
+    });
+  });
+
+  it('enforces 60s OTP cooldown per email+purpose and allows unverified legacy registrant to re-trigger OTP on register', async () => {
+    await withTestApp(async ({ app, prisma, baseUrl }) => {
+      const email = `legacy-cooldown-${randomUUID()}@example.invalid`;
+      const originalHash = await bcrypt.hash(currentPassword, 4);
+      const user = await prisma.user.create({
+        data: {
+          email,
+          password: originalHash,
+          fullName: 'Legacy User',
+          role: Role.REGISTRANT,
+          verified: false,
+          isActive: true,
+        },
+      });
+      const sendOtp = jest.fn().mockResolvedValue(undefined);
+      app.get(MailService).sendOtp = sendOtp;
+
+      const first = await post<{ legacyPending: boolean; email: string }>(baseUrl, '/auth/register', {
+        email,
+        password: nextPassword,
+        fullName: 'Changed Name',
+      });
+      expect(first.status).toBe(200);
+      expect(first.body.data).toMatchObject({ email, legacyPending: true });
+      expect(sendOtp).toHaveBeenCalledTimes(1);
+      expect((await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).password).toBe(originalHash);
+
+      // Second request within 60s returns 429 cooldown without sending a second email
+      const second = await post(baseUrl, '/auth/register', {
+        email,
+        password: nextPassword,
+        fullName: 'Changed Name',
+      });
+      expect(second.status).toBe(429);
+      expect(sendOtp).toHaveBeenCalledTimes(1);
+
+      // Verify OTP activates the legacy account, and forgot-password respects 60s cooldown with neutral 200
+      const sentCode = sendOtp.mock.calls[0][1] as string;
+      expect((await post(baseUrl, '/auth/legacy-registration/verify', { email, code: sentCode })).status).toBe(200);
+      expect((await post(baseUrl, '/auth/forgot-password', { email })).status).toBe(200);
+      expect((await post(baseUrl, '/auth/forgot-password', { email })).status).toBe(200);
+      expect(sendOtp).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -415,7 +461,7 @@ describe('registration creates an account only after OTP', () => {
       expect((await post(baseUrl, '/auth/verify-otp', { registrationToken: second.registrationToken, code: codes[1] })).status).toBe(409);
       const user = await prisma.user.findUniqueOrThrow({ where: { email } });
       expect(user.fullName).toBe('First HTX');
-      expect(await bcrypt.compare('FirstPassword1!', user.password)).toBe(true);
+      expect(await bcrypt.compare('FirstPassword1!', user.password ?? '')).toBe(true);
       expect(await prisma.user.count({ where: { email } })).toBe(1);
       expect(await prisma.pendingAuth.findUnique({ where: { tokenHash: tokenHash(second.registrationToken) } })).not.toBeNull();
     });

@@ -1,4 +1,7 @@
-import { PayloadTooLargeException, UnsupportedMediaTypeException } from '@nestjs/common';
+import {
+  PayloadTooLargeException,
+  UnsupportedMediaTypeException,
+} from '@nestjs/common';
 import { AttachmentType } from '@prisma/client';
 import { open } from 'node:fs/promises';
 import { basename, extname } from 'node:path';
@@ -25,14 +28,24 @@ const imageMimeTypes = new Set([
   'image/webp',
 ]);
 
-const mp4MovBoxTypes = new Set(['ftyp', 'moov', 'wide', 'mdat', 'free', 'skip']);
+const mp4MovBoxTypes = new Set([
+  'ftyp',
+  'moov',
+  'wide',
+  'mdat',
+  'free',
+  'skip',
+]);
 
 export function isVideoAttachmentName(fileName: string): boolean {
   const ext = extname(fileName).slice(1).toLowerCase();
   return extensions[ext]?.kind === UPLOAD_FILE_KIND.VIDEO;
 }
 
-export function detectBufferMimeType(head: Buffer, bytesRead: number): string | null {
+export function detectBufferMimeType(
+  head: Buffer,
+  bytesRead: number,
+): string | null {
   if (bytesRead >= 5 && head.toString('ascii', 0, 5) === '%PDF-') {
     return 'application/pdf';
   }
@@ -42,7 +55,12 @@ export function detectBufferMimeType(head: Buffer, bytesRead: number): string | 
   ) {
     return 'image/png';
   }
-  if (bytesRead >= 3 && head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) {
+  if (
+    bytesRead >= 3 &&
+    head[0] === 0xff &&
+    head[1] === 0xd8 &&
+    head[2] === 0xff
+  ) {
     return 'image/jpeg';
   }
   if (bytesRead >= 4 && head.toString('ascii', 0, 4) === 'GIF8') {
@@ -67,6 +85,23 @@ export function detectBufferMimeType(head: Buffer, bytesRead: number): string | 
   return null;
 }
 
+function matchesDetectedMime(
+  rule: { mime: string; kind: UploadFileKind },
+  detectedMime: string | null,
+): boolean {
+  if (!detectedMime) return false;
+  if (rule.kind === UPLOAD_FILE_KIND.IMAGE) {
+    return imageMimeTypes.has(detectedMime);
+  }
+  if (rule.kind === UPLOAD_FILE_KIND.PDF) {
+    return detectedMime === 'application/pdf';
+  }
+  if (rule.mime === 'video/webm') {
+    return detectedMime === 'video/webm';
+  }
+  return detectedMime === 'video/mp4';
+}
+
 export async function inspectProductUpload(file: UploadedPrivateFile) {
   const name = basename(file.originalname);
   if (!name || name !== file.originalname || /[\\/\0\r\n]/.test(name)) {
@@ -76,7 +111,8 @@ export async function inspectProductUpload(file: UploadedPrivateFile) {
   const incomingMime = file.mimetype.toLowerCase();
   if (
     !rule ||
-    (incomingMime !== rule.mime && incomingMime !== 'application/octet-stream') ||
+    (incomingMime !== rule.mime &&
+      incomingMime !== 'application/octet-stream') ||
     file.size < 1
   ) {
     throw new UnsupportedMediaTypeException('Unsupported file type');
@@ -85,7 +121,7 @@ export async function inspectProductUpload(file: UploadedPrivateFile) {
     throw new PayloadTooLargeException('Attachment video exceeds 50 MB');
   }
   if (rule.kind !== UPLOAD_FILE_KIND.VIDEO && file.size > MAX_FILE_BYTES) {
-    throw new PayloadTooLargeException('Attachment file exceeds 2 MB');
+    throw new PayloadTooLargeException('Attachment file exceeds 10 MB');
   }
 
   const handle = await open(file.path);
@@ -94,18 +130,16 @@ export async function inspectProductUpload(file: UploadedPrivateFile) {
     const { bytesRead } = await handle.read(head, 0, head.length, 0);
     const detectedMime = detectBufferMimeType(head, bytesRead);
 
-    const valid =
-      rule.kind === UPLOAD_FILE_KIND.PDF
-        ? detectedMime === 'application/pdf'
-        : rule.kind === UPLOAD_FILE_KIND.VIDEO
-          ? rule.mime === 'video/webm'
-            ? detectedMime === 'video/webm'
-            : detectedMime === 'video/mp4'
-          : detectedMime !== null && imageMimeTypes.has(detectedMime);
-
-    if (!valid) throw new UnsupportedMediaTypeException('File content does not match its type');
+    if (!matchesDetectedMime(rule, detectedMime)) {
+      throw new UnsupportedMediaTypeException(
+        'File content does not match its type',
+      );
+    }
     return {
-      mimeType: detectedMime && imageMimeTypes.has(detectedMime) ? detectedMime : rule.mime,
+      mimeType:
+        detectedMime && imageMimeTypes.has(detectedMime)
+          ? detectedMime
+          : rule.mime,
       type:
         rule.kind === UPLOAD_FILE_KIND.IMAGE
           ? AttachmentType.IMAGE

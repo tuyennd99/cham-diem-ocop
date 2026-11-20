@@ -2,6 +2,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { isClientError } from '../constants/http-status';
 import { sessionStore } from '../stores/session-store';
 import { ApiError } from './api-error';
+import { getSessionScope } from './session-contract';
 
 export function createQueryClient() {
   return new QueryClient({
@@ -19,16 +20,7 @@ export function createQueryClient() {
 
 export const queryClient = createQueryClient();
 
-function sessionScope(session: ReturnType<typeof sessionStore.getState>['session']) {
-  if (!session) return '';
-  return [
-    session.user.id,
-    session.accessToken,
-    [...session.user.staffPermissions].sort().join(','),
-  ].join(':');
-}
-
 // Drafts and staff lookups are private to the current identity, token, and permissions.
 sessionStore.subscribe((state, previous) => {
-  if (sessionScope(state.session) !== sessionScope(previous.session)) queryClient.clear();
+  if (getSessionScope(state.session) !== getSessionScope(previous.session)) queryClient.clear();
 });

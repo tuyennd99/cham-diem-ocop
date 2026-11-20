@@ -129,6 +129,8 @@ model OtpCode {
   user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([email, purpose, expiresAt])
+  @@index([email, purpose, createdAt(sort: Desc)])
+  @@index([expiresAt])
   @@index([userId])
   @@map("otp_codes")
 }
@@ -359,7 +361,12 @@ model Product {
   evaluations              Evaluation[]
 
   @@index([status, categoryId, createdAt])
+  @@index([status, submittedAt])
+  @@index([status, completedAt])
+  @@index([localityId])
   @@index([registrantId, createdAt])
+  @@index([registrantId, status, updatedAt])
+  @@index([formData(ops: JsonbPathOps)], type: Gin)
   @@map("products")
 }
 
@@ -474,6 +481,7 @@ model Evaluation {
 
   @@unique([judgeId, productId])
   @@index([productId, status])
+  @@index([judgeId, status])
   @@map("evaluations")
 }
 

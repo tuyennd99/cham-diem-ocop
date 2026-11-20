@@ -24,7 +24,7 @@ export type RegistrantProduct = Omit<
   completedAt: string | null;
   localityId: string | null;
   locality: LocalityRecord | null;
-  registrationSnapshot: RegistrationSnapshot | null;
+  registrationSnapshot?: RegistrationSnapshot | null;
   formData: Record<string, unknown>;
   finalScore: number | null;
   starRating: number | null;

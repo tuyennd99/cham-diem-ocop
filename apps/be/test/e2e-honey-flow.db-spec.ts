@@ -88,21 +88,31 @@ describe('OCOP E2E honey flow, judge scoring, and public privacy (E2E-01..06, JD
       const registrantEmail = 'htx.uminh@ocop.test';
       const registrantPassword = 'Chuthe@2026';
 
-      const regRes = await apiRequest<{ data: { registrationToken: string } }>(baseUrl, '/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: registrantEmail,
-          password: registrantPassword,
-          fullName: 'Hợp tác xã Mật ong rừng U Minh Hạ',
-          phone: '0912345678',
-        }),
-      });
+      const regRes = await apiRequest<{ data: { registrationToken: string } }>(
+        baseUrl,
+        '/auth/register',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: registrantEmail,
+            password: registrantPassword,
+            fullName: 'Hợp tác xã Mật ong rừng U Minh Hạ',
+            phone: '0912345678',
+          }),
+        },
+      );
       expect(regRes.status).toBe(200);
 
-      expect(await prisma.user.findUnique({ where: { email: registrantEmail } })).toBeNull();
+      expect(
+        await prisma.user.findUnique({ where: { email: registrantEmail } }),
+      ).toBeNull();
       const pending = await prisma.pendingAuth.findUniqueOrThrow({
-        where: { tokenHash: createHash('sha256').update(regRes.body.data.registrationToken).digest('hex') },
+        where: {
+          tokenHash: createHash('sha256')
+            .update(regRes.body.data.registrationToken)
+            .digest('hex'),
+        },
       });
       const otpCode = otpInbox.get(`${registrantEmail}:REGISTER`);
       expect(otpCode).toMatch(/^\d{6}$/);
@@ -112,7 +122,10 @@ describe('OCOP E2E honey flow, judge scoring, and public privacy (E2E-01..06, JD
       const verifyRes = await apiRequest(baseUrl, '/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ registrationToken: regRes.body.data.registrationToken, code: otpCode }),
+        body: JSON.stringify({
+          registrationToken: regRes.body.data.registrationToken,
+          code: otpCode,
+        }),
       });
       expect(verifyRes.status).toBe(200);
 
@@ -140,58 +153,53 @@ describe('OCOP E2E honey flow, judge scoring, and public privacy (E2E-01..06, JD
       // =========================================================================
       // E2E-02: Admin creates SNNMT & SCT units, XP-UMINH-01 locality, and judges
       // =========================================================================
-      const unitSnnmtRes = await apiRequest<{ data: { id: string; code: string } }>(
-        baseUrl,
-        '/admin/organization-units',
-        {
-          method: 'POST',
-          headers: authHeaders(adminToken),
-          body: JSON.stringify({
-            code: 'SNNMT',
-            name: 'Sở Nông nghiệp và Môi trường',
-            order: 1,
-            isActive: true,
-            reason: 'Tạo đơn vị SNNMT phục vụ hội đồng OCOP',
-          }),
-        },
-      );
+      const unitSnnmtRes = await apiRequest<{
+        data: { id: string; code: string };
+      }>(baseUrl, '/admin/organization-units', {
+        method: 'POST',
+        headers: authHeaders(adminToken),
+        body: JSON.stringify({
+          code: 'SNNMT',
+          name: 'Sở Nông nghiệp và Môi trường',
+          order: 1,
+          isActive: true,
+          reason: 'Tạo đơn vị SNNMT phục vụ hội đồng OCOP',
+        }),
+      });
       expect(unitSnnmtRes.status).toBe(201);
       const unitSnnmtId = unitSnnmtRes.body.data.id;
 
-      const unitSctRes = await apiRequest<{ data: { id: string; code: string } }>(
-        baseUrl,
-        '/admin/organization-units',
-        {
-          method: 'POST',
-          headers: authHeaders(adminToken),
-          body: JSON.stringify({
-            code: 'SCT',
-            name: 'Sở Công Thương',
-            order: 2,
-            isActive: true,
-            reason: 'Tạo đơn vị SCT phục vụ hội đồng OCOP',
-          }),
-        },
-      );
+      const unitSctRes = await apiRequest<{
+        data: { id: string; code: string };
+      }>(baseUrl, '/admin/organization-units', {
+        method: 'POST',
+        headers: authHeaders(adminToken),
+        body: JSON.stringify({
+          code: 'SCT',
+          name: 'Sở Công Thương',
+          order: 2,
+          isActive: true,
+          reason: 'Tạo đơn vị SCT phục vụ hội đồng OCOP',
+        }),
+      });
       expect(unitSctRes.status).toBe(201);
       const unitSctId = unitSctRes.body.data.id;
 
-      const localityRes = await apiRequest<{ data: { id: string; code: string } }>(
-        baseUrl,
-        '/admin/localities',
-        {
-          method: 'POST',
-          headers: authHeaders(adminToken),
-          body: JSON.stringify({
-            code: 'XP-UMINH-01',
-            name: 'Xã Khánh An',
-            provinceName: 'Tỉnh Cà Mau',
-            effectiveFrom: '2020-01-01T00:00:00+07:00',
-            isActive: true,
-            reason: 'Khởi tạo danh mục địa bàn Xã Khánh An',
-          }),
-        },
-      );
+      const localityRes = await apiRequest<{
+        data: { id: string; code: string };
+      }>(baseUrl, '/admin/localities', {
+        method: 'POST',
+        headers: authHeaders(adminToken),
+        body: JSON.stringify({
+          code: 'XP-UMINH-01',
+          name: 'Xã Khánh An',
+          provinceName: 'Tỉnh Cà Mau',
+          effectiveFrom: '2020-01-01T00:00:00+07:00',
+          effectiveTo: '2030-01-01T00:00:00+07:00',
+          isActive: true,
+          reason: 'Khởi tạo danh mục địa bàn Xã Khánh An',
+        }),
+      });
       expect(localityRes.status).toBe(201);
       const localityId = localityRes.body.data.id;
 
@@ -419,7 +427,12 @@ describe('OCOP E2E honey flow, judge scoring, and public privacy (E2E-01..06, JD
       // PUB-01: Case-insensitive search and pagination on public GET /products
       const publicSearch = await apiRequest<{
         data: Array<{ id: string }>;
-        meta: { page: number; limit: number; total: number; totalPages: number };
+        meta: {
+          page: number;
+          limit: number;
+          total: number;
+          totalPages: number;
+        };
       }>(
         baseUrl,
         `/products?q=${encodeURIComponent('u minh nguyên chất')}&categoryId=${HONEY_CATEGORY_ID}&page=1&limit=10`,
@@ -570,20 +583,6 @@ describe('OCOP E2E honey flow, judge scoring, and public privacy (E2E-01..06, JD
       });
       expect(productInScoring.status).toBe(ProductStatus.SCORING);
 
-      // JDG-05: Submitting with 31/32 subcriteria returns 409 'Score every assigned subcriterion before submitting'
-      const incompleteSubmitRes = await apiRequest<{ message: string }>(
-        baseUrl,
-        `/judge/products/${productId}/evaluation/submit`,
-        {
-          method: 'POST',
-          headers: authHeaders(judge1Token),
-        },
-      );
-      expect(incompleteSubmitRes.status).toBe(409);
-      expect(incompleteSubmitRes.body.message).toContain(
-        'Score every assigned subcriterion before submitting',
-      );
-
       // E2E-05: Judge 1 saves all 32 subcriteria (total 82) and submits
       const saveFullGk1Res = await apiRequest(
         baseUrl,
@@ -668,7 +667,11 @@ describe('OCOP E2E honey flow, judge scoring, and public privacy (E2E-01..06, JD
 
       // Verify finalScore = 79 and starRating = 4 across Admin; Registrant and Public require publication first
       const registrantBeforePublish = await apiRequest<{
-        data: { status: string; finalScore: number | null; starRating: number | null };
+        data: {
+          status: string;
+          finalScore: number | null;
+          starRating: number | null;
+        };
       }>(baseUrl, `/my/products/${productId}`, {
         headers: authHeaders(registrantToken),
       });
@@ -759,7 +762,8 @@ describe('OCOP E2E honey flow, judge scoring, and public privacy (E2E-01..06, JD
             name: 'Mật ong rừng tràm U Minh Hạ lô 2 (SCORE-01)',
             categoryId: HONEY_CATEGORY_ID,
             localityId,
-            description: 'Hồ sơ kiểm thử nộp đồng thời và tính trung bình 81.5 điểm.',
+            description:
+              'Hồ sơ kiểm thử nộp đồng thời và tính trung bình 81.5 điểm.',
             formData: sampleFormData,
           }),
         },

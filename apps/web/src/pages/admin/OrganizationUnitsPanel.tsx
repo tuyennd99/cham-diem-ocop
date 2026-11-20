@@ -172,6 +172,7 @@ function UnitFormDialog({
               <Input
                 id='unit-code'
                 value={code}
+                disabled={busy}
                 onChange={(event) => setCode(event.target.value)}
                 maxLength={50}
                 required
@@ -182,13 +183,14 @@ function UnitFormDialog({
             <Input
               id='unit-name'
               value={name}
+              disabled={busy}
               onChange={(event) => setName(event.target.value)}
               maxLength={255}
               required
             />
           </FormField>
           <FormField
-            label='Cơ quan chủ trì quản lý (dành cho đơn vị giám khảo)'
+            label='Cơ quan chủ trì (dành cho đơn vị giám khảo)'
             htmlFor='unit-managing-agency'
           >
             <Combobox
@@ -201,7 +203,7 @@ function UnitFormDialog({
                   id='unit-managing-agency'
                   placeholder='Không gắn cơ quan quản lý chuyên ngành'
                 />
-                <ComboboxTrigger aria-label='Mở danh sách cơ quan chủ trì quản lý' />
+                <ComboboxTrigger aria-label='Mở danh sách cơ quan chủ trì' />
               </ComboboxAnchor>
               <ComboboxContent>
                 <ComboboxEmpty>Không tìm thấy cơ quan quản lý.</ComboboxEmpty>
@@ -218,6 +220,7 @@ function UnitFormDialog({
             <Input
               id='unit-description'
               value={description}
+              disabled={busy}
               onChange={(event) => setDescription(event.target.value)}
             />
           </FormField>
@@ -226,6 +229,7 @@ function UnitFormDialog({
               id='unit-order'
               type='number'
               value={order}
+              disabled={busy}
               onChange={(event) => setOrder(event.target.value)}
               min={0}
               step={1}
@@ -247,6 +251,7 @@ function UnitFormDialog({
             <Input
               id='unit-reason'
               value={reason}
+              disabled={busy}
               onChange={(event) => setReason(event.target.value)}
               maxLength={255}
               required
@@ -285,6 +290,8 @@ export function OrganizationUnitsPanel({
     pageSize: currentLimit,
     setPage,
     setPageSize,
+    sorting,
+    setSorting,
   } = usePaginatedList<OrganizationUnitQuery>({
     search: controlledQuery,
     onSearchChange: onQueryChange,
@@ -292,10 +299,15 @@ export function OrganizationUnitsPanel({
       page: 1,
       limit: DEFAULT_PAGE_SIZE,
     },
+    defaultSortBy: 'order',
+    defaultSortDirection: 'asc',
   });
 
   const [draftQ, setDraftQ] = useState(appliedQuery.q ?? '');
   const [draftIsActive, setDraftIsActive] = useState<boolean | undefined>(appliedQuery.isActive);
+  const [draftManagingAgencyId, setDraftManagingAgencyId] = useState<string | undefined>(
+    appliedQuery.managingAgencyId,
+  );
   const [createOpen, setCreateOpen] = useState(false);
   const [editingUnit, setEditingUnit] = useState<OrganizationUnitRecord | null>(null);
   const [notice, setNotice] = useState('');
@@ -303,7 +315,11 @@ export function OrganizationUnitsPanel({
   useEffect(() => {
     setDraftQ(appliedQuery.q ?? '');
     setDraftIsActive(appliedQuery.isActive);
-  }, [appliedQuery.q, appliedQuery.isActive]);
+    setDraftManagingAgencyId(appliedQuery.managingAgencyId);
+  }, [appliedQuery.q, appliedQuery.isActive, appliedQuery.managingAgencyId]);
+
+  const agenciesQuery = useManagingAgencies();
+  const agencies = agenciesQuery.data ?? [];
 
   const {
     data,
@@ -316,6 +332,9 @@ export function OrganizationUnitsPanel({
     limit: appliedQuery.limit ?? DEFAULT_PAGE_SIZE,
     q: appliedQuery.q,
     isActive: appliedQuery.isActive,
+    managingAgencyId: appliedQuery.managingAgencyId,
+    sortBy: appliedQuery.sortBy,
+    sortDirection: appliedQuery.sortDirection,
   });
 
   const units = data?.data ?? [];
@@ -345,7 +364,7 @@ export function OrganizationUnitsPanel({
       {
         id: 'managingAgency',
         accessorFn: (row) => row.managingAgency?.name ?? '',
-        header: 'Cơ quan chủ trì quản lý',
+        header: 'Cơ quan chủ trì',
         cell: ({ row }) => {
           const agency = row.original.managingAgency;
           if (!agency) return <span className='text-muted text-xs'>Đơn vị chung</span>;
@@ -448,6 +467,7 @@ export function OrganizationUnitsPanel({
             page: 1,
             q: draftQ.trim() || undefined,
             isActive: draftIsActive,
+            managingAgencyId: draftManagingAgencyId,
           });
         }}
       >
@@ -488,9 +508,36 @@ export function OrganizationUnitsPanel({
             </ComboboxContent>
           </Combobox>
         </FormField>
+        <FormField
+          label='Cơ quan chủ trì'
+          htmlFor='units-filter-agency'
+          className='admin-filter-field'
+          data-filter-width='group'
+        >
+          <Combobox
+            value={draftManagingAgencyId ?? ALL}
+            onValueChange={(value) => setDraftManagingAgencyId(value === ALL ? undefined : value)}
+          >
+            <ComboboxAnchor>
+              <ComboboxInput id='units-filter-agency' placeholder='Tất cả' />
+              <ComboboxTrigger aria-label='Mở danh sách cơ quan chủ trì' />
+            </ComboboxAnchor>
+            <ComboboxContent>
+              <ComboboxEmpty>Không tìm thấy cơ quan chủ trì.</ComboboxEmpty>
+              <ComboboxItem value={ALL}>Tất cả</ComboboxItem>
+              {agencies.map((agency) => (
+                <ComboboxItem key={agency.id} value={agency.id}>
+                  {agency.name}
+                </ComboboxItem>
+              ))}
+            </ComboboxContent>
+          </Combobox>
+        </FormField>
         <div className='admin-actions admin-filter-actions items-end'>
           <Button type='submit'>Áp dụng</Button>
-          {(appliedQuery.q !== undefined || appliedQuery.isActive !== undefined) && (
+          {(appliedQuery.q !== undefined ||
+            appliedQuery.isActive !== undefined ||
+            appliedQuery.managingAgencyId !== undefined) && (
             <Button
               type='button'
               variant='secondary'
@@ -549,6 +596,8 @@ export function OrganizationUnitsPanel({
             page={currentPage}
             pageSize={currentLimit}
             enableSorting
+            sorting={sorting}
+            onSortingChange={setSorting}
             getRowId={(row) => row.id}
             onPageChange={setPage}
             onPageSizeChange={setPageSize}

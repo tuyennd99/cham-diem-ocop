@@ -32,6 +32,7 @@ export function SiteHeader() {
   const user = session?.user;
   const isRegistrant = user?.role === USER_ROLE.REGISTRANT;
   const canView = hasStaffPermission(user, STAFF_PERMISSION.VIEW);
+  const canManage = hasStaffPermission(user, STAFF_PERMISSION.MANAGE);
   const canScore = hasStaffPermission(user, STAFF_PERMISSION.SCORE);
   const workPath = session
     ? homeFor(session.user.role, session.user.staffPermissions, '/my/products/new')
@@ -155,9 +156,16 @@ export function SiteHeader() {
                           </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem asChild>
-                          <Link to='/admin/products' className='cursor-pointer'>
-                            <Package className='size-4' aria-hidden='true' />
-                            <span>Danh sách sản phẩm</span>
+                          <Link
+                            to={canManage ? '/admin/products' : '/admin/registrations'}
+                            className='cursor-pointer'
+                          >
+                            {canManage ? (
+                              <Package className='size-4' aria-hidden='true' />
+                            ) : (
+                              <FileText className='size-4' aria-hidden='true' />
+                            )}
+                            <span>{canManage ? 'Danh sách sản phẩm' : 'Phiếu đăng ký'}</span>
                           </Link>
                         </DropdownMenuItem>
                       </>

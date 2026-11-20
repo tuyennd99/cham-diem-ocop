@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import { useForm } from '@tanstack/react-form';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import AlertError from '@/components/alert-error';
+import { useAppForm } from '@/components/form';
 import { FormField } from '@/components/form-field';
 import { GoogleSignIn } from '@/components/google-sign-in';
 import PasswordInput from '@/components/password-input';
@@ -36,23 +36,27 @@ function formatSeedAccountLabel(account: SeedAccount): string {
 export function LoginPage() {
   const navigate = useNavigate();
   const [error, setError] = useState('');
+  const [isSamplePasswordFilled, setIsSamplePasswordFilled] = useState(false);
   const seedAccountsQuery = useQuery({
     queryKey: ['auth', 'seed-accounts'],
     queryFn: async () => (await authApi.seedAccounts()).data,
+    enabled: import.meta.env.DEV,
     staleTime: 60_000,
     retry: false,
   });
   const seedAccountOptions = useMemo(
     () =>
-      (seedAccountsQuery.data ?? []).map((account) => ({
-        value: account.email,
-        label: formatSeedAccountLabel(account),
-      })),
+      import.meta.env.DEV
+        ? (seedAccountsQuery.data ?? []).map((account) => ({
+            value: account.email,
+            label: formatSeedAccountLabel(account),
+          }))
+        : [],
     [seedAccountsQuery.data],
   );
 
-  const form = useForm({
-    defaultValues: { email: '', password: 'OcopTest@2026!' },
+  const form = useAppForm({
+    defaultValues: { email: '', password: '' },
     onSubmit: async ({ value }) => {
       setError('');
       try {
@@ -123,73 +127,87 @@ export function LoginPage() {
       aside={loginAside}
     >
       <GoogleSignIn intent={GOOGLE_AUTH_INTENT.LOGIN} />
-      <form
-        className='account-form'
-        onSubmit={(event) => {
-          event.preventDefault();
-          void form.handleSubmit();
-        }}
+      <form.Subscribe
+        selector={(state) => ({ busy: state.isSubmitting, email: state.values.email })}
       >
-        {seedAccountOptions.length > 0 && (
-          <form.Subscribe selector={(state) => state.values.email}>
-            {(email) => (
+        {({ busy, email }) => (
+          <form
+            className='account-form'
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (busy) return;
+              void form.handleSubmit();
+            }}
+          >
+            {import.meta.env.DEV && seedAccountOptions.length > 0 && (
               <FormField label='Tài khoản test (Seed)' htmlFor='login-seed-account'>
                 <SimpleCombobox
                   id='login-seed-account'
                   options={seedAccountOptions}
+                  disabled={busy}
                   value={seedAccountOptions.some((item) => item.value === email) ? email : ''}
                   onChange={(nextEmail) => {
                     form.setFieldValue('email', nextEmail);
                     form.setFieldValue('password', 'OcopTest@2026!');
+                    setIsSamplePasswordFilled(true);
                   }}
                   placeholder='Chọn nhanh tài khoản seed...'
                 />
               </FormField>
             )}
-          </form.Subscribe>
-        )}
-        <form.Field name='email'>
-          {(field) => (
-            <FormField label='Email' htmlFor={`login-${field.name}`}>
-              <Input
-                id={`login-${field.name}`}
-                name={field.name}
-                type='email'
-                autoComplete='email'
-                placeholder='Ví dụ: lienhe@htxcheshan.vn'
-                value={field.state.value}
-                onBlur={field.handleBlur}
-                onChange={(event) => field.handleChange(event.target.value)}
-                required
-              />
-            </FormField>
-          )}
-        </form.Field>
-        <form.Field name='password'>
-          {(field) => (
-            <FormField label='Mật khẩu' htmlFor={`login-${field.name}`}>
-              <PasswordInput
-                id={`login-${field.name}`}
-                name={field.name}
-                autoComplete='current-password'
-                placeholder='Nhập mật khẩu của bạn'
-                value={field.state.value}
-                onBlur={field.handleBlur}
-                onChange={(event) => field.handleChange(event.target.value)}
-                required
-              />
-            </FormField>
-          )}
-        </form.Field>
-        {error && <AlertError title='Không thể đăng nhập' errors={[error]} />}
-        <form.Subscribe selector={(state) => state.isSubmitting}>
-          {(busy) => (
+            <form.Field name='email'>
+              {(field) => (
+                <FormField label='Email' htmlFor={`login-${field.name}`}>
+                  <Input
+                    id={`login-${field.name}`}
+                    name={field.name}
+                    type='email'
+                    autoComplete='email'
+                    placeholder='Ví dụ: lienhe@htxcheshan.vn'
+                    disabled={busy}
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(event) => {
+                      field.handleChange(event.target.value);
+                      if (isSamplePasswordFilled) {
+                        form.setFieldValue('password', '');
+                        setIsSamplePasswordFilled(false);
+                      }
+                    }}
+                    required
+                  />
+                </FormField>
+              )}
+            </form.Field>
+            <form.Field name='password'>
+              {(field) => (
+                <FormField label='Mật khẩu' htmlFor={`login-${field.name}`}>
+                  <PasswordInput
+                    id={`login-${field.name}`}
+                    name={field.name}
+                    autoComplete='current-password'
+                    placeholder='Nhập mật khẩu của bạn'
+                    disabled={busy}
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(event) => {
+                      field.handleChange(event.target.value);
+                      if (isSamplePasswordFilled) {
+                        setIsSamplePasswordFilled(false);
+                      }
+                    }}
+                    required
+                  />
+                </FormField>
+              )}
+            </form.Field>
+            {error && <AlertError title='Không thể đăng nhập' errors={[error]} />}
             <Button type='submit' className='auth-submit-btn' loading={busy} disabled={busy}>
               {busy ? 'Đang đăng nhập…' : 'Đăng nhập'}
             </Button>
-          )}
-        </form.Subscribe>
-      </form>
+          </form>
+        )}
+      </form.Subscribe>
       <div className='auth-card-footer'>
         <div className='auth-help-links'>
           <Link className='text-link' to='/forgot-password'>

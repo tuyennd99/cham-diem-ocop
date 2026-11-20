@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBlocker } from '@tanstack/react-router';
-import { compact, differenceBy, keyBy, pick, uniq, xor } from 'lodash';
 import { toast } from 'sonner';
 import AlertError from '@/components/alert-error';
 import { FormField } from '@/components/form-field';
@@ -57,8 +56,8 @@ function buildAssignment(
     judgeId: judge.id,
     categoryId: category.id,
     criterionIds: [...criterionIds],
-    judge: pick(judge, ['id', 'email', 'fullName', 'isActive']),
-    category: pick(category, ['id', 'name']),
+    judge: { id: judge.id, email: judge.email, fullName: judge.fullName, isActive: judge.isActive },
+    category: { id: category.id, name: category.name },
   };
 }
 
@@ -130,17 +129,21 @@ export function AdminAssignmentsPage({
   }, [loadData]);
 
   const selectedCategory = categories.find((category) => category.id === categoryId);
-  const originalByKey = keyBy(savedAssignments, assignmentKey);
-  const added = differenceBy(assignments, savedAssignments, assignmentKey);
-  const removed = differenceBy(savedAssignments, assignments, assignmentKey);
+  const originalByKey = new Map(savedAssignments.map((item) => [assignmentKey(item), item]));
+  const currentKeys = new Set(assignments.map(assignmentKey));
+  const added = assignments.filter((item) => !originalByKey.has(assignmentKey(item)));
+  const removed = savedAssignments.filter((item) => !currentKeys.has(assignmentKey(item)));
   const scopeChanged = assignments.filter((item) => {
-    const saved = originalByKey[assignmentKey(item)];
-    return saved && xor(saved.criterionIds, item.criterionIds).length > 0;
+    const saved = originalByKey.get(assignmentKey(item));
+    if (!saved) return false;
+    const savedSet = new Set(saved.criterionIds);
+    const nextSet = new Set(item.criterionIds);
+    return savedSet.size !== nextSet.size || [...savedSet].some((id) => !nextSet.has(id));
   });
   const dirty = Boolean(added.length || removed.length || scopeChanged.length);
-  const touchedCategories = uniq(
-    [...added, ...removed, ...scopeChanged].map((item) => `${item.category.name}`),
-  );
+  const touchedCategories = [
+    ...new Set([...added, ...removed, ...scopeChanged].map((item) => `${item.category.name}`)),
+  ];
 
   useBlocker({
     shouldBlockFn: () =>
@@ -487,7 +490,7 @@ export function AdminAssignmentsPage({
                           }),
                         )}
                         value={criterionIds}
-                        onChange={(nextIds) => setCriterionIds(uniq(nextIds))}
+                        onChange={(nextIds) => setCriterionIds([...new Set(nextIds)])}
                         placeholder='— Chọn tiêu chí phân công —'
                         searchPlaceholder='Tìm mã hoặc tên tiêu chí...'
                       />
@@ -585,11 +588,10 @@ export function AdminAssignmentsPage({
                           ? `${item.criterionIds.length} tiêu chí`
                           : 'Toàn bộ tiêu chí'
                         : 'Chưa phân công';
-                      const criterionNames = compact(
-                        item?.criterionIds.map(
-                          (id) => criteria.find((criterion) => criterion.id === id)?.code,
-                        ),
-                      ).join(', ');
+                      const criterionNames = (item?.criterionIds ?? [])
+                        .map((id) => criteria.find((criterion) => criterion.id === id)?.code)
+                        .filter((code): code is string => Boolean(code))
+                        .join(', ');
                       return (
                         <div key={judge.id} className='grid gap-1'>
                           <button

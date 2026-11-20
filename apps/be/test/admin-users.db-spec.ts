@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, ProductStatus } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'node:crypto';
 import { databaseObject } from '../src/prisma/sql';
@@ -437,7 +437,7 @@ describe('H4 users', () => {
       });
       expect(user.verified).toBe(true);
       expect(user.isActive).toBe(true);
-      expect(await bcryptCompare(input.password, user.password)).toBe(true);
+      expect(await bcryptCompare(input.password, user.password ?? '')).toBe(true);
       const audit = await prisma.auditLog.findFirstOrThrow({
         where: { entityId: user.id },
       });
@@ -1076,7 +1076,7 @@ describe('H4 users', () => {
         where: { id: f.owner.id },
       });
       expect(registrant).toMatchObject({ verified: true, tokenVersion: 1 });
-      expect(await bcryptCompare(registrantPassword, registrant.password)).toBe(
+      expect(await bcryptCompare(registrantPassword, registrant.password ?? '')).toBe(
         true,
       );
       expect(
@@ -1100,7 +1100,7 @@ describe('H4 users', () => {
         where: { id: f.scorer.id },
       });
       expect(scorer).toMatchObject({ verified: true, tokenVersion: 1 });
-      expect(await bcryptCompare(staffPassword, scorer.password)).toBe(true);
+      expect(await bcryptCompare(staffPassword, scorer.password ?? '')).toBe(true);
       const audits = await prisma.auditLog.findMany({
         where: {
           entityId: { in: [f.owner.id, f.scorer.id] },
@@ -1112,6 +1112,141 @@ describe('H4 users', () => {
         expect.arrayContaining(['Registrant recovery', 'Staff recovery']),
       );
       expectNoSecrets(audits);
+    });
+  });
+
+  it('rejects inactive managing agency on organization unit and blocks deactivating unit with open judge assignments', async () => {
+    await withTestApp(async ({ app, prisma, baseUrl }) => {
+      const f = await adminFixture(app, prisma, baseUrl);
+      const inactiveAgency = await prisma.managingAgency.create({
+        data: {
+          code: `INACT-${Date.now()}`,
+          name: `Inactive Agency ${Date.now()}`,
+          isActive: false,
+        },
+      });
+      const createWithInactive = await f.call('manager', unitsPath, 'POST', {
+        code: `U-INACT-${Date.now()}`,
+        name: 'Unit Invalid Agency',
+        order: 99,
+        isActive: true,
+        managingAgencyId: inactiveAgency.id,
+        reason: 'Test inactive agency',
+      });
+      expect(createWithInactive.status).toBe(400);
+
+      const category = await prisma.productCategory.findFirstOrThrow();
+      const prod = await prisma.product.create({
+        data: {
+          registrantId: f.owner.id,
+          categoryId: category.id,
+          localityId: f.locality.id,
+          name: 'Open assigned product',
+          status: ProductStatus.APPROVED,
+          submittedAt: new Date(),
+          formData: {},
+        },
+      });
+      await prisma.productJudgeAssignment.create({
+        data: { productId: prod.id, judgeId: f.scorer.id, isActive: true },
+      });
+
+      const deactivateUnit = await f.call(
+        'manager',
+        `${unitsPath}/${f.unit.id}`,
+        'PUT',
+        { isActive: false, reason: 'Try deactivate with open work' },
+      );
+      expect(deactivateUnit.status).toBe(409);
+    });
+  });
+
+  it('preserves default order, lone sortDirection, and tie-breaker across two pages (#52)', async () => {
+    await withTestApp(async ({ app, prisma, baseUrl }) => {
+      const f = await adminFixture(app, prisma, baseUrl);
+      await prisma.organizationUnit.createMany({
+        data: [
+          {
+            id: 'sort-unit-b',
+            code: 'SORT-U-B',
+            name: 'Shared Unit',
+            order: 50,
+            isActive: true,
+          },
+          {
+            id: 'sort-unit-a',
+            code: 'SORT-U-A',
+            name: 'Shared Unit',
+            order: 50,
+            isActive: true,
+          },
+        ],
+      });
+      await prisma.user.createMany({
+        data: [
+          {
+            id: 'sort-user-b',
+            email: 'sort-user-b@example.invalid',
+            password: 'unused',
+            fullName: 'Tie Name',
+            role: 'VIEWER',
+            staffPermissions: ['VIEW'],
+            verified: true,
+            organizationUnitId: f.unit.id,
+          },
+          {
+            id: 'sort-user-a',
+            email: 'sort-user-a@example.invalid',
+            password: 'unused',
+            fullName: 'Tie Name',
+            role: 'VIEWER',
+            staffPermissions: ['VIEW'],
+            verified: true,
+            organizationUnitId: f.unit.id,
+          },
+        ],
+      });
+
+      const defaultUsers = await f.call('manager', usersPath + '?q=sort-user-');
+      const loneDirUsers = await f.call(
+        'manager',
+        usersPath + '?q=sort-user-&sortDirection=asc',
+      );
+      expect(defaultUsers.status).toBe(200);
+      expect(loneDirUsers.body.data).toEqual(defaultUsers.body.data);
+
+      const userPage1 = await f.call(
+        'manager',
+        usersPath + '?q=Tie%20Name&sortBy=fullName&sortDirection=desc&limit=1&page=1',
+      );
+      const userPage2 = await f.call(
+        'manager',
+        usersPath + '?q=Tie%20Name&sortBy=fullName&sortDirection=desc&limit=1&page=2',
+      );
+      expect(userPage1.body.data.map((u: any) => u.id)).toEqual(['sort-user-a']);
+      expect(userPage2.body.data.map((u: any) => u.id)).toEqual(['sort-user-b']);
+
+      const defaultUnits = await f.call(
+        'manager',
+        unitsPath + '?q=Shared%20Unit',
+      );
+      const loneDirUnits = await f.call(
+        'manager',
+        unitsPath + '?q=Shared%20Unit&sortDirection=desc',
+      );
+      expect(defaultUnits.status).toBe(200);
+      expect(loneDirUnits.body.data).toEqual(defaultUnits.body.data);
+
+      const unitPage1 = await f.call(
+        'manager',
+        unitsPath + '?q=Shared%20Unit&sortBy=name&sortDirection=desc&limit=1&page=1',
+      );
+      const unitPage2 = await f.call(
+        'manager',
+        unitsPath + '?q=Shared%20Unit&sortBy=name&sortDirection=desc&limit=1&page=2',
+      );
+      expect(unitPage1.body.data.map((u: any) => u.id)).toEqual(['sort-unit-a']);
+      expect(unitPage2.body.data.map((u: any) => u.id)).toEqual(['sort-unit-b']);
     });
   });
 });

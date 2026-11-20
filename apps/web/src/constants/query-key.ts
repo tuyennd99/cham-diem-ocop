@@ -6,7 +6,9 @@ import type {
   AdminProductQuery,
   AdminReportQuery,
   AdminUserQuery,
+  JudgeQueueQuery,
   LocalityQuery,
+  MyProductQuery,
   OrganizationUnitQuery,
   PublicLocalityQuery,
 } from '@ocop/shared';
@@ -26,12 +28,14 @@ export const queryKeys = {
   },
   myProducts: {
     all: ['my-products'] as const,
-    list: ['my-products', 'list'] as const,
+    listAll: ['my-products', 'list'] as const,
+    list: (query: MyProductQuery = {}) => ['my-products', 'list', query] as const,
     detail: (id: string) => ['my-products', 'detail', id] as const,
   },
   judge: {
     all: ['judge'] as const,
-    queue: ['judge', 'queue'] as const,
+    queueAll: ['judge', 'queue'] as const,
+    queue: (query: JudgeQueueQuery = {}) => ['judge', 'queue', query] as const,
     evaluation: (productId: string) => ['judge', 'evaluation', productId] as const,
   },
   admin: {

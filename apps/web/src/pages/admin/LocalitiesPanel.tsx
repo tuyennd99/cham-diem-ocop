@@ -37,6 +37,7 @@ import { Input } from '@/components/ui/input';
 import { ALL, DEFAULT_PAGE_SIZE } from '../../constants/consts';
 import { usePaginatedList } from '../../hooks/use-paginated-list';
 import {
+  formatDate,
   nextVietnameseDayIso,
   vietnameseDateInput,
   vietnameseDayStartIso,
@@ -128,6 +129,10 @@ function LocalityFormDialog({
         const registrationTo = value.registrationDateRange.toDay
           ? nextVietnameseDayIso(value.registrationDateRange.toDay)
           : null;
+
+        if (!effectiveFrom || !effectiveTo) {
+          throw new Error('Vui lòng chọn đầy đủ thời gian diễn ra sự kiện.');
+        }
 
         if (effectiveFrom && effectiveTo && Date.parse(effectiveFrom) >= Date.parse(effectiveTo)) {
           throw new Error('Thời điểm kết thúc sự kiện phải sau thời điểm bắt đầu.');
@@ -391,6 +396,8 @@ export function LocalitiesPanel({
     pageSize: currentLimit,
     setPage,
     setPageSize,
+    sorting,
+    setSorting,
   } = usePaginatedList<LocalityQuery>({
     search: controlledQuery,
     onSearchChange: onQueryChange,
@@ -427,6 +434,8 @@ export function LocalitiesPanel({
     q: appliedQuery.q,
     provinceName: appliedQuery.provinceName,
     isActive: appliedQuery.isActive,
+    sortBy: appliedQuery.sortBy,
+    sortDirection: appliedQuery.sortDirection,
   });
 
   const localities = data?.data ?? [];
@@ -471,8 +480,11 @@ export function LocalitiesPanel({
           const item = row.original;
           return (
             <>
-              {item.effectiveFrom ? vietnameseDateInput(item.effectiveFrom) : 'Từ đầu'} →{' '}
-              {item.effectiveTo ? vietnameseInclusiveEndInput(item.effectiveTo) : 'Hiện hành'}
+              {item.effectiveFrom ? formatDate(vietnameseDateInput(item.effectiveFrom)) : 'Từ đầu'}{' '}
+              →{' '}
+              {item.effectiveTo
+                ? formatDate(vietnameseInclusiveEndInput(item.effectiveTo))
+                : 'Hiện hành'}
             </>
           );
         },
@@ -488,8 +500,8 @@ export function LocalitiesPanel({
           const regTo = item.registrationTo ?? item.effectiveTo;
           return (
             <>
-              {regFrom ? vietnameseDateInput(regFrom) : 'Từ đầu'} →{' '}
-              {regTo ? vietnameseInclusiveEndInput(regTo) : 'Hiện hành'}
+              {regFrom ? formatDate(vietnameseDateInput(regFrom)) : 'Từ đầu'} →{' '}
+              {regTo ? formatDate(vietnameseInclusiveEndInput(regTo)) : 'Hiện hành'}
             </>
           );
         },
@@ -716,6 +728,8 @@ export function LocalitiesPanel({
             page={currentPage}
             pageSize={currentLimit}
             enableSorting
+            sorting={sorting}
+            onSortingChange={setSorting}
             getRowId={(row) => row.id}
             onPageChange={setPage}
             onPageSizeChange={setPageSize}

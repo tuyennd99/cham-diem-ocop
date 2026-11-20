@@ -1,3 +1,5 @@
+export { formatDate, formatDateTime } from '@ocop/shared';
+
 const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
 const DAY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const ISO_OFFSET_RE =

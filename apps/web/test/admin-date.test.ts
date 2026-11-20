@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
+import { DATE_FORMAT, DATE_TIME_FORMAT } from '../src/constants/consts';
 import {
+  formatDate,
+  formatDateTime,
   localityEffectiveValue,
   vietnameseDateInput,
   vietnameseDateTimeInput,
@@ -31,4 +34,15 @@ it('edits Vietnamese time without dropping milliseconds or changing untouched IS
   );
   assert.equal(localityEffectiveValue('', original), null);
   assert.throws(() => localityEffectiveValue('2026-02-30T12:00'));
+});
+
+it('formats dates and timestamps using DATE_FORMAT (dd/MM/yyyy) and DATE_TIME_FORMAT in Asia/Ho_Chi_Minh', () => {
+  assert.equal(DATE_FORMAT, 'dd/MM/yyyy');
+  assert.equal(DATE_TIME_FORMAT, 'dd/MM/yyyy HH:mm:ss');
+  assert.equal(formatDate('2026-11-04'), '04/11/2026');
+  assert.equal(formatDate('2026-11-04T02:30:00.000Z'), '04/11/2026');
+  assert.equal(formatDate('2026-10-01T18:30:00.000Z'), '02/10/2026');
+  assert.equal(formatDateTime('2026-11-04T02:03:04.000Z'), '04/11/2026 09:03:04');
+  assert.equal(formatDate('2026-02-30'), '');
+  assert.equal(formatDate(null), '');
 });

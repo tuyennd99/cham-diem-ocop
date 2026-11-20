@@ -1,5 +1,4 @@
 import { clsx, type ClassValue } from 'clsx';
-import _ from 'lodash';
 import { twMerge } from 'tailwind-merge';
 
 export function cn(...values: ClassValue[]): string {
@@ -7,11 +6,11 @@ export function cn(...values: ClassValue[]): string {
 }
 
 export function normalizeEmail(value: string): string {
-  return _.trim(value).toLowerCase();
+  return value.trim().toLowerCase();
 }
 
 export function optionalText(value: string): string | undefined {
-  return _.trim(value) || undefined;
+  return value.trim() || undefined;
 }
 
 export const ENTITY_FORM_KEYS = [
@@ -47,14 +46,26 @@ const registrationTypeLabels: Record<string, string> = {
   REASSESSMENT: 'Đánh giá lại',
 };
 
+function startCaseLabel(key: string): string {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+    .trim();
+}
+
 export function formatFormValue(value: unknown, key?: string): string {
-  if (_.isNil(value) || value === '') return 'Chưa cung cấp';
+  if (value === null || value === undefined || value === '') return 'Chưa cung cấp';
   if (key === 'registrationType' && typeof value === 'string' && value in registrationTypeLabels) {
     return registrationTypeLabels[value];
   }
-  if (_.isBoolean(value)) return value ? 'Có' : 'Không';
-  if (_.isArray(value)) return value.map((item) => formatFormValue(item)).join(', ');
-  if (_.isPlainObject(value)) {
+  if (typeof value === 'boolean') return value ? 'Có' : 'Không';
+  if (Array.isArray(value)) return value.map((item) => formatFormValue(item)).join(', ');
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null)
+  ) {
     return Object.values(value as Record<string, unknown>)
       .map((item) => formatFormValue(item))
       .join(' · ');
@@ -62,14 +73,30 @@ export function formatFormValue(value: unknown, key?: string): string {
   return String(value);
 }
 
-export function formatFormEntries(formData: Record<string, unknown> | undefined) {
+export interface FormattedFormEntry {
+  key: string;
+  label: string;
+  value: string;
+}
+
+export function formatFormEntries(
+  formData: Record<string, unknown> | undefined,
+): FormattedFormEntry[] {
   return Object.entries(formData ?? {}).map(([key, value]) => ({
     key,
-    label: formLabels[key] ?? _.startCase(key),
+    label: formLabels[key] ?? startCaseLabel(key),
     value: formatFormValue(value, key),
   }));
 }
 
-export function partitionFormEntries(formData: Record<string, unknown> | undefined) {
-  return _.partition(formatFormEntries(formData), (entry) => entityKeySet.has(entry.key));
+export function partitionFormEntries(
+  formData: Record<string, unknown> | undefined,
+): [FormattedFormEntry[], FormattedFormEntry[]] {
+  const entityEntries: FormattedFormEntry[] = [];
+  const productEntries: FormattedFormEntry[] = [];
+  for (const entry of formatFormEntries(formData)) {
+    if (entityKeySet.has(entry.key)) entityEntries.push(entry);
+    else productEntries.push(entry);
+  }
+  return [entityEntries, productEntries];
 }

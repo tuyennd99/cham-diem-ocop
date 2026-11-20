@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { useForm } from '@tanstack/react-form';
 import { Link, useLoaderData, useNavigate, useRouter } from '@tanstack/react-router';
 import { CheckCircle2, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import AlertError from '@/components/alert-error';
+import { useAppForm } from '@/components/form';
 import { FormField } from '@/components/form-field';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
@@ -107,7 +107,7 @@ function VerificationForm({
     return () => window.clearInterval(timer);
   }, []);
 
-  const verifyForm = useForm({
+  const verifyForm = useAppForm({
     defaultValues: {
       email:
         initial.kind === VERIFICATION_STATE_KIND.PENDING ? initial.pending.email : initial.email,
@@ -252,107 +252,110 @@ function VerificationForm({
     );
 
   return (
-    <form
-      className='account-form'
-      onSubmit={(event) => {
-        event.preventDefault();
-        void verifyForm.handleSubmit();
-      }}
+    <verifyForm.Subscribe
+      selector={(state) => ({ verifying: state.isSubmitting, email: state.values.email })}
     >
-      {!pending && (
-        <p className='form-note' role='status'>
-          Khôi phục xác thực cho tài khoản đã đăng ký trước đây. Đăng ký mới cần phiên xác thực nhận
-          được sau khi gửi biểu mẫu đăng ký.
-        </p>
-      )}
-      {expired && (
-        <AlertError
-          title='Phiên xác thực đã hết hạn'
-          errors={['Vui lòng đăng ký lại để nhận phiên và mã mới.']}
-        />
-      )}
-      <verifyForm.Field name='email'>
-        {(field) => (
-          <FormField
-            label='Email nhận mã'
-            htmlFor='verify-otp-email'
-            hint={
-              pending
-                ? 'Email của phiên xác thực. Đăng ký lại nếu cần dùng email khác.'
-                : 'Nhập email của tài khoản đã đăng ký trước đây.'
-            }
+      {({ verifying, email }) => {
+        const busy = verifying || resending;
+        const availableAt = pending
+          ? Date.parse(pending.resendAvailableAt)
+          : normalizeEmail(email) === cooldownEmail
+            ? legacyResendAt
+            : 0;
+        const secondsLeft = Math.max(0, Math.ceil((availableAt - now) / 1000));
+        return (
+          <form
+            className='account-form'
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (busy) return;
+              void verifyForm.handleSubmit();
+            }}
           >
-            <Input
-              id='verify-otp-email'
-              name={field.name}
-              type='email'
-              autoComplete='email'
-              value={field.state.value}
-              readOnly={Boolean(pending)}
-              disabled={Boolean(pending)}
-              onBlur={field.handleBlur}
-              onChange={(event) => {
-                field.handleChange(event.target.value);
-                setEmailError('');
-              }}
-              aria-invalid={Boolean(emailError)}
-              aria-describedby='otp-email-error verify-otp-email-hint'
-              required
-            />
-          </FormField>
-        )}
-      </verifyForm.Field>
-      <InputError id='otp-email-error' role='alert' message={emailError} />
-      <verifyForm.Field name='code'>
-        {(field) => (
-          <FormField
-            label='Mã xác thực OTP'
-            optional='6 chữ số'
-            htmlFor='verify-otp-code'
-            hint='Nhập hoặc dán mã 6 chữ số từ email. Kiểm tra mục Thư rác nếu chưa thấy.'
-          >
-            <Input
-              id='verify-otp-code'
-              name={field.name}
-              className='otp-code-input'
-              type='text'
-              inputMode='numeric'
-              autoComplete='one-time-code'
-              pattern='[0-9]{6}'
-              maxLength={6}
-              placeholder='000000'
-              value={field.state.value}
-              onBlur={field.handleBlur}
-              onChange={(event) => {
-                field.handleChange(event.target.value.replace(/\D/g, '').slice(0, 6));
-                setCodeError('');
-              }}
-              aria-invalid={Boolean(codeError)}
-              aria-describedby='otp-code-error verify-otp-code-hint'
-              required
-            />
-          </FormField>
-        )}
-      </verifyForm.Field>
-      <InputError id='otp-code-error' role='alert' message={codeError} />
-      {otpExpired && !expired && <p role='status'>Mã đã hết hạn. Vui lòng gửi mã OTP mới.</p>}
-      {notice && (
-        <p className='form-note' role='status'>
-          {notice}
-        </p>
-      )}
-      {error && <AlertError title='Không thể xác thực' errors={[error]} />}
-      <verifyForm.Subscribe
-        selector={(state) => ({ verifying: state.isSubmitting, email: state.values.email })}
-      >
-        {({ verifying, email }) => {
-          const availableAt = pending
-            ? Date.parse(pending.resendAvailableAt)
-            : normalizeEmail(email) === cooldownEmail
-              ? legacyResendAt
-              : 0;
-          const secondsLeft = Math.max(0, Math.ceil((availableAt - now) / 1000));
-          return (
+            {!pending && (
+              <p className='form-note' role='status'>
+                Khôi phục xác thực cho tài khoản đã đăng ký trước đây. Đăng ký mới cần phiên xác
+                thực nhận được sau khi gửi biểu mẫu đăng ký.
+              </p>
+            )}
+            {expired && (
+              <AlertError
+                title='Phiên xác thực đã hết hạn'
+                errors={['Vui lòng đăng ký lại để nhận phiên và mã mới.']}
+              />
+            )}
+            <verifyForm.Field name='email'>
+              {(field) => (
+                <FormField
+                  label='Email nhận mã'
+                  htmlFor='verify-otp-email'
+                  hint={
+                    pending
+                      ? 'Email của phiên xác thực. Đăng ký lại nếu cần dùng email khác.'
+                      : 'Nhập email của tài khoản đã đăng ký trước đây.'
+                  }
+                >
+                  <Input
+                    id='verify-otp-email'
+                    name={field.name}
+                    type='email'
+                    autoComplete='email'
+                    value={field.state.value}
+                    readOnly={Boolean(pending)}
+                    disabled={Boolean(pending) || busy}
+                    onBlur={field.handleBlur}
+                    onChange={(event) => {
+                      field.handleChange(event.target.value);
+                      setEmailError('');
+                    }}
+                    aria-invalid={Boolean(emailError)}
+                    aria-describedby='otp-email-error verify-otp-email-hint'
+                    required
+                  />
+                </FormField>
+              )}
+            </verifyForm.Field>
+            <InputError id='otp-email-error' role='alert' message={emailError} />
+            <verifyForm.Field name='code'>
+              {(field) => (
+                <FormField
+                  label='Mã xác thực OTP'
+                  optional='6 chữ số'
+                  htmlFor='verify-otp-code'
+                  hint='Nhập hoặc dán mã 6 chữ số từ email. Kiểm tra mục Thư rác nếu chưa thấy.'
+                >
+                  <Input
+                    id='verify-otp-code'
+                    name={field.name}
+                    className='otp-code-input'
+                    type='text'
+                    inputMode='numeric'
+                    autoComplete='one-time-code'
+                    pattern='[0-9]{6}'
+                    maxLength={6}
+                    placeholder='000000'
+                    disabled={busy}
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(event) => {
+                      field.handleChange(event.target.value.replace(/\D/g, '').slice(0, 6));
+                      setCodeError('');
+                    }}
+                    aria-invalid={Boolean(codeError)}
+                    aria-describedby='otp-code-error verify-otp-code-hint'
+                    required
+                  />
+                </FormField>
+              )}
+            </verifyForm.Field>
+            <InputError id='otp-code-error' role='alert' message={codeError} />
+            {otpExpired && !expired && <p role='status'>Mã đã hết hạn. Vui lòng gửi mã OTP mới.</p>}
+            {notice && (
+              <p className='form-note' role='status'>
+                {notice}
+              </p>
+            )}
+            {error && <AlertError title='Không thể xác thực' errors={[error]} />}
             <div className='auth-action-stack'>
               <Button
                 type='submit'
@@ -405,9 +408,9 @@ function VerificationForm({
                   : 'Đăng ký lại với email khác'}
               </Link>
             </div>
-          );
-        }}
-      </verifyForm.Subscribe>
-    </form>
+          </form>
+        );
+      }}
+    </verifyForm.Subscribe>
   );
 }

@@ -9,8 +9,10 @@ import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { Role } from '@prisma/client';
 import type { Request } from 'express';
-import { isObjectLike } from 'lodash';
 import { env } from '../config/env';
+
+const isObjectLike = (value: unknown): value is object =>
+  typeof value === 'object' && value !== null;
 import {
   AUTH_SCHEME_BEARER,
   JWT_ALGORITHM,
@@ -22,14 +24,23 @@ import type { AccessTokenPayload } from '../types/auth';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector, private readonly jwtService: JwtService) {}
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly jwtService: JwtService,
+  ) {}
 
   async canActivate(context: ExecutionContext) {
-    if (this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
-      context.getHandler(), context.getClass(),
-    ])) return true;
+    if (
+      this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ])
+    )
+      return true;
 
-    const request = context.switchToHttp().getRequest<Request & { user?: AccessTokenPayload }>();
+    const request = context
+      .switchToHttp()
+      .getRequest<Request & { user?: AccessTokenPayload }>();
     const [scheme, token] = request.headers.authorization?.split(' ') ?? [];
     if (scheme !== AUTH_SCHEME_BEARER || !token) throw this.unauthorized();
     try {
@@ -50,15 +61,24 @@ export class JwtAuthGuard implements CanActivate {
   private isPayload(value: unknown): value is AccessTokenPayload {
     if (!isObjectLike(value)) return false;
     const payload = value as Record<string, unknown>;
-    return typeof payload.sub === 'string' && payload.sub.length > 0 &&
+    return (
+      typeof payload.sub === 'string' &&
+      payload.sub.length > 0 &&
       typeof payload.email === 'string' &&
       Object.values(Role).includes(payload.role as Role) &&
-      Number.isInteger(payload.tokenVersion) && (payload.tokenVersion as number) >= 0 &&
-      typeof payload.iat === 'number' && Number.isFinite(payload.iat) &&
-      typeof payload.exp === 'number' && Number.isFinite(payload.exp);
+      Number.isInteger(payload.tokenVersion) &&
+      (payload.tokenVersion as number) >= 0 &&
+      typeof payload.iat === 'number' &&
+      Number.isFinite(payload.iat) &&
+      typeof payload.exp === 'number' &&
+      Number.isFinite(payload.exp)
+    );
   }
 
   private unauthorized() {
-    return new HttpException({ message: 'Authentication required' }, HttpStatus.UNAUTHORIZED);
+    return new HttpException(
+      { message: 'Authentication required' },
+      HttpStatus.UNAUTHORIZED,
+    );
   }
 }

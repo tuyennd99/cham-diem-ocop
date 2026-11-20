@@ -121,18 +121,15 @@ export default defineConfig(({ mode }) => {
       //   editor: 'code',
       // }),
       react(),
-      reactClickToComponent(),
+      mode === 'development' ? reactClickToComponent() : null,
       tailwindcss(),
       ocopDevSsrPlugin(),
-    ],
+    ].filter(Boolean),
     resolve: {
       alias: {
         "@": fileURLToPath(new URL("./src", import.meta.url)),
         "@ocop/shared": fileURLToPath(new URL("../../packages/shared/src/index.ts", import.meta.url)),
       },
-    },
-    ssr: {
-      noExternal: ["lodash"],
     },
     server: {
       proxy: {

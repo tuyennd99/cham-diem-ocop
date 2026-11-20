@@ -107,8 +107,7 @@ export class AdminCatalogsService {
       actorId,
       meta,
     );
-    if (!category)
-      throw new NotFoundException('Product category not found');
+    if (!category) throw new NotFoundException('Product category not found');
     return category;
   }
 }

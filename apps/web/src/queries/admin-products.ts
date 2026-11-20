@@ -60,7 +60,6 @@ export function useProductDraftCommands(
   mode: typeof PRODUCT_WORKSPACE_MODE.OWNER | typeof PRODUCT_WORKSPACE_MODE.ADMIN,
   options: { registrantId?: string; reason?: string } = {},
 ): ProductDraftCommands {
-  const queryClient = useQueryClient();
   const create = useMutation<ApiResult<RegistrantProduct>, unknown, ProductWriteInput>({
     mutationFn: (payload) => {
       if (mode === PRODUCT_WORKSPACE_MODE.OWNER) return myProductsApi.create(payload);
@@ -72,7 +71,6 @@ export function useProductDraftCommands(
         reason: options.reason,
       });
     },
-    onSuccess: () => invalidateDraftViews(queryClient, mode),
     retry: false,
   });
   const update = useMutation<
@@ -85,7 +83,6 @@ export function useProductDraftCommands(
       if (!options.reason?.trim()) throw new Error('Nhập lý do thao tác trước khi lưu.');
       return adminProductsApi.update(id, { ...payload, reason: options.reason });
     },
-    onSuccess: () => invalidateDraftViews(queryClient, mode),
     retry: false,
   });
   const upload = useMutation<
@@ -98,7 +95,6 @@ export function useProductDraftCommands(
       if (!options.reason?.trim()) throw new Error('Nhập lý do thao tác trước khi tải tệp.');
       return adminProductsApi.upload(id, file, options.reason);
     },
-    onSuccess: () => invalidateDraftViews(queryClient, mode),
     retry: false,
   });
   const submit = useMutation<ApiResult<RegistrantProduct>, unknown, string>({
@@ -106,12 +102,6 @@ export function useProductDraftCommands(
       if (mode === PRODUCT_WORKSPACE_MODE.OWNER) return myProductsApi.submit(id);
       if (!options.reason?.trim()) throw new Error('Nhập lý do thao tác trước khi nộp hồ sơ.');
       return adminProductsApi.submit(id, options.reason);
-    },
-    onSuccess: () => {
-      invalidateDraftViews(queryClient, mode);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.all });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.judge.all });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.publicProducts.all });
     },
     retry: false,
   });
@@ -127,6 +117,19 @@ export function useProductDraftCommands(
       return { ...result, data: result.data as unknown as RegistrantProduct };
     },
   };
+}
+
+export function invalidateProductDraftQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  mode: typeof PRODUCT_WORKSPACE_MODE.OWNER | typeof PRODUCT_WORKSPACE_MODE.ADMIN,
+  options?: { submitted?: boolean },
+) {
+  invalidateDraftViews(queryClient, mode);
+  if (options?.submitted) {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.admin.all });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.judge.all });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.publicProducts.all });
+  }
 }
 
 export function useAdminProductMutations(id: string, mode: AdminProductMode, canManage: boolean) {

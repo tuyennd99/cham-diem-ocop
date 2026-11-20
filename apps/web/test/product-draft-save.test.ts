@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { FormApi } from '@tanstack/react-form';
 import { ApiError } from '../src/lib/api-error';
 import {
   canStartProductDraftSave,
@@ -572,5 +573,54 @@ describe('validateProductDirectSubmitInput (#27)', () => {
       () => validateProductDirectSubmitInput({ ...validInput, declarationAccepted: false }),
       /xác nhận cam kết/i,
     );
+  });
+});
+
+describe('product draft form hydration and submit state preservation', () => {
+  it('keeps hydrated values through re-renders and in-flight submission until reset is omitted before navigation', async () => {
+    const empty = { name: '', phone: '' };
+    const hydrated = { name: 'Trà Shan Tuyết', phone: '0901234567' };
+    let submittedSnapshot: typeof hydrated | undefined;
+    let markStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    let resolveRequest!: () => void;
+    const inflight = new Promise<void>((resolve) => {
+      resolveRequest = resolve;
+    });
+
+    const onSubmit = async ({ value }: { value: typeof hydrated }) => {
+      submittedSnapshot = { ...value };
+      markStarted();
+      await inflight;
+    };
+    const form = new FormApi({
+      defaultValues: empty,
+      onSubmit,
+    });
+    const unmount = form.mount();
+    try {
+      form.reset(hydrated);
+      // Matching baselineValues on re-render keeps untouched hydrated values intact
+      form.update({ defaultValues: hydrated, onSubmit });
+      assert.deepEqual(form.state.values, hydrated);
+
+      const pendingSubmit = form.handleSubmit();
+      await started;
+      assert.equal(form.state.isSubmitting, true);
+      assert.deepEqual(form.state.values, hydrated);
+      // Even after submitting starts and options re-render, values remain until API finishes
+      form.update({ defaultValues: hydrated, onSubmit });
+      assert.deepEqual(form.state.values, hydrated);
+
+      resolveRequest();
+      await pendingSubmit;
+      assert.equal(form.state.isSubmitting, false);
+      assert.deepEqual(submittedSnapshot, hydrated);
+      assert.deepEqual(form.state.values, hydrated);
+    } finally {
+      unmount();
+    }
   });
 });

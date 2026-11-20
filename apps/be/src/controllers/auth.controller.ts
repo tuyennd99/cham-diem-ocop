@@ -1,12 +1,34 @@
-import { Body, Controller, ForbiddenException, Get, Headers, HttpCode, Patch, Post, UnsupportedMediaTypeException } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  ForbiddenException,
+  Get,
+  Headers,
+  HttpCode,
+  Patch,
+  Post,
+  UnsupportedMediaTypeException,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { Public } from '../decorators/public.decorator';
-import { ChangePasswordDto, EmailDto, GoogleLoginDto, GoogleRegisterDto, LegacyVerifyOtpDto, LoginDto, RegisterDto, RegistrationTokenDto, ResetPasswordDto, UpdateProfileDto, VerifyOtpDto } from '../dtos/auth.dto';
+import {
+  ChangePasswordDto,
+  EmailDto,
+  GoogleLoginDto,
+  GoogleRegisterDto,
+  LegacyVerifyOtpDto,
+  LoginDto,
+  RegisterDto,
+  RegistrationTokenDto,
+  ResetPasswordDto,
+  UpdateProfileDto,
+  VerifyOtpDto,
+} from '../dtos/auth.dto';
 import { env } from '../config/env';
 import { AuthService } from '../services/auth.service';
-import type { AccessTokenPayload } from '../types/auth';
+import type { AccessTokenPayload, AuthenticatedPrincipal } from '../types/auth';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -17,7 +39,10 @@ export class AuthController {
   @Post('google/challenge')
   @HttpCode(200)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  googleChallenge(@Headers('origin') origin: string, @Headers('content-type') contentType: string) {
+  googleChallenge(
+    @Headers('origin') origin: string,
+    @Headers('content-type') contentType: string,
+  ) {
     this.assertGoogleRequest(origin, contentType);
     return this.authService.googleChallenge();
   }
@@ -26,7 +51,11 @@ export class AuthController {
   @Post('google')
   @HttpCode(200)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  google(@Body() body: GoogleLoginDto, @Headers('origin') origin: string, @Headers('content-type') contentType: string) {
+  google(
+    @Body() body: GoogleLoginDto,
+    @Headers('origin') origin: string,
+    @Headers('content-type') contentType: string,
+  ) {
     this.assertGoogleRequest(origin, contentType);
     return this.authService.google(body);
   }
@@ -35,7 +64,11 @@ export class AuthController {
   @Post('google/register')
   @HttpCode(200)
   @Throttle({ default: { limit: 3, ttl: 15 * 60_000 } })
-  googleRegister(@Body() body: GoogleRegisterDto, @Headers('origin') origin: string, @Headers('content-type') contentType: string) {
+  googleRegister(
+    @Body() body: GoogleRegisterDto,
+    @Headers('origin') origin: string,
+    @Headers('content-type') contentType: string,
+  ) {
     this.assertGoogleRequest(origin, contentType);
     return this.authService.googleRegister(body);
   }
@@ -44,7 +77,11 @@ export class AuthController {
   @Post('google/link/verify')
   @HttpCode(200)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  googleLinkVerify(@Body() body: VerifyOtpDto, @Headers('origin') origin: string, @Headers('content-type') contentType: string) {
+  googleLinkVerify(
+    @Body() body: VerifyOtpDto,
+    @Headers('origin') origin: string,
+    @Headers('content-type') contentType: string,
+  ) {
     this.assertGoogleRequest(origin, contentType);
     return this.authService.googleLinkVerify(body.registrationToken, body.code);
   }
@@ -53,14 +90,20 @@ export class AuthController {
   @Post('google/link/resend')
   @HttpCode(200)
   @Throttle({ default: { limit: 3, ttl: 15 * 60_000 } })
-  googleLinkResend(@Body() body: RegistrationTokenDto, @Headers('origin') origin: string, @Headers('content-type') contentType: string) {
+  googleLinkResend(
+    @Body() body: RegistrationTokenDto,
+    @Headers('origin') origin: string,
+    @Headers('content-type') contentType: string,
+  ) {
     this.assertGoogleRequest(origin, contentType);
     return this.authService.googleLinkResend(body.registrationToken);
   }
 
   private assertGoogleRequest(origin: string, contentType: string) {
-    if (!origin || !env(process.env).allowedOrigins.includes(origin)) throw new ForbiddenException('Origin is not allowed');
-    if (contentType?.split(';')[0].trim().toLowerCase() !== 'application/json') throw new UnsupportedMediaTypeException('Google sign-in requires JSON');
+    if (!origin || !env(process.env).allowedOrigins.includes(origin))
+      throw new ForbiddenException('Origin is not allowed');
+    if (contentType?.split(';')[0].trim().toLowerCase() !== 'application/json')
+      throw new UnsupportedMediaTypeException('Google sign-in requires JSON');
   }
 
   @Public()
@@ -137,26 +180,40 @@ export class AuthController {
   @HttpCode(200)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   resetPassword(@Body() body: ResetPasswordDto) {
-    return this.authService.resetPassword(body.email, body.code, body.newPassword);
+    return this.authService.resetPassword(
+      body.email,
+      body.code,
+      body.newPassword,
+    );
   }
 
   @Get('me')
   @ApiBearerAuth()
-  me(@CurrentUser() user: AccessTokenPayload) {
-    return this.authService.me(user.sub);
+  me(@CurrentUser() user: AuthenticatedPrincipal | AccessTokenPayload) {
+    return this.authService.me(user.sub, user);
   }
 
   @Patch('me')
   @ApiBearerAuth()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  updateProfile(@Body() body: UpdateProfileDto, @CurrentUser() user: AccessTokenPayload) {
-    return this.authService.updateProfile(user.sub, body);
+  updateProfile(
+    @Body() body: UpdateProfileDto,
+    @CurrentUser() user: AuthenticatedPrincipal | AccessTokenPayload,
+  ) {
+    return this.authService.updateProfile(user.sub, body, user);
   }
 
   @Post('change-password')
   @ApiBearerAuth()
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  changePassword(@Body() body: ChangePasswordDto, @CurrentUser() user: AccessTokenPayload) {
-    return this.authService.changePassword(user.sub, body.currentPassword, body.newPassword);
+  changePassword(
+    @Body() body: ChangePasswordDto,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.authService.changePassword(
+      user.sub,
+      body.currentPassword,
+      body.newPassword,
+    );
   }
 }

@@ -34,7 +34,7 @@ import {
   PRODUCT_STATUS,
   REPORT_GROUP_BY,
 } from '../../constants/consts';
-import { currentVietnameseYear } from '../../lib/admin-date';
+import { currentVietnameseYear, formatDateTime } from '../../lib/admin-date';
 import {
   parseAdminReportsSearch,
   toAdminReportApiQuery,
@@ -67,9 +67,7 @@ const NUMERIC_CELL_META = {
 };
 
 function formatViTime(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('vi-VN');
+  return formatDateTime(iso) || '—';
 }
 
 function DrillDownLink({
@@ -293,10 +291,7 @@ export function AdminReportsPage({
   const apiQuery = toAdminReportApiQuery(appliedSearch);
 
   const [localityProvince, setLocalityProvince] = useState('');
-  const categoriesQuery = useAdminCategories({
-    page: 1,
-    limit: 100,
-  });
+  const categoriesQuery = useAdminCategories();
   const localitiesQuery = useAdminLocalities({
     page: 1,
     limit: 100,

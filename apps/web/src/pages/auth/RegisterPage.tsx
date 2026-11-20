@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { useForm } from '@tanstack/react-form';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
 import AlertError from '@/components/alert-error';
+import { useAppForm } from '@/components/form';
 import { FormField } from '@/components/form-field';
 import { GoogleSignIn } from '@/components/google-sign-in';
 import PasswordInput from '@/components/password-input';
@@ -25,7 +25,7 @@ export function RegisterPage() {
   const navigate = useNavigate();
   const [error, setError] = useState('');
 
-  const form = useForm({
+  const form = useAppForm({
     defaultValues: { fullName: '', email: '', phone: '', password: '' },
     onSubmit: async ({ value }) => {
       clearPendingEmail();
@@ -39,6 +39,11 @@ export function RegisterPage() {
           phone: optionalText(value.phone),
           password: value.password,
         });
+        if (!('registrationToken' in data)) {
+          toast.success('Tài khoản chưa xác thực — đã gửi lại mã OTP tới email.');
+          await navigate({ to: '/verify-otp', search: { legacy: true } });
+          return;
+        }
         writePendingEmail({ ...data, mode: REGISTRATION_VERIFICATION_MODE.REGISTER });
         toast.success('Đã gửi mã OTP xác thực tới email.');
         await navigate({ to: '/verify-otp', search: {} });
@@ -110,121 +115,126 @@ export function RegisterPage() {
       aside={registerAside}
     >
       <GoogleSignIn intent={GOOGLE_AUTH_INTENT.REGISTER} />
-      <form
-        className='account-form'
-        onSubmit={(event) => {
-          event.preventDefault();
-          void form.handleSubmit();
-        }}
-      >
-        <form.Field name='fullName'>
-          {(field) => (
-            <FormField
-              label='Tên người đăng ký hoặc đơn vị'
-              hint='Ghi đúng tên hợp tác xã, doanh nghiệp hoặc hộ sản xuất kinh doanh trên giấy phép.'
-              htmlFor={`register-${field.name}`}
-            >
-              <Input
-                id={`register-${field.name}`}
-                name={field.name}
-                autoComplete='organization'
-                placeholder='Ví dụ: Hợp tác xã Chè Shan Tuyết Pà Cò'
-                maxLength={255}
-                value={field.state.value}
-                onBlur={field.handleBlur}
-                onChange={(event) => field.handleChange(event.target.value)}
-                aria-describedby={`register-${field.name}-hint`}
-                required
-              />
-            </FormField>
-          )}
-        </form.Field>
-        <form.Field name='email'>
-          {(field) => (
-            <FormField
-              label='Email'
-              hint='Hệ thống sẽ gửi mã OTP gồm 6 chữ số tới địa chỉ email này để kích hoạt tài khoản.'
-              htmlFor={`register-${field.name}`}
-            >
-              <Input
-                id={`register-${field.name}`}
-                name={field.name}
-                type='email'
-                autoComplete='email'
-                placeholder='Ví dụ: lienhe@htxcheshan.vn'
-                value={field.state.value}
-                onBlur={field.handleBlur}
-                onChange={(event) => field.handleChange(event.target.value)}
-                aria-describedby={`register-${field.name}-hint`}
-                required
-              />
-            </FormField>
-          )}
-        </form.Field>
-        <form.Field name='phone'>
-          {(field) => (
-            <FormField
-              label='Số điện thoại'
-              optional='(không bắt buộc)'
-              hint='Dùng để hội đồng chấm điểm liên hệ khi cần đối chiếu bổ sung hồ sơ minh chứng.'
-              htmlFor={`register-${field.name}`}
-            >
-              <Input
-                id={`register-${field.name}`}
-                name={field.name}
-                type='tel'
-                autoComplete='tel'
-                placeholder='Ví dụ: 0912 345 678'
-                maxLength={30}
-                value={field.state.value}
-                onBlur={field.handleBlur}
-                onChange={(event) => field.handleChange(event.target.value)}
-                aria-describedby={`register-${field.name}-hint`}
-              />
-            </FormField>
-          )}
-        </form.Field>
-        <form.Field name='password'>
-          {(field) => (
-            <FormField
-              label='Mật khẩu'
-              hint='Tối thiểu 8 ký tự (tối đa 72 ký tự).'
-              htmlFor={`register-${field.name}`}
-            >
-              <PasswordInput
-                id={`register-${field.name}`}
-                name={field.name}
-                autoComplete='new-password'
-                placeholder='Nhập mật khẩu từ 8 ký tự trở lên'
-                minLength={8}
-                maxLength={72}
-                value={field.state.value}
-                onBlur={field.handleBlur}
-                onChange={(event) => field.handleChange(event.target.value)}
-                aria-describedby={`register-${field.name}-hint`}
-                required
-              />
-            </FormField>
-          )}
-        </form.Field>
-        {error && (
-          <div className='space-y-2'>
-            <AlertError title='Không thể hoàn tất đăng ký' errors={[error]} />
-            <p className='text-sm'>
-              <Link className='text-link' to='/verify-otp'>
-                Xác thực email hoặc gửi lại mã →
-              </Link>
-            </p>
-          </div>
-        )}
-        <form.Subscribe selector={(state) => state.isSubmitting}>
-          {(busy) => (
+      <form.Subscribe selector={(state) => state.isSubmitting}>
+        {(busy) => (
+          <form
+            className='account-form'
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (busy) return;
+              void form.handleSubmit();
+            }}
+          >
+            <form.Field name='fullName'>
+              {(field) => (
+                <FormField
+                  label='Tên người đăng ký hoặc đơn vị'
+                  hint='Ghi đúng tên hợp tác xã, doanh nghiệp hoặc hộ sản xuất kinh doanh trên giấy phép.'
+                  htmlFor={`register-${field.name}`}
+                >
+                  <Input
+                    id={`register-${field.name}`}
+                    name={field.name}
+                    autoComplete='organization'
+                    placeholder='Ví dụ: Hợp tác xã Chè Shan Tuyết Pà Cò'
+                    maxLength={255}
+                    disabled={busy}
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(event) => field.handleChange(event.target.value)}
+                    aria-describedby={`register-${field.name}-hint`}
+                    required
+                  />
+                </FormField>
+              )}
+            </form.Field>
+            <form.Field name='email'>
+              {(field) => (
+                <FormField
+                  label='Email'
+                  hint='Hệ thống sẽ gửi mã OTP gồm 6 chữ số tới địa chỉ email này để kích hoạt tài khoản.'
+                  htmlFor={`register-${field.name}`}
+                >
+                  <Input
+                    id={`register-${field.name}`}
+                    name={field.name}
+                    type='email'
+                    autoComplete='email'
+                    placeholder='Ví dụ: lienhe@htxcheshan.vn'
+                    disabled={busy}
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(event) => field.handleChange(event.target.value)}
+                    aria-describedby={`register-${field.name}-hint`}
+                    required
+                  />
+                </FormField>
+              )}
+            </form.Field>
+            <form.Field name='phone'>
+              {(field) => (
+                <FormField
+                  label='Số điện thoại'
+                  optional='(không bắt buộc)'
+                  hint='Dùng để hội đồng chấm điểm liên hệ khi cần đối chiếu bổ sung hồ sơ minh chứng.'
+                  htmlFor={`register-${field.name}`}
+                >
+                  <Input
+                    id={`register-${field.name}`}
+                    name={field.name}
+                    type='tel'
+                    autoComplete='tel'
+                    placeholder='Ví dụ: 0912 345 678'
+                    maxLength={30}
+                    disabled={busy}
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(event) => field.handleChange(event.target.value)}
+                    aria-describedby={`register-${field.name}-hint`}
+                  />
+                </FormField>
+              )}
+            </form.Field>
+            <form.Field name='password'>
+              {(field) => (
+                <FormField
+                  label='Mật khẩu'
+                  hint='Tối thiểu 8 ký tự (tối đa 72 ký tự).'
+                  htmlFor={`register-${field.name}`}
+                >
+                  <PasswordInput
+                    id={`register-${field.name}`}
+                    name={field.name}
+                    autoComplete='new-password'
+                    placeholder='Nhập mật khẩu từ 8 ký tự trở lên'
+                    minLength={8}
+                    maxLength={72}
+                    disabled={busy}
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(event) => field.handleChange(event.target.value)}
+                    aria-describedby={`register-${field.name}-hint`}
+                    required
+                  />
+                </FormField>
+              )}
+            </form.Field>
+            {error && (
+              <div className='space-y-2'>
+                <AlertError title='Không thể hoàn tất đăng ký' errors={[error]} />
+                <p className='text-sm'>
+                  <Link className='text-link' to='/verify-otp'>
+                    Xác thực email hoặc gửi lại mã →
+                  </Link>
+                </p>
+              </div>
+            )}
             <Button type='submit' className='auth-submit-btn' loading={busy} disabled={busy}>
               {busy ? 'Đang gửi…' : 'Gửi mã xác thực'}
             </Button>
-          )}
-        </form.Subscribe>
-      </form>
+          </form>
+        )}
+      </form.Subscribe>
       <div className='auth-card-footer'>
         <p className='auth-switch-prompt'>
           Đã có tài khoản?{' '}

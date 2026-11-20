@@ -20,6 +20,9 @@ export class MailService {
         port: config.smtpPort,
         secure: config.smtpPort === 465,
         auth: { user: config.smtpUser, pass: config.smtpPassword },
+        connectionTimeout: 10_000,
+        greetingTimeout: 10_000,
+        socketTimeout: 15_000,
       });
     }
     return this.transporter;
@@ -27,7 +30,10 @@ export class MailService {
 
   async sendOtp(email: string, code: string, purpose: MailOtpPurpose) {
     const config = env(process.env);
-    if (config.smtpHost === 'smtp.example.com' && process.env.NODE_ENV !== 'production') {
+    if (
+      config.smtpHost === 'smtp.example.com' &&
+      process.env.NODE_ENV !== 'production'
+    ) {
       // shortcut: skip delivery with placeholder SMTP in development; configure real SMTP to receive codes.
       this.logger.log(`[DEV OTP] ${purpose} delivery skipped for ${email}`);
       return;

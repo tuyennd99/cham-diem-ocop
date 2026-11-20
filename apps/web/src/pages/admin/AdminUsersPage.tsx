@@ -63,6 +63,8 @@ export function AdminUsersPage({ search: controlledSearch, onSearchChange }: Adm
     pageSize,
     setPage,
     setPageSize,
+    sorting,
+    setSorting,
   } = usePaginatedList<AdminUsersSearch>({
     search: controlledSearch,
     onSearchChange,
@@ -230,6 +232,9 @@ export function AdminUsersPage({ search: controlledSearch, onSearchChange }: Adm
       limit: nextUnitsQuery.limit ?? DEFAULT_PAGE_SIZE,
       q: nextUnitsQuery.q,
       isActive: nextUnitsQuery.isActive,
+      managingAgencyId: nextUnitsQuery.managingAgencyId,
+      sortBy: nextUnitsQuery.sortBy,
+      sortDirection: nextUnitsQuery.sortDirection,
     });
   }
 
@@ -546,6 +551,8 @@ export function AdminUsersPage({ search: controlledSearch, onSearchChange }: Adm
                   page={usersMeta?.page ?? requestedPage}
                   pageSize={pageSize}
                   enableSorting
+                  sorting={sorting}
+                  onSortingChange={setSorting}
                   getRowId={(row) => row.id}
                   onPageChange={setPage}
                   onPageSizeChange={setPageSize}

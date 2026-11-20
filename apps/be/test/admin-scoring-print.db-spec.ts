@@ -378,4 +378,70 @@ describe('H5 scoring forms and print-data endpoints', () => {
       });
     });
   });
+
+  it('sorts criteria sets by maxScore before slicing pagination and orders evaluations via SQL scope branch (#55)', async () => {
+    await withTestApp(async ({ app, prisma, baseUrl }) => {
+      const f = await adminFixture(app, prisma, baseUrl);
+      const lowCat = await prisma.productCategory.create({
+        data: { name: 'AAA Low Score Cat', order: 1, isActive: false },
+      });
+      const highCat = await prisma.productCategory.create({
+        data: { name: 'ZZZ High Score Cat', order: 99, isActive: false },
+      });
+      await prisma.criteriaSet.create({
+        data: {
+          categoryId: lowCat.id,
+          name: 'Low Set',
+          version: 'v1',
+          sourceHash: 'low-hash',
+          criteria: {
+            create: [
+              {
+                code: 'L1',
+                name: 'Low 1',
+                sectionCode: 'A',
+                sectionName: 'Phần A',
+                order: 1,
+                maxScore: 25,
+              },
+            ],
+          },
+        },
+      });
+      await prisma.criteriaSet.create({
+        data: {
+          categoryId: highCat.id,
+          name: 'High Set',
+          version: 'v1',
+          sourceHash: 'high-hash',
+          criteria: {
+            create: [
+              {
+                code: 'H1',
+                name: 'High 1',
+                sectionCode: 'A',
+                sectionName: 'Phần A',
+                order: 1,
+                maxScore: 100,
+              },
+            ],
+          },
+        },
+      });
+
+      const page1 = await f.call(
+        'viewer',
+        '/admin/criteria-sets?sortBy=maxScore&sortDirection=desc&limit=1&page=1',
+      );
+      expect(page1.status).toBe(200);
+      expect(page1.body.data[0].maxScore).toBe(100);
+
+      const scopeList = await f.call(
+        'viewer',
+        '/admin/evaluations?sortBy=scope&sortDirection=desc&limit=5&page=1',
+      );
+      expect(scopeList.status).toBe(200);
+      expect(Array.isArray(scopeList.body.data)).toBe(true);
+    });
+  });
 });

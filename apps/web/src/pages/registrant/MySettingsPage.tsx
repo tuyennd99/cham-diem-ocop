@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import AlertError from '@/components/alert-error';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import PageSpin from '@/components/page-spin';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -46,6 +47,7 @@ export function MySettingsPage() {
   const [editing, setEditing] = useState<RegistrationUnitRecord | null>(null);
   const [modalSession, setModalSession] = useState(0);
   const [actionError, setActionError] = useState('');
+  const [deletingUnit, setDeletingUnit] = useState<RegistrationUnitRecord | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   function openCreate() {
@@ -62,20 +64,17 @@ export function MySettingsPage() {
     setModalOpen(true);
   }
 
-  async function handleDelete(unit: RegistrationUnitRecord) {
+  async function confirmDelete() {
+    if (!deletingUnit || deletingId) return;
     setActionError('');
-    const confirmed = window.confirm(
-      `Xóa đơn vị đăng ký "${unit.entityName}"? Các hồ sơ sản phẩm đã tạo sẽ không bị ảnh hưởng.`,
-    );
-    if (!confirmed) return;
-
-    setDeletingId(unit.id);
+    setDeletingId(deletingUnit.id);
     try {
-      await myRegistrationUnitsApi.remove(unit.id);
-      toast.success('Đã xóa đơn vị đăng ký.');
+      await myRegistrationUnitsApi.remove(deletingUnit.id);
       await queryClient.invalidateQueries({
         queryKey: queryKeys.myRegistrationUnits.all,
       });
+      toast.success('Đã xóa đơn vị đăng ký.');
+      setDeletingUnit(null);
     } catch (err) {
       setActionError(messageOf(err));
     } finally {
@@ -146,13 +145,14 @@ export function MySettingsPage() {
           const unit = row.original;
           const isDeleting = deletingId === unit.id;
           return (
-            <div className='flex items-center justify-center gap-1.5'>
+            <div className='admin-table-actions admin-table-actions--icons'>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     type='button'
                     variant='secondary'
                     size='icon-sm'
+                    disabled={Boolean(deletingId)}
                     aria-label={`Sửa đơn vị ${unit.entityName}`}
                     onClick={() => openEdit(unit)}
                   >
@@ -167,9 +167,12 @@ export function MySettingsPage() {
                     type='button'
                     variant='destructive'
                     size='icon-sm'
-                    disabled={isDeleting}
+                    disabled={Boolean(deletingId)}
                     aria-label={`Xóa đơn vị ${unit.entityName}`}
-                    onClick={() => void handleDelete(unit)}
+                    onClick={() => {
+                      setActionError('');
+                      setDeletingUnit(unit);
+                    }}
                   >
                     {isDeleting ? (
                       <Spinner className='size-4' />
@@ -203,7 +206,9 @@ export function MySettingsPage() {
         }
       />
 
-      {actionError && <AlertError title='Không thể thực hiện thao tác' errors={[actionError]} />}
+      {actionError && deletingUnit === null && (
+        <AlertError title='Không thể thực hiện thao tác' errors={[actionError]} />
+      )}
 
       {unitsQuery.error && (
         <div className='space-y-3'>
@@ -268,6 +273,23 @@ export function MySettingsPage() {
           setModalOpen(false);
           setEditing(null);
         }}
+      />
+
+      <ConfirmDialog
+        open={deletingUnit !== null}
+        onOpenChange={(open) => {
+          if (!open && !deletingId) {
+            setDeletingUnit(null);
+            setActionError('');
+          }
+        }}
+        title={`Xóa đơn vị đăng ký: ${deletingUnit?.entityName ?? ''}`}
+        description='Các hồ sơ sản phẩm đã tạo sẽ không bị ảnh hưởng.'
+        confirmLabel='Xóa đơn vị'
+        destructive
+        pending={Boolean(deletingId)}
+        error={actionError}
+        onConfirm={() => void confirmDelete()}
       />
     </PageContainer>
   );

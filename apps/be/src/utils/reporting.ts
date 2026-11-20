@@ -17,6 +17,7 @@ import type {
   ResultsReportRow,
   StarBreakdown,
 } from '@ocop/shared';
+import { formatDateTime } from '@ocop/shared';
 import {
   COMPARISON_NOTE,
   DASHBOARD_KPI_ID,
@@ -34,7 +35,11 @@ function pad2(n: number): string {
   return String(n).padStart(2, '0');
 }
 
-export function formatVnBoundaryIso(year: number, month: number, day = 1): string {
+export function formatVnBoundaryIso(
+  year: number,
+  month: number,
+  day = 1,
+): string {
   return `${year}-${pad2(month)}-${pad2(day)}T00:00:00+07:00`;
 }
 
@@ -42,7 +47,10 @@ export function vnBoundaryDate(year: number, month: number, day = 1): Date {
   return new Date(formatVnBoundaryIso(year, month, day));
 }
 
-export function toVietnamYearMonth(date: Date): { year: number; month: number } {
+export function toVietnamYearMonth(date: Date): {
+  year: number;
+  month: number;
+} {
   const shifted = new Date(date.getTime() + VN_OFFSET_MS);
   return {
     year: shifted.getUTCFullYear(),
@@ -165,8 +173,6 @@ export interface ReportingProductRecord {
     id: string;
     name: string;
 
-
-
     criterionIds?: string[];
   };
   locality: {
@@ -252,11 +258,20 @@ export function computeComparisonDelta(
       comparisonNote: COMPARISON_NOTE.INSUFFICIENT_HISTORY,
     };
   }
-  if (previous === null || previous === 0) {
+  if (previous === null) {
     return {
       current,
-      previous: previous ?? 0,
-      deltaAbsolute: current - (previous ?? 0),
+      previous: null,
+      deltaAbsolute: null,
+      deltaPercent: null,
+      comparisonNote: COMPARISON_NOTE.NO_PRIOR_DATA,
+    };
+  }
+  if (previous === 0) {
+    return {
+      current,
+      previous: 0,
+      deltaAbsolute: current,
       deltaPercent: null,
       comparisonNote: COMPARISON_NOTE.NO_PRIOR_DATA,
     };
@@ -271,6 +286,39 @@ export function computeComparisonDelta(
     deltaPercent,
     comparisonNote: COMPARISON_NOTE.OK,
   };
+}
+
+const WAITING_REPORT_STATUSES = new Set<ProductStatus>([
+  ProductStatus.SUBMITTED,
+  ProductStatus.RETURNED,
+  ProductStatus.APPROVED,
+]);
+
+const OPEN_BACKLOG_STATUSES = new Set<ProductStatus>([
+  ...WAITING_REPORT_STATUSES,
+  ProductStatus.SCORING,
+]);
+
+export function resolveProductStatusAtAsOf(
+  product: Pick<
+    ReportingProductRecord,
+    'status' | 'completedAt' | 'statusEvents'
+  >,
+  asOfDate: Date,
+  now: Date,
+): ProductStatus | null {
+  const eventStatus = statusAtAsOf(product.statusEvents, asOfDate);
+  if (eventStatus) return eventStatus;
+  if (
+    product.completedAt &&
+    product.completedAt.getTime() < asOfDate.getTime()
+  ) {
+    return ProductStatus.COMPLETED;
+  }
+  if (asOfDate.getTime() >= now.getTime()) {
+    return product.status;
+  }
+  return null;
 }
 
 function aggregateRegistrationRows(
@@ -297,48 +345,33 @@ function aggregateRegistrationRows(
     registrants.add(product.registrantId);
     if (!product.locality) unmappedLocalityCount++;
 
-    const eventStatus = statusAtAsOf(product.statusEvents, asOfDate);
-    let resolvedStatus: ProductStatus | null = eventStatus;
-    if (!resolvedStatus) {
-      // If product has no status events before asOf:
-      if (
-        product.completedAt &&
-        product.completedAt.getTime() < asOfDate.getTime()
-      ) {
-        resolvedStatus = ProductStatus.COMPLETED;
-      } else if (asOfDate.getTime() >= now.getTime()) {
-        resolvedStatus = product.status;
-      } else {
-        resolvedStatus = null;
-      }
-    }
-
+    const resolvedStatus = resolveProductStatusAtAsOf(product, asOfDate, now);
     if (!resolvedStatus || resolvedStatus === ProductStatus.DRAFT) {
       missingDataCount++;
       continue;
     }
-
-    if (
-      resolvedStatus === ProductStatus.SUBMITTED ||
-      resolvedStatus === ProductStatus.RETURNED ||
-      resolvedStatus === ProductStatus.APPROVED
-    ) {
+    if (WAITING_REPORT_STATUSES.has(resolvedStatus)) {
       waitingCount++;
-    } else if (resolvedStatus === ProductStatus.SCORING) {
-      scoringCount++;
-    } else if (resolvedStatus === ProductStatus.COMPLETED) {
-      completedCount++;
-      if (isValidCompletedResult(product)) {
-        completedValidCount++;
-        scoreSum += product.finalScore!;
-        const star = product.starRating as 1 | 2 | 3 | 4 | 5;
-        starCounts[star]++;
-        if (product.finalScore! >= 50) passedCount++;
-        else failedCount++;
-      } else {
-        missingDataCount++;
-      }
+      continue;
     }
+    if (resolvedStatus === ProductStatus.SCORING) {
+      scoringCount++;
+      continue;
+    }
+    if (resolvedStatus !== ProductStatus.COMPLETED) {
+      continue;
+    }
+    completedCount++;
+    if (!isValidCompletedResult(product)) {
+      missingDataCount++;
+      continue;
+    }
+    completedValidCount++;
+    scoreSum += product.finalScore!;
+    const star = product.starRating as 1 | 2 | 3 | 4 | 5;
+    starCounts[star]++;
+    if (product.finalScore! >= 50) passedCount++;
+    else failedCount++;
   }
 
   const passRate =
@@ -433,7 +466,6 @@ function resolveGroupingBuckets(
   period: ReturnType<typeof resolveVietnamPeriod>,
   baseQuery: AdminReportFilterQuery,
   catalogs: {
-
     categories: Array<{ id: string; name: string }>;
     localities: Array<{
       id: string;
@@ -475,7 +507,9 @@ function resolveGroupingBuckets(
   }
 
   if (groupBy === REPORT_GROUP_BY.MONTH) {
-    const months = period.month ? [period.month] : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+    const months = period.month
+      ? [period.month]
+      : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
     return months.map((m) => {
       const mFrom = formatVnBoundaryIso(period.year, m, 1);
       const mTo =
@@ -612,9 +646,6 @@ export function buildRegistrationReport(input: {
   categories: Array<{
     id: string;
     name: string;
-
-
-
   }>;
   localities: Array<{
     id: string;
@@ -625,6 +656,7 @@ export function buildRegistrationReport(input: {
   now?: Date;
   historyAvailableFrom?: Date | null;
   assignmentHistoryAvailable?: boolean;
+  preFilteredProducts?: readonly ReportingProductRecord[];
 }): RegistrationReportResponse {
   const now = input.now ?? new Date();
   const groupBy: ReportGroupBy =
@@ -637,12 +669,11 @@ export function buildRegistrationReport(input: {
   );
 
   // Deduplicate by product.id (REP-01)
-  const uniqueProducts = [
-    ...new Map(input.products.map((p) => [p.id, p])).values(),
-  ];
-  const dimensionFiltered = uniqueProducts.filter((p) =>
-    matchesReportDimensionFilters(p, input.query),
-  );
+  const dimensionFiltered = input.preFilteredProducts
+    ? [...input.preFilteredProducts]
+    : [...new Map(input.products.map((p) => [p.id, p])).values()].filter((p) =>
+        matchesReportDimensionFilters(p, input.query),
+      );
 
   const currentCohort = dimensionFiltered.filter(
     (p) =>
@@ -703,7 +734,6 @@ export function buildRegistrationReport(input: {
     period,
     input.query,
     {
-
       categories: input.categories,
       localities: input.localities,
     },
@@ -775,9 +805,6 @@ export function buildResultsReport(input: {
   categories: Array<{
     id: string;
     name: string;
-
-
-
   }>;
   localities: Array<{
     id: string;
@@ -788,6 +815,7 @@ export function buildResultsReport(input: {
   now?: Date;
   historyAvailableFrom?: Date | null;
   assignmentHistoryAvailable?: boolean;
+  preFilteredProducts?: readonly ReportingProductRecord[];
 }): ResultsReportResponse {
   const now = input.now ?? new Date();
   const groupBy: ReportGroupBy =
@@ -799,12 +827,11 @@ export function buildResultsReport(input: {
     input.historyAvailableFrom ?? null,
   );
 
-  const uniqueProducts = [
-    ...new Map(input.products.map((p) => [p.id, p])).values(),
-  ];
-  const dimensionFiltered = uniqueProducts.filter((p) =>
-    matchesReportDimensionFilters(p, input.query),
-  );
+  const dimensionFiltered = input.preFilteredProducts
+    ? [...input.preFilteredProducts]
+    : [...new Map(input.products.map((p) => [p.id, p])).values()].filter((p) =>
+        matchesReportDimensionFilters(p, input.query),
+      );
 
   const currentCompleted = dimensionFiltered.filter(
     (p) =>
@@ -862,7 +889,6 @@ export function buildResultsReport(input: {
     period,
     input.query,
     {
-
       categories: input.categories,
       localities: input.localities,
     },
@@ -927,9 +953,6 @@ export function buildAnalyticsDashboard(input: {
   categories: Array<{
     id: string;
     name: string;
-
-
-
   }>;
   localities: Array<{
     id: string;
@@ -968,9 +991,17 @@ export function buildAnalyticsDashboard(input: {
   );
   const isCurrentAsOf = period.asOfDate.getTime() >= now.getTime();
 
+  const uniqueProducts = [
+    ...new Map(input.products.map((p) => [p.id, p])).values(),
+  ];
+  const dimensionFiltered = uniqueProducts.filter((p) =>
+    matchesReportDimensionFilters(p, input.query),
+  );
+
   const regReport = buildRegistrationReport({
     query: { ...input.query, groupBy: REPORT_GROUP_BY.CATEGORY },
-    products: input.products,
+    products: dimensionFiltered,
+    preFilteredProducts: dimensionFiltered,
 
     categories: input.categories,
     localities: input.localities,
@@ -981,7 +1012,8 @@ export function buildAnalyticsDashboard(input: {
 
   const resReport = buildResultsReport({
     query: { ...input.query, groupBy: REPORT_GROUP_BY.CATEGORY },
-    products: input.products,
+    products: dimensionFiltered,
+    preFilteredProducts: dimensionFiltered,
 
     categories: input.categories,
     localities: input.localities,
@@ -989,13 +1021,6 @@ export function buildAnalyticsDashboard(input: {
     historyAvailableFrom: input.historyAvailableFrom,
     assignmentHistoryAvailable: isCurrentAsOf,
   });
-
-  const uniqueProducts = [
-    ...new Map(input.products.map((p) => [p.id, p])).values(),
-  ];
-  const dimensionFiltered = uniqueProducts.filter((p) =>
-    matchesReportDimensionFilters(p, input.query),
-  );
 
   // KPI 7: Open backlog at asOf (submitted before asOf, not completed at asOf)
   let openBacklogAtAsOf: number | null = 0;
@@ -1010,30 +1035,12 @@ export function buildAnalyticsDashboard(input: {
     ) {
       continue;
     }
-    const evStatus = statusAtAsOf(p.statusEvents, period.asOfDate);
-    let resolved: ProductStatus | null = evStatus;
-    if (!resolved) {
-      if (
-        p.completedAt &&
-        p.completedAt.getTime() < period.asOfDate.getTime()
-      ) {
-        resolved = ProductStatus.COMPLETED;
-      } else if (isCurrentAsOf) {
-        resolved = p.status;
-      } else {
-        resolved = null;
-      }
-    }
+    const resolved = resolveProductStatusAtAsOf(p, period.asOfDate, now);
     if (!resolved) {
       openBacklogMissingHistory = true;
       continue;
     }
-    if (
-      resolved === ProductStatus.SUBMITTED ||
-      resolved === ProductStatus.RETURNED ||
-      resolved === ProductStatus.APPROVED ||
-      resolved === ProductStatus.SCORING
-    ) {
+    if (OPEN_BACKLOG_STATUSES.has(resolved)) {
       openBacklogItems.push(p);
     }
   }
@@ -1063,12 +1070,7 @@ export function buildAnalyticsDashboard(input: {
       prevBacklogMissingHistory = true;
       continue;
     }
-    if (
-      evStatus === ProductStatus.SUBMITTED ||
-      evStatus === ProductStatus.RETURNED ||
-      evStatus === ProductStatus.APPROVED ||
-      evStatus === ProductStatus.SCORING
-    ) {
+    if (OPEN_BACKLOG_STATUSES.has(evStatus)) {
       prevOpenBacklogAtAsOf++;
     }
   }
@@ -1177,7 +1179,7 @@ export function buildAnalyticsDashboard(input: {
     makeKpi({
       id: DASHBOARD_KPI_ID.OPEN_BACKLOG_AT_AS_OF,
       label: 'Hồ sơ còn chờ/đang chấm tại mốc chốt',
-      basisLabel: `Tồn tại mốc chốt ${new Date(period.asOf).toLocaleString('vi-VN')}`,
+      basisLabel: `Tồn tại mốc chốt ${formatDateTime(period.asOf)}`,
       unit: KPI_UNIT.COUNT,
       current: openBacklogAtAsOf,
       previous: prevOpenBacklogAtAsOf,
@@ -1187,7 +1189,7 @@ export function buildAnalyticsDashboard(input: {
     makeKpi({
       id: DASHBOARD_KPI_ID.UNDER_ASSIGNED_BACKLOG_AT_AS_OF,
       label: 'Hồ sơ chưa đủ phân công tại mốc chốt',
-      basisLabel: `Tồn thiếu phủ tiêu chí tại mốc chốt ${new Date(period.asOf).toLocaleString('vi-VN')}`,
+      basisLabel: `Tồn thiếu phủ tiêu chí tại mốc chốt ${formatDateTime(period.asOf)}`,
       unit: KPI_UNIT.COUNT,
       current: underAssignedCount,
       previous: null,
@@ -1196,8 +1198,8 @@ export function buildAnalyticsDashboard(input: {
     }),
   ];
 
-  // Chart 1: Monthly trend for the selected year (12 months)
-  const monthlyTrend = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => {
+  // Chart 1: Monthly trend for the selected year (12 months) in a single O(N) pass
+  const monthBounds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => {
     const mFrom = formatVnBoundaryIso(period.year, m, 1);
     const mTo =
       m === 12
@@ -1205,69 +1207,69 @@ export function buildAnalyticsDashboard(input: {
         : formatVnBoundaryIso(period.year, m + 1, 1);
     const mFromMs = new Date(mFrom).getTime();
     const mToMs = Math.min(new Date(mTo).getTime(), period.asOfDate.getTime());
-    const registeredCount =
-      mToMs <= mFromMs
-        ? 0
-        : dimensionFiltered.filter(
-            (p) =>
-              p.status !== ProductStatus.DRAFT &&
-              p.submittedAt !== null &&
-              p.submittedAt.getTime() >= mFromMs &&
-              p.submittedAt.getTime() < mToMs,
-          ).length;
-    const completedCount =
-      mToMs <= mFromMs
-        ? 0
-        : dimensionFiltered.filter(
-            (p) =>
-              p.status === ProductStatus.COMPLETED &&
-              p.completedAt !== null &&
-              p.completedAt.getTime() >= mFromMs &&
-              p.completedAt.getTime() < mToMs,
-          ).length;
     return {
       month: m,
       label: `T${m}`,
-      registeredCount,
-      completedCount,
       from: mFrom,
       toExclusive: mTo,
+      fromMs: mFromMs,
+      toMs: mToMs,
+      registeredCount: 0,
+      completedCount: 0,
     };
   });
-
-  // Chart 2: By product group + drill-down categories
-  const regCohortIds = new Set(
-    dimensionFiltered
-      .filter(
-        (p) =>
-          p.status !== ProductStatus.DRAFT &&
-          p.submittedAt !== null &&
-          p.submittedAt.getTime() >= period.fromDate.getTime() &&
-          p.submittedAt.getTime() < period.asOfDate.getTime(),
-      )
-      .map((p) => p.id),
+  const yearStartMs = monthBounds[0].fromMs;
+  const asOfMs = period.asOfDate.getTime();
+  for (const p of dimensionFiltered) {
+    if (p.status !== ProductStatus.DRAFT && p.submittedAt !== null) {
+      const subMs = p.submittedAt.getTime();
+      if (subMs >= yearStartMs && subMs < asOfMs) {
+        const { year, month } = toVietnamYearMonth(p.submittedAt);
+        if (year === period.year) {
+          const bucket = monthBounds[month - 1];
+          if (bucket && subMs >= bucket.fromMs && subMs < bucket.toMs) {
+            bucket.registeredCount += 1;
+          }
+        }
+      }
+    }
+    if (p.status === ProductStatus.COMPLETED && p.completedAt !== null) {
+      const compMs = p.completedAt.getTime();
+      if (compMs >= yearStartMs && compMs < asOfMs) {
+        const { year, month } = toVietnamYearMonth(p.completedAt);
+        if (year === period.year) {
+          const bucket = monthBounds[month - 1];
+          if (bucket && compMs >= bucket.fromMs && compMs < bucket.toMs) {
+            bucket.completedCount += 1;
+          }
+        }
+      }
+    }
+  }
+  const monthlyTrend = monthBounds.map(
+    ({ month, label, registeredCount, completedCount, from, toExclusive }) => ({
+      month,
+      label,
+      registeredCount,
+      completedCount,
+      from,
+      toExclusive,
+    }),
   );
-  const resCohortIds = new Set(
-    dimensionFiltered
-      .filter(
-        (p) =>
-          p.status === ProductStatus.COMPLETED &&
-          p.completedAt !== null &&
-          p.completedAt.getTime() >= period.fromDate.getTime() &&
-          p.completedAt.getTime() < period.asOfDate.getTime(),
-      )
-      .map((p) => p.id),
-  );
 
-  const byCategory = input.categories.map((cat) => {
-    const products = dimensionFiltered.filter((product) => product.category.id === cat.id);
-    return {
-      categoryId: cat.id,
-      categoryName: cat.name,
-      registeredCount: products.filter((product) => regCohortIds.has(product.id)).length,
-      completedCount: products.filter((product) => resCohortIds.has(product.id)).length,
-    };
-  });
+  // Chart 2: By product group + drill-down categories (reuses regReport/resReport CATEGORY aggregates)
+  const regByCategory = new Map(
+    regReport.rows.map((row) => [row.key, row.registeredCount]),
+  );
+  const resByCategory = new Map(
+    resReport.rows.map((row) => [row.key, row.completedCount]),
+  );
+  const byCategory = input.categories.map((cat) => ({
+    categoryId: cat.id,
+    categoryName: cat.name,
+    registeredCount: regByCategory.get(cat.id) ?? 0,
+    completedCount: resByCategory.get(cat.id) ?? 0,
+  }));
 
   // Chart 3: Cohort progress of registrations in period
   const cohortProgress = {

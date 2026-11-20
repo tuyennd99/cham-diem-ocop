@@ -1,4 +1,4 @@
-import { ProductStatus } from '@prisma/client';
+import { EvaluationStatus, ProductStatus, Role } from '@prisma/client';
 import { adminFixture } from './support/admin-fixture';
 import { withTestApp } from './support/db-app';
 
@@ -615,6 +615,101 @@ describe('H6 statistical reports and analytics dashboard endpoints', () => {
           }),
         ]),
       );
+    });
+  });
+
+  it('aggregates judge progress accurately across per-product and legacy assignments without Cartesian inflation', async () => {
+    await withTestApp(async ({ app, prisma, baseUrl }) => {
+      const f = await adminFixture(app, prisma, baseUrl);
+      const cats = await prisma.productCategory.findMany({ take: 2, orderBy: { order: 'asc' } });
+      expect(cats).toHaveLength(2);
+      const [catA, catB] = cats;
+
+      await prisma.judgeAssignment.create({
+        data: { judgeId: f.scorer.id, categoryId: catB.id },
+      });
+
+      const prodPerProduct = await prisma.product.create({
+        data: {
+          registrantId: f.owner.id,
+          categoryId: catA.id,
+          localityId: f.locality.id,
+          name: 'Per-product assigned',
+          status: ProductStatus.SCORING,
+          submittedAt: new Date(),
+          formData: {},
+        },
+      });
+      await prisma.productJudgeAssignment.create({
+        data: {
+          productId: prodPerProduct.id,
+          judgeId: f.scorer.id,
+          isActive: true,
+        },
+      });
+      await prisma.evaluation.create({
+        data: {
+          judgeId: f.scorer.id,
+          productId: prodPerProduct.id,
+          status: EvaluationStatus.SUBMITTED,
+          total: 80,
+          submittedAt: new Date(),
+        },
+      });
+
+      await prisma.product.create({
+        data: {
+          registrantId: f.owner.id,
+          categoryId: catB.id,
+          localityId: f.locality.id,
+          name: 'Legacy assigned product',
+          status: ProductStatus.SUBMITTED,
+          submittedAt: new Date(),
+          formData: {},
+        },
+      });
+
+      const otherJudge = await prisma.user.create({
+        data: {
+          email: `other-judge-${Date.now()}@example.invalid`,
+          fullName: 'Other Judge',
+          role: Role.JUDGE,
+          roles: [Role.JUDGE],
+          staffPermissions: ['SCORE'],
+          verified: true,
+          isActive: true,
+          organizationUnitId: f.unit.id,
+        },
+      });
+      const shadowedProduct = await prisma.product.create({
+        data: {
+          registrantId: f.owner.id,
+          categoryId: catB.id,
+          localityId: f.locality.id,
+          name: 'Shadowed by per-product assignment',
+          status: ProductStatus.APPROVED,
+          submittedAt: new Date(),
+          formData: {},
+        },
+      });
+      await prisma.productJudgeAssignment.create({
+        data: {
+          productId: shadowedProduct.id,
+          judgeId: otherJudge.id,
+          isActive: true,
+        },
+      });
+
+      const dash = await f.call('viewer', '/admin/dashboard');
+      expect(dash.status).toBe(200);
+      const scorerRow = dash.body.data.judges.find(
+        (j: { judgeId: string }) => j.judgeId === f.scorer.id,
+      );
+      expect(scorerRow).toMatchObject({
+        assigned: 2,
+        submitted: 1,
+        pending: 1,
+      });
     });
   });
 });

@@ -215,10 +215,10 @@ export async function withTestApp(
       await app?.close();
     } finally {
       try {
-        if (sharedSchema === schema) {
+        if (client && sharedSchema === schema) {
           await client.query(`SET search_path TO "${schema}"`);
           await clearExistingData(client);
-        } else if (schemaCreated) {
+        } else if (client && schemaCreated) {
           await client.query(`DROP SCHEMA "${schema}" CASCADE`);
         }
       } finally {

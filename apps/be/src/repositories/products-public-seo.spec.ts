@@ -9,6 +9,7 @@ import {
 } from './products.repository';
 import { ProductsService } from '../services/products.service';
 import { ProductsController } from '../controllers/products.controller';
+import { PrismaService } from '../prisma/prisma.service';
 
 describe('Public product SEO eligibility and query filtering', () => {
   it('evaluates isSeoEligibleProduct strictly as approvedAt !== null AND status in APPROVED/SCORING/COMPLETED', () => {
@@ -107,26 +108,29 @@ describe('Public product SEO eligibility and query filtering', () => {
   });
 
   it('preserves existing public list contract when approvedOnly is omitted and selects approvedAt', async () => {
-    const findMany = jest.fn().mockResolvedValue([
-      {
-        id: 'prod-submitted',
-        name: 'Hồ sơ mới nộp',
-        description: null,
-        status: ProductStatus.SUBMITTED,
-        approvedAt: null,
-        publicationState: ProductPublicationState.UNPUBLISHED,
-        publishedAt: null,
-        finalScore: 88,
-        starRating: 4,
-        createdAt: new Date('2026-10-01T00:00:00.000Z'),
-        category: { id: 'cat-1', name: 'Thực phẩm' },
-        attachments: [],
-      },
-    ]);
+    const findMany = jest.fn(
+      (_arg?: { where?: unknown; select?: Record<string, unknown> }) =>
+        Promise.resolve([
+          {
+            id: 'prod-submitted',
+            name: 'Hồ sơ mới nộp',
+            description: null,
+            status: ProductStatus.SUBMITTED,
+            approvedAt: null,
+            publicationState: ProductPublicationState.UNPUBLISHED,
+            publishedAt: null,
+            finalScore: 88,
+            starRating: 4,
+            createdAt: new Date('2026-10-01T00:00:00.000Z'),
+            category: { id: 'cat-1', name: 'Thực phẩm' },
+            attachments: [],
+          },
+        ]),
+    );
     const count = jest.fn().mockResolvedValue(1);
     const prisma = {
       product: { findMany, count },
-    } as any;
+    } as unknown as PrismaService;
 
     const repo = new ProductsRepository(prisma);
     const service = new ProductsService(repo);
@@ -137,23 +141,21 @@ describe('Public product SEO eligibility and query filtering', () => {
       limit: 6,
     });
 
-    expect(findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: {
-          status: {
-            in: [
-              ProductStatus.SUBMITTED,
-              ProductStatus.APPROVED,
-              ProductStatus.SCORING,
-              ProductStatus.COMPLETED,
-            ],
-          },
-        },
-        select: expect.objectContaining({
-          approvedAt: true,
-        }),
-      }),
-    );
+    const queryArg = findMany.mock.calls[0]?.[0] as {
+      where?: unknown;
+      select?: Record<string, unknown>;
+    };
+    expect(queryArg?.where).toEqual({
+      status: {
+        in: [
+          ProductStatus.SUBMITTED,
+          ProductStatus.APPROVED,
+          ProductStatus.SCORING,
+          ProductStatus.COMPLETED,
+        ],
+      },
+    });
+    expect(queryArg?.select).toMatchObject({ approvedAt: true });
     expect(result.data[0].approvedAt).toBeNull();
     // Unpublished score/stars must still be stripped
     expect(result.data[0].finalScore).toBeNull();
@@ -162,40 +164,43 @@ describe('Public product SEO eligibility and query filtering', () => {
 
   it('filters by approvedAt !== null and status IN (APPROVED, SCORING, COMPLETED) when approvedOnly is true', async () => {
     const approvedDate = new Date('2026-10-02T08:00:00.000Z');
-    const findMany = jest.fn().mockResolvedValue([
-      {
-        id: 'prod-approved-unpublished',
-        name: 'Chè Shan Tuyết',
-        description: 'Đặc sản vùng cao',
-        status: ProductStatus.SCORING,
-        approvedAt: approvedDate,
-        publicationState: ProductPublicationState.UNPUBLISHED,
-        publishedAt: null,
-        finalScore: 91.5,
-        starRating: 5,
-        createdAt: new Date('2026-10-01T00:00:00.000Z'),
-        category: { id: 'cat-1', name: 'Đồ uống' },
-        attachments: [],
-      },
-      {
-        id: 'prod-completed-published',
-        name: 'Mật ong bạc hà',
-        description: 'Mật ong nguyên chất',
-        status: ProductStatus.COMPLETED,
-        approvedAt: approvedDate,
-        publicationState: ProductPublicationState.PUBLISHED,
-        publishedAt: approvedDate,
-        finalScore: 92,
-        starRating: 5,
-        createdAt: new Date('2026-10-01T00:00:00.000Z'),
-        category: { id: 'cat-1', name: 'Thực phẩm' },
-        attachments: [],
-      },
-    ]);
+    const findMany = jest.fn(
+      (_arg?: { where?: unknown; select?: Record<string, unknown> }) =>
+        Promise.resolve([
+          {
+            id: 'prod-approved-unpublished',
+            name: 'Chè Shan Tuyết',
+            description: 'Đặc sản vùng cao',
+            status: ProductStatus.SCORING,
+            approvedAt: approvedDate,
+            publicationState: ProductPublicationState.UNPUBLISHED,
+            publishedAt: null,
+            finalScore: 91.5,
+            starRating: 5,
+            createdAt: new Date('2026-10-01T00:00:00.000Z'),
+            category: { id: 'cat-1', name: 'Đồ uống' },
+            attachments: [],
+          },
+          {
+            id: 'prod-completed-published',
+            name: 'Mật ong bạc hà',
+            description: 'Mật ong nguyên chất',
+            status: ProductStatus.COMPLETED,
+            approvedAt: approvedDate,
+            publicationState: ProductPublicationState.PUBLISHED,
+            publishedAt: approvedDate,
+            finalScore: 92,
+            starRating: 5,
+            createdAt: new Date('2026-10-01T00:00:00.000Z'),
+            category: { id: 'cat-1', name: 'Thực phẩm' },
+            attachments: [],
+          },
+        ]),
+    );
     const count = jest.fn().mockResolvedValue(2);
     const prisma = {
       product: { findMany, count },
-    } as any;
+    } as unknown as PrismaService;
 
     const repo = new ProductsRepository(prisma);
     const service = new ProductsService(repo);
@@ -208,24 +213,22 @@ describe('Public product SEO eligibility and query filtering', () => {
       approvedOnly: true,
     });
 
-    expect(findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: {
-          approvedAt: { not: null },
-          status: {
-            in: [
-              ProductStatus.APPROVED,
-              ProductStatus.SCORING,
-              ProductStatus.COMPLETED,
-            ],
-          },
-          categoryId: 'cat-1',
-        },
-        select: expect.objectContaining({
-          approvedAt: true,
-        }),
-      }),
-    );
+    const queryArg = findMany.mock.calls[0]?.[0] as {
+      where?: unknown;
+      select?: Record<string, unknown>;
+    };
+    expect(queryArg?.where).toEqual({
+      approvedAt: { not: null },
+      status: {
+        in: [
+          ProductStatus.APPROVED,
+          ProductStatus.SCORING,
+          ProductStatus.COMPLETED,
+        ],
+      },
+      categoryId: 'cat-1',
+    });
+    expect(queryArg?.select).toMatchObject({ approvedAt: true });
 
     expect(result.data).toHaveLength(2);
     expect(result.data[0].approvedAt).toEqual(approvedDate);
@@ -236,34 +239,33 @@ describe('Public product SEO eligibility and query filtering', () => {
   });
 
   it('includes approvedAt in findPublicById while keeping SUBMITTED accessible', async () => {
-    const findFirst = jest.fn().mockResolvedValue({
-      id: 'prod-submitted',
-      name: 'Sản phẩm đã nộp chờ duyệt',
-      description: 'Mô tả',
-      status: ProductStatus.SUBMITTED,
-      approvedAt: null,
-      publicationState: ProductPublicationState.UNPUBLISHED,
-      publishedAt: null,
-      finalScore: 75,
-      starRating: 4,
-      createdAt: new Date('2026-10-01T00:00:00.000Z'),
-      category: { id: 'cat-1', name: 'Thực phẩm' },
-      attachments: [],
-    });
+    const findFirst = jest.fn((_arg?: { select?: Record<string, unknown> }) =>
+      Promise.resolve({
+        id: 'prod-submitted',
+        name: 'Sản phẩm đã nộp chờ duyệt',
+        description: 'Mô tả',
+        status: ProductStatus.SUBMITTED,
+        approvedAt: null,
+        publicationState: ProductPublicationState.UNPUBLISHED,
+        publishedAt: null,
+        finalScore: 75,
+        starRating: 4,
+        createdAt: new Date('2026-10-01T00:00:00.000Z'),
+        category: { id: 'cat-1', name: 'Thực phẩm' },
+        attachments: [],
+      }),
+    );
     const prisma = {
       product: { findFirst },
-    } as any;
+    } as unknown as PrismaService;
 
     const repo = new ProductsRepository(prisma);
     const product = await repo.findPublicById('prod-submitted');
 
-    expect(findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        select: expect.objectContaining({
-          approvedAt: true,
-        }),
-      }),
-    );
+    const queryArg = findFirst.mock.calls[0]?.[0] as {
+      select?: Record<string, unknown>;
+    };
+    expect(queryArg?.select).toMatchObject({ approvedAt: true });
     expect(product).toEqual(
       expect.objectContaining({
         id: 'prod-submitted',

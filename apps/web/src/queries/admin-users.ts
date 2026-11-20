@@ -142,13 +142,15 @@ export function useAdminUserMutations() {
       const result = await update.mutateAsync({ id, data });
       invalidateStaffViews();
       if (getSession()?.user.id === id) {
-        void authApi
-          .me()
-          .then(({ data: user }) => queryClient.setQueryData(queryKeys.me, user))
-          .catch(() => {
+        void (async () => {
+          try {
+            const { data: user } = await authApi.me();
+            queryClient.setQueryData(queryKeys.me, user);
+          } catch {
             const session = getSession();
             if (session?.user.id === id) setSession({ ...session, user: result.data });
-          });
+          }
+        })();
       }
       return result;
     },

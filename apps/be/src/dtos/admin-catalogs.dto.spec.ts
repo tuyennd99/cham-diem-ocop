@@ -17,6 +17,8 @@ describe('locality DTO validation', () => {
     code: 'TEST-L-1',
     name: 'Test locality',
     provinceName: 'Test province',
+    effectiveFrom: '2026-01-01T00:00:00Z',
+    effectiveTo: '2027-01-01T00:00:00Z',
     isActive: true,
     reason: 'Catalog update',
   };
@@ -47,6 +49,8 @@ describe('locality DTO validation', () => {
   });
 
   it.each([
+    { effectiveFrom: undefined },
+    { effectiveTo: undefined },
     { effectiveFrom: '2026-01-01T00:00:00' },
     { effectiveFrom: '2026-02-30T00:00:00Z' },
     {

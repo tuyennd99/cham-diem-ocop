@@ -20,6 +20,7 @@ const server = await createServer({
       export const useEffect = (...args) => globalThis.authUiCheck.useEffect(...args);
       export const useRef = (...args) => globalThis.authUiCheck.useRef(...args);
       export const useForm = (...args) => globalThis.authUiCheck.useForm(...args);
+      export const useAppForm = (...args) => globalThis.authUiCheck.useForm(...args);
       export const useNavigate = () => globalThis.authUiCheck.navigate;
       export const useLoaderData = () => globalThis.authUiCheck.loaderData;
       export const useRouter = () => ({ invalidate: async () => {} });
@@ -36,6 +37,10 @@ const server = await createServer({
           .replace(
             "import { useForm } from '@tanstack/react-form';",
             "import { useForm } from 'virtual:auth-ui-check';",
+          )
+          .replace(
+            "import { useAppForm } from '@/components/form';",
+            "import { useAppForm } from 'virtual:auth-ui-check';",
           )
           .replace(
             "import { useNavigate } from '@tanstack/react-router';",
@@ -63,7 +68,6 @@ const server = await createServer({
         '@tanstack/react-query',
         '@tanstack/react-form',
         'axios',
-        'lodash',
       ],
     },
   },
@@ -199,13 +203,13 @@ try {
       },
     };
     setSession(session);
-    queryClient.setQueryData(queryKeys.myProducts.list, [{ id: 'cached' }]);
-    assert.equal(queryClient.getQueryData(queryKeys.myProducts.list)?.length, 1);
+    queryClient.setQueryData(queryKeys.myProducts.list(), [{ id: 'cached' }]);
+    assert.equal(queryClient.getQueryData(queryKeys.myProducts.list())?.length, 1);
     const meta = { page: 1, limit: 20, total: 1, totalPages: 1 };
     const form = new FormData();
     form.append('file', new Blob(['x']), 'x.pdf');
     setSession(session);
-    queryClient.setQueryData(queryKeys.myProducts.list, [{ id: 'cached' }]);
+    queryClient.setQueryData(queryKeys.myProducts.list(), [{ id: 'cached' }]);
     redirects.length = 0;
     const {
       default: baseRequest,
@@ -533,7 +537,14 @@ try {
             return {
               state: { values: form.defaultValues, isSubmitting: false },
               Field() {},
-              Subscribe() {},
+              Subscribe: function Subscribe({ selector, children }) {
+                if (typeof children !== 'function') return null;
+                return children(
+                  typeof selector === 'function'
+                    ? selector({ isSubmitting: false, values: form.defaultValues })
+                    : { isSubmitting: false, values: form.defaultValues },
+                );
+              },
               handleSubmit() {},
               setFieldValue(name, value) {
                 form.defaultValues[name] = value;
@@ -556,7 +567,12 @@ try {
         const elements = (node) =>
           !node || typeof node !== 'object'
             ? []
-            : [node, ...[node.props?.children].flat(Infinity).flatMap(elements)];
+            : [
+                node,
+                ...(typeof node.type === 'function' && node.type.name === 'Subscribe'
+                  ? elements(node.type(node.props))
+                  : [node.props?.children].flat(Infinity).flatMap(elements)),
+              ];
         const button = (label) => elements(rendered).find((node) => node.props?.children === label);
         const { RegisterPage } = await server.ssrLoadModule('/src/pages/auth/RegisterPage.tsx');
         reset();
@@ -791,7 +807,7 @@ try {
     reply(401, new Blob([JSON.stringify({ message: 'Authentication required' })]));
     await assert.rejects(requestBlob('/my/products/p1/attachments/f1'), { status: 401 });
     assert.equal(getSession(), null);
-    assert.equal(queryClient.getQueryData(queryKeys.myProducts.list), undefined);
+    assert.equal(queryClient.getQueryData(queryKeys.myProducts.list()), undefined);
     setSession(session);
     reply(201, { data: { id: 'file-1' } }, (config) => {
       assert.ok(config.data instanceof FormData);
@@ -836,13 +852,13 @@ try {
       message: 'Request failed (500)',
     });
     setSession(session);
-    queryClient.setQueryData(queryKeys.myProducts.list, [{ id: 'cached' }]);
+    queryClient.setQueryData(queryKeys.myProducts.list(), [{ id: 'cached' }]);
     redirects.length = 0;
     reply(401, { message: 'Authentication required' });
     await assert.rejects(requestJson({ url: '/auth/me' }), { status: 401 });
     assert.equal(getSession(), null);
     assert.equal(storage.has('ocop-session'), false);
-    assert.equal(queryClient.getQueryData(queryKeys.myProducts.list), undefined);
+    assert.equal(queryClient.getQueryData(queryKeys.myProducts.list()), undefined);
     assert.deepEqual(redirects, ['/login']);
     setSession(session);
     redirects.length = 0;

@@ -1,7 +1,13 @@
-import { Controller, Get, Header, Param, Query, StreamableFile } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Header,
+  Param,
+  Query,
+  StreamableFile,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Public } from '../decorators/public.decorator';
-import { ResponseMessage } from '../decorators/response-message.decorator';
 import { PublicProductQueryDto } from '../dtos/products.dto';
 import { ProductsService } from '../services/products.service';
 import { asDownload } from '../utils/private-storage';
@@ -20,12 +26,14 @@ export class ProductsController {
   @Public()
   @Get(':id/attachments/:attachmentId')
   @Header('Cache-Control', 'public, max-age=86400, immutable')
-  @ResponseMessage('Tải ảnh sản phẩm thành công')
   async image(
     @Param('id') id: string,
     @Param('attachmentId') attachmentId: string,
   ): Promise<StreamableFile> {
-    return asDownload(await this.products.getPublicAttachment(id, attachmentId), 'inline');
+    return asDownload(
+      await this.products.getPublicAttachment(id, attachmentId),
+      'inline',
+    );
   }
 
   @Public()
