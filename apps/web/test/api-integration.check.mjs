@@ -18,6 +18,7 @@ const server = await createServer({
           ? `
       export const useState = (...args) => globalThis.authUiCheck.useState(...args);
       export const useEffect = (...args) => globalThis.authUiCheck.useEffect(...args);
+      export const useLayoutEffect = (...args) => globalThis.authUiCheck.useLayoutEffect(...args);
       export const useRef = (...args) => globalThis.authUiCheck.useRef(...args);
       export const useForm = (...args) => globalThis.authUiCheck.useForm(...args);
       export const useAppForm = (...args) => globalThis.authUiCheck.useForm(...args);
@@ -31,7 +32,7 @@ const server = await createServer({
           return;
         return code
           .replace(
-            /import \{ (useEffect, useRef, useState|useEffect, useState|useState) \} from 'react';/,
+            /import \{ (use(?:Layout)?Effect, useRef, useState|useEffect, useState|useState) \} from 'react';/,
             (value, names) => `import { ${names} } from 'virtual:auth-ui-check';`,
           )
           .replace(
@@ -522,13 +523,19 @@ try {
               },
             ];
           },
-          useRef: () => ({ current: container }),
-          useEffect(callback, deps) {
+          useRef(initial) {
+            const index = cursor++;
+            return (states[index] ??= { current: initial });
+          },
+          useEffect(callback, deps, layout = false) {
             const index = effectCursor++;
             if (!effects[index] || deps.some((value, i) => value !== effects[index].deps[i])) {
               effects[index]?.cleanup?.();
-              effects[index] = { deps, cleanup: callback() };
+              effects[index] = { deps, layout, cleanup: callback() };
             }
+          },
+          useLayoutEffect(callback, deps) {
+            this.useEffect(callback, deps, true);
           },
           useForm(options) {
             const form = forms[formCursor++] ?? options;
@@ -555,9 +562,14 @@ try {
             navigations.push(to);
           },
         };
-        const reset = () => {
-          for (const effect of effects) effect.cleanup?.();
+        const reset = ({ deferPassiveCleanup = false } = {}) => {
+          const passiveCleanups = [];
+          for (const effect of effects) {
+            if (deferPassiveCleanup && !effect.layout) passiveCleanups.push(effect.cleanup);
+            else effect.cleanup?.();
+          }
           effects.length = states.length = forms.length = navigations.length = 0;
+          return () => passiveCleanups.forEach((cleanup) => cleanup?.());
         };
         const render = (Component, props = {}) => {
           cursor = effectCursor = formCursor = 0;
@@ -675,7 +687,10 @@ try {
         const configured = () => GoogleSignIn({ intent: 'login' });
         const renderGoogle = () => {
           const element = configured();
-          return render(element.type, element.props);
+          const page = render(element.type, element.props);
+          const googleButton = elements(page).find((node) => node.type === 'div' && node.props?.ref);
+          if (googleButton) googleButton.props.ref.current = container;
+          return page;
         };
         const prepare = async () => {
           reply(200, { data: { challengeToken: 'ui-challenge', nonce: 'ui-nonce' } });
@@ -683,16 +698,13 @@ try {
           await flush();
           renderGoogle();
         };
-        for (const result of [
-          sessionResult,
-          {
-            kind: 'profile',
-            registrationToken: 'profile-ui',
-            email: pending.email,
-            suggestedName: 'Suggested',
-          },
-          { ...registrationResult, kind: 'link_otp' },
-        ]) {
+        const profileResult = {
+          kind: 'profile',
+          registrationToken: 'profile-ui',
+          email: pending.email,
+          suggestedName: 'Suggested',
+        };
+        for (const result of [sessionResult, profileResult, { ...registrationResult, kind: 'link_otp' }]) {
           reset();
           clearPendingEmail();
           setSession(null);
@@ -732,6 +744,37 @@ try {
             ![...storage.values()].some((value) => value.includes('local-mock-credential')),
           );
         }
+        reset();
+        clearPendingEmail();
+        setSession(null);
+        await prepare();
+        reply(200, { data: profileResult });
+        callbacks.at(-1)({ credential: 'local-mock-credential' });
+        await flush();
+        renderGoogle();
+        const delayedProfile = Promise.withResolvers();
+        let profileRequestUrl;
+        baseRequest.defaults.adapter = async (config) => {
+          profileRequestUrl = config.url;
+          await delayedProfile.promise;
+          return { status: 200, data: { data: registrationResult }, headers: {}, config };
+        };
+        const submission = forms.at(-1).onSubmit({ value: { fullName: 'Confirmed', phone: '' } });
+        await flush();
+        assert.equal(profileRequestUrl, '/auth/google/register');
+        const flushUnmountEffects = reset({ deferPassiveCleanup: true });
+        const nextPending = { ...pending, registrationToken: 'new-registration' };
+        writePendingEmail(nextPending);
+        delayedProfile.resolve();
+        await submission;
+        flushUnmountEffects();
+        assert.deepEqual(
+          readPendingEmail(),
+          nextPending,
+          'unmounted Google form must preserve the newer OTP session',
+        );
+        assert.deepEqual(navigations, [], 'unmounted Google form must not navigate to OTP');
+        console.log('PASS Google profile completion ignores success after unmount');
         reset();
         clearPendingEmail();
         setSession(null);

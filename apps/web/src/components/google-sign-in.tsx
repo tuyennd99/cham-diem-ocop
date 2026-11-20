@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useAppForm } from '@/components/form';
 import { authApi } from '../api/auth';
@@ -92,6 +92,7 @@ function ConfiguredGoogleSignIn({
 }) {
   const navigate = useNavigate();
   const container = useRef<HTMLDivElement>(null);
+  const attemptSignal = useRef<AbortSignal | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [phase, setPhase] = useState<
     (typeof GOOGLE_SIGN_IN_PHASE)[keyof typeof GOOGLE_SIGN_IN_PHASE]
@@ -116,7 +117,8 @@ function ConfiguredGoogleSignIn({
   const profileForm = useAppForm({
     defaultValues: { fullName: '', phone: '' },
     onSubmit: async ({ value }) => {
-      if (!profile) return;
+      const signal = attemptSignal.current;
+      if (!profile || !signal || signal.aborted) return;
       setError('');
       if (!value.fullName.trim()) {
         setError('Nhập tên người đăng ký hoặc đơn vị.');
@@ -128,9 +130,11 @@ function ConfiguredGoogleSignIn({
           fullName: value.fullName.trim(),
           phone: optionalText(value.phone),
         });
+        if (signal.aborted) return;
         writePendingEmail({ ...data, mode: 'register' });
         await navigate({ to: '/verify-otp', search: {} });
       } catch (cause) {
+        if (signal.aborted) return;
         setError(
           cause instanceof ApiError && cause.status === 409
             ? 'Tài khoản Google hoặc email này đã được dùng. Vui lòng đăng nhập.'
@@ -140,23 +144,26 @@ function ConfiguredGoogleSignIn({
     },
   });
 
-  useEffect(() => {
-    let active = true;
+  // Invalidate the attempt during unmount before a response can update OTP state.
+  useLayoutEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
+    attemptSignal.current = signal;
     let used = false;
     setPhase('loading');
     async function prepare() {
       try {
         const google = await loadGoogleIdentity();
-        if (!active) return;
+        if (signal.aborted) return;
         const { data: challenge } = await authApi.googleChallenge();
-        if (!active || !container.current) return;
+        if (signal.aborted || !container.current) return;
         google.initialize({
           client_id: clientId,
           nonce: challenge.nonce,
           auto_select: false,
           ux_mode: 'popup',
           callback: (response) => {
-            if (!active || used) return;
+            if (signal.aborted || used) return;
             if (!response.credential) {
               setError('Đăng nhập Google đã bị hủy hoặc không hoàn tất. Vui lòng thử lại.');
               setPhase('error');
@@ -172,9 +179,9 @@ function ConfiguredGoogleSignIn({
                   credential: response.credential as string,
                   intent,
                 });
-                if (active) await accept(data);
+                if (!signal.aborted) await accept(data);
               } catch (cause: unknown) {
-                if (!active) return;
+                if (signal.aborted) return;
                 setError(
                   cause instanceof ApiError
                     ? cause.status === 409
@@ -195,7 +202,7 @@ function ConfiguredGoogleSignIn({
           locale: 'vi',
           text: intent === GOOGLE_AUTH_INTENT.LOGIN ? 'signin_with' : 'signup_with',
           click_listener: () => {
-            if (active && !used) {
+            if (!signal.aborted && !used) {
               setError('');
               setPhase(GOOGLE_SIGN_IN_PHASE.WAITING);
             }
@@ -203,7 +210,7 @@ function ConfiguredGoogleSignIn({
         });
         setPhase(GOOGLE_SIGN_IN_PHASE.READY);
       } catch (cause) {
-        if (!active) return;
+        if (signal.aborted) return;
         setError(
           cause instanceof ApiError
             ? cause.message
@@ -213,9 +220,7 @@ function ConfiguredGoogleSignIn({
       }
     }
     void prepare();
-    return () => {
-      active = false;
-    };
+    return () => controller.abort();
   }, [clientId, intent, attempt]);
 
   function restart() {

@@ -1,5 +1,20 @@
 # Progress
 
+## 2026-11-20: Finish Google profile response handling (#54)
+
+Scope: keep the Google profile completion request tied to its current attempt.
+Invalidate the attempt during unmount or replacement so late responses cannot
+change the pending OTP session, navigate, or show a stale error.
+
+- `node apps/web/test/api-integration.check.mjs` reproduced the OTP session
+  overwrite with passive cleanup, then passed with layout cleanup. The regression
+  also checks that the abandoned form does not navigate. Active submission and
+  existing Google callback cases passed.
+- Web format check, typecheck, client and SSR build, 87 unit tests and all nine
+  web check scripts passed. `git diff --check` passed.
+- Independent review reran the integration check and verified the final cleanup
+  timing. Google Identity and HTTP responses were mocked in these checks.
+
 ## 2026-11-20: Verify workspace and publish to main
 
 Scope: commit the current OCOP API, web, tests and project documentation to
