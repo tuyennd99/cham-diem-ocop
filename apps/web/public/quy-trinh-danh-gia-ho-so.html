@@ -121,21 +121,21 @@
   </style>
 </head>
 <body class="bg-[var(--background)] text-[var(--foreground)] antialiased m-0 p-3 md:p-4 select-none">
-  <div class="max-w-[1440px] mx-auto space-y-3">
+  <div class="max-w-360 mx-auto space-y-3">
 
     <!-- Header & Controls -->
-    <header class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5 space-y-2.5 shadow-sm">
+    <header class="bg-card border border-border rounded-xl p-3.5 space-y-2.5 shadow-sm">
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
           <div class="flex items-center gap-2 flex-wrap">
-            <span class="px-2 py-0.5 text-xs font-semibold rounded-md bg-[var(--primary)] text-[var(--primary-foreground)]">
+            <span class="px-2 py-0.5 text-xs font-semibold rounded-md bg-primary text-primary-foreground">
               OCOP Workflow
             </span>
-            <h1 class="text-sm md:text-base font-bold text-[var(--foreground)]">
+            <h1 class="text-sm md:text-base font-bold text-foreground">
               Quy trình đánh giá hồ sơ OCOP (Sơ đồ phân làn tương tác)
             </h1>
           </div>
-          <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
+          <p class="text-xs text-muted-foreground mt-0.5">
             Nộp hồ sơ → Chủ trì/Quản trị duyệt hoặc trả kèm lý do → Tự phân công &amp; Giám khảo chấm → Tính điểm &amp; Công bố kết quả.
           </p>
         </div>
@@ -146,9 +146,9 @@
             id="toggleReopenBtn"
             type="button"
             onclick="toggleReopenBranch()"
-            class="px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:border-[var(--primary)] text-xs font-medium flex items-center gap-1.5 transition"
+            class="px-2.5 py-1.5 rounded-lg border border-border bg-background hover:border-primary text-xs font-medium flex items-center gap-1.5 transition"
           >
-            <span id="reopenCheckIcon" class="w-3.5 h-3.5 rounded border border-[var(--border)] inline-flex items-center justify-center text-[10px]"></span>
+            <span id="reopenCheckIcon" class="w-3.5 h-3.5 rounded border border-border inline-flex items-center justify-center text-[10px]"></span>
             <span>Nhánh Mở lại (<code class="font-mono text-[11px]">UPDATING</code>)</span>
           </button>
 
@@ -156,7 +156,7 @@
             id="standaloneThemeBtn"
             type="button"
             onclick="toggleStandaloneTheme()"
-            class="hidden px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:border-[var(--primary)] text-xs font-medium transition"
+            class="hidden px-2.5 py-1.5 rounded-lg border border-border bg-background hover:border-primary text-xs font-medium transition"
           >
             🌙 Giao diện Tối
           </button>
@@ -164,10 +164,10 @@
       </div>
 
       <!-- Control Bar: Role Filter & Scenario Walkthrough -->
-      <div class="grid grid-cols-1 xl:grid-cols-12 gap-2.5 pt-2 border-t border-[var(--card-border)]">
+      <div class="grid grid-cols-1 xl:grid-cols-12 gap-2.5 pt-2 border-t border-(--card-border)">
         <!-- Role Filter -->
         <div class="xl:col-span-5 flex flex-col gap-1">
-          <div class="text-xs font-semibold text-[var(--muted-foreground)] flex items-center justify-between">
+          <div class="text-xs font-semibold text-muted-foreground flex items-center justify-between">
             <span>1. Lọc theo vai trò (Ai làm gì):</span>
             <span class="font-mono text-[11px]">4 làn</span>
           </div>
@@ -176,9 +176,9 @@
 
         <!-- Scenario Runner -->
         <div class="xl:col-span-7 flex flex-col gap-1">
-          <div class="text-xs font-semibold text-[var(--muted-foreground)] flex items-center justify-between flex-wrap gap-1">
+          <div class="text-xs font-semibold text-muted-foreground flex items-center justify-between flex-wrap gap-1">
             <span>2. Mô phỏng từng bước theo kịch bản:</span>
-            <span id="scenarioProgressText" class="font-mono text-[11px] text-[var(--primary)]">Chế độ tự do: Bấm vào bước bất kỳ</span>
+            <span id="scenarioProgressText" class="font-mono text-[11px] text-primary">Chế độ tự do: Bấm vào bước bất kỳ</span>
           </div>
           <div class="flex flex-wrap items-center gap-1">
             <div id="scenarioButtons" class="flex flex-wrap gap-1"></div>
@@ -187,7 +187,7 @@
                 id="prevStepBtn"
                 type="button"
                 onclick="stepScenario(-1)"
-                class="px-2 py-1 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:border-[var(--primary)] disabled:opacity-40 disabled:pointer-events-none text-xs font-medium"
+                class="px-2 py-1 rounded-lg border border-border bg-background hover:border-primary disabled:opacity-40 disabled:pointer-events-none text-xs font-medium"
               >
                 ◀ Trước
               </button>
@@ -195,7 +195,7 @@
                 id="nextStepBtn"
                 type="button"
                 onclick="stepScenario(1)"
-                class="px-2 py-1 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 disabled:opacity-40 disabled:pointer-events-none text-xs font-medium"
+                class="px-2 py-1 rounded-lg bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-40 disabled:pointer-events-none text-xs font-medium"
               >
                 Tiếp ▶
               </button>
@@ -205,63 +205,63 @@
       </div>
 
       <!-- Role Summary Banner -->
-      <div class="rounded-lg px-2.5 py-1.5 bg-[var(--background)] border border-[var(--card-border)] text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-        <div id="roleSummaryText" class="text-[var(--foreground)]"></div>
+      <div class="rounded-lg px-2.5 py-1.5 bg-background border border-(--card-border) text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+        <div id="roleSummaryText" class="text-foreground"></div>
       </div>
     </header>
 
     <!-- Compact Active Step Bar (Visible on narrower side-panes < 1024px) -->
-    <div id="compactStepBar" class="lg:hidden bg-[var(--card)] border border-[var(--primary)] rounded-xl p-3 space-y-2 shadow-sm"></div>
+    <div id="compactStepBar" class="lg:hidden bg-card border border-primary rounded-xl p-3 space-y-2 shadow-sm"></div>
 
     <!-- Main Workspace: Swimlane Diagram (Left) + Inspector Panel (Right) -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-3.5 items-start">
 
       <!-- Left: 4-Lane Swimlane Diagram -->
-      <section class="lg:col-span-8 bg-[var(--card)] border border-[var(--border)] rounded-xl p-2.5 md:p-3.5 overflow-x-auto shadow-sm">
-        <div class="min-w-[540px]">
+      <section class="lg:col-span-8 bg-card border border-border rounded-xl p-2.5 md:p-3.5 overflow-x-auto shadow-sm">
+        <div class="min-w-135">
           <!-- Swimlane Column Headers -->
           <div class="grid grid-cols-4 gap-3.5 mb-3">
-            <div id="lane-header-owner" onclick="setRoleFilter('owner')" class="cursor-pointer p-2 border-b border-[var(--border)] hover:border-[var(--primary)] transition">
+            <div id="lane-header-owner" onclick="setRoleFilter('owner')" class="cursor-pointer p-2 border-b border-border hover:border-primary transition">
               <div class="flex items-center justify-between gap-1 flex-wrap">
                 <span class="text-xs font-bold">Người dùng</span>
-                <span class="text-[10px] font-mono px-1 py-0.5 rounded bg-[var(--card)] border border-[var(--card-border)] text-[var(--muted-foreground)]">REGISTRANT</span>
+                <span class="text-[10px] font-mono px-1 py-0.5 rounded bg-card border border-(--card-border) text-muted-foreground">REGISTRANT</span>
               </div>
-              <p class="text-[11px] text-[var(--muted-foreground)] mt-0.5 leading-tight">Soạn, nộp, sửa hồ sơ trả &amp; xem kết quả</p>
+              <p class="text-[11px] text-muted-foreground mt-0.5 leading-tight">Soạn, nộp, sửa hồ sơ trả &amp; xem kết quả</p>
             </div>
 
-            <div id="lane-header-chair" onclick="setRoleFilter('chair')" class="cursor-pointer p-2 border-b border-[var(--border)] hover:border-[var(--primary)] transition">
+            <div id="lane-header-chair" onclick="setRoleFilter('chair')" class="cursor-pointer p-2 border-b border-border hover:border-primary transition">
               <div class="flex items-center justify-between gap-1 flex-wrap">
                 <span class="text-xs font-bold">Chủ trì / Quản trị</span>
-                <span class="text-[10px] font-mono px-1 py-0.5 rounded bg-[var(--card)] border border-[var(--card-border)] text-[var(--muted-foreground)]">VIEW/MANAGE</span>
+                <span class="text-[10px] font-mono px-1 py-0.5 rounded bg-card border border-(--card-border) text-muted-foreground">VIEW/MANAGE</span>
               </div>
-              <p class="text-[11px] text-[var(--muted-foreground)] mt-0.5 leading-tight">Duyệt/trả hồ sơ, thêm GK, công bố</p>
+              <p class="text-[11px] text-muted-foreground mt-0.5 leading-tight">Duyệt/trả hồ sơ, thêm GK, công bố</p>
             </div>
 
-            <div id="lane-header-system" onclick="setRoleFilter('system')" class="cursor-pointer p-2 border-b border-[var(--border)] hover:border-[var(--primary)] transition">
+            <div id="lane-header-system" onclick="setRoleFilter('system')" class="cursor-pointer p-2 border-b border-border hover:border-primary transition">
               <div class="flex items-center justify-between gap-1 flex-wrap">
                 <span class="text-xs font-bold">Hệ thống</span>
-                <span class="text-[10px] font-mono px-1 py-0.5 rounded bg-[var(--card)] border border-[var(--card-border)] text-[var(--muted-foreground)]">AUTO</span>
+                <span class="text-[10px] font-mono px-1 py-0.5 rounded bg-card border border-(--card-border) text-muted-foreground">AUTO</span>
               </div>
-              <p class="text-[11px] text-[var(--muted-foreground)] mt-0.5 leading-tight">Kiểm tra, tự phân công, tính điểm &amp; sao</p>
+              <p class="text-[11px] text-muted-foreground mt-0.5 leading-tight">Kiểm tra, tự phân công, tính điểm &amp; sao</p>
             </div>
 
-            <div id="lane-header-judge" onclick="setRoleFilter('judge')" class="cursor-pointer p-2 border-b border-[var(--border)] hover:border-[var(--primary)] transition">
+            <div id="lane-header-judge" onclick="setRoleFilter('judge')" class="cursor-pointer p-2 border-b border-border hover:border-primary transition">
               <div class="flex items-center justify-between gap-1 flex-wrap">
                 <span class="text-xs font-bold">Giám khảo</span>
-                <span class="text-[10px] font-mono px-1 py-0.5 rounded bg-[var(--card)] border border-[var(--card-border)] text-[var(--muted-foreground)]">SCORE</span>
+                <span class="text-[10px] font-mono px-1 py-0.5 rounded bg-card border border-(--card-border) text-muted-foreground">SCORE</span>
               </div>
-              <p class="text-[11px] text-[var(--muted-foreground)] mt-0.5 leading-tight">Lưu nháp phiếu &amp; nộp phiếu chấm</p>
+              <p class="text-[11px] text-muted-foreground mt-0.5 leading-tight">Lưu nháp phiếu &amp; nộp phiếu chấm</p>
             </div>
           </div>
 
           <!-- Swimlane Canvas with SVG Overlay -->
-          <div id="canvasContainer" class="relative rounded-xl border border-[var(--card-border)] bg-[var(--background)] px-3 pt-5 pb-9">
+          <div id="canvasContainer" class="relative rounded-xl border border-(--card-border) bg-background px-3 pt-5 pb-9">
             <!-- Background vertical lane columns -->
             <div class="pointer-events-none absolute inset-3 grid grid-cols-4 gap-3.5">
-              <div class="rounded-lg border border-dashed border-[var(--card-border)] opacity-55"></div>
-              <div class="rounded-lg border border-dashed border-[var(--card-border)] opacity-55"></div>
-              <div class="rounded-lg border border-dashed border-[var(--card-border)] opacity-55"></div>
-              <div class="rounded-lg border border-dashed border-[var(--card-border)] opacity-55"></div>
+              <div class="rounded-lg border border-dashed border-(--card-border) opacity-55"></div>
+              <div class="rounded-lg border border-dashed border-(--card-border) opacity-55"></div>
+              <div class="rounded-lg border border-dashed border-(--card-border) opacity-55"></div>
+              <div class="rounded-lg border border-dashed border-(--card-border) opacity-55"></div>
             </div>
 
             <!-- SVG Connector Layer -->
@@ -274,14 +274,14 @@
           </div>
 
           <!-- Legend -->
-          <div class="flex flex-wrap items-center justify-between gap-2 mt-2.5 pt-2 border-t border-[var(--card-border)] text-xs text-[var(--muted-foreground)]">
+          <div class="flex flex-wrap items-center justify-between gap-2 mt-2.5 pt-2 border-t border-(--card-border) text-xs text-muted-foreground">
             <div class="flex flex-wrap items-center gap-3">
               <span class="inline-flex items-center gap-1.5">
-                <span class="w-2.5 h-2.5 rounded-full bg-[var(--primary)] inline-block"></span>
+                <span class="w-2.5 h-2.5 rounded-full bg-primary inline-block"></span>
                 Bước đang chọn &amp; nhánh chuyển tiếp
               </span>
               <span class="inline-flex items-center gap-1.5">
-                <span class="w-2.5 h-2.5 rotate-45 border border-[var(--primary)] inline-block"></span>
+                <span class="w-2.5 h-2.5 rotate-45 border border-primary inline-block"></span>
                 Điểm xét quyết định (Rẽ nhánh)
               </span>
             </div>
@@ -291,7 +291,7 @@
       </section>
 
       <!-- Right: Step Detail Inspector -->
-      <aside id="fullInspectorPanel" class="lg:col-span-4 bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5 space-y-3.5 lg:sticky lg:top-4 shadow-sm">
+      <aside id="fullInspectorPanel" class="lg:col-span-4 bg-card border border-border rounded-xl p-3.5 space-y-3.5 lg:sticky lg:top-4 shadow-sm">
         <div id="inspectorContent">
           <!-- Populated dynamically by JS -->
         </div>
@@ -299,14 +299,14 @@
     </div>
 
     <!-- Bottom Reference Tabs: Status Guide & Code/Test Mapping -->
-    <section class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5 space-y-3 shadow-sm">
-      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--card-border)] pb-2">
+    <section class="bg-card border border-border rounded-xl p-3.5 space-y-3 shadow-sm">
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-(--card-border) pb-2">
         <div class="flex items-center gap-1.5 flex-wrap">
           <button
             id="tabBtnStatus"
             type="button"
             onclick="switchBottomTab('status')"
-            class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[var(--primary)] text-[var(--primary-foreground)] transition"
+            class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-primary text-primary-foreground transition"
           >
             Đọc theo trạng thái hồ sơ (6 trạng thái)
           </button>
@@ -314,12 +314,12 @@
             id="tabBtnCode"
             type="button"
             onclick="switchBottomTab('code')"
-            class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[var(--background)] text-[var(--foreground)] border border-[var(--border)] transition"
+            class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-background text-foreground border border-border transition"
           >
             Code &amp; Test đối chiếu (4 nhóm luồng)
           </button>
         </div>
-        <span class="text-xs text-[var(--muted-foreground)]">
+        <span class="text-xs text-muted-foreground">
           Bấm vào từng mục bên dưới để chọn nhanh bước tương ứng trên sơ đồ
         </span>
       </div>

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import AlertError from '@/components/alert-error';
-import { FormField } from '@/components/form-field';
 import PageSpin from '@/components/page-spin';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,7 +12,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import {
   ADMIN_PRODUCT_DETAIL_TAB,
   EVALUATION_STATUS,
@@ -31,6 +29,7 @@ import {
   useAdminProductResults,
   type AdminProductMode,
 } from '../../queries/admin-products';
+import { AssignmentActionDialog } from './product-detail/AssignmentActionDialog';
 
 const EVALUATION_STATUS_LABEL: Record<string, string> = {
   IN_PROGRESS: 'Đang chấm (nháp)',
@@ -274,60 +273,23 @@ export function AdminProductResultsPage({
         </DialogContent>
       </Dialog>
 
-      <Dialog
+      <AssignmentActionDialog
         open={reopenTarget !== null}
-        onOpenChange={(open) => {
-          if (!open && !reopenBusy) {
-            setReopenTarget(null);
-            setReopenError('');
-          }
+        kind='reopen-evaluation'
+        judgeName={reopenTarget?.judgeName ?? ''}
+        contextSummary={product.name}
+        reason={reopenReason}
+        reasonFieldId='results-reopen-evaluation-reason'
+        error={reopenError}
+        busy={reopenBusy}
+        onReasonChange={setReopenReason}
+        onClose={() => {
+          if (reopenBusy) return;
+          setReopenTarget(null);
+          setReopenError('');
         }}
-      >
-        <DialogContent className='admin-dialog' data-admin-ui='true'>
-          <DialogHeader>
-            <DialogTitle>Mở lại phiếu chấm: {reopenTarget?.judgeName ?? ''}</DialogTitle>
-            <DialogDescription>
-              Phiếu chấm sẽ chuyển về trạng thái đang chấm nháp để giám khảo chỉnh sửa và nộp lại.
-            </DialogDescription>
-          </DialogHeader>
-          <div className='admin-form'>
-            <FormField label='Lý do mở lại (tùy chọn)' htmlFor='results-reopen-evaluation-reason'>
-              <Input
-                id='results-reopen-evaluation-reason'
-                value={reopenReason}
-                maxLength={255}
-                disabled={reopenBusy}
-                placeholder='Nhập lý do thao tác…'
-                onChange={(event) => setReopenReason(event.target.value)}
-              />
-            </FormField>
-            {reopenError && (
-              <AlertError title='Không thể mở lại phiếu chấm' errors={[reopenError]} />
-            )}
-          </div>
-          <DialogFooter>
-            <Button
-              type='button'
-              loading={reopenBusy}
-              disabled={reopenBusy}
-              onClick={() => void confirmReopenEvaluation()}
-            >
-              {reopenBusy ? 'Đang mở lại…' : 'Xác nhận mở lại phiếu'}
-            </Button>
-            <Button
-              type='button'
-              variant='secondary'
-              disabled={reopenBusy}
-              onClick={() => {
-                setReopenTarget(null);
-                setReopenError('');
-              }}
-            >
-              Đóng
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onConfirm={() => void confirmReopenEvaluation()}
+      />
     </section>
   );
 }

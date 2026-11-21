@@ -68,6 +68,7 @@ import {
 import { useMyProduct } from '../../queries/registrant';
 import type { RegistrantProduct } from '../../types/registrant';
 import { AdminProductResultsPage } from './AdminProductResultsPage';
+import { AssignmentActionDialog } from './product-detail/AssignmentActionDialog';
 import { ProductFilesTab } from './product-detail/ProductFilesTab';
 import { ProductInformationTab } from './product-detail/ProductInformationTab';
 import { ProductProgressTab } from './product-detail/ProductProgressTab';
@@ -167,7 +168,6 @@ const ADMIN_MODAL_DIALOG_CONFIG: Record<AdminModalAction, AdminModalDialogConfig
     requireReason: true,
     confirmLabel: 'Xác nhận mở lại hồ sơ',
     pendingLabel: 'Đang mở lại…',
-    successText: 'Đã mở lại hồ sơ để tiếp tục phân công/chấm điểm.',
   },
 };
 
@@ -508,6 +508,12 @@ export function AdminProductDetailPage({
   const isCompleted = product.status === PRODUCT_STATUS.COMPLETED;
   const isScoringOrApproved =
     product.status === PRODUCT_STATUS.APPROVED || product.status === PRODUCT_STATUS.SCORING;
+  const showReopenGuidance =
+    canView &&
+    product.status === PRODUCT_STATUS.SCORING &&
+    adminProduct?.resultHistory?.some(
+      (item) => item.isCurrent && item.action === 'PRODUCT_REOPENED',
+    );
   const isPublished = product.publicationState === PRODUCT_PUBLICATION_STATE.PUBLISHED;
   const isUpdatingResult = product.publicationState === PRODUCT_PUBLICATION_STATE.UPDATING;
   const resultReady =
@@ -733,6 +739,32 @@ export function AdminProductDetailPage({
           </>
         }
       />
+
+      {showReopenGuidance && (
+        <div className='border-border bg-secondary/70 space-y-2 rounded-lg border p-4 text-sm'>
+          <div role='status' className='space-y-1'>
+            <p className='font-semibold'>Hồ sơ đã được mở lại</p>
+            <ul className='list-disc space-y-1 pl-5'>
+              <li>
+                Chọn <strong>Mở lại phiếu</strong> ở dòng giám khảo đã nộp để người đó sửa điểm.
+              </li>
+              <li>
+                Chọn <strong>Bổ sung giám khảo</strong> nếu cần thêm phiếu chấm.
+              </li>
+            </ul>
+          </div>
+          {selectedTab !== ADMIN_PRODUCT_DETAIL_TAB.PROGRESS && (
+            <Button
+              type='button'
+              size='sm'
+              variant='outline'
+              onClick={() => changeDetailTab(ADMIN_PRODUCT_DETAIL_TAB.PROGRESS)}
+            >
+              Đến tab Tiến độ
+            </Button>
+          )}
+        </div>
+      )}
 
       {product.returnReason && (
         <div
@@ -1069,99 +1101,43 @@ export function AdminProductDetailPage({
             </DialogContent>
           </Dialog>
 
-          <Dialog
+          <AssignmentActionDialog
             open={assignmentModal !== null}
-            onOpenChange={(open) => {
-              if (!open) requestCloseDialog();
+            kind={assignmentModal?.kind ?? 'reopen-evaluation'}
+            judgeName={assignmentModal?.judgeName ?? ''}
+            contextSummary={`${product.name} · Mã hồ sơ: ${displayProductCode(product)}`}
+            reason={reason}
+            reasonFieldId='admin-assignment-action-reason'
+            error={error}
+            busy={busy}
+            onReasonChange={setReason}
+            onClose={requestCloseDialog}
+            onConfirm={() => {
+              if (!assignmentModal) return;
+              if (assignmentModal.kind === 'reopen-evaluation') {
+                void runAdmin(
+                  (confirmedReason) =>
+                    actions.reopenEvaluation(
+                      assignmentModal.evaluationId,
+                      confirmedReason || undefined,
+                    ),
+                  {
+                    requireReason: false,
+                    successText: 'Đã mở lại phiếu chấm để giám khảo chỉnh sửa.',
+                  },
+                );
+                return;
+              }
+              void runAdmin(
+                (confirmedReason) =>
+                  actions.removeAssignment(assignmentModal.judgeId, confirmedReason || undefined),
+                {
+                  requireReason: false,
+                  successText: 'Đã gỡ giám khảo khỏi hồ sơ.',
+                },
+              );
             }}
-          >
-            <DialogContent className='admin-dialog' data-admin-ui='true'>
-              <DialogHeader>
-                <DialogTitle>
-                  {assignmentModal?.kind === 'reopen-evaluation'
-                    ? `Mở lại phiếu chấm: ${assignmentModal.judgeName}`
-                    : `Gỡ giám khảo khỏi hồ sơ: ${assignmentModal?.judgeName ?? ''}`}
-                </DialogTitle>
-                <DialogDescription>
-                  {assignmentModal?.kind === 'reopen-evaluation'
-                    ? 'Phiếu chấm sẽ chuyển về trạng thái đang chấm nháp để giám khảo chỉnh sửa và nộp lại.'
-                    : 'Giám khảo sẽ bị gỡ khỏi phân công của hồ sơ này và phiếu chấm (nếu có) chuyển sang lịch sử.'}
-                </DialogDescription>
-              </DialogHeader>
-              <div className='admin-form'>
-                <FormField
-                  label='Lý do thao tác (tùy chọn)'
-                  htmlFor='admin-assignment-action-reason'
-                >
-                  <Input
-                    id='admin-assignment-action-reason'
-                    value={reason}
-                    maxLength={255}
-                    disabled={busy}
-                    placeholder='Nhập lý do thao tác…'
-                    onChange={(event) => setReason(event.target.value)}
-                  />
-                </FormField>
-                {error && <AlertError title='Không thể thực hiện thao tác' errors={[error]} />}
-                <div className='admin-actions'>
-                  {assignmentModal?.kind === 'reopen-evaluation' ? (
-                    <Button
-                      type='button'
-                      loading={busy}
-                      disabled={busy}
-                      onClick={() =>
-                        void runAdmin(
-                          (confirmedReason) =>
-                            actions.reopenEvaluation(
-                              assignmentModal.evaluationId,
-                              confirmedReason || undefined,
-                            ),
-                          {
-                            requireReason: false,
-                            successText: 'Đã mở lại phiếu chấm để giám khảo chỉnh sửa.',
-                          },
-                        )
-                      }
-                    >
-                      {busy ? 'Đang mở lại…' : 'Xác nhận mở lại phiếu'}
-                    </Button>
-                  ) : (
-                    <Button
-                      type='button'
-                      variant='destructive'
-                      loading={busy}
-                      disabled={busy || !assignmentModal}
-                      onClick={() =>
-                        assignmentModal &&
-                        assignmentModal.kind === 'remove-assignment' &&
-                        void runAdmin(
-                          (confirmedReason) =>
-                            actions.removeAssignment(
-                              assignmentModal.judgeId,
-                              confirmedReason || undefined,
-                            ),
-                          {
-                            requireReason: false,
-                            successText: 'Đã gỡ giám khảo khỏi hồ sơ.',
-                          },
-                        )
-                      }
-                    >
-                      {busy ? 'Đang gỡ…' : 'Xác nhận gỡ giám khảo'}
-                    </Button>
-                  )}
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    disabled={busy}
-                    onClick={requestCloseDialog}
-                  >
-                    Đóng
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+          />
         </>
       )}
 

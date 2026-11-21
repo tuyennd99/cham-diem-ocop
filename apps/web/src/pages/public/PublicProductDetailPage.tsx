@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, Circle, Copy, Link2, ZoomIn } from 'lucide-react';
 import { ImagePreviewDialog } from '@/components/image-preview-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -40,6 +40,43 @@ const PUBLIC_DETAIL_STATUS_COPY = {
   },
 } as const;
 
+const OCOP_PROGRESS_STEPS = [
+  {
+    status: PRODUCT_STATUS.SUBMITTED,
+    label: 'Đã tiếp nhận',
+    summary: 'Hồ sơ được gửi lên hệ thống và chờ kiểm tra điều kiện.',
+  },
+  {
+    status: PRODUCT_STATUS.APPROVED,
+    label: 'Đã duyệt',
+    summary: 'Hồ sơ hợp lệ và được phân công cho hội đồng chấm điểm.',
+  },
+  {
+    status: PRODUCT_STATUS.SCORING,
+    label: 'Đang đánh giá',
+    summary: 'Các giám khảo chấm điểm độc lập theo bộ tiêu chí OCOP.',
+  },
+  {
+    status: PRODUCT_STATUS.COMPLETED,
+    label: 'Hoàn tất & Công bố',
+    summary: 'Tổng hợp điểm chấm và công bố kết quả xếp hạng chính thức.',
+  },
+] as const;
+
+type CopyTarget = 'code' | 'link';
+
+async function writeClipboardText(value: string): Promise<boolean> {
+  if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+    return false;
+  }
+  try {
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function PublicProductNotFound() {
   return (
     <main className='route-main public-product-page' id='content'>
@@ -56,6 +93,160 @@ export function PublicProductNotFound() {
   );
 }
 
+function ProductMediaGallery({
+  product,
+  selectedImageIndex,
+  failedAttachmentIds,
+  onSelectImage,
+  onOpenPreview,
+  onImageError,
+}: {
+  product: PublicProduct;
+  selectedImageIndex: number;
+  failedAttachmentIds: Set<string>;
+  onSelectImage: (index: number) => void;
+  onOpenPreview: (index: number) => void;
+  onImageError: (attachmentId: string) => void;
+}) {
+  const totalImages = product.attachments.length;
+  const activeAttachment = product.attachments[selectedImageIndex];
+  if (!activeAttachment) return null;
+
+  const isPrimaryFailed = failedAttachmentIds.has(activeAttachment.id);
+  const imageNumber = selectedImageIndex + 1;
+
+  return (
+    <section className='public-product-media' aria-labelledby='public-product-media-title'>
+      <div className='public-product-section-head'>
+        <h2 id='public-product-media-title'>Hình ảnh sản phẩm</h2>
+        {totalImages > 1 && (
+          <span className='public-product-media-count'>
+            Ảnh {imageNumber} / {totalImages}
+          </span>
+        )}
+      </div>
+
+      <figure className='public-product-image-frame public-product-image-primary'>
+        {isPrimaryFailed ? (
+          <div
+            className='public-product-image-fallback'
+            role='img'
+            aria-label={`${product.name} — ảnh ${imageNumber}: không tải được hình ảnh này`}
+          >
+            Không tải được hình ảnh này.
+          </div>
+        ) : (
+          <button
+            type='button'
+            className='public-product-zoom-trigger'
+            onClick={() => onOpenPreview(selectedImageIndex)}
+            aria-label={`Xem phóng to ${product.name} — ảnh ${imageNumber}`}
+          >
+            <img
+              src={publicAttachmentUrl(product.id, activeAttachment.id)}
+              alt={`${product.name} — ảnh ${imageNumber}`}
+              loading='eager'
+              decoding='async'
+              onError={() => onImageError(activeAttachment.id)}
+            />
+            <span className='public-product-zoom-pill' aria-hidden='true'>
+              <ZoomIn size={15} strokeWidth={2} />
+              <span>Phóng to</span>
+            </span>
+          </button>
+        )}
+      </figure>
+
+      {totalImages > 1 && (
+        <div className='public-product-thumbs' role='list' aria-label='Chọn hình ảnh sản phẩm'>
+          {product.attachments.map((attachment, index) => {
+            const isActive = index === selectedImageIndex;
+            const isFailed = failedAttachmentIds.has(attachment.id);
+            const thumbNumber = index + 1;
+            return (
+              <div key={attachment.id} role='listitem'>
+                <button
+                  type='button'
+                  className={isActive ? 'public-product-thumb is-active' : 'public-product-thumb'}
+                  onClick={() => onSelectImage(index)}
+                  aria-label={`Xem ${product.name} — ảnh ${thumbNumber}`}
+                  aria-pressed={isActive}
+                >
+                  {isFailed ? (
+                    <span className='public-product-thumb-fallback'>Lỗi ảnh</span>
+                  ) : (
+                    <img
+                      src={publicAttachmentUrl(product.id, attachment.id)}
+                      alt={`${product.name} — ảnh thu nhỏ ${thumbNumber}`}
+                      loading='lazy'
+                      decoding='async'
+                      onError={() => onImageError(attachment.id)}
+                    />
+                  )}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function OcopEvaluationProgress({ status }: { status: PublicProduct['status'] }) {
+  const currentStepIndex = OCOP_PROGRESS_STEPS.findIndex((step) => step.status === status);
+
+  return (
+    <section className='public-product-progress' aria-labelledby='public-product-progress-title'>
+      <div className='public-product-section-head'>
+        <h2 id='public-product-progress-title'>Tiến trình đánh giá OCOP</h2>
+        <span className='public-product-progress-tag'>Thang 100 điểm</span>
+      </div>
+      <ol className='public-product-steps'>
+        {OCOP_PROGRESS_STEPS.map((step, index) => {
+          const stateClass =
+            index < currentStepIndex
+              ? 'is-done'
+              : index === currentStepIndex
+                ? 'is-current'
+                : 'is-upcoming';
+          return (
+            <li key={step.status} className={`public-product-step ${stateClass}`}>
+              <span className='public-product-step-icon' aria-hidden='true'>
+                {index < currentStepIndex ? (
+                  <Check size={14} strokeWidth={2.5} />
+                ) : (
+                  <Circle size={12} strokeWidth={2.2} />
+                )}
+              </span>
+              <div className='public-product-step-body'>
+                <div className='public-product-step-title'>
+                  <strong>{step.label}</strong>
+                  {index === currentStepIndex && (
+                    <span className='public-product-step-now'>Hiện tại</span>
+                  )}
+                </div>
+                <p>{step.summary}</p>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+      <div className='public-product-progress-links'>
+        <span>Điểm tổng hợp và mức xếp hạng sẽ hiển thị tại đây sau khi công bố.</span>
+        <div className='public-product-progress-actions'>
+          <Link className='text-link' to='/' hash='workflow'>
+            Xem quy trình OCOP
+          </Link>
+          <Link className='text-link' to='/' hash='criteria'>
+            Xem bộ tiêu chí đánh giá
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function PublicProductDetailPage({ id }: { id: string }) {
   const {
     data: product,
@@ -65,8 +256,32 @@ export function PublicProductDetailPage({ id }: { id: string }) {
     refetch,
   } = usePublicProduct<PublicProduct>(id);
   const [failedAttachmentIds, setFailedAttachmentIds] = useState<Set<string>>(() => new Set());
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [previewImageIndex, setPreviewImageIndex] = useState<number | null>(null);
+  const [copiedTarget, setCopiedTarget] = useState<CopyTarget | null>(null);
   const isNotFound = loadError instanceof ApiError && loadError.status === HTTP_STATUS.NOT_FOUND;
+
+  useEffect(() => {
+    setSelectedImageIndex(0);
+    setPreviewImageIndex(null);
+    setCopiedTarget(null);
+  }, [id]);
+
+  useEffect(() => {
+    if (!copiedTarget) return;
+    const timeoutId = window.setTimeout(() => setCopiedTarget(null), 2000);
+    return () => window.clearTimeout(timeoutId);
+  }, [copiedTarget]);
+
+  const handleImageError = (attachmentId: string) => {
+    setFailedAttachmentIds((current) => new Set(current).add(attachmentId));
+  };
+
+  const handleCopy = async (target: CopyTarget, value: string) => {
+    if (await writeClipboardText(value)) {
+      setCopiedTarget(target);
+    }
+  };
 
   if (isNotFound) return <PublicProductNotFound />;
 
@@ -117,20 +332,33 @@ export function PublicProductDetailPage({ id }: { id: string }) {
 
   const statusCopy = PUBLIC_DETAIL_STATUS_COPY[product.status];
   const hasImages = product.attachments.length > 0;
+  const activeImageIndex = hasImages
+    ? Math.min(selectedImageIndex, product.attachments.length - 1)
+    : 0;
   const hasDescription = Boolean(product.description?.trim());
   const layoutClass = !hasImages ? ' public-product-layout--no-image' : '';
+  const productCode = displayProductCode(product);
 
   return (
     <main className='route-main public-product-page' id='content'>
       <div className='route-container container'>
         <article className='public-product-detail' aria-labelledby='public-product-title'>
           <header className='public-product-detail-header'>
-            <Button asChild variant='secondary' className='public-product-back'>
-              <Link to='/products'>
-                <ArrowLeft aria-hidden='true' size={20} strokeWidth={2} />
-                <span>Danh sách sản phẩm</span>
-              </Link>
-            </Button>
+            <div className='public-product-topbar'>
+              <Button asChild variant='secondary' className='public-product-back'>
+                <Link to='/products'>
+                  <ArrowLeft aria-hidden='true' size={20} strokeWidth={2} />
+                  <span>Danh sách sản phẩm</span>
+                </Link>
+              </Button>
+              <nav className='public-product-breadcrumb' aria-label='Đường dẫn trang'>
+                <Link to='/'>Trang chủ</Link>
+                <ChevronRight size={14} aria-hidden='true' />
+                <Link to='/products'>Tra cứu</Link>
+                <ChevronRight size={14} aria-hidden='true' />
+                <span aria-current='page'>{product.name}</span>
+              </nav>
+            </div>
             <div className='public-product-detail-heading'>
               <Badge
                 variant='outline'
@@ -160,55 +388,72 @@ export function PublicProductDetailPage({ id }: { id: string }) {
 
           <div className={'public-product-layout' + layoutClass}>
             {hasImages && (
-              <section
-                className='public-product-media'
-                aria-labelledby='public-product-media-title'
-              >
-                <h2 id='public-product-media-title'>Hình ảnh sản phẩm</h2>
-                <figure className='public-product-image-frame public-product-image-primary'>
-                  {failedAttachmentIds.has(product.attachments[0].id) ? (
-                    <div
-                      className='public-product-image-fallback'
-                      role='img'
-                      aria-label={product.name + ' — ảnh 1: không tải được hình ảnh này'}
-                    >
-                      Không tải được hình ảnh này.
-                    </div>
-                  ) : (
-                    <button
-                      type='button'
-                      className='block size-full cursor-zoom-in border-0 bg-transparent p-0'
-                      onClick={() => setPreviewImageIndex(0)}
-                      aria-label={`Xem phóng to ${product.name} — ảnh 1`}
-                    >
-                      <img
-                        src={publicAttachmentUrl(product.id, product.attachments[0].id)}
-                        alt={product.name + ' — ảnh 1'}
-                        loading='eager'
-                        decoding='async'
-                        onError={() =>
-                          setFailedAttachmentIds((current) =>
-                            new Set(current).add(product.attachments[0].id),
-                          )
-                        }
-                      />
-                    </button>
-                  )}
-                </figure>
-              </section>
+              <ProductMediaGallery
+                product={product}
+                selectedImageIndex={activeImageIndex}
+                failedAttachmentIds={failedAttachmentIds}
+                onSelectImage={setSelectedImageIndex}
+                onOpenPreview={setPreviewImageIndex}
+                onImageError={handleImageError}
+              />
             )}
 
             <div className='public-product-content'>
               <section className='public-product-info' aria-labelledby='public-product-info-title'>
-                <h2 id='public-product-info-title'>Thông tin sản phẩm</h2>
+                <div className='public-product-section-head'>
+                  <h2 id='public-product-info-title'>Thông tin sản phẩm</h2>
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    size='sm'
+                    className='public-product-share-btn'
+                    onClick={() => {
+                      if (typeof window !== 'undefined') {
+                        void handleCopy('link', window.location.href);
+                      }
+                    }}
+                  >
+                    {copiedTarget === 'link' ? (
+                      <Check size={14} aria-hidden='true' />
+                    ) : (
+                      <Link2 size={14} aria-hidden='true' />
+                    )}
+                    <span className='leading-none'>
+                      {copiedTarget === 'link' ? 'Đã sao chép liên kết' : 'Chia sẻ liên kết'}
+                    </span>
+                  </Button>
+                </div>
                 <dl className='public-product-facts'>
                   <div>
                     <dt>Danh mục</dt>
-                    <dd>{product.category.name}</dd>
+                    <dd>
+                      <Link
+                        className='public-product-category-link'
+                        to='/products'
+                        search={{ categoryId: product.category.id }}
+                      >
+                        {product.category.name}
+                      </Link>
+                    </dd>
                   </div>
                   <div>
                     <dt>Mã hồ sơ</dt>
-                    <dd>{displayProductCode(product)}</dd>
+                    <dd className='public-product-code-value'>
+                      <span>{productCode}</span>
+                      <button
+                        type='button'
+                        className='public-product-copy-btn'
+                        onClick={() => void handleCopy('code', productCode)}
+                        aria-label={`Sao chép mã hồ sơ ${productCode}`}
+                        title={copiedTarget === 'code' ? 'Đã sao chép' : 'Sao chép mã hồ sơ'}
+                      >
+                        {copiedTarget === 'code' ? (
+                          <Check size={14} aria-hidden='true' />
+                        ) : (
+                          <Copy size={14} aria-hidden='true' />
+                        )}
+                      </button>
+                    </dd>
                   </div>
                   <div>
                     <dt>Ngày tạo</dt>
@@ -229,7 +474,7 @@ export function PublicProductDetailPage({ id }: { id: string }) {
                 </section>
               )}
 
-              {product.status === PRODUCT_STATUS.COMPLETED && (
+              {product.status === PRODUCT_STATUS.COMPLETED ? (
                 <section
                   className='public-product-result'
                   aria-labelledby='public-product-result-title'
@@ -263,6 +508,8 @@ export function PublicProductDetailPage({ id }: { id: string }) {
                     </p>
                   )}
                 </section>
+              ) : (
+                <OcopEvaluationProgress status={product.status} />
               )}
             </div>
 
@@ -276,49 +523,6 @@ export function PublicProductDetailPage({ id }: { id: string }) {
               </section>
             )}
           </div>
-
-          {product.attachments.length > 1 && (
-            <section
-              className='public-product-gallery'
-              aria-labelledby='public-product-gallery-title'
-            >
-              <h2 id='public-product-gallery-title'>Hình ảnh khác</h2>
-              <div className='public-product-image-grid'>
-                {product.attachments.slice(1).map((attachment, index) => (
-                  <figure className='public-product-image-frame' key={attachment.id}>
-                    {failedAttachmentIds.has(attachment.id) ? (
-                      <div
-                        className='public-product-image-fallback'
-                        role='img'
-                        aria-label={
-                          product.name + ' — ảnh ' + (index + 2) + ': không tải được hình ảnh này'
-                        }
-                      >
-                        Không tải được hình ảnh này.
-                      </div>
-                    ) : (
-                      <button
-                        type='button'
-                        className='block size-full cursor-zoom-in border-0 bg-transparent p-0'
-                        onClick={() => setPreviewImageIndex(index + 1)}
-                        aria-label={`Xem phóng to ${product.name} — ảnh ${index + 2}`}
-                      >
-                        <img
-                          src={publicAttachmentUrl(product.id, attachment.id)}
-                          alt={product.name + ' — ảnh ' + (index + 2)}
-                          loading='lazy'
-                          decoding='async'
-                          onError={() =>
-                            setFailedAttachmentIds((current) => new Set(current).add(attachment.id))
-                          }
-                        />
-                      </button>
-                    )}
-                  </figure>
-                ))}
-              </div>
-            </section>
-          )}
 
           <ImagePreviewDialog
             items={product.attachments.map((att, idx) => ({

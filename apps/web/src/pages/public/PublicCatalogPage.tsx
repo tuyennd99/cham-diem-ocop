@@ -214,12 +214,8 @@ export function PublicCatalogPage({
             Chưa tải được danh sách danh mục sản phẩm. Bạn vẫn có thể tìm theo tên hoặc mã hồ sơ.
           </p>
         )}
-        <p className='result-count' aria-live='polite'>
-          {loading
-            ? 'Đang tải hồ sơ…'
-            : productError
-              ? 'Tạm thời chưa tải được dữ liệu'
-              : `${meta.total} hồ sơ`}
+        <p className='sr-only' role='status'>
+          {loading ? 'Đang tải hồ sơ…' : productError ? '' : `${meta.total} hồ sơ`}
         </p>
         {!loading && productError && (
           <div className='state-panel state-panel-error' role='alert'>
@@ -342,12 +338,7 @@ export function PublicCatalogPage({
                     </dl>
                     <div className='record-result'>
                       {product.publicationState !== 'UNPUBLISHED' && product.starRating ? (
-                        <div className='rating-block'>
-                          <strong>{product.starRating} sao</strong>
-                          <span className='stars' aria-hidden='true'>
-                            ★{product.starRating > 1 ? ` × ${product.starRating}` : ''}
-                          </span>
-                        </div>
+                        <strong className='record-rating'>{product.starRating} sao</strong>
                       ) : (
                         <p className='no-rating'>Chưa có kết quả đánh giá</p>
                       )}

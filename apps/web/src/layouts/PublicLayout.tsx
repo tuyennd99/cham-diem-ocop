@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { STAFF_PERMISSION, USER_ROLE } from '@ocop/shared';
-import { Link, Outlet, useNavigate } from '@tanstack/react-router';
+import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import {
   FileSpreadsheet,
   FileText,
@@ -27,6 +27,7 @@ import { hasStaffPermission } from '../lib/session-contract';
 export function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   const session = useSession();
   const signedIn = Boolean(session);
   const user = session?.user;
@@ -34,6 +35,9 @@ export function SiteHeader() {
   const canView = hasStaffPermission(user, STAFF_PERMISSION.VIEW);
   const canManage = hasStaffPermission(user, STAFF_PERMISSION.MANAGE);
   const canScore = hasStaffPermission(user, STAFF_PERMISSION.SCORE);
+  const isCatalogRoute = pathname === '/products' || pathname.startsWith('/products/');
+  const isHomeRoute = pathname === '/';
+  const showPublicContextBadge = signedIn && !isRegistrant && (isHomeRoute || isCatalogRoute);
   const workPath = session
     ? homeFor(session.user.role, session.user.staffPermissions, '/my/products/new')
     : '/my/products/new';
@@ -67,10 +71,21 @@ export function SiteHeader() {
           <span className='sr-only'>{menuOpen ? 'Đóng menu' : 'Mở menu'}</span>
         </button>
         <nav className='primary-nav' id='primary-nav' aria-label='Điều hướng chính'>
-          <Link to='/' hash='home' onClick={() => setMenuOpen(false)}>
+          <Link
+            to='/'
+            hash='home'
+            className={isHomeRoute ? 'is-active' : undefined}
+            aria-current={isHomeRoute ? 'page' : undefined}
+            onClick={() => setMenuOpen(false)}
+          >
             Trang chủ
           </Link>
-          <Link to='/products' onClick={() => setMenuOpen(false)}>
+          <Link
+            to='/products'
+            className={isCatalogRoute ? 'is-active' : undefined}
+            aria-current={isCatalogRoute ? 'page' : undefined}
+            onClick={() => setMenuOpen(false)}
+          >
             Tra cứu
           </Link>
           <Link to='/' hash='workflow' onClick={() => setMenuOpen(false)}>
@@ -111,6 +126,7 @@ export function SiteHeader() {
             </Link>
           ) : (
             <>
+              {showPublicContextBadge && <span className='header-public-mode'>Xem công khai</span>}
               <span className='header-user-name'>{user?.fullName}</span>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
