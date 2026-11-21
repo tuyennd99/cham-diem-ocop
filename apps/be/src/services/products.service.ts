@@ -35,7 +35,10 @@ import type {
 } from '../types/auth';
 import type { UploadedPrivateFile } from '../types/files';
 import type { ProductMutationActor } from '../types/product-mutation';
-import { inspectProductUpload } from '../utils/product-files';
+import {
+  inspectProductUpload,
+  isVideoAttachmentName,
+} from '../utils/product-files';
 import {
   MAX_IMAGE_BYTES,
   openStoredFile,
@@ -116,16 +119,20 @@ export class ProductsService {
     return product;
   }
 
-  async getPublicAttachment(productId: string, attachmentId: string) {
+  async getPublicAttachment(
+    productId: string,
+    attachmentId: string,
+    rangeHeader?: string,
+  ) {
     const file = await this.repository.findAttachment(productId, attachmentId);
-    if (
-      !file ||
-      file.type !== AttachmentType.IMAGE ||
-      !publicStatuses.has(file.product.status)
-    ) {
+    const isPublicMedia =
+      file !== null &&
+      (file.type === AttachmentType.IMAGE ||
+        isVideoAttachmentName(file.fileName));
+    if (!file || !isPublicMedia || !publicStatuses.has(file.product.status)) {
       throw new NotFoundException('Attachment not found');
     }
-    return this.asFile(file.filePath, file.fileName);
+    return this.asFile(file.filePath, file.fileName, rangeHeader);
   }
 
   async listMine(
@@ -512,8 +519,12 @@ export class ProductsService {
     return resolveStoredPath(storageKey, this.root);
   }
 
-  private asFile(storageKey: string, originalName: string) {
-    return openStoredFile(storageKey, originalName, this.root);
+  private asFile(
+    storageKey: string,
+    originalName: string,
+    rangeHeader?: string,
+  ) {
+    return openStoredFile(storageKey, originalName, this.root, rangeHeader);
   }
 
   listRegistrationUnits(registrantId: string) {

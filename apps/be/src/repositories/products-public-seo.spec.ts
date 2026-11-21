@@ -1,4 +1,8 @@
-import { ProductPublicationState, ProductStatus } from '@prisma/client';
+import {
+  AttachmentType,
+  ProductPublicationState,
+  ProductStatus,
+} from '@prisma/client';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { PublicProductQueryDto } from '../dtos/products.dto';
@@ -275,5 +279,76 @@ describe('Public product SEO eligibility and query filtering', () => {
         starRating: null,
       }),
     );
+  });
+
+  it('splits public images and videos in findPublicById and restricts getPublicAttachment to public images/videos only', async () => {
+    const findFirst = jest.fn().mockResolvedValue({
+      id: 'prod-with-video',
+      codeNumber: 23,
+      name: 'Hạt dẻ Trùng Khánh',
+      description: 'Có video giới thiệu.',
+      status: ProductStatus.SCORING,
+      approvedAt: new Date('2026-10-01T00:00:00.000Z'),
+      publicationState: ProductPublicationState.UNPUBLISHED,
+      publishedAt: null,
+      finalScore: null,
+      starRating: null,
+      createdAt: new Date('2026-10-01T00:00:00.000Z'),
+      category: { id: 'cat-1', name: 'Rau, củ, quả, hạt tươi' },
+      attachments: [
+        { id: 'att-img', fileName: 'anh-1.jpg' },
+        { id: 'att-vid', fileName: 'gioi-thieu.mp4' },
+      ],
+    });
+    const findAttachment = jest.fn();
+    const prisma = {
+      product: { findFirst },
+      attachment: { findFirst: findAttachment },
+    } as unknown as PrismaService;
+
+    const repo = new ProductsRepository(prisma);
+    const detail = await repo.findPublicById('prod-with-video');
+    expect(detail?.attachments).toEqual([
+      { id: 'att-img', fileName: 'anh-1.jpg' },
+    ]);
+    expect(detail?.videos).toEqual([
+      { id: 'att-vid', fileName: 'gioi-thieu.mp4' },
+    ]);
+
+    const service = new ProductsService(repo);
+    jest
+      .spyOn(
+        service as unknown as {
+          asFile: (
+            key: string,
+            name: string,
+            range?: string,
+          ) => Promise<unknown>;
+        },
+        'asFile',
+      )
+      .mockResolvedValue({ ok: true });
+
+    findAttachment.mockResolvedValueOnce({
+      id: 'att-pdf',
+      type: AttachmentType.EVIDENCE,
+      fileName: 'ho-so.pdf',
+      filePath: 'storage-key-pdf',
+      product: { status: ProductStatus.SCORING },
+    });
+    await expect(
+      service.getPublicAttachment('prod-with-video', 'att-pdf'),
+    ).rejects.toThrow('Attachment not found');
+
+    findAttachment.mockResolvedValueOnce({
+      id: 'att-vid',
+      type: AttachmentType.EVIDENCE,
+      fileName: 'gioi-thieu.mp4',
+      filePath: 'storage-key-vid',
+      product: { status: ProductStatus.SCORING },
+    });
+    await expect(
+      service.getPublicAttachment('prod-with-video', 'att-vid', 'bytes=0-10'),
+    ).resolves.toEqual({ ok: true });
   });
 });

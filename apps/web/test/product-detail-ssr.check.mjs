@@ -235,6 +235,10 @@ try {
       'Published starRating must be rendered in COMPLETED PUBLISHED product detail HTML',
     );
     assert.ok(
+      !publishedHtml.includes('Đã hoàn tất đánh giá'),
+      'COMPLETED product detail must not render "Đã hoàn tất đánh giá" badge',
+    );
+    assert.ok(
       !publishedHtml.includes('AggregateRating') && !publishedHtml.includes('"@type":"Review"'),
       'Must NOT generate fake customer review schema from OCOP score',
     );
@@ -498,6 +502,7 @@ try {
         createdAt: '2026-10-09T00:00:00.000Z',
         category: { id: 'cat-food', name: 'Thực phẩm' },
         attachments: [{ id: 'att-rice-1', fileName: 'rice.jpg' }],
+        videos: [{ id: 'att-rice-vid', fileName: 'gioi-thieu.mp4' }],
       },
       {
         id: 'prod-http-submitted',
@@ -528,6 +533,15 @@ try {
       assert.ok(okHttpHtml.includes('Gạo ST25 Sóc Trăng'));
       assert.ok(
         okHttpHtml.includes('https://ocop.vn/api/products/prod-http-ok/attachments/att-rice-1'),
+      );
+      assert.match(
+        okHttpHtml,
+        /<video\b[^>]*\ssrc="\/api\/products\/prod-http-ok\/attachments\/att-rice-vid"/,
+        'Public product detail SSR HTML must render inline <video> player when product has videos',
+      );
+      assert.ok(
+        !/<meta[^>]+property="og:image"[^>]+att-rice-vid/i.test(okHttpHtml),
+        'og:image must keep using image attachments rather than video attachments',
       );
 
       const subHttpRes = await fetch(`${baseUrl}/products/prod-http-submitted`);

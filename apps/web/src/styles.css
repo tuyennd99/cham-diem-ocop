@@ -5438,6 +5438,14 @@ body:has(.application-shell) {
   min-width: 0;
 }
 
+.public-product-video-fallback {
+  color: #e7f0e9;
+}
+
+.yarl__thumbnails_vignette {
+  display: none;
+}
+
 .public-product-section-head {
   display: flex;
   flex-wrap: wrap;
@@ -5468,6 +5476,7 @@ body:has(.application-shell) {
 
 .public-product-image-frame {
   position: relative;
+  width: 100%;
   min-width: 0;
   aspect-ratio: 4 / 3;
   max-height: 420px;
@@ -5480,14 +5489,18 @@ body:has(.application-shell) {
   background: var(--surface);
 }
 
+.public-product-image-frame.is-video {
+  background: #0f1712;
+}
+
 .public-product-zoom-trigger {
-  position: relative;
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
   height: 100%;
-  max-height: 420px;
   padding: 12px;
   border: 0;
   background: transparent;
@@ -5499,7 +5512,19 @@ body:has(.application-shell) {
   display: block;
   width: 100%;
   height: 100%;
-  max-height: 396px;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.public-product-image-frame video {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
   object-fit: contain;
 }
 
@@ -5529,6 +5554,7 @@ body:has(.application-shell) {
 }
 
 .public-product-thumb {
+  position: relative;
   display: grid;
   place-items: center;
   width: 76px;
@@ -5551,11 +5577,48 @@ body:has(.application-shell) {
   background: var(--accent-soft);
 }
 
-.public-product-thumb img {
+.public-product-thumb img,
+.public-product-thumb video {
   width: 100%;
   height: 100%;
+  min-width: 0;
+  min-height: 0;
   object-fit: cover;
   border-radius: calc(var(--radius) - 3px);
+}
+
+.public-product-thumb--video video {
+  display: block;
+  background: #0f1712;
+  pointer-events: none;
+}
+
+.public-product-thumb-play {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  background: rgba(12, 22, 16, 0.72);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 1px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+  transition:
+    transform 140ms ease,
+    background-color 140ms ease;
+}
+
+.public-product-thumb--video:hover .public-product-thumb-play,
+.public-product-thumb--video.is-active .public-product-thumb-play {
+  background: var(--accent);
+  border-color: #ffffff;
+  transform: scale(1.06);
 }
 
 .public-product-thumb-fallback {

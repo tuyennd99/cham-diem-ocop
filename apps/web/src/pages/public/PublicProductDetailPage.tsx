@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { ArrowLeft, Check, ChevronRight, Circle, Copy, Link2, ZoomIn } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, Circle, Copy, Link2, Play, ZoomIn } from 'lucide-react';
 import { ImagePreviewDialog } from '@/components/image-preview-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -35,7 +35,6 @@ const PUBLIC_DETAIL_STATUS_COPY = {
     description: 'Hồ sơ đang được chấm theo bộ tiêu chí OCOP.',
   },
   COMPLETED: {
-    label: 'Đã hoàn tất đánh giá',
     description: 'Kết quả đánh giá của hồ sơ được hiển thị bên dưới sau khi công bố.',
   },
 } as const;
@@ -93,61 +92,123 @@ export function PublicProductNotFound() {
   );
 }
 
+type ProductMediaItem = {
+  kind: 'image' | 'video';
+  attachment: PublicProduct['attachments'][number];
+  typeIndex: number;
+};
+
+function buildProductMediaItems(product: PublicProduct): ProductMediaItem[] {
+  const images: ProductMediaItem[] = product.attachments.map((attachment, typeIndex) => ({
+    kind: 'image',
+    attachment,
+    typeIndex,
+  }));
+  const videos: ProductMediaItem[] = (product.videos ?? []).map((attachment, typeIndex) => ({
+    kind: 'video',
+    attachment,
+    typeIndex,
+  }));
+  return [...images, ...videos];
+}
+
 function ProductMediaGallery({
   product,
-  selectedImageIndex,
+  mediaItems,
+  selectedMediaIndex,
   failedAttachmentIds,
-  onSelectImage,
+  onSelectMedia,
   onOpenPreview,
-  onImageError,
+  onMediaError,
 }: {
   product: PublicProduct;
-  selectedImageIndex: number;
+  mediaItems: ProductMediaItem[];
+  selectedMediaIndex: number;
   failedAttachmentIds: Set<string>;
-  onSelectImage: (index: number) => void;
-  onOpenPreview: (index: number) => void;
-  onImageError: (attachmentId: string) => void;
+  onSelectMedia: (index: number) => void;
+  onOpenPreview: (imageIndex: number) => void;
+  onMediaError: (attachmentId: string) => void;
 }) {
-  const totalImages = product.attachments.length;
-  const activeAttachment = product.attachments[selectedImageIndex];
-  if (!activeAttachment) return null;
+  const totalMedia = mediaItems.length;
+  const activeItem = mediaItems[selectedMediaIndex];
+  if (!activeItem) return null;
 
-  const isPrimaryFailed = failedAttachmentIds.has(activeAttachment.id);
-  const imageNumber = selectedImageIndex + 1;
+  const hasImages = product.attachments.length > 0;
+  const hasVideos = (product.videos ?? []).length > 0;
+  const sectionTitle =
+    hasImages && hasVideos
+      ? 'Hình ảnh & video sản phẩm'
+      : hasVideos
+        ? 'Video sản phẩm'
+        : 'Hình ảnh sản phẩm';
+  const counterLabel = hasVideos
+    ? `${activeItem.kind === 'video' ? 'Video' : 'Ảnh'} · ${selectedMediaIndex + 1} / ${totalMedia}`
+    : `Ảnh ${selectedMediaIndex + 1} / ${totalMedia}`;
+
+  const isPrimaryFailed = failedAttachmentIds.has(activeItem.attachment.id);
+  const itemNumber = activeItem.typeIndex + 1;
+  const activeItemLabel =
+    activeItem.kind === 'video'
+      ? `${product.name} — video ${itemNumber}`
+      : `${product.name} — ảnh ${itemNumber}`;
 
   return (
     <section className='public-product-media' aria-labelledby='public-product-media-title'>
       <div className='public-product-section-head'>
-        <h2 id='public-product-media-title'>Hình ảnh sản phẩm</h2>
-        {totalImages > 1 && (
-          <span className='public-product-media-count'>
-            Ảnh {imageNumber} / {totalImages}
-          </span>
-        )}
+        <h2 id='public-product-media-title'>{sectionTitle}</h2>
+        {totalMedia > 1 && <span className='public-product-media-count'>{counterLabel}</span>}
       </div>
 
-      <figure className='public-product-image-frame public-product-image-primary'>
+      <figure
+        className={
+          activeItem.kind === 'video'
+            ? 'public-product-image-frame public-product-image-primary is-video'
+            : 'public-product-image-frame public-product-image-primary'
+        }
+      >
         {isPrimaryFailed ? (
           <div
-            className='public-product-image-fallback'
+            className={
+              activeItem.kind === 'video'
+                ? 'public-product-image-fallback public-product-video-fallback'
+                : 'public-product-image-fallback'
+            }
             role='img'
-            aria-label={`${product.name} — ảnh ${imageNumber}: không tải được hình ảnh này`}
+            aria-label={
+              activeItem.kind === 'video'
+                ? `${activeItemLabel}: không tải được video này`
+                : `${activeItemLabel}: không tải được hình ảnh này`
+            }
           >
-            Không tải được hình ảnh này.
+            {activeItem.kind === 'video'
+              ? 'Không tải được video này.'
+              : 'Không tải được hình ảnh này.'}
           </div>
+        ) : activeItem.kind === 'video' ? (
+          <video
+            key={activeItem.attachment.id}
+            controls
+            preload='metadata'
+            playsInline
+            src={publicAttachmentUrl(product.id, activeItem.attachment.id)}
+            aria-label={activeItemLabel}
+            onError={() => onMediaError(activeItem.attachment.id)}
+          >
+            Trình duyệt của bạn không hỗ trợ phát video trực tiếp.
+          </video>
         ) : (
           <button
             type='button'
             className='public-product-zoom-trigger'
-            onClick={() => onOpenPreview(selectedImageIndex)}
-            aria-label={`Xem phóng to ${product.name} — ảnh ${imageNumber}`}
+            onClick={() => onOpenPreview(activeItem.typeIndex)}
+            aria-label={`Xem phóng to ${activeItemLabel}`}
           >
             <img
-              src={publicAttachmentUrl(product.id, activeAttachment.id)}
-              alt={`${product.name} — ảnh ${imageNumber}`}
+              src={publicAttachmentUrl(product.id, activeItem.attachment.id)}
+              alt={activeItemLabel}
               loading='eager'
               decoding='async'
-              onError={() => onImageError(activeAttachment.id)}
+              onError={() => onMediaError(activeItem.attachment.id)}
             />
             <span className='public-product-zoom-pill' aria-hidden='true'>
               <ZoomIn size={15} strokeWidth={2} />
@@ -157,30 +218,60 @@ function ProductMediaGallery({
         )}
       </figure>
 
-      {totalImages > 1 && (
-        <div className='public-product-thumbs' role='list' aria-label='Chọn hình ảnh sản phẩm'>
-          {product.attachments.map((attachment, index) => {
-            const isActive = index === selectedImageIndex;
-            const isFailed = failedAttachmentIds.has(attachment.id);
-            const thumbNumber = index + 1;
+      {totalMedia > 1 && (
+        <div
+          className='public-product-thumbs'
+          role='list'
+          aria-label='Chọn hình ảnh hoặc video sản phẩm'
+        >
+          {mediaItems.map((item, index) => {
+            const isActive = index === selectedMediaIndex;
+            const isFailed = failedAttachmentIds.has(item.attachment.id);
+            const thumbNumber = item.typeIndex + 1;
+            const isVideo = item.kind === 'video';
             return (
-              <div key={attachment.id} role='listitem'>
+              <div key={item.attachment.id} role='listitem'>
                 <button
                   type='button'
-                  className={isActive ? 'public-product-thumb is-active' : 'public-product-thumb'}
-                  onClick={() => onSelectImage(index)}
-                  aria-label={`Xem ${product.name} — ảnh ${thumbNumber}`}
+                  className={
+                    'public-product-thumb' +
+                    (isVideo ? ' public-product-thumb--video' : '') +
+                    (isActive ? ' is-active' : '')
+                  }
+                  onClick={() => onSelectMedia(index)}
+                  aria-label={
+                    isVideo
+                      ? `Xem ${product.name} — video ${thumbNumber}`
+                      : `Xem ${product.name} — ảnh ${thumbNumber}`
+                  }
                   aria-pressed={isActive}
                 >
                   {isFailed ? (
-                    <span className='public-product-thumb-fallback'>Lỗi ảnh</span>
+                    <span className='public-product-thumb-fallback'>
+                      {isVideo ? 'Lỗi video' : 'Lỗi ảnh'}
+                    </span>
+                  ) : isVideo ? (
+                    <>
+                      <video
+                        src={publicAttachmentUrl(product.id, item.attachment.id)}
+                        preload='metadata'
+                        muted
+                        playsInline
+                        tabIndex={-1}
+                        aria-hidden='true'
+                        onError={() => onMediaError(item.attachment.id)}
+                      />
+                      <span className='public-product-thumb-play' aria-hidden='true'>
+                        <Play size={12} fill='currentColor' strokeWidth={2} />
+                      </span>
+                    </>
                   ) : (
                     <img
-                      src={publicAttachmentUrl(product.id, attachment.id)}
+                      src={publicAttachmentUrl(product.id, item.attachment.id)}
                       alt={`${product.name} — ảnh thu nhỏ ${thumbNumber}`}
                       loading='lazy'
                       decoding='async'
-                      onError={() => onImageError(attachment.id)}
+                      onError={() => onMediaError(item.attachment.id)}
                     />
                   )}
                 </button>
@@ -256,13 +347,13 @@ export function PublicProductDetailPage({ id }: { id: string }) {
     refetch,
   } = usePublicProduct<PublicProduct>(id);
   const [failedAttachmentIds, setFailedAttachmentIds] = useState<Set<string>>(() => new Set());
-  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [selectedMediaIndex, setSelectedMediaIndex] = useState(0);
   const [previewImageIndex, setPreviewImageIndex] = useState<number | null>(null);
   const [copiedTarget, setCopiedTarget] = useState<CopyTarget | null>(null);
   const isNotFound = loadError instanceof ApiError && loadError.status === HTTP_STATUS.NOT_FOUND;
 
   useEffect(() => {
-    setSelectedImageIndex(0);
+    setSelectedMediaIndex(0);
     setPreviewImageIndex(null);
     setCopiedTarget(null);
   }, [id]);
@@ -273,7 +364,7 @@ export function PublicProductDetailPage({ id }: { id: string }) {
     return () => window.clearTimeout(timeoutId);
   }, [copiedTarget]);
 
-  const handleImageError = (attachmentId: string) => {
+  const handleMediaError = (attachmentId: string) => {
     setFailedAttachmentIds((current) => new Set(current).add(attachmentId));
   };
 
@@ -331,12 +422,11 @@ export function PublicProductDetailPage({ id }: { id: string }) {
     );
 
   const statusCopy = PUBLIC_DETAIL_STATUS_COPY[product.status];
-  const hasImages = product.attachments.length > 0;
-  const activeImageIndex = hasImages
-    ? Math.min(selectedImageIndex, product.attachments.length - 1)
-    : 0;
+  const mediaItems = buildProductMediaItems(product);
+  const hasMedia = mediaItems.length > 0;
+  const activeMediaIndex = hasMedia ? Math.min(selectedMediaIndex, mediaItems.length - 1) : 0;
   const hasDescription = Boolean(product.description?.trim());
-  const layoutClass = !hasImages ? ' public-product-layout--no-image' : '';
+  const layoutClass = !hasMedia ? ' public-product-layout--no-image' : '';
   const productCode = displayProductCode(product);
 
   return (
@@ -360,12 +450,14 @@ export function PublicProductDetailPage({ id }: { id: string }) {
               </nav>
             </div>
             <div className='public-product-detail-heading'>
-              <Badge
-                variant='outline'
-                className={'status-badge ' + PUBLIC_PRODUCT_STATUS_TONE[product.status]}
-              >
-                {statusCopy.label}
-              </Badge>
+              {'label' in statusCopy && (
+                <Badge
+                  variant='outline'
+                  className={'status-badge ' + PUBLIC_PRODUCT_STATUS_TONE[product.status]}
+                >
+                  {statusCopy.label}
+                </Badge>
+              )}
               <h1 id='public-product-title'>{product.name}</h1>
               <p className='public-product-status-copy'>{statusCopy.description}</p>
             </div>
@@ -387,14 +479,15 @@ export function PublicProductDetailPage({ id }: { id: string }) {
           )}
 
           <div className={'public-product-layout' + layoutClass}>
-            {hasImages && (
+            {hasMedia && (
               <ProductMediaGallery
                 product={product}
-                selectedImageIndex={activeImageIndex}
+                mediaItems={mediaItems}
+                selectedMediaIndex={activeMediaIndex}
                 failedAttachmentIds={failedAttachmentIds}
-                onSelectImage={setSelectedImageIndex}
+                onSelectMedia={setSelectedMediaIndex}
                 onOpenPreview={setPreviewImageIndex}
-                onImageError={handleImageError}
+                onMediaError={handleMediaError}
               />
             )}
 
@@ -513,7 +606,7 @@ export function PublicProductDetailPage({ id }: { id: string }) {
               )}
             </div>
 
-            {!hasImages && (
+            {!hasMedia && (
               <section
                 className='public-product-no-image'
                 aria-labelledby='public-product-no-image-title'

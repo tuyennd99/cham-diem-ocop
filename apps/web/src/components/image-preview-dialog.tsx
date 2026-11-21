@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import Lightbox, { type SlideImage } from 'yet-another-react-lightbox';
 import Captions from 'yet-another-react-lightbox/plugins/captions';
-import Counter from 'yet-another-react-lightbox/plugins/counter';
 import Download from 'yet-another-react-lightbox/plugins/download';
 import Fullscreen from 'yet-another-react-lightbox/plugins/fullscreen';
 import Thumbnails from 'yet-another-react-lightbox/plugins/thumbnails';
 import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import 'yet-another-react-lightbox/styles.css';
 import 'yet-another-react-lightbox/plugins/captions.css';
-import 'yet-another-react-lightbox/plugins/counter.css';
 import 'yet-another-react-lightbox/plugins/thumbnails.css';
 import {
   getCachedAttachmentObjectUrl,
@@ -61,12 +59,7 @@ function getOrCreateFileObjectUrl(file: File): string {
   return created;
 }
 
-export function ImagePreviewDialog({
-  items,
-  activeIndex,
-  onIndexChange,
-  contextLabel,
-}: ImagePreviewDialogProps) {
+export function ImagePreviewDialog({ items, activeIndex, onIndexChange }: ImagePreviewDialogProps) {
   const sessionScope = getSessionScope(useSession());
   const isOpen = activeIndex !== null && activeIndex >= 0 && activeIndex < items.length;
   const [resolvedUrls, setResolvedUrls] = useState<Record<string, string>>(() => {
@@ -145,7 +138,7 @@ export function ImagePreviewDialog({
 
   const slides = useMemo<SlideImage[]>(
     () =>
-      items.map((item, idx) => {
+      items.map((item) => {
         const src =
           resolvedUrls[item.id] ??
           (item.kind === 'private'
@@ -158,9 +151,6 @@ export function ImagePreviewDialog({
           src,
           alt: item.name,
           title: item.name,
-          description: contextLabel
-            ? `Ảnh ${idx + 1} / ${items.length} · ${contextLabel}`
-            : `Ảnh ${idx + 1} / ${items.length}`,
           download:
             src !== TRANSPARENT_PLACEHOLDER
               ? {
@@ -170,14 +160,14 @@ export function ImagePreviewDialog({
               : false,
         };
       }),
-    [contextLabel, items, resolvedUrls],
+    [items, resolvedUrls],
   );
 
   if (!items.length) return null;
 
   const plugins =
     items.length > 1
-      ? [Captions, Counter, Download, Fullscreen, Thumbnails, Zoom]
+      ? [Captions, Download, Fullscreen, Thumbnails, Zoom]
       : [Captions, Download, Fullscreen, Zoom];
 
   return (
@@ -206,6 +196,26 @@ export function ImagePreviewDialog({
         borderRadius: 6,
         padding: 2,
         gap: 10,
+      }}
+      styles={{
+        root: {
+          '--yarl__color_backdrop': 'rgba(12, 22, 16, 0.72)',
+          '--yarl__container_background_color': 'transparent',
+          '--yarl__thumbnails_container_background_color': 'rgba(12, 22, 16, 0.42)',
+          '--yarl__slide_captions_container_background': 'rgba(12, 22, 16, 0.48)',
+          '--yarl__slide_title_font_weight': '400',
+          '--yarl__slide_title_font_size': '14px',
+        },
+        container: {
+          backgroundColor: 'rgba(12, 22, 16, 0.72)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+        },
+        thumbnailsContainer: {
+          backgroundColor: 'rgba(12, 22, 16, 0.42)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+        },
       }}
       on={{
         view: ({ index }) => {

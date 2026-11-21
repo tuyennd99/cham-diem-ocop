@@ -5,6 +5,8 @@ import { v7 as uuidv7 } from 'uuid';
 import { pipeline, Readable } from 'node:stream';
 import {
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   NotFoundException,
   StreamableFile,
 } from '@nestjs/common';
@@ -63,11 +65,61 @@ export async function removeUploadedPrivateFile(
   }
 }
 
+export interface StoredFileDownload {
+  stream: Readable;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  range?: { start: number; end: number };
+}
+
+export type ParsedByteRange =
+  { unsat: true } | { unsat: false; start: number; end: number };
+
+export function parseByteRange(
+  rangeHeader: string | undefined,
+  totalBytes: number,
+): ParsedByteRange | null {
+  if (!rangeHeader || !rangeHeader.startsWith('bytes=')) return null;
+  const spec = rangeHeader.slice('bytes='.length).trim();
+  if (!spec || spec.includes(',')) return null;
+  const match = /^(\d*)-(\d*)$/.exec(spec);
+  if (!match) return null;
+  const [, startText, endText] = match;
+  if (!startText && !endText) return null;
+  if (totalBytes <= 0) return { unsat: true };
+
+  let start: number;
+  let end: number;
+  if (!startText) {
+    const suffixLength = Number(endText);
+    if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) {
+      return { unsat: true };
+    }
+    start = Math.max(0, totalBytes - suffixLength);
+    end = totalBytes - 1;
+  } else {
+    start = Number(startText);
+    end = endText ? Math.min(Number(endText), totalBytes - 1) : totalBytes - 1;
+    if (
+      !Number.isSafeInteger(start) ||
+      !Number.isSafeInteger(end) ||
+      start < 0 ||
+      start >= totalBytes ||
+      start > end
+    ) {
+      return { unsat: true };
+    }
+  }
+  return { unsat: false, start, end };
+}
+
 export async function openStoredFile(
   storageKey: string,
   originalName: string,
   root = storageRoot(),
-) {
+  rangeHeader?: string,
+): Promise<StoredFileDownload> {
   const path = resolveStoredPath(storageKey, root);
   const extension = originalName.split('.').pop()?.toLowerCase();
   let info: Awaited<ReturnType<typeof stat>>;
@@ -88,17 +140,31 @@ export async function openStoredFile(
     }
     throw error;
   }
+  const parsedRange = parseByteRange(rangeHeader, info.size);
+  if (parsedRange?.unsat) {
+    throw new HttpException(
+      'Requested range not satisfiable',
+      HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE,
+    );
+  }
   const fallbackMime =
     storedFileMimeTypes[extension ?? ''] ?? 'application/octet-stream';
   const mimeType =
     detectedMime === 'video/mp4' && extension === 'mov'
       ? 'video/quicktime'
       : (detectedMime ?? fallbackMime);
+  const range = parsedRange
+    ? { start: parsedRange.start, end: parsedRange.end }
+    : undefined;
   return {
-    stream: createReadStream(path),
+    stream: createReadStream(
+      path,
+      range ? { start: range.start, end: range.end } : undefined,
+    ),
     originalName,
     mimeType,
     sizeBytes: info.size,
+    ...(range ? { range } : {}),
   };
 }
 
@@ -201,18 +267,30 @@ export function productUploadOptions(): MulterOptions {
   };
 }
 
+export interface RangeResponseTarget {
+  status(code: number): unknown;
+  setHeader(name: string, value: string | number | readonly string[]): unknown;
+}
+
 export function asDownload(
-  file: {
-    stream: Readable;
-    originalName: string;
-    mimeType: string;
-    sizeBytes: number;
-  },
+  file: StoredFileDownload,
   disposition: 'attachment' | 'inline' = 'attachment',
+  res?: RangeResponseTarget,
 ) {
+  res?.setHeader('Accept-Ranges', 'bytes');
+  const length = file.range
+    ? file.range.end - file.range.start + 1
+    : file.sizeBytes;
+  if (file.range && res) {
+    res.status(HttpStatus.PARTIAL_CONTENT);
+    res.setHeader(
+      'Content-Range',
+      `bytes ${file.range.start}-${file.range.end}/${file.sizeBytes}`,
+    );
+  }
   return new StreamableFile(file.stream, {
     type: file.mimeType,
-    length: file.sizeBytes,
+    length,
     disposition: `${disposition}; filename*=UTF-8''${encodeURIComponent(file.originalName)}`,
   });
 }

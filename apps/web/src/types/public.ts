@@ -40,4 +40,5 @@ export type PublicProduct = Omit<
   createdAt: string;
   category: Category;
   attachments: Attachment[];
+  videos?: Attachment[];
 };

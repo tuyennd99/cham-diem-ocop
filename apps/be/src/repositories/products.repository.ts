@@ -56,6 +56,14 @@ const editableStatuses: ProductStatus[] = [
 
 export { isSeoEligibleProduct, SEO_ELIGIBLE_PRODUCT_STATUSES };
 
+const VIDEO_ATTACHMENT_WHERE: Prisma.AttachmentWhereInput = {
+  OR: [
+    { fileName: { endsWith: '.mp4', mode: 'insensitive' } },
+    { fileName: { endsWith: '.webm', mode: 'insensitive' } },
+    { fileName: { endsWith: '.mov', mode: 'insensitive' } },
+  ],
+};
+
 const publicProductSelect = {
   id: true,
   codeNumber: true,
@@ -73,6 +81,17 @@ const publicProductSelect = {
   },
   attachments: {
     where: { type: AttachmentType.IMAGE },
+    select: { id: true, fileName: true },
+    orderBy: { createdAt: 'asc' as const },
+  },
+} satisfies Prisma.ProductSelect;
+
+const publicProductDetailSelect = {
+  ...publicProductSelect,
+  attachments: {
+    where: {
+      OR: [{ type: AttachmentType.IMAGE }, VIDEO_ATTACHMENT_WHERE],
+    },
     select: { id: true, fileName: true },
     orderBy: { createdAt: 'asc' as const },
   },
@@ -340,9 +359,18 @@ export class ProductsRepository {
           ],
         },
       },
-      select: publicProductSelect,
+      select: publicProductDetailSelect,
     });
-    return product && sanitizePublicProductResult(product);
+    if (!product) return null;
+    const sanitized = sanitizePublicProductResult(product);
+    const allMedia = sanitized.attachments ?? [];
+    return {
+      ...sanitized,
+      attachments: allMedia.filter(
+        (att) => !isVideoAttachmentName(att.fileName),
+      ),
+      videos: allMedia.filter((att) => isVideoAttachmentName(att.fileName)),
+    };
   }
 
   listMine(registrantId: string, query: MyProductsQueryDto) {
