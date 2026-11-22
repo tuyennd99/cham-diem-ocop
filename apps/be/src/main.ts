@@ -12,7 +12,8 @@ async function bootstrap() {
   configureApp(app);
   app.enableShutdownHooks();
 
-  await app.listen(config.port);
+  const host = process.env.HOST?.trim();
+  await (host ? app.listen(config.port, host) : app.listen(config.port));
   const logger = new Logger('Main');
   logger.log(`Application is running on: ${await app.getUrl()}`);
 }
