@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
   EvaluationStatus,
@@ -49,11 +50,19 @@ import {
   buildResultsReport,
 } from '../utils/reporting';
 import { formatProductCode } from '../utils/product-code';
+import {
+  CACHE_PREFIXES,
+  invalidatePublicCachePrefixes,
+} from '../utils/public-cache';
 import { effectiveStaffPermissions } from '../utils/staff-permissions';
+import { RedisService } from './redis.service';
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly repository: AdminRepository) {}
+  constructor(
+    private readonly repository: AdminRepository,
+    @Optional() private readonly redis?: RedisService,
+  ) {}
 
   async dashboard(canManage = true, query?: AdminDashboardQueryDto) {
     const { queuePage, queueSearch, judgePage, judgeSearch, ...reportQuery } =
@@ -329,12 +338,17 @@ export class AdminService {
     meta: AdminRequestMeta,
   ) {
     const entries = input.assignments;
-    return this.repository.replaceAssignments(
+    const result = await this.repository.replaceAssignments(
       entries,
       actorId,
       input.reason,
       meta,
     );
+    await invalidatePublicCachePrefixes(
+      this.redis,
+      CACHE_PREFIXES.PUBLIC_PRODUCTS,
+    );
+    return result;
   }
 
   async listProducts(query: AdminProductQueryDto, canManage = true) {
@@ -405,6 +419,10 @@ export class AdminService {
       canManage,
     );
     if (!product) throw new NotFoundException('Product not found');
+    await invalidatePublicCachePrefixes(
+      this.redis,
+      CACHE_PREFIXES.PUBLIC_PRODUCTS,
+    );
     return product;
   }
 
@@ -428,6 +446,10 @@ export class AdminService {
       canManage,
     );
     if (!product) throw new NotFoundException('Product not found');
+    await invalidatePublicCachePrefixes(
+      this.redis,
+      CACHE_PREFIXES.PUBLIC_PRODUCTS,
+    );
     return product;
   }
 
@@ -448,6 +470,10 @@ export class AdminService {
       canManage,
     );
     if (!product) throw new NotFoundException('Product not found');
+    await invalidatePublicCachePrefixes(
+      this.redis,
+      CACHE_PREFIXES.PUBLIC_PRODUCTS,
+    );
     return product;
   }
 
@@ -471,6 +497,10 @@ export class AdminService {
       canManage,
     );
     if (!product) throw new NotFoundException('Product not found');
+    await invalidatePublicCachePrefixes(
+      this.redis,
+      CACHE_PREFIXES.PUBLIC_PRODUCTS,
+    );
     return product;
   }
 
@@ -491,6 +521,15 @@ export class AdminService {
       canManage,
     );
     if (!result) throw new NotFoundException('Product not found');
+    const needsRestoreConfirmation =
+      'requiresRestoreConfirmation' in result &&
+      result.requiresRestoreConfirmation;
+    if (!needsRestoreConfirmation) {
+      await invalidatePublicCachePrefixes(
+        this.redis,
+        CACHE_PREFIXES.PUBLIC_PRODUCTS,
+      );
+    }
     return result;
   }
 
@@ -513,6 +552,10 @@ export class AdminService {
       canManage,
     );
     if (!product) throw new NotFoundException('Product not found');
+    await invalidatePublicCachePrefixes(
+      this.redis,
+      CACHE_PREFIXES.PUBLIC_PRODUCTS,
+    );
     return product;
   }
 
@@ -535,6 +578,10 @@ export class AdminService {
       canManage,
     );
     if (!product) throw new NotFoundException('Product not found');
+    await invalidatePublicCachePrefixes(
+      this.redis,
+      CACHE_PREFIXES.PUBLIC_PRODUCTS,
+    );
     return product;
   }
 

@@ -1,0 +1,55 @@
+services:
+  kh2959-api:
+    image: docker.io/library/node:24-bookworm-slim
+    container_name: kh2959-api
+    restart: unless-stopped
+    userns_mode: keep-id
+    # apps/be/src/main.ts calls app.listen(config.port) without HOST, so slirp4netns + 127.0.0.1 port publish binds strictly to 127.0.0.1:3045 on the host.
+    network_mode: "slirp4netns:allow_host_loopback=true"
+    mem_limit: 1g
+    ports:
+      - "127.0.0.1:3045:3045"
+    working_dir: /home/dev/Desktop/kh2959-dashboard/apps/be
+    environment:
+      - NODE_ENV=production
+      - HOME=/home/dev
+    volumes:
+      - /home/dev/.local/share/pnpm:/home/dev/.local/share/pnpm:ro
+      - /home/dev/Desktop/kh2959-dashboard:/home/dev/Desktop/kh2959-dashboard
+    command:
+      - node
+      - --enable-source-maps
+      - -e
+      - >-
+        require('dotenv/config');
+        for (const k of ['DATABASE_URL', 'SHEET_SYNC_LOCK_DATABASE_URL']) {
+          if (process.env[k]) process.env[k] = process.env[k].replace('127.0.0.1:5432', '10.0.2.2:5432');
+        }
+        require('./dist/src/main.js');
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  kh2959-web:
+    image: docker.io/library/node:24-bookworm-slim
+    container_name: kh2959-web
+    restart: unless-stopped
+    userns_mode: keep-id
+    network_mode: host
+    mem_limit: 256m
+    working_dir: /home/dev/Desktop/kh2959-dashboard/apps/web
+    environment:
+      - NODE_ENV=production
+      - PORT=5185
+      - API_PORT=3045
+    volumes:
+      - /home/dev/Desktop/kh2959-dashboard/apps/web/dist:/home/dev/Desktop/kh2959-dashboard/apps/web/dist:ro
+      - /srv/apps/kh2959-dashboard/web-server.mjs:/srv/apps/kh2959-dashboard/web-server.mjs:ro
+    command: ["node", "/srv/apps/kh2959-dashboard/web-server.mjs"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

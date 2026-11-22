@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { computePaginationSkip } from '../dtos/common.dto';
 import { AdminCatalogsRepository } from '../repositories/admin-catalogs.repository';
 import type {
   AdminLocalitiesQueryDto,
@@ -10,10 +11,20 @@ import type {
   UpdateAdminCategoryDto,
 } from '../dtos/admin-catalogs.dto';
 import type { RequestMeta } from '../types/auth';
+import {
+  buildPublicLocalitiesCacheKey,
+  CACHE_PREFIXES,
+  invalidatePublicCachePrefixes,
+  readThroughPublicCache,
+} from '../utils/public-cache';
+import { RedisService } from './redis.service';
 
 @Injectable()
 export class AdminCatalogsService {
-  constructor(private readonly repository: AdminCatalogsRepository) {}
+  constructor(
+    private readonly repository: AdminCatalogsRepository,
+    @Optional() private readonly redis?: RedisService,
+  ) {}
 
   listManagingAgencies() {
     return this.repository.listManagingAgencies();
@@ -24,7 +35,11 @@ export class AdminCatalogsService {
   }
 
   async listPublicLocalities(query: PublicLocalitiesQueryDto) {
-    return this.listLocalities(query, true);
+    computePaginationSkip(query.page ?? 1, query.limit ?? 20);
+    const cacheKey = buildPublicLocalitiesCacheKey(query);
+    return readThroughPublicCache(this.redis, cacheKey, () =>
+      this.listLocalities(query, true),
+    );
   }
 
   private async listLocalities(
@@ -46,8 +61,18 @@ export class AdminCatalogsService {
     };
   }
 
-  createLocality(input: CreateLocalityDto, actorId: string, meta: RequestMeta) {
-    return this.repository.createLocality(input, actorId, meta);
+  async createLocality(
+    input: CreateLocalityDto,
+    actorId: string,
+    meta: RequestMeta,
+  ) {
+    const locality = await this.repository.createLocality(input, actorId, meta);
+    await invalidatePublicCachePrefixes(
+      this.redis,
+      CACHE_PREFIXES.LOCALITIES,
+      CACHE_PREFIXES.PUBLIC_PRODUCTS,
+    );
+    return locality;
   }
 
   async updateLocality(
@@ -63,6 +88,11 @@ export class AdminCatalogsService {
       meta,
     );
     if (!locality) throw new NotFoundException('Locality not found');
+    await invalidatePublicCachePrefixes(
+      this.redis,
+      CACHE_PREFIXES.LOCALITIES,
+      CACHE_PREFIXES.PUBLIC_PRODUCTS,
+    );
     return locality;
   }
 
@@ -92,6 +122,11 @@ export class AdminCatalogsService {
   ) {
     const category = await this.repository.createCategory(input, actorId, meta);
     if (!category) throw new NotFoundException('Product category not found');
+    await invalidatePublicCachePrefixes(
+      this.redis,
+      CACHE_PREFIXES.CATEGORIES,
+      CACHE_PREFIXES.PUBLIC_PRODUCTS,
+    );
     return category;
   }
 
@@ -108,6 +143,11 @@ export class AdminCatalogsService {
       meta,
     );
     if (!category) throw new NotFoundException('Product category not found');
+    await invalidatePublicCachePrefixes(
+      this.redis,
+      CACHE_PREFIXES.CATEGORIES,
+      CACHE_PREFIXES.PUBLIC_PRODUCTS,
+    );
     return category;
   }
 }

@@ -1,0 +1,51 @@
+services:
+  ocop-api:
+    image: docker.io/library/node:24-bookworm-slim
+    container_name: ocop-api
+    restart: unless-stopped
+    userns_mode: keep-id
+    network_mode: host
+    mem_limit: 1g
+    working_dir: /home/dev/Desktop/cham-diem-ocop/apps/be
+    environment:
+      - NODE_ENV=production
+      - HOST=127.0.0.1
+      - HOME=/home/dev
+    volumes:
+      - /home/dev/.local/share/pnpm:/home/dev/.local/share/pnpm:ro
+      - /home/dev/Desktop/cham-diem-ocop:/home/dev/Desktop/cham-diem-ocop
+      - /srv/storage/cham-diem-ocop/uploads:/srv/storage/cham-diem-ocop/uploads
+    command: ["node", "--enable-source-maps", "dist/src/main.js"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  ocop-web:
+    image: docker.io/library/node:24-bookworm-slim
+    container_name: ocop-web
+    restart: unless-stopped
+    userns_mode: keep-id
+    network_mode: host
+    mem_limit: 512m
+    working_dir: /home/dev/Desktop/cham-diem-ocop/apps/web
+    environment:
+      - NODE_ENV=production
+      - PORT=5173
+      - API_PORT=3030
+      - API_INTERNAL_URL=http://127.0.0.1:3030
+      - HOME=/home/dev
+      - NODE_OPTIONS=--max-old-space-size=384
+    volumes:
+      - /home/dev/Desktop/cham-diem-ocop/apps/web/dist:/home/dev/Desktop/cham-diem-ocop/apps/web/dist:ro
+      - /home/dev/Desktop/cham-diem-ocop/apps/web/node_modules:/home/dev/Desktop/cham-diem-ocop/apps/web/node_modules:ro
+      - /home/dev/Desktop/cham-diem-ocop/node_modules:/home/dev/Desktop/cham-diem-ocop/node_modules:ro
+      - /home/dev/Desktop/cham-diem-ocop/packages/shared:/home/dev/Desktop/cham-diem-ocop/packages/shared:ro
+      - /srv/apps/cham-diem-ocop/web-server.mjs:/srv/apps/cham-diem-ocop/web-server.mjs:ro
+    command: ["node", "/srv/apps/cham-diem-ocop/web-server.mjs"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

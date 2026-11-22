@@ -56,4 +56,52 @@ describe('HealthService', () => {
     });
     expect(service.live()).toEqual({ status: 'ok' });
   });
+
+  it('skips Redis check when REDIS_URL is not configured', async () => {
+    const redis = {
+      isEnabled: jest.fn(() => false),
+      ping: jest.fn(),
+    };
+    const healthWithDisabledRedis = new HealthService(
+      prisma as unknown as PrismaService,
+      redis as never,
+    );
+
+    await expect(healthWithDisabledRedis.ready()).resolves.toEqual({
+      status: 'ok',
+    });
+    expect(redis.isEnabled).toHaveBeenCalledTimes(1);
+    expect(redis.ping).not.toHaveBeenCalled();
+  });
+
+  it('checks Redis PING when REDIS_URL is configured and succeeds', async () => {
+    const redis = {
+      isEnabled: jest.fn(() => true),
+      ping: jest.fn().mockResolvedValue(true),
+    };
+    const healthWithRedis = new HealthService(
+      prisma as unknown as PrismaService,
+      redis as never,
+    );
+
+    await expect(healthWithRedis.ready()).resolves.toEqual({ status: 'ok' });
+    expect(redis.ping).toHaveBeenCalledWith(1000);
+  });
+
+  it('throws ServiceUnavailableException when Redis PING fails while keeping liveness independent', async () => {
+    const redis = {
+      isEnabled: jest.fn(() => true),
+      ping: jest.fn().mockResolvedValue(false),
+    };
+    const healthWithDownRedis = new HealthService(
+      prisma as unknown as PrismaService,
+      redis as never,
+    );
+
+    await expect(healthWithDownRedis.ready()).rejects.toMatchObject({
+      constructor: ServiceUnavailableException,
+      message: 'Redis is unavailable',
+    });
+    expect(healthWithDownRedis.live()).toEqual({ status: 'ok' });
+  });
 });
