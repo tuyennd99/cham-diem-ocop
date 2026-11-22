@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
   PayloadTooLargeException,
   UnsupportedMediaTypeException,
 } from '@nestjs/common';
@@ -46,7 +47,16 @@ import {
   storageRoot,
   uuidStorageKeyPattern,
 } from '../utils/private-storage';
+import {
+  buildPublicProductDetailCacheKey,
+  buildPublicProductsListCacheKey,
+  CACHE_KEYS,
+  CACHE_PREFIXES,
+  invalidatePublicCachePrefixes,
+  readThroughPublicCache,
+} from '../utils/public-cache';
 import { effectiveStaffPermissions } from '../utils/staff-permissions';
+import { RedisService } from './redis.service';
 
 const publicStatuses = new Set<ProductStatus>([
   ProductStatus.SUBMITTED,
@@ -69,12 +79,17 @@ export class ProductsService {
   private readonly root: string;
   private readonly logger = new Logger(ProductsService.name);
 
-  constructor(private readonly repository: ProductsRepository) {
+  constructor(
+    private readonly repository: ProductsRepository,
+    @Optional() private readonly redis?: RedisService,
+  ) {
     this.root = storageRoot();
   }
 
   categories() {
-    return this.repository.listCategories();
+    return readThroughPublicCache(this.redis, CACHE_KEYS.CATEGORIES, () =>
+      this.repository.listCategories(),
+    );
   }
 
   async listPublic(
@@ -101,22 +116,28 @@ export class ProductsService {
             approvedOnly,
           };
     computePaginationSkip(normalized.page, normalized.limit);
-    const { data, total } = await this.repository.listPublic(normalized);
-    return {
-      data,
-      meta: {
-        page: normalized.page,
-        limit: normalized.limit,
-        total,
-        totalPages: Math.ceil(total / normalized.limit),
-      },
-    };
+    const cacheKey = buildPublicProductsListCacheKey(normalized);
+    return readThroughPublicCache(this.redis, cacheKey, async () => {
+      const { data, total } = await this.repository.listPublic(normalized);
+      return {
+        data,
+        meta: {
+          page: normalized.page,
+          limit: normalized.limit,
+          total,
+          totalPages: Math.ceil(total / normalized.limit),
+        },
+      };
+    });
   }
 
   async getPublic(id: string) {
-    const product = await this.repository.findPublicById(id);
-    if (!product) throw new NotFoundException('Product not found');
-    return product;
+    const cacheKey = buildPublicProductDetailCacheKey(id);
+    return readThroughPublicCache(this.redis, cacheKey, async () => {
+      const product = await this.repository.findPublicById(id);
+      if (!product) throw new NotFoundException('Product not found');
+      return product;
+    });
   }
 
   async getPublicAttachment(
@@ -310,6 +331,10 @@ export class ProductsService {
         filePath: file.filename,
       });
       if (!attachment) await this.assertDraftAvailable(id, actor);
+      await invalidatePublicCachePrefixes(
+        this.redis,
+        CACHE_PREFIXES.PUBLIC_PRODUCTS,
+      );
       return attachment;
     } catch (error) {
       try {
@@ -370,6 +395,10 @@ export class ProductsService {
         `Failed to unlink removed attachment after DB delete: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
+    await invalidatePublicCachePrefixes(
+      this.redis,
+      CACHE_PREFIXES.PUBLIC_PRODUCTS,
+    );
     return { id: attachmentId };
   }
 
@@ -407,7 +436,7 @@ export class ProductsService {
     actor: ProductMutationActor,
     managerRegistrantId?: string,
   ) {
-    return this.repository.create(
+    const created = await this.repository.create(
       {
         registrantId:
           actor.kind === PRODUCT_MUTATION_ACTOR_KIND.OWNER
@@ -421,6 +450,12 @@ export class ProductsService {
       },
       actor,
     );
+    await invalidatePublicCachePrefixes(
+      this.redis,
+      CACHE_PREFIXES.PUBLIC_PRODUCTS,
+      CACHE_PREFIXES.LOCALITIES,
+    );
+    return created;
   }
 
   private async writeUpdate(
@@ -445,6 +480,11 @@ export class ProductsService {
       changes.formData = input.formData as Prisma.InputJsonValue;
     const product = await this.repository.updateDraft(id, actor, changes);
     if (!product) await this.assertDraftAvailable(id, actor);
+    await invalidatePublicCachePrefixes(
+      this.redis,
+      CACHE_PREFIXES.PUBLIC_PRODUCTS,
+      CACHE_PREFIXES.LOCALITIES,
+    );
     return product;
   }
 
@@ -466,12 +506,21 @@ export class ProductsService {
         }
       }),
     );
+    await invalidatePublicCachePrefixes(
+      this.redis,
+      CACHE_PREFIXES.PUBLIC_PRODUCTS,
+    );
     return { id };
   }
 
   private async submitDraft(id: string, actor: ProductMutationActor) {
     const product = await this.repository.submitDraft(id, actor);
     if (!product) await this.assertDraftAvailable(id, actor);
+    await invalidatePublicCachePrefixes(
+      this.redis,
+      CACHE_PREFIXES.PUBLIC_PRODUCTS,
+      CACHE_PREFIXES.LOCALITIES,
+    );
     return product;
   }
 
