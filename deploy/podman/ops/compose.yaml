@@ -75,3 +75,31 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  backrest:
+    image: docker.io/garethgeorge/backrest:latest
+    container_name: backrest
+    restart: unless-stopped
+    userns_mode: keep-id
+    mem_limit: 512m
+    ports:
+      - "127.0.0.1:9898:9898"
+    environment:
+      - BACKREST_DATA=/data
+      - BACKREST_CONFIG=/config/config.json
+      - BACKREST_PORT=0.0.0.0:9898
+      - XDG_CACHE_HOME=/cache
+      - TZ=Asia/Ho_Chi_Minh
+    volumes:
+      - /srv/storage/backups/backrest-config:/config
+      - /srv/storage/backups/backrest-data:/data
+      - /srv/storage/backups/backrest-cache:/cache
+      - /srv/storage/backups/restic-repo:/repos
+      - /srv/storage/backups/staging/postgres:/userdata/postgres:ro
+      - /srv/storage/cham-diem-ocop/uploads:/userdata/ocop-uploads:ro
+      - /srv/storage/ops/n8n:/userdata/n8n:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
