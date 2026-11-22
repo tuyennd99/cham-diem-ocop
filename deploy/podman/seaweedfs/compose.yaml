@@ -1,0 +1,30 @@
+services:
+  seaweedfs:
+    image: docker.io/chrislusf/seaweedfs:latest
+    container_name: seaweedfs
+    restart: unless-stopped
+    userns_mode: keep-id
+    mem_limit: 1g
+    env_file:
+      - .env
+    command:
+      - mini
+      - -options=/data/mini.options
+      - -dir=/data
+      - -ip=127.0.0.1
+      - -ip.bind=0.0.0.0
+      - -master.telemetry=false
+      - -master.volumeSizeLimitMB=1024
+    ports:
+      - "127.0.0.1:8333:8333"
+      - "127.0.0.1:8888:8888"
+      - "127.0.0.1:9333:9333"
+      - "127.0.0.1:12535:12535"
+      - "127.0.0.1:23646:23646"
+    volumes:
+      - /srv/storage/seaweedfs:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
