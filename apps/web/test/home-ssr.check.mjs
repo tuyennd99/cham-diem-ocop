@@ -381,6 +381,25 @@ try {
       const httpText = await httpRes.text();
       assert.ok(httpText.includes('Trà Shan Tuyết Cổ Thụ'));
       assert.ok(httpText.includes('https://ocop.vn/'));
+
+      // Verify React useId parity between SSR #root tree and client hydrateRoot(<StrictMode><RouterProvider /></StrictMode>)
+      const { StrictMode } = await import('react');
+      const { RouterProvider, createMemoryHistory } = await import('@tanstack/react-router');
+      const { createAppRouter } = await server.ssrLoadModule('/src/router.tsx');
+      const clientRouter = createAppRouter({ origin: 'https://ocop.vn' });
+      clientRouter.update({ history: createMemoryHistory({ initialEntries: ['/'] }) });
+      await clientRouter.load();
+      const clientHtml = renderToString(
+        createElement(StrictMode, null, createElement(RouterProvider, { router: clientRouter })),
+      );
+      const ssrDiceIds = httpText.match(/aria-(?:controls|labelledby)="dice-[^"]+"/g) ?? [];
+      const clientDiceIds = clientHtml.match(/aria-(?:controls|labelledby)="dice-[^"]+"/g) ?? [];
+      assert.ok(ssrDiceIds.length > 0, 'Homepage Combobox must emit dice-* ARIA IDs');
+      assert.deepEqual(
+        ssrDiceIds,
+        clientDiceIds,
+        'SSR and client hydration trees must generate identical React useId values for Combobox',
+      );
     } finally {
       await new Promise((resolve) => httpServer.close(resolve));
     }

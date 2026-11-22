@@ -1,10 +1,12 @@
-import { RouterContextProvider, Scripts } from '@tanstack/react-router';
+import { StrictMode } from 'react';
+import { HeadContent, RouterContextProvider, Scripts } from '@tanstack/react-router';
 import {
   createRequestHandler,
   defineHandlerCallback,
-  renderRouterToString,
+  renderSsrHtmlResponse,
 } from '@tanstack/react-router/ssr/server';
 import { StartServer } from '@tanstack/react-start/server';
+import { renderToString } from 'react-dom/server';
 import { DEFAULT_OG_IMAGE_PATH, resolvePublicOrigin } from './lib/seo';
 import {
   buildDefaultOgImageResponse,
@@ -55,40 +57,51 @@ export async function renderAppRequest(
 
   return handler(
     defineHandlerCallback(({ router, responseHeaders }) =>
-      renderRouterToString({
+      renderSsrHtmlResponse({
         router,
         responseHeaders,
-        children: (
-          <RouterContextProvider router={router}>
-            <html lang='vi'>
-              <head>
-                <meta charSet='UTF-8' />
-                <meta name='viewport' content='width=device-width, initial-scale=1.0' />
-                <meta name='theme-color' content='#f7faf8' />
-                <link rel='preconnect' href='https://fonts.googleapis.com' />
-                <link rel='preconnect' href='https://fonts.gstatic.com' crossOrigin='' />
-                {/* <link
-                  href='https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Lora:wght@500;600;700&display=swap'
-                  rel='stylesheet'
-                /> */}
-                <link
-                  href='https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght@6..144,400..700&family=JetBrains+Mono:wght@400;500;600&family=Lora:wght@500;600;700&display=swap'
-                  rel='stylesheet'
-                />
-                {stylesheetHrefs.map((href) => (
-                  <link key={href} rel='stylesheet' href={href} />
-                ))}
-              </head>
-              <body>
-                <div id='root'>
-                  <StartServer router={router} />
-                </div>
-                <Scripts />
-                <script type='module' src={clientEntrySrc} />
-              </body>
-            </html>
-          </RouterContextProvider>
-        ),
+        render: () => {
+          const appHtml = renderToString(
+            <StrictMode>
+              <StartServer router={router} />
+            </StrictMode>,
+          );
+          const documentHtml = renderToString(
+            <RouterContextProvider router={router}>
+              <html lang='vi'>
+                <head>
+                  <meta charSet='UTF-8' />
+                  <meta name='viewport' content='width=device-width, initial-scale=1.0' />
+                  <meta name='theme-color' content='#f7faf8' />
+                  <link rel='preconnect' href='https://fonts.googleapis.com' />
+                  <link rel='preconnect' href='https://fonts.gstatic.com' crossOrigin='' />
+                  {/* <link
+                    href='https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Lora:wght@500;600;700&display=swap'
+                    rel='stylesheet'
+                  /> */}
+                  <link
+                    href='https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght@6..144,400..700&family=JetBrains+Mono:wght@400;500;600&family=Lora:wght@500;600;700&display=swap'
+                    rel='stylesheet'
+                  />
+                  {stylesheetHrefs.map((href) => (
+                    <link key={href} rel='stylesheet' href={href} />
+                  ))}
+                  <HeadContent />
+                </head>
+                <body>
+                  <div id='root' />
+                  <Scripts />
+                  <script type='module' src={clientEntrySrc} />
+                </body>
+              </html>
+            </RouterContextProvider>,
+          );
+
+          return documentHtml.replace(
+            '<div id="root"></div>',
+            () => `<div id="root">${appHtml}</div>`,
+          );
+        },
       }),
     ),
   );

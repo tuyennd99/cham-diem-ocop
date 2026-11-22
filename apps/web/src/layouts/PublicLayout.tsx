@@ -51,7 +51,7 @@ export function SiteHeader() {
   return (
     <header className='site-header'>
       <div className={`header-inner container ${menuOpen ? 'menu-open' : ''}`}>
-        <Link className='brand' to='/' hash='home' aria-label='OCOP Đánh Giá — Trang chủ'>
+        <Link className='brand' to='/' aria-label='OCOP Đánh Giá — Trang chủ'>
           <span className='brand-mark' aria-hidden='true'>
             ★
           </span>
@@ -73,7 +73,7 @@ export function SiteHeader() {
         <nav className='primary-nav' id='primary-nav' aria-label='Điều hướng chính'>
           <Link
             to='/'
-            hash='home'
+            // hash='home'
             className={isHomeRoute ? 'is-active' : undefined}
             aria-current={isHomeRoute ? 'page' : undefined}
             onClick={() => setMenuOpen(false)}

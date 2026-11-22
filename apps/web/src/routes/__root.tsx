@@ -8,7 +8,7 @@ import type { RouterContext } from '../types/router-context';
 export const Route = createRootRouteWithContext<RouterContext>()({
   shellComponent: ({ children }) => (
     <TooltipProvider delayDuration={200}>
-      <HeadContent />
+      {typeof window !== 'undefined' && <HeadContent />}
       <a className='skip-link' href='#content'>
         Bỏ qua điều hướng
       </a>
