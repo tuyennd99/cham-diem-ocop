@@ -1,0 +1,77 @@
+services:
+  caddy:
+    image: docker.io/library/caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    # slirp4netns:allow_host_loopback=true cho phép container truy cập cổng loopback 127.0.0.1 của host qua 10.0.2.2
+    # (khác với host.containers.internal vốn trỏ vào IP công cộng của VPS và không chạm được các cổng bind 127.0.0.1).
+    network_mode: "slirp4netns:allow_host_loopback=true"
+    mem_limit: 256m
+    ports:
+      - "18080:80" # Switch to 80:80 after running sudo-bootstrap.sh (#67)
+      # - "443:443" # Bật sau khi chạy sudo-bootstrap.sh (#67) và cấu hình tên miền trong Caddyfile
+    volumes:
+      - /srv/apps/ops/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /srv/storage/ops/caddy:/data
+      - /srv/storage/ops/caddy-config:/config
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  dozzle:
+    image: docker.io/amir20/dozzle:latest
+    container_name: dozzle
+    restart: unless-stopped
+    mem_limit: 256m
+    ports:
+      - "127.0.0.1:9999:8080"
+    volumes:
+      - /run/user/1000/podman/podman.sock:/var/run/docker.sock:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  uptime-kuma:
+    image: docker.io/louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    restart: unless-stopped
+    # Cho phép Uptime Kuma kiểm tra PostgreSQL (10.0.2.2:5432), Redis (10.0.2.2:6379), ocop-api (10.0.2.2:3030), ...
+    network_mode: "slirp4netns:allow_host_loopback=true"
+    mem_limit: 512m
+    ports:
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - /srv/storage/ops/uptime-kuma:/app/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  n8n:
+    image: docker.io/n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    userns_mode: keep-id
+    network_mode: "slirp4netns:allow_host_loopback=true"
+    mem_limit: 1g
+    ports:
+      - "127.0.0.1:5678:5678"
+    environment:
+      - N8N_HOST=127.0.0.1
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - N8N_SECURE_COOKIE=false
+      - GENERIC_TIMEZONE=Asia/Ho_Chi_Minh
+      - TZ=Asia/Ho_Chi_Minh
+    volumes:
+      - /srv/storage/ops/n8n:/home/node/.n8n
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
