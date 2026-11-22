@@ -94,33 +94,79 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ -z "${VPS_SSH_KEY}" ]; then
+          if [ -z "${VPS_SSH_KEY:-}" ]; then
             echo "::notice::Skipping VPS deployment because VPS_SSH_KEY is not configured. Add GitHub Secrets VPS_HOST, VPS_USER, VPS_SSH_KEY (and optional VPS_PORT) to enable deployment."
             exit 0
           fi
+
+          sanitize_secret() {
+            printf '%s\n' "$1" | LC_ALL=C sed $'s/\r//g; s/\xef\xbb\xbf//g; s/^[ \t]*//; s/[ \t]*$//; /^$/d'
+          }
+
+          VPS_HOST="$(sanitize_secret "${VPS_HOST:-}")"
+          VPS_USER="$(sanitize_secret "${VPS_USER:-}")"
+          VPS_PORT="$(sanitize_secret "${VPS_PORT:-}")"
 
           if [ -z "${VPS_HOST}" ] || [ -z "${VPS_USER}" ]; then
             echo "::error::VPS_HOST and VPS_USER GitHub Secrets must both be set when VPS_SSH_KEY is configured."
             exit 1
           fi
 
+          case "${VPS_HOST}" in
+            *[[:space:]]*)
+              echo "::error::VPS_HOST must be a single hostname or IP address without whitespace."
+              exit 1
+              ;;
+          esac
+          case "${VPS_USER}" in
+            *[[:space:]]*)
+              echo "::error::VPS_USER must be a single SSH username without whitespace."
+              exit 1
+              ;;
+          esac
+
           SSH_PORT="${VPS_PORT:-22}"
+          case "${SSH_PORT}" in
+            ''|*[!0-9]*)
+              echo "::error::VPS_PORT must be a numeric TCP port (1-65535)."
+              exit 1
+              ;;
+          esac
+          if [ "${SSH_PORT}" -lt 1 ] || [ "${SSH_PORT}" -gt 65535 ]; then
+            echo "::error::VPS_PORT must be between 1 and 65535."
+            exit 1
+          fi
+
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           trap 'rm -f ~/.ssh/id_deploy' EXIT
 
-          printf '%s\n' "${VPS_SSH_KEY}" > ~/.ssh/id_deploy
+          (
+            umask 077
+            sanitize_secret "${VPS_SSH_KEY}" > ~/.ssh/id_deploy
+          )
           chmod 600 ~/.ssh/id_deploy
 
-          ssh-keyscan -p "${SSH_PORT}" -H "${VPS_HOST}" >> ~/.ssh/known_hosts
-          chmod 644 ~/.ssh/known_hosts
-          if [ ! -s ~/.ssh/known_hosts ]; then
-            echo "::error::Failed to retrieve SSH host key for ${VPS_HOST}:${SSH_PORT}."
+          if [ ! -s ~/.ssh/id_deploy ]; then
+            echo "::error::VPS_SSH_KEY is empty after sanitizing whitespace and line endings."
             exit 1
           fi
 
+          if ! ssh-keygen -y -P "" -f ~/.ssh/id_deploy </dev/null >/dev/null; then
+            echo "::error::VPS_SSH_KEY is not a valid passphrase-less private SSH key. Verify GitHub Secret VPS_SSH_KEY contains the full private key without a passphrase."
+            exit 1
+          fi
+
+          if ! KEYSCAN_OUT="$(ssh-keyscan -p "${SSH_PORT}" -H "${VPS_HOST}")" || [ -z "${KEYSCAN_OUT}" ]; then
+            echo "::error::Failed to retrieve SSH host key for ${VPS_HOST}:${SSH_PORT}."
+            exit 1
+          fi
+          printf '%s\n' "${KEYSCAN_OUT}" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
           ssh -i ~/.ssh/id_deploy \
             -p "${SSH_PORT}" \
+            -o IdentitiesOnly=yes \
             -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
             -o ConnectTimeout=15 \
