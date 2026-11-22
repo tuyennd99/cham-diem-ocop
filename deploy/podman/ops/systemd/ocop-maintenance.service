@@ -1,0 +1,9 @@
+[Unit]
+Description=OCOP Nightly PostgreSQL Dump and Expired pending_auth Maintenance
+After=default.target
+
+[Service]
+Type=oneshot
+ExecStart=/srv/apps/ops/backup-maintenance.sh
+StandardOutput=journal
+StandardError=journal
