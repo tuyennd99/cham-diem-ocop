@@ -1,5 +1,33 @@
 # Progress
 
+## 2026-11-22 — Hạ tầng DevOps Podman, Redis, Ops, Backup & Bảo mật (#61–#67)
+
+Nhánh tích hợp: `feat/devops-podman-system` (từ `main`), đặc tả [2026-11-22-devops-podman-system-design.md](docs/superpowers/specs/2026-11-22-devops-podman-system-design.md). Toàn bộ 7 ticket (#61–#67) đã triển khai và đóng trên GitHub kèm bằng chứng.
+
+Đã xác minh sau các chỉnh sửa cuối:
+- Repo (`feat/devops-podman-system`):
+  - `pnpm --filter @ocop/api lint:check`: PASS.
+  - `pnpm build` (API + Web client/SSR): PASS.
+  - `pnpm typecheck`: PASS.
+  - `pnpm --filter @ocop/api test -- --runInBand`: PASS (34 suites, 263/263 tests — bao gồm RedisService, RedisThrottlerStorage, HealthService, PublicCache và fallback RAM khi không bật/lỗi Redis).
+  - `node --experimental-transform-types --import ./apps/web/test/register-typescript.mjs --test apps/web/test/*.test.ts scripts/dev-cloud.test.mjs`: PASS (13 suites, 87/87 tests) và 9/9 `apps/web/test/*.check.mjs` PASS.
+  - `.github/workflows/ci-cd.yml`: kiểm tra cú pháp YAML sạch (`js-yaml@3.15.2`); `git diff --check main..feat/devops-podman-system` PASS, 0 bí mật lộ trong diff.
+- VPS `ocop-cloud` (Rootless Podman user `dev`):
+  - Redis (`/srv/apps/redis/compose.yaml`, `127.0.0.1:6379`): `Up (healthy)`, `redis-cli ping` → `PONG`.
+  - Production OCOP (`/srv/apps/cham-diem-ocop/`): 10 tệp minh chứng chuyển sang `/srv/storage/cham-diem-ocop/uploads` (khớp 1-1 `chamdiemocop_prod`, thư mục cũ trong repo trống); `prisma migrate deploy` cập nhật cả `chamdiemocop_prod` và `chamdiemocop_dev` lên `0022_query_optimization_indexes`; `ocop-api` và `ocop-web` chạy `NODE_ENV=production` (`:3030/api/system/health/ready` → `200`, `/docs` → `404`, `:5173` SSR → `200`).
+  - Ops (`/srv/apps/ops/`): `caddy` (`:80` → `200`, đã chuyển từ `18080:80` sang `80:80` sau khi chạy `sudo-bootstrap.sh`), `dozzle` (`127.0.0.1:9999` → `200`), `uptime-kuma` (`127.0.0.1:3001` → `200`), `n8n` (`127.0.0.1:5678` → `200`), `backrest` (`127.0.0.1:9898` → `200`).
+  - Bảo trì & Backup: `ocop-maintenance.timer` (`02:00` hằng ngày) đã bật; `backup-maintenance.sh` dọn `pending_auth` và dump 3 DB (`chamdiemocop_prod`, `chamdiemocop_dev`, `kh2959`); Restic repo `/repos/ocop-vps` đã tạo snapshot `4564a227` và kiểm tra khôi phục thử khớp SHA-256.
+  - Gia cố mạng: SeaweedFS (`8333, 8888, 9333, 12535, 23646`), PostgreSQL (`5432`), Redis (`6379`), KH2959 API (`3045`) đều bind `127.0.0.1`; toàn bộ container đã giới hạn log `json-file` (`10m` x 3); `ip_unprivileged_port_start=80`, Tailscale và Fail2ban đã kích hoạt qua `sudo-bootstrap.sh`.
+
+Chưa thực hiện / Cần cấu hình tiếp:
+- Khai báo đúng GitHub Repository Secrets (`VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`) tại Settings → Secrets and variables → Actions cho job `deploy` trên GitHub Actions.
+
+## 2026-11-22 — Kho tệp HTTP trên VPS
+
+- Khảo sát [SFTPGo, Zipline, Dufs, SeaweedFS, RustFS và Garage](docs/research/2026-11-22-vps-file-storage.md) cho ảnh, video và PDF. Đối chiếu giao diện web, API cho nhiều dự án, quyền đọc tệp và cách upload trực tiếp khi backend chỉ lưu liên kết.
+- Kết quả dựa trên mã nguồn và tài liệu. Việc tải lên, đọc lại và kiểm tra quyền trên VPS của dự án chưa được thử nghiệm.
+- Đối chiếu benchmark S3 ngắn với báo cáo RustFS chạm giới hạn bộ nhớ khi quét kho lớn. Bản khảo sát ghi rõ phiên bản, tải thử và giới hạn của số liệu. Chưa đo RAM dài hạn trên VPS.
+
 ## 2026-11-20: Finish Google profile response handling (#54)
 
 Scope: keep the Google profile completion request tied to its current attempt.
