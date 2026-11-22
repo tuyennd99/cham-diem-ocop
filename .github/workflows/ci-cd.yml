@@ -1,0 +1,128 @@
+# GitHub Actions CI/CD workflow for OCOP (@ocop/api + @ocop/web).
+#
+# Required GitHub Secrets for automatic VPS deployment on pushes to `main`:
+#   - VPS_HOST: VPS hostname or IP address
+#   - VPS_USER: SSH user on the VPS (e.g. `dev`)
+#   - VPS_SSH_KEY: Private SSH key authorized to deploy on the VPS
+# Optional GitHub Secrets:
+#   - VPS_PORT: SSH port on the VPS (defaults to `22`)
+
+name: CI/CD
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  verify:
+    name: Verify (Lint, Format, Build, Typecheck, Tests & SSR)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        env:
+          # apps/be/prisma.config.ts calls env('DATABASE_URL'); a placeholder URL suffices for client generation.
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/ocop?schema=public
+        run: pnpm --filter @ocop/api prisma generate
+
+      - name: Lint API
+        run: pnpm --filter @ocop/api lint:check
+
+      - name: Check Web formatting
+        run: pnpm --filter @ocop/web format:check
+
+      - name: Build API and Web SSR
+        # Run before typecheck and built-server.check.mjs because openapi.db-spec.ts imports dist/src/*.
+        run: pnpm build
+
+      - name: Typecheck workspace
+        run: pnpm typecheck
+
+      - name: Run API unit tests
+        run: pnpm --filter @ocop/api test -- --runInBand
+
+      - name: Run Web and script unit tests
+        run: node --experimental-transform-types --import ./apps/web/test/register-typescript.mjs --test apps/web/test/*.test.ts scripts/dev-cloud.test.mjs
+
+      - name: Run Web architecture, router, proxy and SSR checks
+        run: |
+          node apps/web/test/api-boundary.check.mjs
+          node apps/web/test/api-integration.check.mjs
+          node apps/web/test/built-server.check.mjs
+          node apps/web/test/catalog-ssr.check.mjs
+          node apps/web/test/home-ssr.check.mjs
+          node apps/web/test/product-detail-ssr.check.mjs
+          node apps/web/test/proxy.check.mjs
+          node apps/web/test/router.check.mjs
+          node apps/web/test/seo-integration.check.mjs
+
+  deploy:
+    name: Deploy to VPS
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Deploy over SSH
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${VPS_SSH_KEY}" ]; then
+            echo "::notice::Skipping VPS deployment because VPS_SSH_KEY is not configured. Add GitHub Secrets VPS_HOST, VPS_USER, VPS_SSH_KEY (and optional VPS_PORT) to enable deployment."
+            exit 0
+          fi
+
+          if [ -z "${VPS_HOST}" ] || [ -z "${VPS_USER}" ]; then
+            echo "::error::VPS_HOST and VPS_USER GitHub Secrets must both be set when VPS_SSH_KEY is configured."
+            exit 1
+          fi
+
+          SSH_PORT="${VPS_PORT:-22}"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          trap 'rm -f ~/.ssh/id_deploy' EXIT
+
+          printf '%s\n' "${VPS_SSH_KEY}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+
+          ssh-keyscan -p "${SSH_PORT}" -H "${VPS_HOST}" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+          if [ ! -s ~/.ssh/known_hosts ]; then
+            echo "::error::Failed to retrieve SSH host key for ${VPS_HOST}:${SSH_PORT}."
+            exit 1
+          fi
+
+          ssh -i ~/.ssh/id_deploy \
+            -p "${SSH_PORT}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 \
+            "${VPS_USER}@${VPS_HOST}" \
+            'set -euo pipefail; export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"; cd /home/dev/Desktop/cham-diem-ocop && git fetch origin main && git checkout main && git pull --ff-only origin main && /srv/apps/cham-diem-ocop/deploy.sh'
