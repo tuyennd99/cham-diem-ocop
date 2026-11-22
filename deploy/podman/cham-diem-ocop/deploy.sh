@@ -10,6 +10,7 @@ WEB_URL="http://127.0.0.1:5173"
 echo "[deploy] Installing dependencies, running Prisma migrations, and building API + Web SSR..."
 cd "$REPO_DIR"
 podman run --rm --userns=keep-id --network=host \
+  -e CI=true \
   -e HOME=/home/dev \
   -e PATH="${NODE_BIN}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
   -v /home/dev/.cache:/home/dev/.cache \
