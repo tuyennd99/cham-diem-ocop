@@ -61,7 +61,7 @@ jobs:
         run: pnpm typecheck
 
       - name: Run API unit tests
-        run: pnpm --filter @ocop/api test -- --runInBand
+        run: pnpm --filter @ocop/api test --runInBand
 
       - name: Run Web and script unit tests
         run: node --experimental-transform-types --import ./apps/web/test/register-typescript.mjs --test apps/web/test/*.test.ts scripts/dev-cloud.test.mjs
