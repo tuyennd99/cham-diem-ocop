@@ -36,7 +36,7 @@ services:
         max-file: "3"
 
   uptime-kuma:
-    image: docker.io/louislam/uptime-kuma:1
+    image: docker.io/louislam/uptime-kuma:2
     container_name: uptime-kuma
     restart: unless-stopped
     # Cho phép Uptime Kuma kiểm tra PostgreSQL (10.0.2.2:5432), Redis (10.0.2.2:6379), ocop-api (10.0.2.2:3030), ...
@@ -46,6 +46,44 @@ services:
       - "127.0.0.1:3001:3001"
     volumes:
       - /srv/storage/ops/uptime-kuma:/app/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  beszel:
+    image: docker.io/henrygd/beszel:latest
+    container_name: beszel
+    restart: unless-stopped
+    mem_limit: 256m
+    ports:
+      - "127.0.0.1:8090:8090"
+    volumes:
+      - /srv/storage/ops/beszel:/beszel_data
+      - /srv/storage/ops/beszel-socket:/beszel_socket
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  beszel-agent:
+    image: docker.io/henrygd/beszel-agent:latest
+    container_name: beszel-agent
+    restart: unless-stopped
+    network_mode: host
+    mem_limit: 128m
+    environment:
+      - LISTEN=/beszel_socket/beszel.sock
+      - FILESYSTEM=vda2
+      - KEY=${BESZEL_KEY:-}
+    volumes:
+      - /run/user/1000/podman/podman.sock:/var/run/docker.sock:ro
+      - /srv/storage/ops/beszel-socket:/beszel_socket
+      - /srv/storage/ops/beszel-agent:/var/lib/beszel-agent
+      - /etc/os-release:/etc/os-release:ro
+      - /srv/storage:/extra-filesystems/vdb__srv:ro
     logging:
       driver: json-file
       options:

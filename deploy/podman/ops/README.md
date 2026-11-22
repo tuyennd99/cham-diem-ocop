@@ -6,9 +6,42 @@ Thư mục này chứa cấu hình chuẩn hóa cho các dịch vụ vận hành
 
 - **Caddy** (`:18080`, chuyển sang `:80/:443` sau `sudo-bootstrap.sh`): Reverse proxy.
 - **Dozzle** (`127.0.0.1:9999`): Xem log container theo thời gian thực.
-- **Uptime Kuma** (`127.0.0.1:3001`): Giám sát trạng thái dịch vụ.
+- **Uptime Kuma v2** (`127.0.0.1:3001`, `louislam/uptime-kuma:2`): Giám sát trạng thái dịch vụ (HTTP, TCP, PostgreSQL, Redis...).
+- **Beszel Hub & Beszel Agent** (`127.0.0.1:8090`, `henrygd/beszel:latest` + `henrygd/beszel-agent:latest`): Giám sát tài nguyên máy chủ (CPU, RAM, Disk `/` `vda2` + `/srv` `vdb`, băng thông `eth0`/`tailscale0`) và thống kê từng container Rootless Podman kèm lịch sử và cảnh báo.
 - **n8n** (`127.0.0.1:5678`): Tự động hóa quy trình thông báo/tác vụ.
 - **Backrest** (`127.0.0.1:9898`): Giao diện web và bộ điều phối sao lưu chống trùng lặp **Restic** (mã hóa AES-256).
+
+---
+
+## Giám sát Tài nguyên & Container với Beszel (`127.0.0.1:8090`)
+
+Beszel Hub chỉ bind vào `127.0.0.1:8090` trên VPS và giao tiếp nội bộ với `beszel-agent` qua Unix socket `/srv/storage/ops/beszel-socket/beszel.sock` (`/beszel_socket/beszel.sock` trong container) mà không cần mở thêm cổng TCP trên host.
+
+### 1. Truy cập Giao diện Web Beszel Hub
+
+Mở qua SSH port-forward từ máy cá nhân (hoặc qua Tailscale):
+
+```bash
+ssh -N -L 8090:127.0.0.1:8090 ocop-cloud
+```
+
+Sau đó mở trình duyệt tại `http://127.0.0.1:8090`.
+
+### 2. Thiết lập lần đầu trên Giao diện Web
+
+1. Ở lần truy cập đầu tiên, tạo tài khoản quản trị viên (email + mật khẩu mạnh) trên Beszel Hub.
+2. Nhấn **+ Add System** (Thêm máy chủ):
+   - **Name**: `ocop-cloud`
+   - **Host / IP**: `/beszel_socket/beszel.sock`
+   - **Public Key**: Khóa công khai Ed25519 của Hub (sinh tự động từ `/srv/storage/ops/beszel/id_ed25519`) đã được nạp sẵn vào `/srv/apps/ops/.env` (`BESZEL_KEY=ssh-ed25519 ...`, quyền `600`) trên VPS nên `beszel-agent` sẵn sàng kết nối ngay khi nhấn **Add system**.
+3. Nếu khởi tạo lại thư mục `/srv/storage/ops/beszel` trên máy chủ mới, cập nhật khóa công khai vào `/srv/apps/ops/.env` và khởi động lại agent:
+
+```bash
+PUBKEY=$(ssh-keygen -y -f /srv/storage/ops/beszel/id_ed25519)
+printf 'BESZEL_KEY=%s\n' "$PUBKEY" > /srv/apps/ops/.env
+chmod 600 /srv/apps/ops/.env
+cd /srv/apps/ops && COMPOSE_PARALLEL_LIMIT=1 podman compose up -d --no-deps beszel-agent
+```
 
 ---
 
