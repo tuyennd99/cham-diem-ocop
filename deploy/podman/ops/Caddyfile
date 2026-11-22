@@ -1,0 +1,35 @@
+# Reverse Proxy cho hệ thống OCOP và các ứng dụng trên VPS
+# Hiện tại chạy qua HTTP (:80 trong container, map 18080:80 ở compose.yaml cho tới khi chạy sudo-bootstrap.sh #67).
+# Khi có tên miền, bỏ comment khối HTTPS bên dưới để Caddy tự cấp & gia hạn chứng chỉ Let's Encrypt.
+
+:80 {
+	encode zstd gzip
+
+	@kh2959 host kh2959.*
+	handle @kh2959 {
+		reverse_proxy 10.0.2.2:5185 {
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	handle {
+		reverse_proxy 10.0.2.2:5173 {
+			header_up X-Real-IP {remote_host}
+		}
+	}
+}
+
+# --- Mẫu cấu hình khi có tên miền (HTTPS tự động) ---
+# ocop.example.com {
+# 	encode zstd gzip
+# 	reverse_proxy 10.0.2.2:5173 {
+# 		header_up X-Real-IP {remote_host}
+# 	}
+# }
+#
+# kh2959.example.com {
+# 	encode zstd gzip
+# 	reverse_proxy 10.0.2.2:5185 {
+# 		header_up X-Real-IP {remote_host}
+# 	}
+# }
