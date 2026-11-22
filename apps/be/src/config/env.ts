@@ -13,6 +13,7 @@ export interface AppEnv {
   readonly trustProxyHops: number;
   readonly allowedOrigins: readonly string[];
   readonly googleClientId: string | undefined;
+  readonly redisUrl: string | undefined;
   readonly smtpHost: string;
   readonly smtpPort: number;
   readonly smtpUser: string;
@@ -34,6 +35,12 @@ export function getGoogleClientId(
   return values.GOOGLE_CLIENT_ID?.trim() || undefined;
 }
 
+export function getRedisUrl(
+  values: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  return values.REDIS_URL?.trim() || undefined;
+}
+
 function buildEnvSignature(values: NodeJS.ProcessEnv): string {
   return [
     values.PORT ?? '',
@@ -41,6 +48,7 @@ function buildEnvSignature(values: NodeJS.ProcessEnv): string {
     values.CORS_ORIGINS ?? '',
     values.JWT_SECRET ?? '',
     values.GOOGLE_CLIENT_ID ?? '',
+    values.REDIS_URL ?? '',
     values.SMTP_HOST ?? '',
     values.SMTP_PORT ?? '',
     values.SMTP_USER ?? '',
@@ -81,6 +89,7 @@ function parseEnv(values: NodeJS.ProcessEnv): AppEnv {
     trustProxyHops,
     allowedOrigins,
     googleClientId: getGoogleClientId(values),
+    redisUrl: getRedisUrl(values),
     smtpHost,
     smtpPort,
     smtpUser,

@@ -1,9 +1,19 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  Optional,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from './redis.service';
+
+const REDIS_PING_TIMEOUT_MS = 1000;
 
 @Injectable()
 export class HealthService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly redis?: RedisService,
+  ) {}
 
   live() {
     return { status: 'ok' as const };
@@ -21,6 +31,14 @@ export class HealthService {
     } catch {
       throw new ServiceUnavailableException('Database is unavailable');
     }
+
+    if (this.redis?.isEnabled()) {
+      const ok = await this.redis.ping(REDIS_PING_TIMEOUT_MS);
+      if (!ok) {
+        throw new ServiceUnavailableException('Redis is unavailable');
+      }
+    }
+
     return { status: 'ok' as const };
   }
 }
